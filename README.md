@@ -84,6 +84,13 @@ failures, stale snapshots and frontend fallback use.
 
 The `Publish tracker to GitHub Pages` workflow assembles the static files from the repository. Enable GitHub Pages with **Source: GitHub Actions** under the repository's Pages settings if the workflow indicates that Pages isn't configured. The expected project URL after successful deployment is `https://ctharvey.github.io/texas_bill_tracker/` (unverified until GitHub confirms).
 
+Member roles from official FTP are stored separately in `authors`, `coauthors`, `sponsors` and
+`cosponsors` arrays. Counts are derived from those lists. Bill cards show author/coauthor/cosponsor
+counts; details list every member by role. Search and CSV export include these fields.
+Empty official lists mean none listed in the snapshot; missing fields in local imports are
+shown as not reported. Authors/coauthors belong to the originating chamber and sponsors/
+cosponsors to the other chamber. The `author` display string remains for compatibility.
+
 ### Input data schema
 
 `data/bills.json` contains:

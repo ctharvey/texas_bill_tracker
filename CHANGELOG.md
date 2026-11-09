@@ -2,6 +2,8 @@
 
 ## 2026-11-09
 
+- Import separate author, coauthor, sponsor and cosponsor lists. Show counts on cards and full member lists in details; include them in search and CSV export.
+
 - Parse official TLC authors and dated filing actions; refresh the full dataset so authors and Filed today display correctly.
 - Add an unprivileged pull-based production deployer and systemd timer for bills.ctharvey.me.
 - Publish complete official snapshots atomically; keep the previous release on fetch or validation failure.

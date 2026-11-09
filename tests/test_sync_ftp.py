@@ -52,6 +52,25 @@ class BillParserTests(unittest.TestCase):
         self.assertEqual(bill['filed_at'], '')
         self.assertEqual(bill['last_action_date'], '2026-11-10')
 
+    def test_member_roles_are_separate_and_names_are_deduplicated(self):
+        xml = b'''<billhistory><caption>Relating to tax incentives for data centers.</caption>
+          <authors>Primary | Joint</authors><coauthors>One | Two | One | </coauthors>
+          <sponsors>Other chamber</sponsors><cosponsors>Three | Four</cosponsors></billhistory>'''
+        bill = parse_bill_xml(xml, 'SB99.xml')
+        self.assertEqual(bill['author'], 'Primary | Joint')
+        self.assertEqual(bill['authors'], ['Primary', 'Joint'])
+        self.assertEqual(bill['coauthors'], ['One', 'Two'])
+        self.assertEqual(bill['sponsors'], ['Other chamber'])
+        self.assertEqual(bill['cosponsors'], ['Three', 'Four'])
+
+    def test_empty_official_member_roles_are_empty_lists(self):
+        xml = b'''<billhistory><caption>Relating to tax incentives for data centers.</caption>
+          <authors>Primary</authors><coauthors /><sponsors /><cosponsors /></billhistory>'''
+        bill = parse_bill_xml(xml, 'SB99.xml')
+        self.assertEqual(bill['authors'], ['Primary'])
+        for role in ('coauthors', 'sponsors', 'cosponsors'):
+            self.assertEqual(bill[role], [])
+
     def test_invalid_xml_and_insufficient_caption_fail_closed(self):
         self.assertIsNone(parse_bill_xml(b'not xml','HB00001.xml'))
         self.assertIsNone(parse_bill_xml(b'<Bill><caption>Hi</caption></Bill>','HB00001.xml'))
