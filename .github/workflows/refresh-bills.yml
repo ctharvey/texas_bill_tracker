@@ -1,6 +1,11 @@
 name: Refresh Texas bill data
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/sync_ftp.py'
+      - '.github/workflows/refresh-bills.yml'
   schedule:
     - cron: '17 */12 * * *'
 permissions:
