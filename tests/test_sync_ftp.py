@@ -26,6 +26,32 @@ class BillParserTests(unittest.TestCase):
         self.assertEqual(bill['id'],'SB36')
         self.assertEqual(bill['status'],'Referred')
 
+    def test_official_history_authors_and_filing_action(self):
+        xml = '''<billhistory bill="90(R) SJR 9">
+          <lastaction>11/10/2026 S Referred to committee</lastaction>
+          <caption>Proposing a constitutional amendment establishing the Texas Redistricting Commission.</caption>
+          <authors>Men\u00e9ndez | Gutierrez</authors><coauthors />
+          <actions>
+            <action><actionNumber>S000</actionNumber><date>11/9/2026</date>
+              <description>Received by the Secretary of the Senate</description></action>
+            <action><actionNumber>S001</actionNumber><date>11/9/2026</date><description>Filed</description></action>
+            <action><date>11/10/2026</date><description>Referred to committee</description></action>
+          </actions></billhistory>'''.encode('utf-8')
+        bill = parse_bill_xml(xml, 'SJR 9.xml')
+        self.assertEqual(bill['author'], 'Men\u00e9ndez | Gutierrez')
+        self.assertEqual(bill['filed_at'], '2026-11-09')
+        self.assertEqual(bill['last_action_date'], '2026-11-10')
+        self.assertEqual(bill['status'], 'Referred')
+        self.assertEqual(bill['actions'][-1], 'Referred to committee')
+
+    def test_does_not_substitute_unrelated_action_date_for_filing(self):
+        xml = b'''<billhistory><caption>Relating to tax incentives for data centers.</caption>
+          <authors>Example</authors><actions><action><date>11/10/2026</date>
+          <description>Committee report filed</description></action></actions></billhistory>'''
+        bill = parse_bill_xml(xml, 'SB99.xml')
+        self.assertEqual(bill['filed_at'], '')
+        self.assertEqual(bill['last_action_date'], '2026-11-10')
+
     def test_invalid_xml_and_insufficient_caption_fail_closed(self):
         self.assertIsNone(parse_bill_xml(b'not xml','HB00001.xml'))
         self.assertIsNone(parse_bill_xml(b'<Bill><caption>Hi</caption></Bill>','HB00001.xml'))
