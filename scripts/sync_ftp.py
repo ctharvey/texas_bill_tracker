@@ -104,13 +104,25 @@ def parse_bill_xml(raw: bytes, path: str) -> dict | None:
     caption = first_text(root, "captiontext", "currentcaption", "caption", "longtitle", "description", "billtitle")
     if len(caption) < 12:
         return None
-    author = first_text(root, "primaryauthor", "authorname", "author", "primarysponsor")
-    actions = all_text(root, "actiondescription", "actiontext", "action")
+    author = first_text(root, "primaryauthor", "authorname", "author", "authors", "primarysponsor")
+    history = [
+        (first_text(element, "actiondescription", "actiontext", "description"),
+         normalize_date(first_text(element, "date")))
+        for element in root.iter() if local_tag(element.tag) == "action"
+    ]
+    actions = [description for description, _ in history if description]
+    if not actions:
+        actions = all_text(root, "actiondescription", "actiontext", "action")
     dates = all_text(root, "fileddate", "introductiondate", "filedate", "datefiled")
     committees = all_text(root, "committeename", "currentcommittee", "referredcommittee")
     status = infer_status(actions, committees)
     date = normalize_date(dates[0]) if dates else ""
-    last_action = actions[-1] if actions else "Filed"
+    if not date:
+        filing_dates = [day for description, day in history
+                        if day and description.strip().lower() == "filed"]
+        date = min(filing_dates, default="")
+    last_action = first_text(root, "lastaction") or (actions[-1] if actions else "Filed")
+    last_action_date = normalize_date(last_action) or max((day for _, day in history if day), default=date)
     record = {
         "id": bill_id,
         "number": re.sub(r"(?<=\D)(?=\d)", " ", bill_id, count=1),
@@ -121,7 +133,7 @@ def parse_bill_xml(raw: bytes, path: str) -> dict | None:
         "filed_at": date,
         "status": status,
         "last_action": last_action[:400],
-        "last_action_date": date,
+        "last_action_date": last_action_date,
         "actions": actions[-12:],
         "source_record": "Texas Legislative Council bulk FTP bill history",
         "source_path": path,
