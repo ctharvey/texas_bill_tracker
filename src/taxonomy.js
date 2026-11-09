@@ -1,6 +1,8 @@
 // Curated vocabulary: add agency aliases and topic rules as new legislation arrives.
 // 'direct' means explicitly named in verified material; 'related' is an editorial inference.
 export const AGENCIES = [
+  // Virtual scope tag, not a single agency. Keep it in the same filter vocabulary.
+  ['all-state-agencies','All state agencies (cross-cutting)'],
   ['ag','Texas Department of Agriculture'],
   ['attorney-general','Office of the Attorney General'], ['comptroller','Texas Comptroller of Public Accounts'],
   ['dps','Texas Department of Public Safety'], ['dshs','Department of State Health Services'],
@@ -25,6 +27,7 @@ export const AGENCIES = [
   ['sbec','State Board for Educator Certification'], ['tbc','Texas Bond Review Board'],
   ['tsbvi','Texas School for the Blind and Visually Impaired'], ['tsd','Texas School for the Deaf'],
   ['tsbp','Texas State Board of Pharmacy'], ['tbn','Texas Board of Nursing'],
+  ['tsbpa','Texas State Board of Public Accountancy'],
   ['tba','Texas Alcoholic Beverage Commission'], ['tfc','Texas Facilities Commission'],
   ['veterans-land','Texas Veterans Land Board'],
   ['ut-system','University of Texas System'], ['tamu-system','Texas A&M University System'],
@@ -57,7 +60,8 @@ export const POLICY_AREAS = [
   {name:'Agriculture', pattern:/agricultur|livestock|crop|farm|ranch/i},
   {name:'Civil rights', pattern:/discriminat|voter registration rejection|civil right|equal protection/i},
   {name:'Criminal justice', pattern:/prison|probation|criminal offense|sentenc|correctional|jail/i},
-  {name:'Economic development', pattern:/incentive|economic development|investment|job creation/i}
+  {name:'Economic development', pattern:/incentive|economic development|investment|job creation/i},
+  {name:'Government operations', pattern:/state agenc(?:y|ies)|public procurement|government contract|administrative procedure|agency report/i}
 ];
 
 const AGENCY_SIGNALS = [
@@ -80,8 +84,16 @@ const AGENCY_SIGNALS = [
   {id:'thecb', related:/university|higher education|student financial aid/i, explicit:/higher education coordinating board|\bTHECB\b/i},
   {id:'tcole', related:/peace officer training|law enforcement licens/i, explicit:/commission on law enforcement|\bTCOLE\b/i},
   {id:'rrc', related:/natural gas|oil and gas|pipeline safety/i, explicit:/railroad commission|\bRRC\b/i},
-  {id:'tdhca', related:/affordable housing|housing tax credit|housing assistance/i, explicit:/department of housing and community affairs|\bTDHCA\b/i}
+  {id:'tdhca', related:/affordable housing|housing tax credit|housing assistance/i, explicit:/department of housing and community affairs|\bTDHCA\b/i},
+  {id:'tsbpa', related:/\bCPAs?\b|certified public accountant|public accountancy|public accounting firm|accountant licens/i, explicit:/texas state board of public accountancy|\bTSBPA\b|state board of public accountancy/i}
 ];
+
+// A scope tag cannot be inferred merely because an individual agency is named.
+// Broad wording is required, and uncertain application stays marked 'related'.
+const ALL_AGENCIES_EXPLICIT = /\b(?:all|each|every)\s+(?:texas\s+)?state\s+agenc(?:y|ies)\b|\bany\s+(?:texas\s+)?state\s+agency\b|\bstate\s+agencies\s+(?:shall|must|are required|may not)\b/i;
+const ALL_AGENCIES_POSSIBLE = /\bstate\s+agenc(?:y|ies)\b/i;
+const CROSS_AGENCY_CHANGE = /\b(?:shall|must|may not|required|prohibited|compliance|comply|procurement|contracting|cybersecurity|data security|audit|reporting|records retention|ethics|standards|administrative procedures)\b/i;
+const LIMITED_AGENCIES = /\b(?:certain|specified|designated|selected|some|particular|one)\s+state\s+agenc(?:y|ies)\b|\bstate\s+agency\s+(?:that|which|responsible for)\b/i;
 
 const EFFECT_SIGNALS = [
   ['Funding & appropriations', /appropriat|grant program|state fund|budget|funding/i],
@@ -107,7 +119,20 @@ export function autoTagBill(bill) {
       known.add(signal.id);
     }
   }
+  if (!known.has('all-state-agencies') && !LIMITED_AGENCIES.test(text)) {
+    const explicit = ALL_AGENCIES_EXPLICIT.test(text);
+    if (explicit || (ALL_AGENCIES_POSSIBLE.test(text) && CROSS_AGENCY_CHANGE.test(text))) {
+      agencies.push({
+        id:'all-state-agencies',
+        relationship:explicit ? 'direct' : 'related',
+        reason:explicit
+          ? 'The supplied wording applies to state agencies as a class; check exceptions in the bill text'
+          : 'Possible statewide agency compliance or operations impact; scope requires full-text review'
+      });
+    }
+  }
   const impacts = [...new Set([...(bill.impacts || []), ...EFFECT_SIGNALS.filter(([,pattern])=>pattern.test(text)).map(([name])=>name)])];
+  if (agencies.some(a=>a.id==='all-state-agencies') && !impacts.includes('Cross-agency scope')) impacts.push('Cross-agency scope');
   return {...bill, topics, agencies, impacts};
 }
 

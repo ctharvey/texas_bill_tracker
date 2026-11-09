@@ -33,3 +33,26 @@ test('official link points to regular 90th session',()=>{
   assert.equal(officialUrl({number:'HB 164'}),'https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill=HB164');
   assert.ok(AGENCY_NAME.hhsc);
 });
+
+test('Texas State Board of Public Accountancy is indexed and matched to CPA regulation',()=>{
+  assert.equal(AGENCY_NAME.tsbpa,'Texas State Board of Public Accountancy');
+  const inferred=autoTagBill({title:'CPA licensing and examination requirements'});
+  assert.equal(inferred.agencies.find(a=>a.id==='tsbpa').relationship,'related');
+  const named=autoTagBill({title:'Duties of the Texas State Board of Public Accountancy'});
+  assert.equal(named.agencies.find(a=>a.id==='tsbpa').relationship,'direct');
+});
+
+test('all-state-agencies scope is explicit for statewide duties, not individual agency rules',()=>{
+  const broad=autoTagBill({title:'Cybersecurity standards',caption:'Each state agency must comply with statewide security requirements'});
+  assert.equal(broad.agencies.find(a=>a.id==='all-state-agencies').relationship,'direct');
+  assert.ok(broad.impacts.includes('Cross-agency scope'));
+  const narrow=autoTagBill({title:'Texas Education Agency shall adopt rules for public schools'});
+  assert.equal(narrow.agencies.some(a=>a.id==='all-state-agencies'),false);
+  const limited=autoTagBill({title:'Audit requirements for certain state agencies'});
+  assert.equal(limited.agencies.some(a=>a.id==='all-state-agencies'),false);
+});
+
+test('possible cross-agency compliance is flagged without false certainty',()=>{
+  const result=autoTagBill({title:'Records retention standards for state agencies'});
+  assert.equal(result.agencies.find(a=>a.id==='all-state-agencies').relationship,'related');
+});

@@ -6,6 +6,7 @@ An independent, open-source bill tracker for the Texas Legislature's **90th Regu
 
 - Search and filter by bill number, author, topic, chamber, affected agency, procedural stage, and hearing status.
 - Surface **multiple potentially affected agencies per bill**, distinguishing directly supported mentions from inferred connections. The agency catalog is an extensible starting vocabulary, not a claim of complete statutory review.
+- Include the Texas State Board of Public Accountancy for CPA certification and licensing bills, and a separate **All state agencies (cross-cutting)** scope tag for general agency-wide requirements. Explicit broad language gets a direct tag; broader compliance inferences are marked possible. The cross-cutting scope is not counted as another physical state agency.
 - Show author institutional influence **only when a verified role or tenure fact has been entered**. No party-only influence assumptions.
 - Show referral, scheduled hearing and hearing held as separate procedural signals. A prefiled bill without committee evidence is *not rated*, never assigned an invented probability.
 - Maintain a device-local watchlist, view bill details and source links, export filtered CSV, and import CSV/JSON datasets locally.

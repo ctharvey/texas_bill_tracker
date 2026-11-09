@@ -84,7 +84,7 @@ function renderNotice(){
 
 function renderOverview(){
   const bills=state.view==='watchlist'?state.bills.filter(b=>state.watch.has(b.id)):state.bills;
-  const agencies=unique(bills.flatMap(b=>b.agencies.map(a=>a.id))).length;
+  const agencies=unique(bills.flatMap(b=>b.agencies.map(a=>a.id))).filter(id=>id!=='all-state-agencies').length;
   const scheduled=bills.filter(b=>assessHearing(b).level>=3).length;
   const today=bills.filter(b=>b.filed_at===new Date().toLocaleDateString('sv-SE',{timeZone:'America/Chicago'})).length;
   const cards=[
