@@ -205,6 +205,7 @@ function showAgencyChoices(query=''){
   let visible=0;
   popup.querySelectorAll('[data-agency-option]').forEach(option=>{
     option.hidden=!!needle&&!option.dataset.agencyLabel.toLocaleLowerCase().includes(needle);
+    option.setAttribute('aria-selected',String(option.dataset.agencyOption===state.agency));
     if(!option.hidden)visible++;
     option.classList.remove('active');
   });
