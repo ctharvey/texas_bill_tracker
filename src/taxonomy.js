@@ -128,10 +128,13 @@ export function authorInfluence(bill) {
   const factors = [];
   if (p.leadership_position) factors.push(p.leadership_position);
   if (p.committee_chair) factors.push('Committee chair');
-  if (p.seniority_years >= 12) factors.push(`${p.seniority_years}+ years in office`);
+  if (p.seniority_title) factors.push(p.seniority_title);
+  if (p.seniority_years > 0) factors.push(`Approximately ${p.seniority_years} years of legislative service`);
+  if (p.historical_bills_passed) factors.push(`${p.historical_bills_passed.toLocaleString()} bills passed (historical record)`);
+  if (p.prior_role) factors.push(p.prior_role+' (prior session, not confirmed for 90R)');
   if (p.relevant_committee_member) factors.push('Relevant committee assignment');
   if (!factors.length) return {label:'Unassessed', factors:['Awaiting verified 90R committee and leadership assignments'],level:0};
-  return {label:p.leadership_position || p.committee_chair ? 'High institutional access' : 'Established member', factors,level:p.leadership_position || p.committee_chair ? 3 : 2};
+  return {label:p.leadership_position || p.committee_chair ? 'High institutional access' : p.seniority_years >= 12 ? 'Established member' : 'Tenure documented', factors,level:p.leadership_position || p.committee_chair ? 3 : p.seniority_years >= 12 ? 2 : 1};
 }
 
 export function officialUrl(bill) {

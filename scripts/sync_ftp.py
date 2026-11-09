@@ -215,6 +215,7 @@ def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000) -> tuple[
         'data_mode': 'official-ftp',
         'coverage_note': f"{len(parsed)} bill histories read from the official bulk FTP; {len(merged)} combined records. Agency inferences are based on available captions and curated overrides.",
         'sources': ['ftp://ftp.legis.state.tx.us/bills/90r/billhistory/', 'https://capitol.texas.gov/billlookup/filedownloads.aspx'],
+        'author_profiles': prior.get('author_profiles',{}),
         'bills': sorted(merged.values(), key=lambda b:(b.get('filed_at') or '',b['id']),reverse=True),
     }
     return snapshot, {'listed':len(paths),'parsed':len(parsed),'combined':len(merged),'transfer_errors':len(errors)}

@@ -2,7 +2,7 @@ import {AGENCIES, AGENCY_NAME, autoTagBill, assessHearing, authorInfluence, offi
 
 const $ = (selector, root=document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state = {view:'all',bills:[],watch:new Set(),query:'',topic:'',agency:'',chamber:'',stage:'',outlook:'',sort:'newest',onlyWatch:false,meta:null};
+const state = {view:'all',bills:[],watch:new Set(),query:'',topic:'',agency:'',chamber:'',stage:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30,meta:null};
 const storageKey = 'tx-bill-atlas-watch-90r';
 const STORAGE_OK = (()=>{try{localStorage.setItem('__txb_test','1');localStorage.removeItem('__txb_test');return true}catch{return false}})();
 try{state.watch=new Set(JSON.parse(localStorage.getItem(storageKey)||'[]'))}catch{}
@@ -20,6 +20,7 @@ function normalized(raw){
     title:raw.title||raw.description||raw.caption||'No caption available',
     caption:raw.caption||raw.description||raw.title||'',
     author:raw.author||raw.primary_author||'Author not yet available',
+    author_profile:raw.author_profile||state.meta?.author_profiles?.[raw.author||raw.primary_author]||{},
     filed_at:raw.filed_at||raw.status_date||'',
     last_action:raw.last_action||raw.status||'Filed',
     status:raw.status||'Filed',
@@ -32,9 +33,24 @@ async function init(){
   $('.day-box').textContent=new Intl.DateTimeFormat('en-US',{day:'2-digit',timeZone:'America/Chicago'}).format(now);
   $('.heading-date strong').textContent=new Intl.DateTimeFormat('en-US',{month:'short',year:'numeric',timeZone:'America/Chicago'}).format(now).toUpperCase();
   try {
-    const response=await fetch('./data/bills.json',{cache:'no-store'});
-    if(!response.ok)throw Error('Unable to load bill snapshot');
-    const data=await response.json();
+    // Repository JSON is the source of truth for deployed readers. If GitHub
+    // is unreachable, fall back to the last successfully deployed snapshot.
+    const local=location.hostname==='localhost'||location.hostname==='127.0.0.1'||location.hostname==='terminal.local';
+    const urls=local?['./data/bills.json','https://raw.githubusercontent.com/ctharvey/texas_bill_tracker/main/data/bills.json']:[
+      'https://raw.githubusercontent.com/ctharvey/texas_bill_tracker/main/data/bills.json','./data/bills.json'
+    ];
+    let data,loadedFrom;
+    for(const url of urls){
+      try{
+        const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(7500)});
+        if(!response.ok)throw Error(`HTTP ${response.status}`);
+        const candidate=await response.json();
+        if(candidate.session!=='90R'||!Array.isArray(candidate.bills)||!candidate.bills.length)throw Error('Invalid bill snapshot');
+        data=candidate;loadedFrom=url;break;
+      }catch(error){console.warn(`Bill source unavailable: ${url}`,error.message)}
+    }
+    if(!data)throw Error('Unable to load bill snapshot');
+    data.loaded_from=loadedFrom.includes('raw.githubusercontent.com')?'GitHub source snapshot':'Bundled fallback snapshot';
     state.meta=data;
     state.bills=(data.bills||[]).map(normalized).filter(Boolean);
   }catch(error){
@@ -125,14 +141,15 @@ function renderResults(){
   const list=filteredBills();
   $('#result-count').textContent=`${list.length} ${list.length===1?'bill':'bills'}`;
   $('#result-note').textContent=state.meta?.data_mode==='curated'?' · within curated sample':' · matching filters';
-  $('#bill-list').innerHTML=list.length?list.map(billCard).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p></div>`;
-  $('#results-bottom').textContent=state.meta?.coverage_note||'Check the official record for authoritative status.';
+  const visible=list.slice(0,state.visibleCount);
+  $('#bill-list').innerHTML=list.length?visible.map(billCard).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p></div>`;
+  $('#results-bottom').innerHTML=`${list.length>state.visibleCount?`<button class="outline-button" id="load-more">Load 30 more · showing ${visible.length} of ${list.length}</button><div style="height:12px"></div>`:''}${esc(state.meta?.coverage_note||'Check the official record for authoritative status.')}`;
 }
 
 function billCard(b){
-  const h=assessHearing(b);const watched=state.watch.has(b.id);
+  const h=assessHearing(b);const watched=state.watch.has(b.id);const influence=authorInfluence(b);
   const agencyTags=b.agencies.slice(0,2).map(a=>`<span class="tag agency" title="${esc(a.reason||'')}">${esc((AGENCY_NAME[a.id]||a.id).replace(/^Texas /,'').replace(/ Department of /,' · '))}</span>`).join('');
-  return `<article class="bill-card"><div class="bill-left"><div class="bill-head"><span class="bill-number">${esc(b.number)}</span><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span></div><h3 class="bill-title">${esc(b.title)}</h3><p class="bill-description">${esc(b.caption)}</p><div class="bill-tags">${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${agencyTags}${b.agencies.length>2?`<span class="tag agency">+${b.agencies.length-2} agencies</span>`:''}</div><div class="bill-meta"><span>By <b>${esc(b.author)}</b></span><span>Filed ${dateText(b.filed_at)}</span><span>${b.agencies.length} agency ${b.agencies.length===1?'link':'links'}</span></div></div><div class="bill-right"><button class="watch-button" data-watch="${b.id}" aria-label="${watched?'Remove from':'Add to'} watchlist" aria-pressed="${watched}">${watched?'★':'☆'}</button><div><div class="outlook-label">Hearing progress</div><div class="outlook-value">${esc(h.label)}</div><button class="bill-open" data-open="${b.id}">Bill details →</button></div></div></article>`;
+  return `<article class="bill-card"><div class="bill-left"><div class="bill-head"><span class="bill-number">${esc(b.number)}</span><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span>${influence.level?`<span class="influence-pill">◆ ${esc(influence.label)}</span>`:''}</div><h3 class="bill-title">${esc(b.title)}</h3><p class="bill-description">${esc(b.caption)}</p><div class="bill-tags">${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${agencyTags}${b.agencies.length>2?`<span class="tag agency">+${b.agencies.length-2} agencies</span>`:''}</div><div class="bill-meta"><span>By <b>${esc(b.author)}</b></span><span>Filed ${dateText(b.filed_at)}</span><span>${b.agencies.length} agency ${b.agencies.length===1?'link':'links'}</span></div></div><div class="bill-right"><button class="watch-button" data-watch="${b.id}" aria-label="${watched?'Remove from':'Add to'} watchlist" aria-pressed="${watched}">${watched?'★':'☆'}</button><div><div class="outlook-label">Hearing progress</div><div class="outlook-value">${esc(h.label)}</div><button class="bill-open" data-open="${b.id}">Bill details →</button></div></div></article>`;
 }
 
 function agenciesMarkup(){
@@ -154,7 +171,7 @@ function methodMarkup(){
 }
 
 function dataMarkup(){
-  return `<div class="section-head"><div><div class="section-overline">DATA PROVENANCE</div><h2>Source, coverage & export</h2></div></div><div class="subpage-card"><div class="data-field"><span class="data-label">Legislative session</span><span class="data-value">90R · 2027</span></div><div class="data-field"><span class="data-label">Loaded records</span><span class="data-value">${state.bills.length}</span></div><div class="data-field"><span class="data-label">Snapshot mode</span><span class="data-value">${esc(state.meta?.data_mode||'Unknown')}</span></div><div class="data-field"><span class="data-label">Last generated</span><span class="data-value">${stampText(state.meta?.generated_at)}</span></div><p style="font-size:12px;color:#748697;line-height:1.65;margin:18px 0">${esc(state.meta?.coverage_note||'Coverage is not guaranteed complete.')}</p><div class="info-callout"><strong>Official source policy:</strong> The Texas Legislative Council publishes bulk material through anonymous FTP and discourages data mining the public Legislature Online pages. The project includes an updater for the official bulk files, with snapshot validation so a failed import cannot silently replace data with an empty result. <a class="text-link" href="https://capitol.texas.gov/billlookup/filedownloads.aspx" target="_blank" rel="noopener noreferrer">Read the source policy ↗</a></div><div class="data-actions"><button class="primary-button" id="import-trigger">↑ Import CSV or JSON</button><button class="outline-button" id="export-csv">↓ Export current results</button><a class="outline-button" href="https://github.com/ctharvey/texas_bill_tracker" target="_blank" rel="noopener noreferrer">Source code ↗</a><input type="file" id="import-file" accept=".csv,.json,text/csv,application/json" hidden></div><p style="font-size:11px;color:#91a0ad;margin:14px 0 0">Imports are temporary to this browser session; they do not alter the public dataset. Watchlist stars are stored on this device.</p></div>`;
+  return `<div class="section-head"><div><div class="section-overline">DATA PROVENANCE</div><h2>Source, coverage & export</h2></div></div><div class="subpage-card"><div class="data-field"><span class="data-label">Legislative session</span><span class="data-value">90R · 2027</span></div><div class="data-field"><span class="data-label">Loaded records</span><span class="data-value">${state.bills.length}</span></div><div class="data-field"><span class="data-label">Snapshot mode</span><span class="data-value">${esc(state.meta?.data_mode||'Unknown')}</span></div><div class="data-field"><span class="data-label">Read from</span><span class="data-value">${esc(state.meta?.loaded_from||'User import')}</span></div><div class="data-field"><span class="data-label">Last generated</span><span class="data-value">${stampText(state.meta?.generated_at)}</span></div><p style="font-size:12px;color:#748697;line-height:1.65;margin:18px 0">${esc(state.meta?.coverage_note||'Coverage is not guaranteed complete.')}</p><div class="info-callout"><strong>Official source policy:</strong> The Texas Legislative Council publishes bulk material through anonymous FTP and discourages data mining the public Legislature Online pages. The project includes an updater for the official bulk files, with snapshot validation so a failed import cannot silently replace data with an empty result. <a class="text-link" href="https://capitol.texas.gov/billlookup/filedownloads.aspx" target="_blank" rel="noopener noreferrer">Read the source policy ↗</a></div><div class="data-actions"><button class="primary-button" id="import-trigger">↑ Import CSV or JSON</button><button class="outline-button" id="export-csv">↓ Export current results</button><a class="outline-button" href="https://github.com/ctharvey/texas_bill_tracker" target="_blank" rel="noopener noreferrer">Source code ↗</a><input type="file" id="import-file" accept=".csv,.json,text/csv,application/json" hidden></div><p style="font-size:11px;color:#91a0ad;margin:14px 0 0">Imports are temporary to this browser session; they do not alter the public dataset. Watchlist stars are stored on this device.</p></div>`;
 }
 
 function showDrawer(id){
@@ -162,7 +179,7 @@ function showDrawer(id){
   const h=assessHearing(b),influence=authorInfluence(b);
   const agencyRows=b.agencies.length?b.agencies.map(a=>`<div class="agency-row"><div><strong>${esc(AGENCY_NAME[a.id]||a.id)}</strong><p>${esc(a.reason||'Relationship not yet annotated')}</p></div><span class="confidence ${a.relationship==='direct'?'direct':''}">${a.relationship==='direct'?'Direct':'Possible'}</span></div>`).join(''):'<p>No agency has been tagged yet. This does not establish that none are affected.</p>';
   const watched=state.watch.has(b.id);
-  $('#detail-drawer').innerHTML=`<div class="drawer-top"><span class="drawer-number">90R / ${esc(b.number)}</span><button class="drawer-close" id="drawer-close" aria-label="Close bill details">×</button></div><div class="drawer-pills"><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span></div><h2 style="margin-top:14px">${esc(b.title)}</h2><p class="drawer-caption">${esc(b.caption)}</p><div class="drawer-pills">${b.topics.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div><div class="drawer-meta-grid"><div><small>Filed by</small><strong>${esc(b.author)}</strong></div><div><small>Filed on</small><strong>${dateText(b.filed_at)}</strong></div><div><small>Most recent action</small><strong>${esc(b.last_action)}</strong></div><div><small>Hearing status</small><strong>${esc(h.label)}</strong></div></div><section class="drawer-section"><h3>Hearing progress & evidence</h3><div class="evidence-card"><strong>${esc(h.label)} · ${h.level===0?'No rating yet':'Verified procedural signal'}</strong><p>${esc(h.detail)}</p><ul>${h.facts.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div></section><section class="drawer-section"><h3>Author prominence</h3><div class="evidence-card"><strong>${esc(influence.label)}</strong><p>${esc(influence.factors.join(' · '))}</p></div></section><section class="drawer-section"><h3>Potentially affected agencies (${b.agencies.length})</h3><p>All known tags are listed. Possible links are model/rule inferences, not confirmed legal obligations.</p>${agencyRows}</section><section class="drawer-section"><h3>Types of impact</h3><div class="drawer-pills">${b.impacts.length?b.impacts.map(t=>`<span class="tag related">${esc(t)}</span>`).join(''):'<span class="tag">Pending analysis</span>'}</div></section>${b.constituencies?.length?`<section class="drawer-section"><h3>People and institutions affected</h3><div class="drawer-pills">${b.constituencies.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></section>`:''}<section class="drawer-section"><h3>Source & verification</h3><p>Review the bill history and latest text before relying on any classification. <a class="text-link" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a></p></section><div class="drawer-actions"><a class="primary-button" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Read official bill ↗</a><button class="outline-button" data-watch="${b.id}">${watched?'★ Remove from watchlist':'☆ Follow this bill'}</button></div>`;
+  $('#detail-drawer').innerHTML=`<div class="drawer-top"><span class="drawer-number">90R / ${esc(b.number)}</span><button class="drawer-close" id="drawer-close" aria-label="Close bill details">×</button></div><div class="drawer-pills"><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span></div><h2 style="margin-top:14px">${esc(b.title)}</h2><p class="drawer-caption">${esc(b.caption)}</p><div class="drawer-pills">${b.topics.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div><div class="drawer-meta-grid"><div><small>Filed by</small><strong>${esc(b.author)}</strong></div><div><small>Filed on</small><strong>${dateText(b.filed_at)}</strong></div><div><small>Most recent action</small><strong>${esc(b.last_action)}</strong></div><div><small>Hearing status</small><strong>${esc(h.label)}</strong></div></div><section class="drawer-section"><h3>Hearing progress & evidence</h3><div class="evidence-card"><strong>${esc(h.label)} · ${h.level===0?'No rating yet':'Verified procedural signal'}</strong><p>${esc(h.detail)}</p><ul>${h.facts.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div></section><section class="drawer-section"><h3>Author prominence</h3><div class="evidence-card"><strong>${esc(influence.label)}</strong><p>${esc(influence.factors.join(' · '))}</p>${b.author_profile?.source?`<p><a class="text-link" href="${esc(b.author_profile.source)}" target="_blank" rel="noopener noreferrer">Verified member biography ↗</a></p>`:''}</div></section><section class="drawer-section"><h3>Potentially affected agencies (${b.agencies.length})</h3><p>All known tags are listed. Possible links are model/rule inferences, not confirmed legal obligations.</p>${agencyRows}</section><section class="drawer-section"><h3>Types of impact</h3><div class="drawer-pills">${b.impacts.length?b.impacts.map(t=>`<span class="tag related">${esc(t)}</span>`).join(''):'<span class="tag">Pending analysis</span>'}</div></section>${b.constituencies?.length?`<section class="drawer-section"><h3>People and institutions affected</h3><div class="drawer-pills">${b.constituencies.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></section>`:''}<section class="drawer-section"><h3>Source & verification</h3><p>Review the bill history and latest text before relying on any classification. <a class="text-link" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a></p></section><div class="drawer-actions"><a class="primary-button" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Read official bill ↗</a><button class="outline-button" data-watch="${b.id}">${watched?'★ Remove from watchlist':'☆ Follow this bill'}</button></div>`;
   $('#detail-drawer').hidden=false;$('#drawer-scrim').hidden=false;document.body.style.overflow='hidden';$('#drawer-close').focus();
 }
 
@@ -173,20 +190,21 @@ function handleClick(e){
   const nav=e.target.closest('[data-view]');if(nav){e.preventDefault();location.hash=nav.dataset.view;setView(nav.dataset.view);return}
   const open=e.target.closest('[data-open]');if(open){showDrawer(open.dataset.open);return}
   const star=e.target.closest('[data-watch]');if(star){const id=star.dataset.watch;state.watch.has(id)?state.watch.delete(id):state.watch.add(id);if(STORAGE_OK)localStorage.setItem(storageKey,JSON.stringify([...state.watch]));renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(!$('#detail-drawer').hidden)showDrawer(id);toast(state.watch.has(id)?`${id} added to your watchlist`:`${id} removed from your watchlist`);return}
-  const topic=e.target.closest('[data-topic]');if(topic){state.topic=topic.dataset.topic;renderContent();return}
-  const pick=e.target.closest('[data-agency-pick]');if(pick){state.agency=pick.dataset.agencyPick;state.view='all';location.hash='all';setView('all');return}
-  if(e.target.closest('#clear-filters')){Object.assign(state,{query:'',topic:'',agency:'',chamber:'',stage:'',outlook:'',sort:'newest',onlyWatch:false});renderContent();return}
-  if(e.target.closest('#watch-filter')){state.onlyWatch=!state.onlyWatch;renderContent();return}
+  const topic=e.target.closest('[data-topic]');if(topic){state.topic=topic.dataset.topic;state.visibleCount=30;renderContent();return}
+  const pick=e.target.closest('[data-agency-pick]');if(pick){state.agency=pick.dataset.agencyPick;state.visibleCount=30;state.view='all';location.hash='all';setView('all');return}
+  if(e.target.closest('#clear-filters')){Object.assign(state,{query:'',topic:'',agency:'',chamber:'',stage:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30});renderContent();return}
+  if(e.target.closest('#watch-filter')){state.onlyWatch=!state.onlyWatch;state.visibleCount=30;renderContent();return}
+  if(e.target.closest('#load-more')){state.visibleCount+=30;renderResults();return}
   if(e.target.closest('#export-csv')){exportCsv();return}
   if(e.target.closest('#import-trigger')){$('#import-file').click();return}
   if(e.target.closest('#drawer-close')){closeDrawer();return}
 }
 
-function handleInput(e){if(e.target.id==='bill-search'){state.query=e.target.value;renderResults()}}
+function handleInput(e){if(e.target.id==='bill-search'){state.query=e.target.value;state.visibleCount=30;renderResults()}}
 function handleChange(e){
   const m={'filter-topic':'topic','filter-agency':'agency','filter-chamber':'chamber','filter-stage':'stage','filter-outlook':'outlook'};
-  if(m[e.target.id]){state[m[e.target.id]]=e.target.value;renderResults();return}
-  if(e.target.id==='sort-order'){state.sort=({'Newest filed':'newest','Bill number':'number','Most agencies':'agencies','Hearing progress':'hearing','Author influence':'influence'})[e.target.value]||'newest';renderResults();return}
+  if(m[e.target.id]){state[m[e.target.id]]=e.target.value;state.visibleCount=30;renderResults();return}
+  if(e.target.id==='sort-order'){state.sort=({'Newest filed':'newest','Bill number':'number','Most agencies':'agencies','Hearing progress':'hearing','Author influence':'influence'})[e.target.value]||'newest';state.visibleCount=30;renderResults();return}
   if(e.target.id==='import-file'&&e.target.files?.length)importFile(e.target.files[0]);
 }
 
@@ -213,7 +231,7 @@ async function importFile(file){
     const valid=rows.map(normalized).filter(Boolean);
     if(!valid.length)throw Error('No valid Texas bill numbers found');
     state.bills=valid;state.meta={session:'90R',data_mode:'local import',generated_at:new Date().toISOString(),coverage_note:`Local file: ${file.name}. Imported rows are visible only during this session.`};
-    Object.assign(state,{topic:'',agency:'',chamber:'',stage:'',outlook:'',query:''});setView('all');location.hash='all';toast(`Imported ${valid.length} bills`);
+    Object.assign(state,{topic:'',agency:'',chamber:'',stage:'',outlook:'',query:'',visibleCount:30});setView('all');location.hash='all';toast(`Imported ${valid.length} bills`);
   }catch(err){toast(`Import failed: ${err.message}`)}
 }
 
