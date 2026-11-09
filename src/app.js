@@ -63,7 +63,13 @@ async function init(){
   document.addEventListener('click',handleClick);
   document.addEventListener('change',handleChange);
   document.addEventListener('input',handleInput);
-  document.addEventListener('keydown',event=>{if(event.key==='Escape')closeDrawer()});
+  document.addEventListener('focusin',event=>{
+    if(event.target.id==='filter-agency')showAgencyChoices('');
+  });
+  document.addEventListener('keydown',event=>{
+    if(event.target.id==='filter-agency'&&handleAgencyKeydown(event))return;
+    if(event.key==='Escape')closeDrawer();
+  });
   $('#drawer-scrim').addEventListener('click',closeDrawer);
   window.addEventListener('hashchange',()=>setView(location.hash.slice(1)||'all'));
   setView(['all','watchlist','agencies','method','data'].includes(location.hash.slice(1))?location.hash.slice(1):'all');
@@ -118,11 +124,11 @@ function explorerMarkup(){
   const agencyCounts=new Map();
   for(const bill of state.bills)for(const agency of bill.agencies)agencyCounts.set(agency.id,(agencyCounts.get(agency.id)||0)+1);
   const agencies=AGENCIES.map(a=>a.id).sort((a,b)=>a==='all-state-agencies'?-1:b==='all-state-agencies'?1:(AGENCY_NAME[a]||a).localeCompare(AGENCY_NAME[b]||b));
-  const agencyOpts=agencies.map(id=>`<option value="${esc(id)}" ${state.agency===id?'selected':''}>${esc(AGENCY_NAME[id]||id)} (${agencyCounts.get(id)||0})</option>`).join('');
+  const agencyOpts=agencies.map((id,i)=>`<div id="agency-option-${i+1}" role="option" class="agency-option" data-agency-option="${esc(id)}" data-agency-label="${esc(AGENCY_NAME[id]||id)}" aria-selected="${state.agency===id}"><span>${esc(AGENCY_NAME[id]||id)}</span><span class="agency-option-count">${agencyCounts.get(id)||0}</span></div>`).join('');
   const popular=['Education','Healthcare','Elections','Taxes','Immigration','Data centers','Local government','Energy & utilities'];
   return `<div class="section-head"><div><div class="section-overline">EXPLORE LEGISLATION</div><h2>${state.view==='watchlist'?'Watched bills':'Bill explorer'}</h2></div><span class="subtitle">90R · House & Senate · All bill types</span></div>
     <div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><button class="outline-button" id="clear-filters">Clear filters</button><button class="primary-button" id="export-csv">↓ Export results</button></div>
-    <div class="filter-row"><select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><select aria-label="Affected agency" id="filter-agency"><option value="">All affected agencies</option>${agencyOpts}</select><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted'],state.stage,'Any stage')}</select><select aria-label="Hearing status" id="filter-outlook">${options(['Not rated','Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></div>
+    <div class="filter-row"><select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><div class="agency-combobox" id="agency-combobox"><input aria-label="Affected agency" aria-controls="agency-options" aria-expanded="false" aria-autocomplete="list" role="combobox" id="filter-agency" placeholder="All affected agencies" value="${esc(AGENCY_NAME[state.agency]||'')}" autocomplete="off"><span class="agency-chevron" aria-hidden="true">⌄</span><div class="agency-options" id="agency-options" role="listbox" hidden><div id="agency-option-0" role="option" class="agency-option" data-agency-option="" data-agency-label="All affected agencies" aria-selected="${!state.agency}"><span>All affected agencies</span></div>${agencyOpts}<p class="agency-no-results" id="agency-no-results" hidden>No matching agencies</p></div></div><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted'],state.stage,'Any stage')}</select><select aria-label="Hearing status" id="filter-outlook">${options(['Not rated','Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></div>
     <div class="topic-strip" aria-label="Quick topic filters"><button class="topic-chip ${state.topic===''?'selected':''}" data-topic="">All topics</button>${popular.map(t=>`<button class="topic-chip ${state.topic===t?'selected':''}" data-topic="${esc(t)}">${esc(t)}</button>`).join('')}</div>
     <div class="results-header"><div><strong id="result-count">—</strong><span id="result-note"></span></div><select id="sort-order" aria-label="Sort bills">${options(['Newest filed','Bill number','Most agencies','Hearing progress','Author influence'],({'newest':'Newest filed','number':'Bill number','agencies':'Most agencies','hearing':'Hearing progress','influence':'Author influence'})[state.sort],'Sort by')}</select></div><div class="bill-list" id="bill-list"></div><div class="explorer-bottom" id="results-bottom"></div>`;
 }
@@ -190,9 +196,79 @@ function showDrawer(id){
 }
 
 function closeDrawer(){$('#detail-drawer').hidden=true;$('#drawer-scrim').hidden=true;document.body.style.overflow=''}
+
+function showAgencyChoices(query=''){
+  const input=$('#filter-agency'),popup=$('#agency-options');
+  if(!input||!popup)return;
+  if(!query)input.value='';
+  const needle=query.trim().toLocaleLowerCase();
+  let visible=0;
+  popup.querySelectorAll('[data-agency-option]').forEach(option=>{
+    option.hidden=!!needle&&!option.dataset.agencyLabel.toLocaleLowerCase().includes(needle);
+    if(!option.hidden)visible++;
+    option.classList.remove('active');
+  });
+  $('#agency-no-results').hidden=visible!==0;
+  popup.hidden=false;
+  input.setAttribute('aria-expanded','true');
+  input.removeAttribute('aria-activedescendant');
+  popup.scrollTop=0;
+}
+
+function hideAgencyChoices(){
+  const input=$('#filter-agency'),popup=$('#agency-options');
+  if(!input||!popup)return;
+  popup.hidden=true;
+  input.value=AGENCY_NAME[state.agency]||'';
+  input.setAttribute('aria-expanded','false');
+  input.removeAttribute('aria-activedescendant');
+}
+
+function pickAgency(id){
+  state.agency=id;
+  state.visibleCount=30;
+  hideAgencyChoices();
+  renderResults();
+}
+
+function handleAgencyKeydown(event){
+  const popup=$('#agency-options');
+  if(event.key==='Escape'){
+    hideAgencyChoices();
+    return true;
+  }
+  if(event.key==='Tab'){
+    hideAgencyChoices();
+    return false;
+  }
+  if(!['ArrowDown','ArrowUp','Enter'].includes(event.key))return false;
+  if(popup.hidden)showAgencyChoices('');
+  const options=[...popup.querySelectorAll('[data-agency-option]:not([hidden])')];
+  if(!options.length)return true;
+  event.preventDefault();
+  const current=options.findIndex(option=>option.classList.contains('active'));
+  if(event.key==='Enter'){
+    pickAgency((options[current]||options[0]).dataset.agencyOption);
+    return true;
+  }
+  const next=options[current===-1?(event.key==='ArrowDown'?0:options.length-1):(current+(event.key==='ArrowDown'?1:-1)+options.length)%options.length];
+  options.forEach(option=>option.classList.toggle('active',option===next));
+  event.target.setAttribute('aria-activedescendant',next.id);
+  next.scrollIntoView({block:'nearest'});
+  return true;
+}
 function toast(message){const t=$('#toast');t.textContent=message;t.classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove('visible'),2500)}
 
 function handleClick(e){
+  const agencyOption=e.target.closest('[data-agency-option]');
+  if(agencyOption){pickAgency(agencyOption.dataset.agencyOption);return}
+  if(e.target.closest('#agency-combobox')){
+    const input=$('#filter-agency');
+    if(e.target!==input)input.focus();
+    if($('#agency-options').hidden)showAgencyChoices('');
+    return;
+  }
+  hideAgencyChoices();
   const nav=e.target.closest('[data-view]');if(nav){e.preventDefault();location.hash=nav.dataset.view;setView(nav.dataset.view);return}
   const open=e.target.closest('[data-open]');if(open){showDrawer(open.dataset.open);return}
   const star=e.target.closest('[data-watch]');if(star){const id=star.dataset.watch;state.watch.has(id)?state.watch.delete(id):state.watch.add(id);if(STORAGE_OK)localStorage.setItem(storageKey,JSON.stringify([...state.watch]));renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(!$('#detail-drawer').hidden)showDrawer(id);toast(state.watch.has(id)?`${id} added to your watchlist`:`${id} removed from your watchlist`);return}
@@ -206,9 +282,15 @@ function handleClick(e){
   if(e.target.closest('#drawer-close')){closeDrawer();return}
 }
 
-function handleInput(e){if(e.target.id==='bill-search'){state.query=e.target.value;state.visibleCount=30;renderResults()}}
+function handleInput(e){
+  if(e.target.id==='bill-search'){state.query=e.target.value;state.visibleCount=30;renderResults()}
+  if(e.target.id==='filter-agency'){
+    if(state.agency){state.agency='';state.visibleCount=30;renderResults()}
+    showAgencyChoices(e.target.value);
+  }
+}
 function handleChange(e){
-  const m={'filter-topic':'topic','filter-agency':'agency','filter-chamber':'chamber','filter-stage':'stage','filter-outlook':'outlook'};
+  const m={'filter-topic':'topic','filter-chamber':'chamber','filter-stage':'stage','filter-outlook':'outlook'};
   if(m[e.target.id]){state[m[e.target.id]]=e.target.value;state.visibleCount=30;renderResults();return}
   if(e.target.id==='sort-order'){state.sort=({'Newest filed':'newest','Bill number':'number','Most agencies':'agencies','Hearing progress':'hearing','Author influence':'influence'})[e.target.value]||'newest';state.visibleCount=30;renderResults();return}
   if(e.target.id==='import-file'&&e.target.files?.length)importFile(e.target.files[0]);
