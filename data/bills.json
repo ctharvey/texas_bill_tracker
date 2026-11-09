@@ -1,6 +1,6 @@
 {
   "session": "90R",
-  "generated_at": "2026-11-09T21:08:34.293965Z",
+  "generated_at": "2026-11-09T21:34:23.653597Z",
   "data_mode": "official-ftp",
   "coverage_note": "1201 bill histories read from the official bulk FTP; 1201 combined records. Agency inferences are based on available captions and curated overrides.",
   "sources": [
