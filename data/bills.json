@@ -1,8 +1,8 @@
 {
   "session": "90R",
-  "generated_at": "2026-11-09T21:34:23.653597Z",
+  "generated_at": "2026-11-09T23:30:45.815132Z",
   "data_mode": "official-ftp",
-  "coverage_note": "1201 bill histories read from the official bulk FTP; 1201 combined records. Agency inferences are based on available captions and curated overrides.",
+  "coverage_note": "1261 bill histories read from the official bulk FTP; 1261 combined records. Agency inferences are based on available captions and curated overrides.",
   "sources": [
     "ftp://ftp.legis.state.tx.us/bills/90r/billhistory/",
     "https://capitol.texas.gov/billlookup/filedownloads.aspx"
@@ -124,6 +124,78 @@
       "coauthors": [],
       "sponsors": [],
       "cosponsors": []
+    },
+    {
+      "id": "SJR14",
+      "number": "SJR 14",
+      "chamber": "Senate",
+      "title": "Proposing a constitutional amendment to authorize the legislature to set a lower limit on the maximum appraised value of a residence homestead for ad valorem taxation.",
+      "caption": "Proposing a constitutional amendment to authorize the legislature to set a lower limit on the maximum appraised value of a residence homestead for ad valorem taxation.",
+      "author": "Flores",
+      "authors": [
+        "Flores"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_joint_resolutions/SJR00001_SJR00099/SJR 14.xml"
+    },
+    {
+      "id": "SJR13",
+      "number": "SJR 13",
+      "chamber": "Senate",
+      "title": "Proposing a constitutional amendment authorizing the Kickapoo Traditional Tribe of Texas to conduct gaming on certain lands under state law; limiting certain taxes and fees.",
+      "caption": "Proposing a constitutional amendment authorizing the Kickapoo Traditional Tribe of Texas to conduct gaming on certain lands under state law; limiting certain taxes and fees.",
+      "author": "Gutierrez",
+      "authors": [
+        "Gutierrez"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_joint_resolutions/SJR00001_SJR00099/SJR 13.xml"
+    },
+    {
+      "id": "SJR12",
+      "number": "SJR 12",
+      "chamber": "Senate",
+      "title": "Proposing a constitutional amendment authorizing the Kickapoo Traditional Tribe of Texas to conduct gaming by executing a gaming compact with this state; providing for occupational licensing under the compact; limiting certain taxes and fees.",
+      "caption": "Proposing a constitutional amendment authorizing the Kickapoo Traditional Tribe of Texas to conduct gaming by executing a gaming compact with this state; providing for occupational licensing under the compact; limiting certain taxes and fees.",
+      "author": "Gutierrez",
+      "authors": [
+        "Gutierrez"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_joint_resolutions/SJR00001_SJR00099/SJR 12.xml"
     },
     {
       "id": "SJR11",
@@ -1933,6 +2005,369 @@
       "coauthors": [],
       "sponsors": [],
       "cosponsors": []
+    },
+    {
+      "id": "SB309",
+      "number": "SB 309",
+      "chamber": "Senate",
+      "title": "Relating to prohibiting the use of credit scoring in certain lines of personal insurance.",
+      "caption": "Relating to prohibiting the use of credit scoring in certain lines of personal insurance.",
+      "author": "Gutierrez | Cook, Molly",
+      "authors": [
+        "Gutierrez",
+        "Cook, Molly"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00300_SB00399/SB 309.xml"
+    },
+    {
+      "id": "SB308",
+      "number": "SB 308",
+      "chamber": "Senate",
+      "title": "Relating to prohibiting the manufacture of firearms and major components of firearms with a three-dimensional printer, the possession, transport, repair, or sale of those firearms and components, and the distribution or publication of the schematics for those firearms and components; creating criminal offenses.",
+      "caption": "Relating to prohibiting the manufacture of firearms and major components of firearms with a three-dimensional printer, the possession, transport, repair, or sale of those firearms and components, and the distribution or publication of the schematics for those firearms and components; creating criminal offenses.",
+      "author": "Gutierrez | Cook, Molly | Menéndez",
+      "authors": [
+        "Gutierrez",
+        "Cook, Molly",
+        "Menéndez"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00300_SB00399/SB 308.xml"
+    },
+    {
+      "id": "SB307",
+      "number": "SB 307",
+      "chamber": "Senate",
+      "title": "Relating to composition of the board of directors of the Central Texas Water Alliance.",
+      "caption": "Relating to composition of the board of directors of the Central Texas Water Alliance.",
+      "author": "Flores",
+      "authors": [
+        "Flores"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00300_SB00399/SB 307.xml"
+    },
+    {
+      "id": "SB306",
+      "number": "SB 306",
+      "chamber": "Senate",
+      "title": "Relating to information that a property owners' association must file with the Texas Real Estate Commission.",
+      "caption": "Relating to information that a property owners' association must file with the Texas Real Estate Commission.",
+      "author": "Flores",
+      "authors": [
+        "Flores"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00300_SB00399/SB 306.xml"
+    },
+    {
+      "id": "SB305",
+      "number": "SB 305",
+      "chamber": "Senate",
+      "title": "Relating to taxes imposed on vinous liquor.",
+      "caption": "Relating to taxes imposed on vinous liquor.",
+      "author": "Flores",
+      "authors": [
+        "Flores"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00300_SB00399/SB 305.xml"
+    },
+    {
+      "id": "SB304",
+      "number": "SB 304",
+      "chamber": "Senate",
+      "title": "Relating to the Kimble County Hospital District of Kimble County, Texas.",
+      "caption": "Relating to the Kimble County Hospital District of Kimble County, Texas.",
+      "author": "Flores",
+      "authors": [
+        "Flores"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00300_SB00399/SB 304.xml"
+    },
+    {
+      "id": "SB303",
+      "number": "SB 303",
+      "chamber": "Senate",
+      "title": "Relating to inservice training on identifying abuse, neglect, and illegal, unprofessional, and unethical conduct in certain health care facilities.",
+      "caption": "Relating to inservice training on identifying abuse, neglect, and illegal, unprofessional, and unethical conduct in certain health care facilities.",
+      "author": "Flores",
+      "authors": [
+        "Flores"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00300_SB00399/SB 303.xml"
+    },
+    {
+      "id": "SB302",
+      "number": "SB 302",
+      "chamber": "Senate",
+      "title": "Relating to the subdivision of land outside a municipality for which a plat must be filed.",
+      "caption": "Relating to the subdivision of land outside a municipality for which a plat must be filed.",
+      "author": "Flores",
+      "authors": [
+        "Flores"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00300_SB00399/SB 302.xml"
+    },
+    {
+      "id": "SB301",
+      "number": "SB 301",
+      "chamber": "Senate",
+      "title": "Relating to the delivery and direct shipment of certain alcoholic beverages to ultimate consumers; creating criminal offenses.",
+      "caption": "Relating to the delivery and direct shipment of certain alcoholic beverages to ultimate consumers; creating criminal offenses.",
+      "author": "Flores",
+      "authors": [
+        "Flores"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00300_SB00399/SB 301.xml"
+    },
+    {
+      "id": "SB300",
+      "number": "SB 300",
+      "chamber": "Senate",
+      "title": "Relating to the delivery of alcoholic beverages by holders of a consumer delivery permit.",
+      "caption": "Relating to the delivery of alcoholic beverages by holders of a consumer delivery permit.",
+      "author": "Flores",
+      "authors": [
+        "Flores"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00300_SB00399/SB 300.xml"
+    },
+    {
+      "id": "SB299",
+      "number": "SB 299",
+      "chamber": "Senate",
+      "title": "Relating to memorial markers for certain officers killed in the line of duty.",
+      "caption": "Relating to memorial markers for certain officers killed in the line of duty.",
+      "author": "Flores",
+      "authors": [
+        "Flores"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00200_SB00299/SB 299.xml"
+    },
+    {
+      "id": "SB298",
+      "number": "SB 298",
+      "chamber": "Senate",
+      "title": "Relating to the limitation on increases in the appraised value of a residence homestead for ad valorem taxation.",
+      "caption": "Relating to the limitation on increases in the appraised value of a residence homestead for ad valorem taxation.",
+      "author": "Flores",
+      "authors": [
+        "Flores"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00200_SB00299/SB 298.xml"
+    },
+    {
+      "id": "SB297",
+      "number": "SB 297",
+      "chamber": "Senate",
+      "title": "Relating to one-time emergency household economic relief payments in response to a statewide household affordability emergency; making an appropriation.",
+      "caption": "Relating to one-time emergency household economic relief payments in response to a statewide household affordability emergency; making an appropriation.",
+      "author": "Gutierrez",
+      "authors": [
+        "Gutierrez"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00200_SB00299/SB 297.xml"
+    },
+    {
+      "id": "SB296",
+      "number": "SB 296",
+      "chamber": "Senate",
+      "title": "Relating to the siting, construction, permitting, and operation of certain data centers; requiring local option elections; imposing a temporary moratorium; establishing an annual payments to county residents; repealing certain tax exemptions; providing civil penalties.",
+      "caption": "Relating to the siting, construction, permitting, and operation of certain data centers; requiring local option elections; imposing a temporary moratorium; establishing an annual payments to county residents; repealing certain tax exemptions; providing civil penalties.",
+      "author": "Gutierrez",
+      "authors": [
+        "Gutierrez"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00200_SB00299/SB 296.xml"
+    },
+    {
+      "id": "SB295",
+      "number": "SB 295",
+      "chamber": "Senate",
+      "title": "Relating to the minimum wage.",
+      "caption": "Relating to the minimum wage.",
+      "author": "Gutierrez",
+      "authors": [
+        "Gutierrez"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 S Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Received by the Secretary of the Senate",
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/senate_bills/SB00200_SB00299/SB 295.xml"
     },
     {
       "id": "SB294",
@@ -6811,6 +7246,29 @@
       "cosponsors": []
     },
     {
+      "id": "HR16",
+      "number": "HR 16",
+      "chamber": "House",
+      "title": "Recognizing the holy month of Ramadan 2027.",
+      "caption": "Recognizing the holy month of Ramadan 2027.",
+      "author": "Lalani",
+      "authors": [
+        "Lalani"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_resolutions/HR00001_HR00099/HR 16.xml"
+    },
+    {
       "id": "HR15",
       "number": "HR 15",
       "chamber": "House",
@@ -8352,11 +8810,724 @@
       "cosponsors": []
     },
     {
+      "id": "HB999",
+      "number": "HB 999",
+      "chamber": "House",
+      "title": "Relating to the civil service status of emergency medical services personnel employed by local governmental entities other than police or fire departments in certain political subdivisions.",
+      "caption": "Relating to the civil service status of emergency medical services personnel employed by local governmental entities other than police or fire departments in certain political subdivisions.",
+      "author": "Cole",
+      "authors": [
+        "Cole"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 999.xml"
+    },
+    {
+      "id": "HB998",
+      "number": "HB 998",
+      "chamber": "House",
+      "title": "Relating to the regulation of roadside vendors and solicitors in certain counties.",
+      "caption": "Relating to the regulation of roadside vendors and solicitors in certain counties.",
+      "author": "Cole",
+      "authors": [
+        "Cole"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 998.xml"
+    },
+    {
+      "id": "HB997",
+      "number": "HB 997",
+      "chamber": "House",
+      "title": "Relating to the authority of a county to dispose of surplus and salvage property to a civic or charitable organization.",
+      "caption": "Relating to the authority of a county to dispose of surplus and salvage property to a civic or charitable organization.",
+      "author": "Cole",
+      "authors": [
+        "Cole"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 997.xml"
+    },
+    {
+      "id": "HB996",
+      "number": "HB 996",
+      "chamber": "House",
+      "title": "Relating to the coverage and provision of abortion, contraception, and sterilization under Medicaid and certain health benefit plans.",
+      "caption": "Relating to the coverage and provision of abortion, contraception, and sterilization under Medicaid and certain health benefit plans.",
+      "author": "Cole",
+      "authors": [
+        "Cole"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 996.xml"
+    },
+    {
+      "id": "HB995",
+      "number": "HB 995",
+      "chamber": "House",
+      "title": "Relating to the authority of certain municipalities to use certain tax revenue from a hotel and convention center project.",
+      "caption": "Relating to the authority of certain municipalities to use certain tax revenue from a hotel and convention center project.",
+      "author": "Bowers",
+      "authors": [
+        "Bowers"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 995.xml"
+    },
+    {
+      "id": "HB994",
+      "number": "HB 994",
+      "chamber": "House",
+      "title": "Relating to the establishment of the Texas geothermal energy production policy council.",
+      "caption": "Relating to the establishment of the Texas geothermal energy production policy council.",
+      "author": "Salinas",
+      "authors": [
+        "Salinas"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 994.xml"
+    },
+    {
+      "id": "HB993",
+      "number": "HB 993",
+      "chamber": "House",
+      "title": "Relating to establishment by the Texas Workforce Commission of a geothermal energy workforce education and training initiative.",
+      "caption": "Relating to establishment by the Texas Workforce Commission of a geothermal energy workforce education and training initiative.",
+      "author": "Salinas",
+      "authors": [
+        "Salinas"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 993.xml"
+    },
+    {
+      "id": "HB992",
+      "number": "HB 992",
+      "chamber": "House",
+      "title": "Relating to public school bilingual education programs, dual language immersion programs, and special language programs.",
+      "caption": "Relating to public school bilingual education programs, dual language immersion programs, and special language programs.",
+      "author": "Salinas",
+      "authors": [
+        "Salinas"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 992.xml"
+    },
+    {
+      "id": "HB991",
+      "number": "HB 991",
+      "chamber": "House",
+      "title": "Relating to automatic participation by certain county employees in deferred compensation plans provided by certain counties.",
+      "caption": "Relating to automatic participation by certain county employees in deferred compensation plans provided by certain counties.",
+      "author": "Garcia, Linda",
+      "authors": [
+        "Garcia, Linda"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 991.xml"
+    },
+    {
+      "id": "HB990",
+      "number": "HB 990",
+      "chamber": "House",
+      "title": "Relating to a study by the Texas Department of Transportation on transportation impacts of flooding in the Rio Grande Valley.",
+      "caption": "Relating to a study by the Texas Department of Transportation on transportation impacts of flooding in the Rio Grande Valley.",
+      "author": "Salinas",
+      "authors": [
+        "Salinas"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 990.xml"
+    },
+    {
+      "id": "HB989",
+      "number": "HB 989",
+      "chamber": "House",
+      "title": "Relating to health benefit plan cost-sharing and drug formulary requirements for an epinephrine auto-injector.",
+      "caption": "Relating to health benefit plan cost-sharing and drug formulary requirements for an epinephrine auto-injector.",
+      "author": "Salinas",
+      "authors": [
+        "Salinas"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 989.xml"
+    },
+    {
+      "id": "HB988",
+      "number": "HB 988",
+      "chamber": "House",
+      "title": "Relating to the expunction of arrest records and files when a grand jury fails to find that probable cause exists to believe the alleged offense was committed",
+      "caption": "Relating to the expunction of arrest records and files when a grand jury fails to find that probable cause exists to believe the alleged offense was committed",
+      "author": "Bowers",
+      "authors": [
+        "Bowers"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 988.xml"
+    },
+    {
+      "id": "HB987",
+      "number": "HB 987",
+      "chamber": "House",
+      "title": "Relating to the regulation of abortion, including abortion complication reporting and the repeal of certain laws prohibiting abortion",
+      "caption": "Relating to the regulation of abortion, including abortion complication reporting and the repeal of certain laws prohibiting abortion",
+      "author": "Bowers",
+      "authors": [
+        "Bowers"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 987.xml"
+    },
+    {
+      "id": "HB986",
+      "number": "HB 986",
+      "chamber": "House",
+      "title": "Relating to the monitoring of certain family violence offenders, the provision of resources for family violence victims, and the collection of information about conditions of bond imposed in family violence cases and certain other criminal cases.",
+      "caption": "Relating to the monitoring of certain family violence offenders, the provision of resources for family violence victims, and the collection of information about conditions of bond imposed in family violence cases and certain other criminal cases.",
+      "author": "Bowers",
+      "authors": [
+        "Bowers"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 986.xml"
+    },
+    {
+      "id": "HB985",
+      "number": "HB 985",
+      "chamber": "House",
+      "title": "Relating to certain requirements for activation of the Texas National Guard into active combat duty.",
+      "caption": "Relating to certain requirements for activation of the Texas National Guard into active combat duty.",
+      "author": "Salinas",
+      "authors": [
+        "Salinas"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 985.xml"
+    },
+    {
+      "id": "HB984",
+      "number": "HB 984",
+      "chamber": "House",
+      "title": "Relating to the Independent Citizen Redistricting Commission and the redistricting of the districts used to elect members of the United States House of Representatives, the Texas Legislature, and the State Board of Education.",
+      "caption": "Relating to the Independent Citizen Redistricting Commission and the redistricting of the districts used to elect members of the United States House of Representatives, the Texas Legislature, and the State Board of Education.",
+      "author": "Bucy",
+      "authors": [
+        "Bucy"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 984.xml"
+    },
+    {
+      "id": "HB983",
+      "number": "HB 983",
+      "chamber": "House",
+      "title": "Relating to information regarding the procedures and available resources for the sealing of juvenile records.",
+      "caption": "Relating to information regarding the procedures and available resources for the sealing of juvenile records.",
+      "author": "Bowers",
+      "authors": [
+        "Bowers"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 983.xml"
+    },
+    {
+      "id": "HB982",
+      "number": "HB 982",
+      "chamber": "House",
+      "title": "Relating to the jurisdiction of a juvenile court over certain persons and to the sealing and nondisclosure of certain juvenile records.",
+      "caption": "Relating to the jurisdiction of a juvenile court over certain persons and to the sealing and nondisclosure of certain juvenile records.",
+      "author": "Bowers",
+      "authors": [
+        "Bowers"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 982.xml"
+    },
+    {
+      "id": "HB981",
+      "number": "HB 981",
+      "chamber": "House",
+      "title": "Relating to health benefit plan coverage for certain tests to detect prostate cancer.",
+      "caption": "Relating to health benefit plan coverage for certain tests to detect prostate cancer.",
+      "author": "Cortez",
+      "authors": [
+        "Cortez"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 981.xml"
+    },
+    {
+      "id": "HB980",
+      "number": "HB 980",
+      "chamber": "House",
+      "title": "Relating to the exchange of certain information between the Department of Family and Protective Services or certain foster care services contractors and a state or local juvenile justice agency.",
+      "caption": "Relating to the exchange of certain information between the Department of Family and Protective Services or certain foster care services contractors and a state or local juvenile justice agency.",
+      "author": "Bowers",
+      "authors": [
+        "Bowers"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 980.xml"
+    },
+    {
+      "id": "HB979",
+      "number": "HB 979",
+      "chamber": "House",
+      "title": "Relating to the prosecution of the offense of exploitation of a child, elderly individual, or disabled individual.",
+      "caption": "Relating to the prosecution of the offense of exploitation of a child, elderly individual, or disabled individual.",
+      "author": "Plesa",
+      "authors": [
+        "Plesa"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 979.xml"
+    },
+    {
+      "id": "HB978",
+      "number": "HB 978",
+      "chamber": "House",
+      "title": "Relating to the punishment for the offense of arson involving a government building.",
+      "caption": "Relating to the punishment for the offense of arson involving a government building.",
+      "author": "Virdell",
+      "authors": [
+        "Virdell"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 978.xml"
+    },
+    {
+      "id": "HB977",
+      "number": "HB 977",
+      "chamber": "House",
+      "title": "Relating to the expunction of arrest records and files for certain defendants placed on deferred adjudication community supervision for the unlawful carrying of a handgun.",
+      "caption": "Relating to the expunction of arrest records and files for certain defendants placed on deferred adjudication community supervision for the unlawful carrying of a handgun.",
+      "author": "Virdell",
+      "authors": [
+        "Virdell"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 977.xml"
+    },
+    {
+      "id": "HB976",
+      "number": "HB 976",
+      "chamber": "House",
+      "title": "Relating to increasing the criminal penalty for continuous sexual abuse of a child who is younger than 14 years of age.",
+      "caption": "Relating to increasing the criminal penalty for continuous sexual abuse of a child who is younger than 14 years of age.",
+      "author": "Lowe",
+      "authors": [
+        "Lowe"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 976.xml"
+    },
+    {
+      "id": "HB975",
+      "number": "HB 975",
+      "chamber": "House",
+      "title": "Relating to a public school paid parental leave policy and an allotment under the Foundation School Program for the cost of providing paid parental leave under that policy.",
+      "caption": "Relating to a public school paid parental leave policy and an allotment under the Foundation School Program for the cost of providing paid parental leave under that policy.",
+      "author": "Simmons",
+      "authors": [
+        "Simmons"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 975.xml"
+    },
+    {
+      "id": "HB974",
+      "number": "HB 974",
+      "chamber": "House",
+      "title": "Relating to a franchise tax credit for entities that establish a grocery store or healthy corner store in a food desert.",
+      "caption": "Relating to a franchise tax credit for entities that establish a grocery store or healthy corner store in a food desert.",
+      "author": "Simmons",
+      "authors": [
+        "Simmons"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 974.xml"
+    },
+    {
+      "id": "HB973",
+      "number": "HB 973",
+      "chamber": "House",
+      "title": "Relating to the misuse of money received for an open-enrollment charter school to support an out-of-state school.",
+      "caption": "Relating to the misuse of money received for an open-enrollment charter school to support an out-of-state school.",
+      "author": "Simmons",
+      "authors": [
+        "Simmons"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 973.xml"
+    },
+    {
+      "id": "HB972",
+      "number": "HB 972",
+      "chamber": "House",
+      "title": "Relating to the minimum wage.",
+      "caption": "Relating to the minimum wage.",
+      "author": "Simmons",
+      "authors": [
+        "Simmons"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 972.xml"
+    },
+    {
+      "id": "HB971",
+      "number": "HB 971",
+      "chamber": "House",
+      "title": "Relating to the designation of a portion of State Highway 121 in Collin County as the Officer D. Weston \"Wes\" Hardy Memorial Highway.",
+      "caption": "Relating to the designation of a portion of State Highway 121 in Collin County as the Officer D. Weston \"Wes\" Hardy Memorial Highway.",
+      "author": "Plesa",
+      "authors": [
+        "Plesa"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 971.xml"
+    },
+    {
+      "id": "HB970",
+      "number": "HB 970",
+      "chamber": "House",
+      "title": "Relating to depression screenings for certain women in county jail or in the custody of the Texas Department of Criminal Justice.",
+      "caption": "Relating to depression screenings for certain women in county jail or in the custody of the Texas Department of Criminal Justice.",
+      "author": "Bowers",
+      "authors": [
+        "Bowers"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 970.xml"
+    },
+    {
+      "id": "HB969",
+      "number": "HB 969",
+      "chamber": "House",
+      "title": "Relating to acceptable forms of photo identification for the purposes of voting.",
+      "caption": "Relating to acceptable forms of photo identification for the purposes of voting.",
+      "author": "Hayes",
+      "authors": [
+        "Hayes"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB00900_HB00999/HB 969.xml"
+    },
+    {
       "id": "HB968",
       "number": "HB 968",
       "chamber": "House",
-      "title": "Relating to the establishment of the behaviorally at-risk student grant program to provide social and cognitive skills training to certain public school students",
-      "caption": "Relating to the establishment of the behaviorally at-risk student grant program to provide social and cognitive skills training to certain public school students",
+      "title": "Relating to the establishment of the behaviorally at-risk student grant program to provide social and cognitive skills training to certain public school students.",
+      "caption": "Relating to the establishment of the behaviorally at-risk student grant program to provide social and cognitive skills training to certain public school students.",
       "author": "Bowers",
       "authors": [
         "Bowers"
@@ -8723,8 +9894,8 @@
       "id": "HB952",
       "number": "HB 952",
       "chamber": "House",
-      "title": "Relating to the establishment of the Supported Independent Living Program",
-      "caption": "Relating to the establishment of the Supported Independent Living Program",
+      "title": "Relating to the establishment of the Supported Independent Living Program.",
+      "caption": "Relating to the establishment of the Supported Independent Living Program.",
       "author": "Bowers",
       "authors": [
         "Bowers"
@@ -8884,8 +10055,8 @@
       "id": "HB945",
       "number": "HB 945",
       "chamber": "House",
-      "title": "Relating to employment leave for victims of domestic violence, sexual assault, and stalking",
-      "caption": "Relating to employment leave for victims of domestic violence, sexual assault, and stalking",
+      "title": "Relating to employment leave for victims of domestic violence, sexual assault, and stalking.",
+      "caption": "Relating to employment leave for victims of domestic violence, sexual assault, and stalking.",
       "author": "Lopez-Resendez",
       "authors": [
         "Lopez-Resendez"
@@ -11529,8 +12700,8 @@
       "id": "HB829",
       "number": "HB 829",
       "chamber": "House",
-      "title": "Relating to the repeal of the Texas Jobs, Energy, Technology, and Innovation Act",
-      "caption": "Relating to the repeal of the Texas Jobs, Energy, Technology, and Innovation Act",
+      "title": "Relating to the repeal of the Texas Jobs, Energy, Technology, and Innovation Act.",
+      "caption": "Relating to the repeal of the Texas Jobs, Energy, Technology, and Innovation Act.",
       "author": "Harrison",
       "filed_at": "2026-11-09",
       "status": "Filed",
@@ -11644,8 +12815,8 @@
       "id": "HB824",
       "number": "HB 824",
       "chamber": "House",
-      "title": "Relating to the repeal of the Moving Image Incentive Program",
-      "caption": "Relating to the repeal of the Moving Image Incentive Program",
+      "title": "Relating to the repeal of the Moving Image Incentive Program.",
+      "caption": "Relating to the repeal of the Moving Image Incentive Program.",
       "author": "Harrison",
       "filed_at": "2026-11-09",
       "status": "Filed",
@@ -11713,8 +12884,8 @@
       "id": "HB821",
       "number": "HB 821",
       "chamber": "House",
-      "title": "Relating to the repeal of the Texas Advanced Nuclear Energy Office",
-      "caption": "Relating to the repeal of the Texas Advanced Nuclear Energy Office",
+      "title": "Relating to the repeal of the Texas Advanced Nuclear Energy Office.",
+      "caption": "Relating to the repeal of the Texas Advanced Nuclear Energy Office.",
       "author": "Harrison",
       "filed_at": "2026-11-09",
       "status": "Filed",
@@ -11736,8 +12907,8 @@
       "id": "HB820",
       "number": "HB 820",
       "chamber": "House",
-      "title": "Relating to the repeal of the Texas Quantum Initiative",
-      "caption": "Relating to the repeal of the Texas Quantum Initiative",
+      "title": "Relating to the repeal of the Texas Quantum Initiative.",
+      "caption": "Relating to the repeal of the Texas Quantum Initiative.",
       "author": "Harrison",
       "filed_at": "2026-11-09",
       "status": "Filed",
@@ -11828,8 +12999,8 @@
       "id": "HB816",
       "number": "HB 816",
       "chamber": "House",
-      "title": "Relating to the period during which a retail fireworks permit holder may sell fireworks to the public",
-      "caption": "Relating to the period during which a retail fireworks permit holder may sell fireworks to the public",
+      "title": "Relating to the period during which a retail fireworks permit holder may sell fireworks to the public.",
+      "caption": "Relating to the period during which a retail fireworks permit holder may sell fireworks to the public.",
       "author": "Harrison",
       "filed_at": "2026-11-09",
       "status": "Filed",
@@ -14335,8 +15506,8 @@
       "id": "HB706",
       "number": "HB 706",
       "chamber": "House",
-      "title": "Relating to election and public hearing requirements before a municipality may enter into a data center development agreement under certain economic development programs",
-      "caption": "Relating to election and public hearing requirements before a municipality may enter into a data center development agreement under certain economic development programs",
+      "title": "Relating to election and public hearing requirements before a municipality may enter into a data center development agreement under certain economic development programs.",
+      "caption": "Relating to election and public hearing requirements before a municipality may enter into a data center development agreement under certain economic development programs.",
       "author": "Ochoa",
       "filed_at": "2026-11-09",
       "status": "Filed",
@@ -14979,8 +16150,8 @@
       "id": "HB677",
       "number": "HB 677",
       "chamber": "House",
-      "title": "Relating to a study on employer and state agency use of automated employment decision tools in assessing an applicant's suitability for a position",
-      "caption": "Relating to a study on employer and state agency use of automated employment decision tools in assessing an applicant's suitability for a position",
+      "title": "Relating to a study on employer and state agency use of automated employment decision tools in assessing an applicant's suitability for a position.",
+      "caption": "Relating to a study on employer and state agency use of automated employment decision tools in assessing an applicant's suitability for a position.",
       "author": "Bhojani",
       "filed_at": "2026-11-09",
       "status": "Filed",
@@ -16152,8 +17323,8 @@
       "id": "HB625",
       "number": "HB 625",
       "chamber": "House",
-      "title": "Relating to the requirement of labeling artificial intelligence for a commercial purpose.",
-      "caption": "Relating to the requirement of labeling artificial intelligence for a commercial purpose.",
+      "title": "Relating to the labeling of artificial intelligence systems by businesses for commercial purposes.",
+      "caption": "Relating to the labeling of artificial intelligence systems by businesses for commercial purposes.",
       "author": "Bhojani",
       "filed_at": "2026-11-09",
       "status": "Filed",
@@ -16336,8 +17507,8 @@
       "id": "HB617",
       "number": "HB 617",
       "chamber": "House",
-      "title": "Relating to health benefit plan coverage of telemedicine, teledentistry, and telehealth services provided by only synchronous or asynchronous audio interaction",
-      "caption": "Relating to health benefit plan coverage of telemedicine, teledentistry, and telehealth services provided by only synchronous or asynchronous audio interaction",
+      "title": "Relating to health benefit plan coverage of telemedicine, teledentistry, and telehealth services provided by only synchronous or asynchronous audio interaction.",
+      "caption": "Relating to health benefit plan coverage of telemedicine, teledentistry, and telehealth services provided by only synchronous or asynchronous audio interaction.",
       "author": "Bhojani",
       "filed_at": "2026-11-09",
       "status": "Filed",
@@ -16543,8 +17714,8 @@
       "id": "HB608",
       "number": "HB 608",
       "chamber": "House",
-      "title": "Relating to health benefit plan coverage of certain physical therapy services and the practice of physical therapy",
-      "caption": "Relating to health benefit plan coverage of certain physical therapy services and the practice of physical therapy",
+      "title": "Relating to health benefit plan coverage of certain physical therapy services and the practice of physical therapy.",
+      "caption": "Relating to health benefit plan coverage of certain physical therapy services and the practice of physical therapy.",
       "author": "Bhojani",
       "filed_at": "2026-11-09",
       "status": "Filed",
@@ -19234,8 +20405,8 @@
       "id": "HB489",
       "number": "HB 489",
       "chamber": "House",
-      "title": "Relating to the establishment and administration of a rebate program for certain residential tenants",
-      "caption": "Relating to the establishment and administration of a rebate program for certain residential tenants",
+      "title": "Relating to the establishment and administration of a rebate program for certain residential tenants.",
+      "caption": "Relating to the establishment and administration of a rebate program for certain residential tenants.",
       "author": "Bhojani",
       "filed_at": "2026-11-09",
       "status": "Filed",
@@ -19579,8 +20750,8 @@
       "id": "HB474",
       "number": "HB 474",
       "chamber": "House",
-      "title": "Relating to human oversight and review of decisions and actions involving artificial intelligence systems used by state agencies.",
-      "caption": "Relating to human oversight and review of decisions and actions involving artificial intelligence systems used by state agencies.",
+      "title": "BE IT ENACTED BY THE LEGISLATURE OF THE STATE OF TEXAS:",
+      "caption": "BE IT ENACTED BY THE LEGISLATURE OF THE STATE OF TEXAS:",
       "author": "Bhojani",
       "filed_at": "2026-11-09",
       "status": "Filed",
@@ -20338,8 +21509,8 @@
       "id": "HB441",
       "number": "HB 441",
       "chamber": "House",
-      "title": "Relating to public school instruction and courses in artificial intelligence system usage",
-      "caption": "Relating to public school instruction and courses in artificial intelligence system usage",
+      "title": "Relating to public school instruction and courses in artificial intelligence system usage.",
+      "caption": "Relating to public school instruction and courses in artificial intelligence system usage.",
       "author": "Bhojani",
       "filed_at": "2026-11-09",
       "status": "Filed",
@@ -28235,6 +29406,29 @@
       "cosponsors": []
     },
     {
+      "id": "HB1010",
+      "number": "HB 1010",
+      "chamber": "House",
+      "title": "Relating to the oversight of rehabilitation hospitals by the office of the state long-term care ombudsman.",
+      "caption": "Relating to the oversight of rehabilitation hospitals by the office of the state long-term care ombudsman.",
+      "author": "Rose",
+      "authors": [
+        "Rose"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB01000_HB01099/HB 1010.xml"
+    },
+    {
       "id": "HB101",
       "number": "HB 101",
       "chamber": "House",
@@ -28278,6 +29472,213 @@
       "coauthors": [],
       "sponsors": [],
       "cosponsors": []
+    },
+    {
+      "id": "HB1009",
+      "number": "HB 1009",
+      "chamber": "House",
+      "title": "Relating to the court costs and fees assessed in a mental health proceeding filed by a county in the name of the state for an indigent patient.",
+      "caption": "Relating to the court costs and fees assessed in a mental health proceeding filed by a county in the name of the state for an indigent patient.",
+      "author": "Rose",
+      "authors": [
+        "Rose"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB01000_HB01099/HB 1009.xml"
+    },
+    {
+      "id": "HB1008",
+      "number": "HB 1008",
+      "chamber": "House",
+      "title": "Relating to the use of facial coverings by and the identification of certain law enforcement officers.",
+      "caption": "Relating to the use of facial coverings by and the identification of certain law enforcement officers.",
+      "author": "Salinas",
+      "authors": [
+        "Salinas"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB01000_HB01099/HB 1008.xml"
+    },
+    {
+      "id": "HB1007",
+      "number": "HB 1007",
+      "chamber": "House",
+      "title": "Relating to the right of an employee to time off from work if the employee or the employee's child is a victim of family violence or a violent felony offense.",
+      "caption": "Relating to the right of an employee to time off from work if the employee or the employee's child is a victim of family violence or a violent felony offense.",
+      "author": "Salinas",
+      "authors": [
+        "Salinas"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB01000_HB01099/HB 1007.xml"
+    },
+    {
+      "id": "HB1006",
+      "number": "HB 1006",
+      "chamber": "House",
+      "title": "Relating to requiring certain alert messages to be in English and Spanish.",
+      "caption": "Relating to requiring certain alert messages to be in English and Spanish.",
+      "author": "Salinas",
+      "authors": [
+        "Salinas"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB01000_HB01099/HB 1006.xml"
+    },
+    {
+      "id": "HB1005",
+      "number": "HB 1005",
+      "chamber": "House",
+      "title": "Relating to an exemption from or reimbursement of electricity transmission distribution charges for residential ratepayers of property directly affected by extra high voltage transmission lines.",
+      "caption": "Relating to an exemption from or reimbursement of electricity transmission distribution charges for residential ratepayers of property directly affected by extra high voltage transmission lines.",
+      "author": "Slawson",
+      "authors": [
+        "Slawson"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB01000_HB01099/HB 1005.xml"
+    },
+    {
+      "id": "HB1004",
+      "number": "HB 1004",
+      "chamber": "House",
+      "title": "Relating to measures to prevent and respond to opioid-related drug overdoses, including policies and training regarding the use of opioid antagonists, at student residences on campuses of public institutions of higher education; providing immunity.",
+      "caption": "Relating to measures to prevent and respond to opioid-related drug overdoses, including policies and training regarding the use of opioid antagonists, at student residences on campuses of public institutions of higher education; providing immunity.",
+      "author": "Cole",
+      "authors": [
+        "Cole"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB01000_HB01099/HB 1004.xml"
+    },
+    {
+      "id": "HB1003",
+      "number": "HB 1003",
+      "chamber": "House",
+      "title": "Relating to customers eligible for a discount program provided by a toll project entity.",
+      "caption": "Relating to customers eligible for a discount program provided by a toll project entity.",
+      "author": "Cole",
+      "authors": [
+        "Cole"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB01000_HB01099/HB 1003.xml"
+    },
+    {
+      "id": "HB1002",
+      "number": "HB 1002",
+      "chamber": "House",
+      "title": "Relating to the eligibility of certain first responders for workers' compensation benefits for post-traumatic stress disorder under the workers' compensation system.",
+      "caption": "Relating to the eligibility of certain first responders for workers' compensation benefits for post-traumatic stress disorder under the workers' compensation system.",
+      "author": "Cole",
+      "authors": [
+        "Cole"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB01000_HB01099/HB 1002.xml"
+    },
+    {
+      "id": "HB1001",
+      "number": "HB 1001",
+      "chamber": "House",
+      "title": "Relating to a mental health leave policy for certain public safety employees.",
+      "caption": "Relating to a mental health leave policy for certain public safety employees.",
+      "author": "Cole",
+      "authors": [
+        "Cole"
+      ],
+      "coauthors": [],
+      "sponsors": [],
+      "cosponsors": [],
+      "filed_at": "2026-11-09",
+      "status": "Filed",
+      "last_action": "11/09/2026 H Filed",
+      "last_action_date": "2026-11-09",
+      "actions": [
+        "Filed"
+      ],
+      "source_record": "Texas Legislative Council bulk FTP bill history",
+      "source_path": "/bills/90r/billhistory/house_bills/HB01000_HB01099/HB 1001.xml"
     }
   ]
 }
