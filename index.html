@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#112136">
+  <meta name="description" content="An independent, source-linked tracker for Texas's 90th Legislature, with policy and agency impacts and transparent advancement signals.">
+  <title>Texas Bill Atlas · 90th Legislature</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./src/styles.css">
+  <script type="module" src="./src/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="brand" href="#all" aria-label="Texas Bill Atlas home">
+        <span class="brand-mark" aria-hidden="true">✳</span>
+        <span class="brand-text">TEXAS<span>BILL ATLAS</span></span>
+      </a>
+      <div class="session-badge"><span class="badge-dot"></span> 90th Legislature <span class="tiny">2027</span></div>
+      <div class="nav-label">WORKSPACE</div>
+      <nav class="main-nav" id="main-nav">
+        <button class="nav-item active" data-view="all"><span class="nav-icon">▦</span> Bill explorer <span class="nav-count" id="nav-all">—</span></button>
+        <button class="nav-item" data-view="watchlist"><span class="nav-icon">☆</span> Watchlist <span class="nav-count" id="nav-watch">0</span></button>
+        <button class="nav-item" data-view="agencies"><span class="nav-icon">▤</span> Agency index</button>
+      </nav>
+      <div class="nav-label nav-label-second">REFERENCE</div>
+      <nav class="main-nav">
+        <button class="nav-item" data-view="method"><span class="nav-icon">◈</span> Scoring method</button>
+        <button class="nav-item" data-view="data"><span class="nav-icon">⇄</span> Data & imports</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="calendar-mini"><div class="calendar-eyebrow">UPCOMING MILESTONE</div><div class="calendar-date">JAN 12 <span>2027</span></div><div class="calendar-desc">90th regular session convenes</div><div class="calendar-progress"><span></span></div></div>
+        <a class="official-link" href="https://capitol.texas.gov/" target="_blank" rel="noopener noreferrer">Official Texas Legislature Online <span>↗</span></a>
+        <div class="sidebar-credit">Independent research tool · Not an official state website</div>
+      </div>
+    </aside>
+    <div class="main-column">
+      <header class="topbar"><div class="topbar-left"><span class="mobile-logo">✳ <b>TEXAS BILL ATLAS</b></span><span class="topbar-crumb">Legislative intelligence <span>/</span> 90R</span></div><div class="topbar-right"><span class="topbar-date">SESSION 2027</span><a href="https://github.com/ctharvey/texas_bill_tracker" target="_blank" rel="noopener noreferrer" class="github-link">View project ↗</a></div></header>
+      <main id="main-content">
+        <div class="page-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> TEXAS LEGISLATIVE MONITOR</div><h1 id="page-title">See what’s moving.<br><em>Know what it changes.</em></h1><p id="page-subtitle">Track legislation by policy, affected agency, author influence, and its path through the Capitol.</p></div><div class="heading-date"><span class="day-box">09</span><div><strong>NOV 2026</strong><small>PREFILING OPEN</small></div></div></div>
+        <div id="source-notice" class="source-notice" role="status"></div>
+        <section id="overview" class="overview-grid" aria-label="At a glance"></section>
+        <section id="dynamic-content" class="dynamic-content"></section>
+      </main>
+      <footer class="site-footer">Built for public scrutiny. <span>Official filings remain the authoritative record.</span><span class="footer-right" id="footer-timestamp"></span></footer>
+    </div>
+  </div>
+  <div class="drawer-scrim" id="drawer-scrim" hidden></div>
+  <aside class="detail-drawer" id="detail-drawer" aria-label="Bill details" aria-modal="true" role="dialog" hidden></aside>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
