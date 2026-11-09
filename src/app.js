@@ -111,8 +111,10 @@ function options(values,selected,placeholder){return `<option value="">${esc(pla
 
 function explorerMarkup(){
   const topics=unique(state.bills.flatMap(b=>b.topics)).sort();
-  const agencies=unique(state.bills.flatMap(b=>b.agencies.map(a=>a.id))).sort((a,b)=>(AGENCY_NAME[a]||a).localeCompare(AGENCY_NAME[b]||b));
-  const agencyOpts=agencies.map(id=>`<option value="${esc(id)}" ${state.agency===id?'selected':''}>${esc(AGENCY_NAME[id]||id)}</option>`).join('');
+  const agencyCounts=new Map();
+  for(const bill of state.bills)for(const agency of bill.agencies)agencyCounts.set(agency.id,(agencyCounts.get(agency.id)||0)+1);
+  const agencies=AGENCIES.map(a=>a.id).sort((a,b)=>a==='all-state-agencies'?-1:b==='all-state-agencies'?1:(AGENCY_NAME[a]||a).localeCompare(AGENCY_NAME[b]||b));
+  const agencyOpts=agencies.map(id=>`<option value="${esc(id)}" ${state.agency===id?'selected':''}>${esc(AGENCY_NAME[id]||id)} (${agencyCounts.get(id)||0})</option>`).join('');
   const popular=['Education','Healthcare','Elections','Taxes','Immigration','Data centers','Local government','Energy & utilities'];
   return `<div class="section-head"><div><div class="section-overline">EXPLORE LEGISLATION</div><h2>${state.view==='watchlist'?'Watched bills':'Bill explorer'}</h2></div><span class="subtitle">90R · House & Senate · All bill types</span></div>
     <div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><button class="outline-button" id="clear-filters">Clear filters</button><button class="primary-button" id="export-csv">↓ Export results</button></div>
