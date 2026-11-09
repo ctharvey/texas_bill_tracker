@@ -36,7 +36,7 @@ python3 scripts/sync_ftp.py
 
 `scripts/sync_ftp.py` enumerates `/bills/90r/billhistory`, parses each XML document, validates the bill number and caption, then atomically replaces `data/bills.json` **only if enough records parse successfully**. The previous file stays unchanged on a connectivity or schema failure. Manually reviewed impact tags survive metadata refreshes. The parser intentionally does not claim unobserved hearings or manufacture agency facts.
 
-The first verified official import read 1,059 bill histories on November 9, 2026. GitHub Actions is scheduled every 12 hours. Each snapshot records its actual generation time and coverage; it is a dated bulk snapshot rather than a real-time feed.
+The first verified official import read 1,059 bill histories on November 9, 2026. GitHub Actions is scheduled hourly, at minute 17 UTC (GitHub may delay scheduled jobs). Each snapshot records its actual generation time and coverage; it is a dated bulk snapshot rather than a real-time feed.
 
 ### Production deployment
 

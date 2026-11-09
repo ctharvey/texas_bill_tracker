@@ -2,6 +2,7 @@
 
 ## 2026-11-09
 
+- Schedule the official FTP refresh hourly, at minute 17, instead of every twelve hours.
 - Import separate author, coauthor, sponsor and cosponsor lists. Show counts on cards and full member lists in details; include them in search and CSV export.
 
 - Parse official TLC authors and dated filing actions; refresh the full dataset so authors and Filed today display correctly.
