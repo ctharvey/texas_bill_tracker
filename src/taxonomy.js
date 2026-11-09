@@ -1,5 +1,10 @@
 // Curated vocabulary: add agency aliases and topic rules as new legislation arrives.
 // 'direct' means explicitly named in verified material; 'related' is an editorial inference.
+export function memberNames(value){
+  const names=Array.isArray(value)?value:typeof value==='string'?value.split('|'):[];
+  return [...new Set(names.filter(name=>typeof name==='string').map(name=>name.trim()).filter(Boolean))];
+}
+
 export const AGENCIES = [
   // Virtual scope tag, not a single agency. Keep it in the same filter vocabulary.
   ['all-state-agencies','All state agencies (cross-cutting)'],

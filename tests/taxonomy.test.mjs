@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {autoTagBill,assessHearing,authorInfluence,officialUrl,AGENCY_NAME} from '../src/taxonomy.js';
+import {autoTagBill,assessHearing,authorInfluence,officialUrl,AGENCY_NAME,memberNames} from '../src/taxonomy.js';
 
 test('tags all relevant detected agencies instead of picking one',()=>{
   const b=autoTagBill({title:'Medicaid, voter registration and public school changes',caption:'Changes to Medicaid eligibility, voter registration and school districts'});
@@ -55,4 +55,13 @@ test('all-state-agencies scope is explicit for statewide duties, not individual 
 test('possible cross-agency compliance is flagged without false certainty',()=>{
   const result=autoTagBill({title:'Records retention standards for state agencies'});
   assert.equal(result.agencies.find(a=>a.id==='all-state-agencies').relationship,'related');
+});
+
+
+test('member lists preserve names, remove duplicates and support CSV pipes',()=>{
+  assert.deepEqual(memberNames(' One | Two | One | '),['One','Two']);
+  assert.deepEqual(memberNames(['One',' Two ',null,'One']),['One','Two']);
+  assert.deepEqual(memberNames(undefined),[]);
+  assert.deepEqual(memberNames(''),[]);
+  assert.deepEqual(memberNames('Surname, Jr. | Other'),['Surname, Jr.','Other']);
 });

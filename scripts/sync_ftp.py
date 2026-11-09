@@ -66,6 +66,13 @@ def parse_bill_number(*candidates: str) -> str | None:
     return None
 
 
+def member_names(root: ET.Element, *tags: str) -> list[str]:
+    """TLC separates members with pipes; preserve source order and distinct roles."""
+    return list(dict.fromkeys(
+        name.strip() for text in all_text(root, *tags) for name in text.split('|') if name.strip()
+    ))
+
+
 def infer_status(actions: list[str], committees: list[str]) -> str:
     text = " ".join(actions).lower()
     if "signed by the governor" in text or "became law" in text:
@@ -104,7 +111,8 @@ def parse_bill_xml(raw: bytes, path: str) -> dict | None:
     caption = first_text(root, "captiontext", "currentcaption", "caption", "longtitle", "description", "billtitle")
     if len(caption) < 12:
         return None
-    author = first_text(root, "primaryauthor", "authorname", "author", "authors", "primarysponsor")
+    authors = member_names(root, "authors") or member_names(root, "primaryauthor", "authorname", "author")
+    author = " | ".join(authors)
     history = [
         (first_text(element, "actiondescription", "actiontext", "description"),
          normalize_date(first_text(element, "date")))
@@ -130,6 +138,10 @@ def parse_bill_xml(raw: bytes, path: str) -> dict | None:
         "title": caption,
         "caption": caption,
         "author": author or "Author not available in parsed history",
+        "authors": authors,
+        "coauthors": member_names(root, "coauthors"),
+        "sponsors": member_names(root, "sponsors"),
+        "cosponsors": member_names(root, "cosponsors"),
         "filed_at": date,
         "status": status,
         "last_action": last_action[:400],
