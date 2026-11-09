@@ -1,6 +1,6 @@
 # Texas Bill Atlas
 
-An independent, open-source bill tracker for the Texas Legislature's **90th Regular Session (2027)**. Built for fast exploration by policy, state agency, author prominence and the verifiable legislative path to a hearing. It starts with a **clearly labeled, selective** November 9, 2026 filing snapshot, not a fictional complete feed.
+An independent, open-source bill tracker for the Texas Legislature's **90th Regular Session (2027)**. Built for fast exploration by policy, state agency, author prominence and the verifiable legislative path to a hearing. Its verified November 9, 2026 official FTP snapshot contains 1,059 legislative measures; the interface displays the dataset's source and timestamp.
 
 ## What it does now
 
@@ -36,9 +36,51 @@ python3 scripts/sync_ftp.py
 
 `scripts/sync_ftp.py` enumerates `/bills/90r/billhistory`, parses each XML document, validates the bill number and caption, then atomically replaces `data/bills.json` **only if enough records parse successfully**. The previous file stays unchanged on a connectivity or schema failure. Manually reviewed impact tags survive metadata refreshes. The parser intentionally does not claim unobserved hearings or manufacture agency facts.
 
-**Important first-run limitation:** the current TLC 90R FTP XML layout has not been tested in this environment. The GitHub Actions job and parser tests are present, but the first actual remote sync must be observed and any schema differences adapted before claiming live completeness. The UI distinguishes curated, imported and official-FTP snapshots so users see this limitation. GitHub Actions runs every 12 hours once enabled, but should not be represented as successful until it completes.
+The first verified official import read 1,059 bill histories on November 9, 2026. GitHub Actions is scheduled every 12 hours. Each snapshot records its actual generation time and coverage; it is a dated bulk snapshot rather than a real-time feed.
 
-### Publishing
+### Production deployment
+
+Production: https://bills.ctharvey.me on the existing VPS, 147.93.132.141.
+Cloudflare DNS has a DNS-only A record `bills` pointing there. Shared Caddy routing
+is owned by `ctharvey/cth.hosting`; its site root is
+`/srv/static/texas-bill-atlas/current`, through the existing read-only `/var/www/html` mount.
+Caddy manages HTTPS and the HTTP redirect. No application server or build is required.
+
+`texas-bill-atlas.timer` checks public GitHub `main` every two minutes, including commits
+from the data-refresh workflow. No deployment credential is needed. `scripts/deploy_static.py`
+reads all five application files at one commit, requires an official-FTP 90R snapshot
+of at least 1,000 unique valid measures, writes an immutable release, and atomically
+switches `current`. Fetch or validation failure leaves the previous release online.
+The bundled fallback updates with each release. The frontend still prefers live GitHub
+JSON and retains all existing source and freshness indicators.
+
+One-time VPS installation as root, from a reviewed Git archive of this repository:
+
+```sh
+useradd --system --home-dir /var/lib/texas-bill-atlas --shell /usr/sbin/nologin texas-bill-atlas
+install -d -m 755 -o texas-bill-atlas -g texas-bill-atlas /var/www/html/texas-bill-atlas
+install -d -m 755 /usr/local/lib/texas-bill-atlas
+install -m 644 scripts/deploy_static.py /usr/local/lib/texas-bill-atlas/deploy_static.py
+install -m 644 scripts/texas-bill-atlas.service scripts/texas-bill-atlas.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl start texas-bill-atlas.service
+systemctl enable --now texas-bill-atlas.timer
+```
+
+Requires existing Python 3, Git and systemd. The unprivileged service writes only its
+state directory and this site's directory. Check `systemctl status texas-bill-atlas.timer`
+and `journalctl -u texas-bill-atlas.service`. Deployer or unit changes require reinstalling
+the reviewed files; application and data changes deploy automatically. Old releases are retained.
+
+Rollback: stop the timer, make a temporary relative symlink to a retained `releases/<commit>`,
+then atomically rename it over `current` using `mv -Tf`. Fix or revert main before restarting
+the timer. This affects only the bills site. The legacy Pages workflow below is manual-only.
+
+Deferred improvements: incremental FTP imports; retry/rebase concurrent dataset pushes;
+an authoritative agency registry; full-text agency classification; and alerts for importer
+failures, stale snapshots and frontend fallback use.
+
+### Optional GitHub Pages publishing
 
 The `Publish tracker to GitHub Pages` workflow assembles the static files from the repository. Enable GitHub Pages with **Source: GitHub Actions** under the repository's Pages settings if the workflow indicates that Pages isn't configured. The expected project URL after successful deployment is `https://ctharvey.github.io/texas_bill_tracker/` (unverified until GitHub confirms).
 
