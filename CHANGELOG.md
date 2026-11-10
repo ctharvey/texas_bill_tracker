@@ -2,6 +2,10 @@
 
 ## 2026-11-09
 
+- Enable the private hourly review worker on the existing VPS with the authorized $1/day ceiling, protected
+  credentials/cache, and priority retries that leave capacity for new bills. Verify live annotated review,
+  mobile layout, watchlist persistence and the complete 1,262-record official snapshot.
+
 - Integrate complete-text review in bill details with selectable verified highlights, reasons, agency certainty,
   source links, open questions and reviewed corrections. Review imports remain private to the browser session.
 - Add private queued Luna classification and targeted cleanup with cached official sources, source-generated

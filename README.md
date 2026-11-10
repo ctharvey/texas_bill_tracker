@@ -81,6 +81,10 @@ Worker results are written to `<cache-dir>/reviews/<bill-id>.json`, always with 
 `ready_for_review` result still needs human approval. This change does not automatically expose that private
 directory, add classifications to `data/bills.json`, or enable public AI classifications.
 
+The production review timer was enabled on the existing VPS on November 9, 2026. Server-side replay of the
+seeded pilot cache incurred no new model spending; pilot costs are retained in the daily ledger. Generated
+analyses remain private and unapproved, including any semantic questions or capacity-deferred cleanup.
+
 Hourly operation uses `scripts/texas-bill-review.service` and `.timer`, a dedicated `texas-bill-review` account,
 and `/var/lib/texas-bill-review/{repository,venv,cache}`. The repository stays on `main` and pulls with
 `--ff-only`. Install optional dependencies into the dedicated venv; install the units under `/etc/systemd/system`.
