@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-10
+- Releases serve the scripts and stylesheet from `assets/<digest>/`, a content-hashed copy of `src/`, so Cloudflare
+  and browsers cache them for a year; a deploy points `index.html` at the new folder. Needs the deployer reinstalled.
 - Agent search, after a fourth LLM probe: `OR` between words; THC and hemp join the cannabis synonyms; a partial
   match shows only the bills matching the most words plus a count per word; "did you mean" for misspelled member
   names; results note that unreviewed bills are searched by caption only; known topic names and agency ids match

@@ -347,7 +347,9 @@ dependencies are absent so the standard-library-only FTP workflow remains usable
 ### Production deployment
 
 Production: https://bills.ctharvey.me on the existing VPS, 147.93.132.141.
-Cloudflare DNS has a DNS-only A record `bills` pointing there. Shared Caddy routing
+The Cloudflare A record `bills` points there and is proxied. Cache rules for that host only: `/live/*` and `/data/*`
+5 minutes at the edge, `/api/sync/health` 30 seconds, `/assets/*` a year at the edge and in browsers; the page,
+`src/` and the rest of the sync API are not cached. Shared Caddy routing
 is owned by `ctharvey/cth.hosting`; its site root is
 `/srv/static/texas-bill-atlas/current`, through the existing read-only `/var/www/html` mount.
 Caddy manages HTTPS and the HTTP redirect. No application server or build is required.
@@ -356,7 +358,9 @@ Caddy manages HTTPS and the HTTP redirect. No application server or build is req
 from the data-refresh workflow. No deployment credential is needed. `scripts/deploy_static.py`
 reads all six application files at one commit, requires an official-FTP 90R snapshot
 of at least 1,000 unique valid measures, writes an immutable release, and atomically
-switches `current`. Fetch or validation failure leaves the previous release online.
+switches `current`. Each release also copies `src/` to `assets/<digest>/` (a hash of every module) and points
+`index.html` there, so browsers can cache the scripts for good; the previous release's folder is carried over for
+pages loaded just before a switch. Fetch or validation failure leaves the previous release online.
 The bundled fallback updates with each release. The frontend prefers live GitHub JSON
 (accepted only as an official-FTP snapshot of at least 1,000 bills) and shows a warning
 banner for the bundled fallback, local imports and stale snapshots.

@@ -1,6 +1,7 @@
 """Publish public GitHub main atomically; run as the dedicated Linux site user."""
 
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -17,6 +18,36 @@ REPOSITORY = STATE / 'repository.git'
 FILES = ('index.html', 'src/app.js', 'src/taxonomy.js', 'src/styles.css', 'src/review.js', 'src/prefs.js', 'src/sync.js',
          'data/members.json', 'data/bills.json')
 KEEP_RELEASES = 10
+ASSETS = 'assets'
+PAGE_REFERENCES = ('./src/styles.css', './src/app.js')
+
+
+def versioned_assets(bundle: dict[str, bytes]) -> tuple[str, dict[str, bytes]]:
+    """Copy src/ to assets/<digest>/ and point index.html there, so the copy can be cached forever.
+
+    The digest covers every module, so changing any import changes the folder; imports stay relative."""
+    sources = sorted(name for name in bundle if name.startswith('src/'))
+    digest = hashlib.sha256(b''.join(name.encode() + b'\0' + bundle[name] + b'\0' for name in sources)).hexdigest()[:16]
+    files = {f'{ASSETS}/{digest}/{name[len("src/"):]}': bundle[name] for name in sources}
+    index = bundle['index.html']
+    for reference in PAGE_REFERENCES:
+        quoted = f'"{reference}"'.encode()
+        if index.count(quoted) != 1:
+            raise ValueError('index.html must reference ' + reference + ' exactly once')
+        index = index.replace(quoted, f'"./{ASSETS}/{digest}/{reference[len("./src/"):]}"'.encode())
+    files['index.html'] = index
+    return digest, files
+
+
+def carry_previous_assets(current: Path, staging: Path, digest: str) -> None:
+    # A page loaded from the previous release may still be fetching its assets when current switches.
+    try:
+        index = (current / 'index.html').read_text(encoding='utf-8')
+    except OSError:
+        return
+    match = re.search(r'\./' + ASSETS + r'/([0-9a-f]{16})/app\.js', index)
+    if match and match.group(1) != digest and (current / ASSETS / match.group(1)).is_dir():
+        shutil.copytree(current / ASSETS / match.group(1), staging / ASSETS / match.group(1))
 
 
 def git(*args: str) -> bytes:
@@ -50,6 +81,8 @@ def main() -> None:
         for name in FILES[:-1]:
             if not bundle[name].strip():
                 raise ValueError('Empty application asset: ' + name)
+        digest, versioned = versioned_assets(bundle)
+        bundle.update(versioned)
         release.parent.mkdir(parents=True, exist_ok=True)
         staging = Path(tempfile.mkdtemp(prefix='.staging-', dir=release.parent))
         try:
@@ -59,6 +92,7 @@ def main() -> None:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(content)
                 path.chmod(0o644)
+            carry_previous_assets(current, staging, digest)
             # Server-written data (live/bills.json, live/luna/tags.json) outlives releases.
             (staging / 'live').symlink_to(Path('..') / '..' / 'live', target_is_directory=True)
             if not release.exists():
