@@ -1,0 +1,24 @@
+[Unit]
+Description=Private Texas Bill Atlas classification and review
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=texas-bill-review
+Group=texas-bill-review
+WorkingDirectory=/var/lib/texas-bill-review/repository
+EnvironmentFile=/etc/texas-bill-review.env
+Environment=TZ=America/Chicago
+UMask=0077
+ExecStartPre=/usr/bin/git pull --ff-only
+ExecStart=/var/lib/texas-bill-review/venv/bin/python scripts/review_pipeline.py --cache-dir /var/lib/texas-bill-review/cache --daily-budget 1 --run-budget 0.10 --max-bills 10 --execute
+TimeoutStartSec=3300
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/texas-bill-review
+
+[Install]
+WantedBy=multi-user.target

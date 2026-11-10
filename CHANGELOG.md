@@ -2,6 +2,24 @@
 
 ## 2026-11-09
 
+- Integrate complete-text review in bill details with selectable verified highlights, reasons, agency certainty,
+  source links, open questions and reviewed corrections. Review imports remain private to the browser session.
+- Add private queued Luna classification and targeted cleanup with cached official sources, source-generated
+  evidence options, typed corrections, a persistent $1/day spending guard, and bounded hourly systemd operation.
+  Keep publication approval separate and leave the complete official metadata dataset unchanged.
+
+- Add scoped, citable statutory definitions to focused classification, starting with Water Code Chapter 16
+  identities for TWDB and TCEQ. Keep bill-impact and definition evidence separate, prefer in-bill definitions,
+  and include substantive context changes in cache identity without billing another pilot call.
+
+- Resolve classification excerpts against complete source text, derive page offsets and span links, and
+  flag ambiguous or missing quotes without fuzzy acceptance. Fix all six HB529 citation placements offline
+  while preserving the original model response and semantic review requirements.
+
+- Preserve the detailed extraction version and add focused Luna Flex full-text classification for summaries,
+  policy tags, agency impacts, locations, affected groups, major effects and verifiable excerpts. Reuse the
+  private response/prompt caches and leave all classifications unpublished pending evaluation.
+
 - Fix unmatched entity IDs to accept null and reject empty strings; add explicit business-day units following
   the held-out HB529 evaluation. Schema changes invalidate response reuse; prior raw responses stay intact.
 

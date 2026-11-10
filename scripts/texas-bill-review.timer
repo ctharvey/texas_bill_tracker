@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly private bill review after the metadata refresh
+
+[Timer]
+OnCalendar=*-*-* *:35:00
+RandomizedDelaySec=120
+Persistent=true
+Unit=texas-bill-review.service
+
+[Install]
+WantedBy=timers.target

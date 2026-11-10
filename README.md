@@ -38,7 +38,121 @@ python3 scripts/sync_ftp.py
 
 The first verified official import read 1,059 bill histories on November 9, 2026. GitHub Actions is scheduled hourly, at minute 17 UTC (GitHub may delay scheduled jobs). Each snapshot records its actual generation time and coverage; it is a dated bulk snapshot rather than a real-time feed.
 
-### Optional full-text extraction (pending evaluation)
+### Automated private review and highlighted evidence
+
+Bill details now include **Full text & highlighted evidence**. Open a `texas-bill-review-v1` JSON file from
+the private worker to inspect the complete normalized PDF text, select a highlight, and read its supporting
+classification, agency impact or reviewed correction. Statutory evidence retains separate official links.
+Imported reviews stay in the browser session; they do not replace the official bill snapshot or publish
+classifications. Unresolved questions and validation issues remain visible. Watchlists remain device-local.
+
+The worker is `scripts/review_pipeline.py`. It classifies complete introduced bill PDFs from official TLC FTP,
+checks excerpts and questions, then submits only targeted questions. Both model-raised questions and code
+checks participate: missing/ambiguous citations, unresolved agency identities, and potentially omitted
+conditions in the supporting sentence. These checks are review signals, not proof of semantic correctness.
+The resolver selects evidence from verbatim source-generated options and can change only fields present in
+the affected claim's schema. Unsupported, invalid or unanswered corrections stay queued for review.
+
+```sh
+python scripts/review_pipeline.py --cache-dir /private/texas-bill-review --bill-id HB273 --execute
+```
+
+Omit `--execute` to prepare/replay without spending. Without bill IDs, each run selects up to three unseen
+or rotating known bills from the official snapshot; `--max-bills` permits at most 20. Introduced PDFs use FTP
+modification times to avoid unchanged downloads. The complete normalized text/configuration controls model
+reuse, so metadata-only changes do not cause another classification. Discovery of later text-version suffixes
+is not yet implemented; the worker explicitly processes introduced text and labels it accordingly.
+
+The authorized hard ceiling is **$1 per calendar day**, with the service pinned to `America/Chicago` and a
+default **$0.10 per run**. A private durable ledger reserves a conservative upper bound before each provider
+call, accounts for cache writes and output, and records actual estimates afterward. Unknown outcomes retain
+their reservation and block new calls until reconciled. A worker lock prevents concurrent spending races.
+Cache hits make no provider call. Flex cooldowns defer work; quota/auth/unknown outcomes stop the worker.
+The limit cannot be raised above $1 via CLI. Do not remove the ledger or uncertain response records to retry.
+
+At most three new targeted queries per bill run; cached resolutions do not consume this allowance. Later
+runs progress through remaining questions. Requested official statute chapters are cached privately for
+seven days and reused across bills. Supported code mappings fetch only fixed official URLs, include chapter
+definitions alongside the requested section, and never follow model-supplied URLs or crawl bill pages.
+Source-content changes invalidate targeted reuse; retrieval-date-only changes do not. Other codes and
+oversized/missing sources remain explicit review work. Raw first-pass and resolution responses are preserved.
+
+Worker results are written to `<cache-dir>/reviews/<bill-id>.json`, always with `publishable: false`. A
+`ready_for_review` result still needs human approval. This change does not automatically expose that private
+directory, add classifications to `data/bills.json`, or enable public AI classifications.
+
+Hourly operation uses `scripts/texas-bill-review.service` and `.timer`, a dedicated `texas-bill-review` account,
+and `/var/lib/texas-bill-review/{repository,venv,cache}`. The repository stays on `main` and pulls with
+`--ff-only`. Install optional dependencies into the dedicated venv; install the units under `/etc/systemd/system`.
+Set `OPENAI_API_KEY` only in root-owned mode-0600 `/etc/texas-bill-review.env`, outside the web root and git.
+Enable `texas-bill-review.timer` after the pilot; it runs hourly at minute 35, with up to two minutes jitter,
+at most ten bills and $0.10 per invocation. Inspect `journalctl -u texas-bill-review.service` and the private
+ledger/review queue. To pause spending, stop/disable this timer; the public tracker and metadata refresh remain
+independent. Reinstall dependencies when their requirements change. The six-asset public deployer must be
+updated for `src/review.js`; otherwise preserve the prior release until the module can be served.
+
+Operators can retrieve a review with the existing authenticated SSH path and `sudo cat` its JSON, then open
+it in that bill's detail drawer. Private source/cache directories must never be added to the static web root
+or public GitHub artifacts. Publication approval remains separate from classification and source validation.
+
+### Focused classifier contract
+
+`scripts/classify_bill.py` reads the complete official bill using **Luna Flex/high** and returns a concise
+summary, canonical policy tags, direct/inferred state-agency impacts, separate all-agencies scope,
+substantive locations, affected groups, major effects and short supporting excerpts. It does not enumerate
+every obligation, deadline or exception. Author/party/member counts and legislative events remain official
+metadata. The policy and agency vocabularies come from `src/taxonomy.js`; the agency list is still incomplete.
+
+Reviewed statutory definitions live in `scripts/statutory_definitions.json`, initially Water Code
+16.001(1)-(2): Board/TWDB and Commission/TCEQ. An explicit matching chapter or section amendment selects
+the chapter context; a topical mention or another code does not. In-bill definitions take precedence.
+Each entry retains its official source URL, section, chapter scope and verification date. This is a small
+reviewed registry, not an automatic or exhaustive statute lookup; unsupported amendment forms and missing
+chapters provide no external definitions. Expand it with verified sources before broader deployment.
+
+Definitions follow the full bill in the variable request suffix, preserving the shared prompt cache.
+Their text/scope/provenance affect response-cache identity; verification-date-only changes do not. A `D_`
+evidence ID cites a statutory definition and is validated separately from bill-page evidence. Agency impact
+still requires a bill citation, and identity derived from a supplied definition requires that citation too.
+External identity context does not itself establish substantive impact. Definition quotes cannot match an
+unrelated chapter or silently fall back to bill text.
+
+```sh
+python scripts/classify_bill.py --pdf /path/to/HB00529I.pdf --bill-id HB529 --session 90R --version introduced --source-url ftp://ftp.legis.state.tx.us/bills/90R/billtext/PDF/house_bills/HB00500_HB00599/HB00529I.pdf
+```
+
+Install `requirements-extraction.txt` first. Preparation is free; `--execute` authorizes a cache-miss call
+using `OPENAI_API_KEY`. This path reuses the detailed extractor's complete-text reader, private persistent
+response cache, prompt-cache breakpoints, bounded capacity backoff and uncertain-call protection. Its model,
+schema and prompt produce a distinct cache key. A response hit makes no provider call. Shared instructions
+and vocabulary target a 12-hour prompt cache; the complete changing bill remains the variable suffix.
+
+The tool verifies canonical IDs/tags and finds literal supporting excerpts in the complete source text.
+It derives page offsets and all overlapping span IDs, including excerpts crossing span or page boundaries.
+A model-provided span is only a hint: repeated quotes require one uniquely matching source context or stay
+flagged as ambiguous. Missing or fuzzy quotes are rejected. `verified_citations` stores source-derived text
+and zero-based, end-exclusive offsets into normalized page text, separately from the unchanged model output.
+The tool flags unresolved/inferred agency impacts and keeps every output private and pending review.
+It does not require every operative span to be
+cited. Valid excerpts do not prove semantic accuracy. Nothing is written to `data/bills.json` or published;
+classification is not part of the hourly metadata job. Luna Flex short-context cost estimates use the
+[official pricing](https://developers.openai.com/api/docs/pricing) verified November 9, 2026, including
+cache writes. Review pricing before rollout or use with long-context requests.
+
+The first focused HB529 pilot used all 21 pages and returned 5 policy tags, 2 agency entries, 3 location
+scopes, 3 affected groups and 7 major effects. It cost an estimated $0.002208825 in 95 seconds. Six excerpt
+locations initially failed validation (four neighboring-span references and two excerpts crossing span
+boundaries). Deterministic source matching resolved all six offline: all 43 citations now have verified
+locations, with no missing or ambiguous matches. Subsequent statutory review identified the unnamed board
+as TWDB under Water Code 16.001(1). The revised HB529 request includes those definitions; it was prepared
+offline without another paid pass. The original response remains unchanged and unapproved. This is one pilot, not a claim
+of corpus-wide accuracy or demonstrated provider prompt-cache hits across bills.
+
+The detailed version is preserved at
+[`archive/detailed-extraction-v1`](https://github.com/ctharvey/texas_bill_tracker/tree/archive/detailed-extraction-v1)
+(commit `a78c67d`) and the local tag `detailed-extraction-v1`. Its script and contract remain available below.
+
+### Detailed full-text extraction (preserved, pending evaluation)
 
 `scripts/extract_bill.py` prepares a single Terra Flex/high request from a local official TLC full-bill PDF.
 It extracts entities, authority changes, obligations and timing into a **private review cache**. It does not
@@ -128,7 +242,7 @@ Caddy manages HTTPS and the HTTP redirect. No application server or build is req
 
 `texas-bill-atlas.timer` checks public GitHub `main` every two minutes, including commits
 from the data-refresh workflow. No deployment credential is needed. `scripts/deploy_static.py`
-reads all five application files at one commit, requires an official-FTP 90R snapshot
+reads all six application files at one commit, requires an official-FTP 90R snapshot
 of at least 1,000 unique valid measures, writes an immutable release, and atomically
 switches `current`. Fetch or validation failure leaves the previous release online.
 The bundled fallback updates with each release. The frontend still prefers live GitHub
