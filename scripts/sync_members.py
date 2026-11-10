@@ -133,7 +133,17 @@ def service_years(stints: list[dict]) -> int | None:
     return total if seen else None
 
 
-def build(fetch: Fetcher) -> dict:
+def load_elect(path: Path | None) -> dict:
+    if not path or not path.exists():
+        return {}
+    data = json.loads(path.read_text('utf-8'))
+    if data.get('format') != 'texas-bill-members-elect-v1':
+        raise RuntimeError(f'Unrecognized members-elect file: {path}')
+    return data
+
+
+def build(fetch: Fetcher, elect: dict | None = None) -> dict:
+    elect = elect or {}
     members = tlo_roster(fetch)
     pool = {}
     for chamber in 'HS':
@@ -156,12 +166,24 @@ def build(fetch: Fetcher) -> dict:
             record = resolve(member, history)
         latest = record['stints'][0] if record and record['stints'] else None
         same_chamber = bool(latest and latest['chamber'] == member['chamber'])
-        party = latest['party'] if latest else None
-        roster[f"{member['chamber']}|{member['display_name']}"] = {
+        key = f"{member['chamber']}|{member['display_name']}"
+        party = PARTY.get(latest['party'], latest['party']) if latest and latest['party'] else None
+        source = 'Texas Legislative Reference Library, latest recorded service' if party else None
+        district = latest['district'] if same_chamber else None
+        won = (elect.get('members') or {}).get(key) if record is None else None
+        if won and same_person(member['full_name'], member['display_name'], won.get('ballot_name', '')):
+            party, district = won.get('party'), won.get('district')
+            source = elect.get('source')
+        elif won:
+            print('Members-elect entry ignored, ballot name disagrees:', key, won.get('ballot_name'))
+            won = None
+        roster[key] = {
             **{k: member[k] for k in ('chamber', 'code', 'display_name', 'full_name')},
-            'party': PARTY.get(party, party) if party else None,
-            'party_source': 'Texas Legislative Reference Library, latest recorded service' if party else None,
-            'district': latest['district'] if same_chamber else None,
+            'party': party,
+            'party_source': source,
+            'party_basis': 'service' if record and party else 'election' if won else None,
+            'district': district,
+            'election_margin_pct': won.get('margin_pct') if won else None,
             'service': record['stints'] if record else [],
             'first_year': min((int(s['years'][:4]) for s in record['stints'] if s['years'][:4].isdigit()), default=None) if record else None,
             'years_served': service_years(record['stints']) if record else None,
@@ -177,19 +199,24 @@ def build(fetch: Fetcher) -> dict:
         raise RuntimeError(f'Roster looks incomplete: {counts}')
     return {'format': 'texas-bill-members-v1', 'session': '90R',
             'generated_at': dt.datetime.now(dt.timezone.utc).isoformat().replace('+00:00', 'Z'),
-            'sources': [TLO + 'Members.aspx', LRL + 'lrlhome.cfm'], 'counts': counts,
-            'without_service_record': sorted(unresolved), 'members': dict(sorted(roster.items()))}
+            'sources': [TLO + 'Members.aspx', LRL + 'lrlhome.cfm'] + ([elect['source_url']] if elect.get('source_url') else []),
+            'counts': counts, 'without_service_record': sorted(unresolved),
+            'without_party': sorted(m['display_name'] for m in roster.values() if not m['party']),
+            'members': dict(sorted(roster.items()))}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, default=OUT)
+    parser.add_argument('--elect', type=Path, default=ROOT / 'data' / 'members_elect_2026.json',
+                        help='Election results for members-elect without an LRL record (optional)')
     args = parser.parse_args()
-    roster = build(Fetcher())
+    roster = build(Fetcher(), load_elect(args.elect))
     temp = args.out.with_suffix('.json.tmp')
     temp.write_text(json.dumps(roster, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
     os.replace(temp, args.out)
-    print(json.dumps({'counts': roster['counts'], 'without_service_record': len(roster['without_service_record'])}))
+    print(json.dumps({'counts': roster['counts'], 'without_service_record': len(roster['without_service_record']),
+                      'without_party': roster['without_party']}))
     return 0
 
 

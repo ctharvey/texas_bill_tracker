@@ -15,6 +15,11 @@
 .party-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;background:#c3cbd3;vertical-align:middle}
 .party-dot.party-dem{background:#3d6fb8}.party-dot.party-rep{background:#c0463c}
 .member-list{list-style:none;padding:0;margin:4px 0 10px}.member-list li{padding:4px 0;font-size:12px;line-height:1.5}.member-list small{color:#748697}
+.tag.action-tag{background:#f4f6f8;color:#40505e;border-color:#dfe5ea;font-weight:700}
+.tag.action-referred,.tag.action-scheduled,.tag.action-heard{background:#fff7e6;color:#7a5200;border-color:#f1dfb8}
+.tag.action-reported,.tag.action-calendar,.tag.action-floor{background:#e9f6f4;color:#1f625a;border-color:#c5e4df}
+.tag.action-passed,.tag.action-other_chamber,.tag.action-governor,.tag.action-law{background:#e8f4e9;color:#256132;border-color:#c6e2ca}
+.tag.action-vetoed,.tag.action-withdrawn{background:#f9e9e8;color:#8c2f28;border-color:#efcfcc}
 .luna-block{background:#f6faf8;border-left:3px solid #2f6b4f;padding:10px 14px;border-radius:4px}
 .agency-combobox{position:relative;flex:0 1 250px;min-width:185px;max-width:100%}
 .agency-combobox input{width:100%;border:1px solid #e1e8ee;background:#fbfcfd;border-radius:7px;color:#5d6f80;padding:9px 29px 9px 12px;font-size:11px;outline:0}

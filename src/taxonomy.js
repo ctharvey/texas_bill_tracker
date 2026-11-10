@@ -255,13 +255,42 @@ export function authorshipParty(bill) {
 export function memberSummary(member) {
   if (!member) return 'Not matched to the 90th Legislature roster';
   const bits = [];
-  if (member.party) bits.push(member.party);
+  if (member.party) bits.push(member.party_basis === 'election' ? `${member.party} (2026 ballot, unofficial)` : member.party);
   if (member.district) bits.push(`${member.chamber === 'house' ? 'HD' : 'SD'} ${member.district}`);
   else if (member.new_to_chamber && member.service?.length) bits.push(`new to the ${member.chamber === 'house' ? 'House' : 'Senate'}`);
   if (member.years_served > 0) bits.push(`${member.years_served} ${member.years_served === 1 ? 'year' : 'years'} served`);
   if (member.first_year) bits.push(`since ${member.first_year}`);
   if (!member.service?.length) bits.push('member-elect; no prior service on record');
   return bits.join(' · ');
+}
+
+// Last action: TLO writes "MM/DD/YYYY H|S|E description". Rules are ordered most specific first; rank orders
+// categories along the legislative path (withdrawn/vetoed rank by where they stop, not as progress).
+export const LAST_ACTION_TYPES = [
+  {key:'vetoed', label:'Vetoed', rank:9, test:/vetoed/},
+  {key:'law', label:'Signed or effective', rank:10, test:/signed by the governor|^effective|filed without the governor|became law/},
+  {key:'governor', label:'Sent to governor', rank:9, test:/sent to the governor|enrolled/},
+  {key:'other_chamber', label:'Received in other chamber', rank:7, test:/received from the (house|senate)/},
+  {key:'passed', label:'Passed chamber', rank:6, test:/^passed(?! to)|reported engrossed|^adopted/},
+  {key:'withdrawn', label:'Withdrawn or failed', rank:0, test:/withdrawn|^failed|^died|^not again placed/},
+  {key:'floor', label:'Floor action', rank:5, test:/read (2nd|second|3rd|third) time|passed to (engrossment|third)|laid on the table|postponed|^amended|amendment\(s\) (offered|adopted)/},
+  {key:'calendar', label:'Placed on calendar', rank:4, test:/placed on|calendar|set on the/},
+  {key:'reported', label:'Reported from committee', rank:3, test:/reported (favorably|unfavorably|from)|committee report|recommended for/},
+  {key:'heard', label:'Heard in committee', rank:2.5, test:/considered in (public hearing|formal meeting)|testimony taken|left pending|heard in committee|hearing held/},
+  {key:'scheduled', label:'Hearing scheduled', rank:2, test:/scheduled for (public )?hearing|hearing scheduled|meeting cancelled/},
+  {key:'referred', label:'Referred to committee', rank:1, test:/referred to|read first time|recommitted/},
+  {key:'filed', label:'Filed', rank:0.5, test:/^filed$|received by the secretary|^introduced|^filed\b/},
+];
+const ACTION_CHAMBER = {H:'House', S:'Senate', E:'Governor'};
+
+export function lastActionInfo(bill) {
+  const raw = String(bill.last_action || '').trim();
+  const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+([HSE])\s+(.*)$/);
+  const text = (m ? m[5] : raw).trim() || 'Filed';
+  const date = m ? `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` : (bill.last_action_date || bill.filed_at || '');
+  const lower = text.toLowerCase();
+  const type = LAST_ACTION_TYPES.find(t => t.test.test(lower)) || {key:'other', label:'Other action', rank:0.5};
+  return {key:type.key, label:type.label, rank:type.rank, chamber:m ? ACTION_CHAMBER[m[4]] || null : null, date, text};
 }
 
 // Evidence-based procedural outlook, not a probability of enactment.

@@ -53,6 +53,11 @@ test('roster tenure feeds author influence only when no curated profile exists',
   assert.equal(authorInfluence(bill('HB10', ['Bailey'])).level, 0);
 });
 
+test('election-based party is labelled as the unofficial 2026 ballot', () => {
+  const elect = member('house', 'Bord', null, {party: 'Democratic', party_basis: 'election', district: '126'});
+  assert.equal(memberSummary(elect), 'Democratic (2026 ballot, unofficial) · HD 126 · member-elect; no prior service on record');
+});
+
 test('member summary is explicit about missing records', () => {
   assert.equal(memberSummary(null), 'Not matched to the 90th Legislature roster');
   assert.match(memberSummary(roster.members['house|Bailey']), /member-elect; no prior service on record/);

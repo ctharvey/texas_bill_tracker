@@ -31,6 +31,19 @@ class MatchTests(unittest.TestCase):
         self.assertFalse(sm.same_person('Ana Fischer', 'Fischer', 'Trey Martinez Fischer'))
 
 
+class ElectTests(unittest.TestCase):
+    def test_ballot_names_agree_with_tlo_names(self):
+        import json
+        data = sm.load_elect(ROOT / 'data' / 'members_elect_2026.json')
+        self.assertEqual(len(data['members']), 41)
+        names = {'Oziel Ochoa, Jr.': 'Ochoa', 'Beth McLaughlin': 'McLaughlin', 'Odus Evbagharu': 'Evbagharu',
+                 'Dennis Geesaman': 'Geesaman', 'Tyler Smith': 'Smith'}
+        for full, display in names.items():
+            self.assertTrue(sm.same_person(full, display, data['members']['house|' + display]['ballot_name']), display)
+        self.assertFalse(sm.same_person('Lauren Smith', 'Smith', data['members']['house|Smith']['ballot_name']))
+        self.assertTrue(all(v['party'] in ('Democratic', 'Republican') for v in data['members'].values()))
+
+
 class ParseTests(unittest.TestCase):
     def test_lrl_row_keeps_each_stint_and_tenure(self):
         [row] = sm.lrl_rows('<tr><th>header</th></tr>' + ROW)

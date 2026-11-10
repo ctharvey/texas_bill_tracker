@@ -1,6 +1,10 @@
 # Changelog
 
 ## 2026-11-10
+- Last action: cards show a categorized last-action tag with chamber and date; new "Last action" filter and
+  sorts by latest action, oldest last action and last-action stage.
+- Members-elect: party and district for the 41 new members from the SOS unofficial 2026 general election
+  results (`data/members_elect_2026.json`), labelled as such and used only when the ballot name agrees.
 - Member roster: `sync_members.py` joins the TLO 90th roster to LRL party, district and tenure; bill cards are
   tinted blue/red by primary author party, purple for bipartisan authorship, neutral when unknown; the drawer
   shows each member's party, district and tenure; daily `texas-bill-members.timer` refreshes `live/members.json`.

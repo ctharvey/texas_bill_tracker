@@ -100,7 +100,11 @@ through a `live -> ../../live` symlink the deployer adds to every release. The t
 Online (member code and the exact display name bill histories use), joined to the Legislative Reference
 Library for party, district and service history through the 89th. Authors resolve only by exact
 (chamber, display name); the LRL join needs the same surname and an agreeing given name (nickname or prefix),
-and ambiguity leaves a member unmatched. Members-elect without an LRL record keep party and district unknown.
+and ambiguity leaves a member unmatched. Members-elect without an LRL record take party and district from
+`data/members_elect_2026.json`, the winners in the Secretary of State's unofficial 2026 general election
+results (read in a browser session, since the feed sits behind a bot check), and only when the ballot name
+agrees with the TLO name. The drawer labels that party "2026 ballot, unofficial". Delete the file once LRL
+adds the 90th Legislature.
 
 Cards are tinted by authorship: blue for a Democratic primary author, red for Republican, purple when the
 authors and coauthors include both parties, neutral when the primary author's party is unknown. Every tint
@@ -108,6 +112,14 @@ has a text label. The drawer lists each author, coauthor, sponsor and cosponsor 
 tenure, linked to LRL or TLO. Roster tenure feeds author influence when no curated profile exists.
 `data/members.json` ships with each release; `texas-bill-members.timer` refreshes `live/members.json` daily
 on the VPS (about 180 page requests at one per second), and the tracker prefers the live copy.
+
+### Last action
+
+Each card carries a last-action tag (category, chamber and date) parsed from TLO's `MM/DD/YYYY H|S|E text`
+last action: filed, referred, hearing scheduled, heard, reported, on calendar, floor action, passed chamber,
+received in other chamber, sent to governor, signed or effective, vetoed, withdrawn or failed, other.
+The explorer can filter by that category and sort by latest action, oldest last action (stalled bills first)
+or last-action stage. This is separate from the "stage" filter, which is the furthest stage ever reached.
 
 ### Live bill snapshot
 
