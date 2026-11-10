@@ -240,8 +240,9 @@ def validate_result(result: dict, document: dict, registry: list[dict], schema: 
     }
 
 
-def response_cost(raw: dict) -> list[float] | None:
-    if raw.get("service_tier") != "flex" or raw.get("model") != MODEL or not raw.get("usage"):
+def response_cost(raw: dict, *, model: str = MODEL,
+                  rates: tuple = (.5, .025, 2.5, .625, 1.25)) -> list[float] | None:
+    if raw.get("service_tier") != "flex" or raw.get("model") != model or not raw.get("usage"):
         return None
     usage = raw["usage"]
     details = usage.get("input_tokens_details") or {}
@@ -249,15 +250,16 @@ def response_cost(raw: dict) -> list[float] | None:
     ordinary = usage["input_tokens"] - reads - writes
     if min(ordinary, reads, writes, usage["output_tokens"]) < 0:
         raise ValueError("Inconsistent provider token usage")
-    fixed = (ordinary * .5 + reads * .025 + usage["output_tokens"] * 2.5) / 1e6
+    input_rate, read_rate, output_rate, short_write, long_write = rates
+    fixed = (ordinary * input_rate + reads * read_rate + usage["output_tokens"] * output_rate) / 1e6
     lifetimes = details.get("cache_write_tokens_details")
     if lifetimes is not None:
         if set(lifetimes) - {"ttl_30m_tokens", "ttl_12h_tokens"} or sum(lifetimes.values()) != writes:
             raise ValueError("Unrecognized provider cache-write accounting")
-        total = fixed + (lifetimes.get("ttl_30m_tokens", 0) * .625
-                         + lifetimes.get("ttl_12h_tokens", 0) * 1.25) / 1e6
+        total = fixed + (lifetimes.get("ttl_30m_tokens", 0) * short_write
+                         + lifetimes.get("ttl_12h_tokens", 0) * long_write) / 1e6
         return [total, total]
-    return [fixed + writes * .625 / 1e6, fixed + writes * 1.25 / 1e6]
+    return [fixed + writes * short_write / 1e6, fixed + writes * long_write / 1e6]
 
 
 def send_request(request: dict) -> dict:
@@ -300,9 +302,9 @@ def send_request(request: dict) -> dict:
 
 
 def extract(document: dict, registry: list[dict], cache_root: Path, *, execute: bool = False,
-            sender=None) -> dict:
+            sender=None, request: dict | None = None, validator=None, cost_estimator=None) -> dict:
     check_cache_location(cache_root)
-    request = build_request(document, registry)
+    request = request if request is not None else build_request(document, registry)
     import jsonschema
     jsonschema.Draft202012Validator.check_schema(request["text"]["format"]["schema"])
     cache = ResponseCache(cache_root / "responses")
@@ -320,7 +322,7 @@ def extract(document: dict, registry: list[dict], cache_root: Path, *, execute: 
         return {"action": "not_submitted", "request_key": key, "message": str(error),
                 "new_api_cost_estimate": [0, 0], "publishable": False}
     raw = cached.response
-    estimate = response_cost(raw)
+    estimate = (cost_estimator or response_cost)(raw)
     report = {"request_key": key, "text_hash": document["text_hash"], "cache_hit": cached.cache_hit,
               "usage_source": "historical_response" if cached.cache_hit else "new_response",
               "original_response_cost_estimate": estimate,
@@ -328,12 +330,14 @@ def extract(document: dict, registry: list[dict], cache_root: Path, *, execute: 
               "source_provenance": {k: document.get(k) for k in ("pdf_sha256", "source_url")},
               "status": "needs_review", "publishable": False}
     try:
-        if raw.get("status") != "completed" or raw.get("service_tier") != "flex" or raw.get("model") != MODEL:
+        if (raw.get("status") != "completed" or raw.get("service_tier") != "flex"
+                or raw.get("model") != request["model"]):
             raise ValueError("Incomplete response or unexpected model/service tier; not retried")
         output = "".join(part["text"] for item in raw.get("output", []) if item.get("type") == "message"
                          for part in item.get("content", []) if part.get("type") == "output_text")
         result = json.loads(output)
-        report.update(validate_result(result, document, registry, request["text"]["format"]["schema"], key))
+        report.update((validator or validate_result)(
+            result, document, registry, request["text"]["format"]["schema"], key))
         report["result"] = result
     except (ValueError, KeyError, TypeError, jsonschema.ValidationError) as error:
         report["errors"] = ["Response failed validation: " + type(error).__name__]

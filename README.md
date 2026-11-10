@@ -38,7 +38,42 @@ python3 scripts/sync_ftp.py
 
 The first verified official import read 1,059 bill histories on November 9, 2026. GitHub Actions is scheduled hourly, at minute 17 UTC (GitHub may delay scheduled jobs). Each snapshot records its actual generation time and coverage; it is a dated bulk snapshot rather than a real-time feed.
 
-### Optional full-text extraction (pending evaluation)
+### Focused full-text classification (pending evaluation)
+
+`scripts/classify_bill.py` reads the complete official bill using **Luna Flex/high** and returns a concise
+summary, canonical policy tags, direct/inferred state-agency impacts, separate all-agencies scope,
+substantive locations, affected groups, major effects and short supporting excerpts. It does not enumerate
+every obligation, deadline or exception. Author/party/member counts and legislative events remain official
+metadata. The policy and agency vocabularies come from `src/taxonomy.js`; the agency list is still incomplete.
+
+```sh
+python scripts/classify_bill.py --pdf /path/to/HB00529I.pdf --bill-id HB529 --session 90R --version introduced --source-url ftp://ftp.legis.state.tx.us/bills/90R/billtext/PDF/house_bills/HB00500_HB00599/HB00529I.pdf
+```
+
+Install `requirements-extraction.txt` first. Preparation is free; `--execute` authorizes a cache-miss call
+using `OPENAI_API_KEY`. This path reuses the detailed extractor's complete-text reader, private persistent
+response cache, prompt-cache breakpoints, bounded capacity backoff and uncertain-call protection. Its model,
+schema and prompt produce a distinct cache key. A response hit makes no provider call. Shared instructions
+and vocabulary target a 12-hour prompt cache; the complete changing bill remains the variable suffix.
+
+The tool verifies canonical IDs/tags and literal supporting excerpts, flags unresolved/inferred agency
+impacts, and keeps every output private and pending review. It does not require every operative span to be
+cited. Valid excerpts do not prove semantic accuracy. Nothing is written to `data/bills.json` or published;
+classification is not part of the hourly metadata job. Luna Flex short-context cost estimates use the
+[official pricing](https://developers.openai.com/api/docs/pricing) verified November 9, 2026, including
+cache writes. Review pricing before rollout or use with long-context requests.
+
+The first focused HB529 pilot used all 21 pages and returned 5 policy tags, 2 agency entries, 3 location
+scopes, 3 affected groups and 7 major effects. It cost an estimated $0.002208825 in 95 seconds. Six excerpt
+locations failed validation (four neighboring-span references and two excerpts crossing span boundaries);
+the response remains unapproved. An offline replay made no provider call. This is one pilot, not a claim
+of corpus-wide accuracy or demonstrated provider prompt-cache hits across bills.
+
+The detailed version is preserved at
+[`archive/detailed-extraction-v1`](https://github.com/ctharvey/texas_bill_tracker/tree/archive/detailed-extraction-v1)
+(commit `a78c67d`) and the local tag `detailed-extraction-v1`. Its script and contract remain available below.
+
+### Detailed full-text extraction (preserved, pending evaluation)
 
 `scripts/extract_bill.py` prepares a single Terra Flex/high request from a local official TLC full-bill PDF.
 It extracts entities, authority changes, obligations and timing into a **private review cache**. It does not

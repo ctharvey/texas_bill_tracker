@@ -2,6 +2,10 @@
 
 ## 2026-11-09
 
+- Preserve the detailed extraction version and add focused Luna Flex full-text classification for summaries,
+  policy tags, agency impacts, locations, affected groups, major effects and verifiable excerpts. Reuse the
+  private response/prompt caches and leave all classifications unpublished pending evaluation.
+
 - Fix unmatched entity IDs to accept null and reject empty strings; add explicit business-day units following
   the held-out HB529 evaluation. Schema changes invalidate response reuse; prior raw responses stay intact.
 

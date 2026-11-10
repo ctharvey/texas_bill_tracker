@@ -1,0 +1,423 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "bill_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 12
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 900
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "span_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20
+              },
+              "quote": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              }
+            },
+            "required": [
+              "span_id",
+              "quote"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 3,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "text",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "policy_tags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tag": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "span_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "required": [
+                "span_id",
+                "quote"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 3,
+            "minItems": 1
+          }
+        },
+        "required": [
+          "tag",
+          "explanation",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 8,
+      "minItems": 0
+    },
+    "agencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "registry_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "impact": {
+            "enum": [
+              "direct",
+              "inferred"
+            ],
+            "type": "string"
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "span_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "required": [
+                "span_id",
+                "quote"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 3,
+            "minItems": 1
+          }
+        },
+        "required": [
+          "registry_id",
+          "name",
+          "impact",
+          "explanation",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 12,
+      "minItems": 0
+    },
+    "all_state_agencies_scope": {
+      "type": "object",
+      "properties": {
+        "applies": {
+          "type": "boolean"
+        },
+        "basis": {
+          "enum": [
+            "direct",
+            "inferred",
+            "not_applicable"
+          ],
+          "type": "string"
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "span_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20
+              },
+              "quote": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              }
+            },
+            "required": [
+              "span_id",
+              "quote"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 3,
+          "minItems": 0
+        }
+      },
+      "required": [
+        "applies",
+        "basis",
+        "explanation",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "locations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "kind": {
+            "enum": [
+              "named_place",
+              "defined_area",
+              "statewide"
+            ],
+            "type": "string"
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "span_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "required": [
+                "span_id",
+                "quote"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 3,
+            "minItems": 1
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "explanation",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 8,
+      "minItems": 0
+    },
+    "affected_groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "span_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "required": [
+                "span_id",
+                "quote"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 3,
+            "minItems": 1
+          }
+        },
+        "required": [
+          "group",
+          "explanation",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 8,
+      "minItems": 0
+    },
+    "major_effects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "effect": {
+            "enum": [
+              "reporting",
+              "registration",
+              "rulemaking",
+              "funding",
+              "tax_change",
+              "penalties",
+              "program_creation",
+              "authority_change",
+              "eligibility_change",
+              "rights_protections",
+              "other"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "span_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "required": [
+                "span_id",
+                "quote"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 3,
+            "minItems": 1
+          }
+        },
+        "required": [
+          "effect",
+          "label",
+          "explanation",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 8,
+      "minItems": 0
+    },
+    "uncertainties": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "maxItems": 8,
+      "minItems": 0
+    }
+  },
+  "required": [
+    "bill_id",
+    "summary",
+    "policy_tags",
+    "agencies",
+    "all_state_agencies_scope",
+    "locations",
+    "affected_groups",
+    "major_effects",
+    "uncertainties"
+  ],
+  "additionalProperties": false
+}
