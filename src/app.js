@@ -1,6 +1,7 @@
 import {reviewModel, renderReview} from './review.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, watchlistFile, parseWatchlistFile} from './prefs.js';
 import {createSyncClient} from './sync.js';
+import {parseBillMarkdown, validHighlights, sha256Hex, renderBillText} from './billtext.js';
 import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, searchTerms} from './taxonomy.js';
 
 const $ = (selector, root=document) => root.querySelector(selector);
@@ -527,6 +528,82 @@ function memberItem({name,member}){
   return `<li><span class="party-dot party-${letter}" aria-hidden="true"></span>${link?`<a class="text-link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`:`<strong>${esc(label)}</strong>`} <small>${esc(memberSummary(member))}</small></li>`;
 }
 
+function billTextSection(b){
+  const section=document.createElement('section');section.className='drawer-section bill-text-section';
+  const heading=document.createElement('h3');heading.textContent='Bill text';
+  const intro=document.createElement('p');intro.textContent='Read the filed text with additions underlined and deletions struck through. Luna highlights show where its tags come from.';
+  const button=document.createElement('button');button.className='outline-button';button.type='button';button.textContent='Show bill text';
+  const picker=document.createElement('div');picker.className='bt-versions';
+  const area=document.createElement('div');area.setAttribute('aria-live','polite');
+  const official=document.createElement('p');official.hidden=true;
+  const link=document.createElement('a');link.className='text-link';link.href=/^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)\d{1,5}$/.test(b.id)?`https://capitol.texas.gov/BillLookup/Text.aspx?LegSess=90R&Bill=${b.id}`:officialUrl(b);link.target='_blank';link.rel='noopener noreferrer';link.textContent='Read the official text on Texas Legislature Online ↗';
+  official.append(link);
+  section.append(heading,intro,button,picker,area,official);
+  const idOk=/^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)\d{1,5}$/.test(b.id);
+  const fetchText=async url=>{const r=await fetch(url,{cache:'no-cache',signal:timeoutSignal(20000)});if(r.status===404)return null;if(!r.ok)throw Error('HTTP '+r.status);return r};
+  let selected=null,versions=[],select=null,highlightsPromise=null;
+  const highlightsOnce=()=>highlightsPromise||(highlightsPromise=(async()=>{try{const hr=await fetchText(`./live/luna/highlights/${b.id}.json`);return hr?await hr.json():null}catch{return null}})());
+  const loadVersion=async(index,version)=>{
+    selected=version.code;area.textContent='Loading bill text…';
+    const stale=()=>state.openBill!==b.id||selected!==version.code;
+    try{
+      if(!/^[A-Z0-9]{1,3}$/.test(version.code))throw Error('Unexpected version code');
+      const textResponse=await fetchText(`./live/text/${b.id}/${version.code}.md`);
+      if(!textResponse)throw Error('This version is not available yet');
+      const raw=await textResponse.text();
+      let highlights=null,note,other=null;
+      const candidate=await highlightsOnce();
+      if(candidate&&typeof candidate.text_version==='string'){
+        if(candidate.text_version===version.code){
+          if(validHighlights(candidate,b.id,version.code,await sha256Hex(raw)))highlights=candidate;
+          else note='Luna highlights do not match this version of the text.';
+        }else{
+          const idx=versions.findIndex(v=>v.code===candidate.text_version);
+          if(idx>=0){other={idx,name:versions[idx].name||versions[idx].code};note=' '}
+        }
+      }
+      const parsed=parseBillMarkdown(raw);
+      if(stale())return;
+      renderBillText(area,parsed,highlights,{highlightsNote:note,idPrefix:`bt-${b.id}`});
+      if(other){
+        const line=document.createElement('p');line.className='bt-note';
+        const go=document.createElement('button');go.type='button';go.className='outline-button';go.textContent=`Luna's highlights are on the ${other.name} text`;
+        go.addEventListener('click',()=>{if(select){select.value=String(other.idx)}loadVersion(other.idx,versions[other.idx])});
+        line.append(go);area.prepend(line);
+      }
+    }catch(error){
+      if(stale())return;
+      area.textContent='The bill text could not be shown: '+error.message;
+    }
+  };
+  button.addEventListener('click',async()=>{
+    button.disabled=true;official.hidden=false;area.textContent='Loading bill text…';
+    try{
+      if(!idOk)throw Error('Unexpected bill id');
+      const response=await fetchText(`./live/text/${b.id}/index.json`);
+      if(state.openBill!==b.id)return;
+      if(!response){
+        area.replaceChildren(document.createTextNode('The bill text is not on this site yet; it is added within a few hours of filing. Read it on '),link,document.createTextNode('.'));
+        official.hidden=true;button.hidden=true;return;
+      }
+      const index=await response.json();
+      versions=Array.isArray(index?.versions)?index.versions.filter(v=>v&&/^[A-Z0-9]{1,3}$/.test(v.code)):[];
+      if(index?.format!=='texas-bill-text-index-v1'||index.bill_id!==b.id||!versions.length)throw Error('The text index is not valid');
+      if(state.openBill!==b.id)return;
+      button.hidden=true;
+      select=document.createElement('select');select.setAttribute('aria-label','Bill text version');
+      versions.forEach((v,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent=v.name?`${v.name} (${v.code})`:v.code;select.append(o)});
+      select.value=String(versions.length-1);
+      select.addEventListener('change',()=>loadVersion(Number(select.value),versions[Number(select.value)]));
+      picker.append(select);
+      await loadVersion(versions.length-1,versions[versions.length-1]);
+    }catch(error){
+      button.disabled=false;area.textContent='The bill text could not be loaded: '+error.message;
+    }
+  });
+  return section;
+}
+
 function showDrawer(id,push=false){
   const b=state.bills.find(b=>b.id===id);if(!b)return;
   const h=assessHearing(b),influence=authorInfluence(b),party=authorshipParty(b),last=lastActionInfo(b);
@@ -541,6 +618,7 @@ function showDrawer(id,push=false){
   load.addEventListener('click',()=>local.click());
   const draw=()=>{if(reviews.has(b.id))renderReview(area,reviews.get(b.id),true);else area.textContent='A reviewed full-text analysis is not yet available. Review files open only in this browser session.';};
   local.addEventListener('change',async()=>{try{const file=local.files[0];if(!file)return;if(file.size>15*1024*1024)throw Error('Select a file smaller than 15 MB');const bundle=JSON.parse(await file.text());reviewModel(bundle);if(bundle.bill_id!==b.id)throw Error('This review belongs to '+bundle.bill_id);reviews.set(b.id,bundle);draw();toast('Private review opened');}catch(error){toast('Review could not be opened: '+error.message)}});
+  $('#detail-drawer').append(billTextSection(b));
   reviewSection.append(heading,load,local,area);$('#detail-drawer').append(reviewSection);draw();
   $('#detail-drawer').hidden=false;$('#drawer-scrim').hidden=false;document.body.style.overflow='hidden';$('#drawer-close').focus();
   state.openBill=b.id;

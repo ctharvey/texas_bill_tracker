@@ -406,6 +406,16 @@ Empty official lists mean none listed in the snapshot; missing fields in local i
 shown as not reported. Authors/coauthors belong to the originating chamber and sponsors/
 cosponsors to the other chamber. The `author` display string remains for compatibility.
 
+Bill text: `sync_ftp.py` reads each history's text versions and writes `live/text/<BILL>/<code>.md` (code is the
+TLC file suffix, `I` = introduced) and `index.json`. The Markdown keeps one paragraph per line, `### SECTION n.`
+headings, `<ins>` for added and `<del>` for deleted wording, and backslash-escapes Markdown characters. Highlight
+positions use the plain projection of each paragraph (headings marker, ins/del tags and escapes removed; offsets
+in code points, paragraph 0 = title), computed identically by `sync_ftp.plain_paragraphs`,
+`review_pipeline.plain_paragraphs` and `src/billtext.js`. The review worker writes
+`live/luna/highlights/<BILL>.json` (format `texas-bill-luna-highlights-v1`) for reviewed bills whose introduced
+text is present. The format spec is in the workspace plan
+`.agent/plans/texas-bill-tracker-bill-text-and-luna-highlights-plan-2026-11-10.md`.
+
 `subjects` is the Legislative Council's subject index from the history's `<subjects>` field, without the index
 codes ("Artificial Intelligence (IQ7C5)" becomes "Artificial Intelligence"); it is absent in older snapshots.
 Both searches match it, so bills with vague captions are found before their full-text review.

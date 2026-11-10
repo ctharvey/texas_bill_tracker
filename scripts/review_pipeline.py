@@ -524,6 +524,136 @@ def publish_tags(cache_dir: Path, out: Path, registry: list[dict]) -> int:
     return len(bills)
 
 
+def plain_paragraphs(markdown: str) -> list[str]:
+    """Plain projection of a bill-text Markdown file (format spec 9.1); paragraph 0 is the title line."""
+    paragraphs = []
+    for raw in markdown.split("\n\n"):
+        text = raw.rstrip("\n")
+        if not text.strip():
+            continue
+        for prefix in ("### ", "# "):
+            if text.startswith(prefix):
+                text = text[len(prefix):]
+                break
+        for tag in ("<ins>", "</ins>", "<del>", "</del>"):
+            text = text.replace(tag, "")
+        paragraphs.append(re.sub(r"\\(.)", r"\1", text))
+    return paragraphs
+
+
+def _alnum_stream(text: str) -> list[tuple[str, int]]:
+    return [(x, i) for i, ch in enumerate(text) for x in ch.lower() if x.isalnum()]
+
+
+_PDF_ARTIFACT = re.compile(r'(?<=[A-Za-z0-9.):])A{1,2}(?=[A-Z0-9(\["])')
+
+
+def locate_quote(quote: str, paragraphs: list[str]) -> list[dict] | None:
+    """Exact-once match of the quote's alnum stream in the paragraphs' stream, as per-paragraph ranges."""
+    stream = [(x, p, i) for p, text in enumerate(paragraphs) for x, i in _alnum_stream(text)]
+    haystack = "".join(x for x, _, _ in stream)
+    for candidate in (quote, _PDF_ARTIFACT.sub("", quote)):
+        needle = "".join(x for x, _ in _alnum_stream(candidate))
+        if not needle:
+            return None
+        first = haystack.find(needle)
+        if first < 0:
+            continue  # Strategy 2 runs only when strategy 1 finds nothing.
+        if haystack.find(needle, first + 1) >= 0:
+            return None
+        spans: dict[int, list[int]] = {}
+        for _, p, i in stream[first:first + len(needle)]:
+            low_high = spans.setdefault(p, [i, i])
+            low_high[1] = i
+        return [{"p": p, "start": lo, "end": hi + 1} for p, (lo, hi) in sorted(spans.items())]
+    return None
+
+
+KEY_EFFECTS = {"penalties", "funding", "tax_change", "program_creation", "authority_change", "rulemaking",
+               "eligibility_change"}
+HIGHLIGHT_KINDS = {"agencies": "agency", "major_effects": "effect", "policy_tags": "topic",
+                   "affected_groups": "group", "locations": "location"}
+
+
+def highlight_entry(bundle: dict, reviewed_at: str, markdown: str, version_code: str) -> dict:
+    result = bundle.get("result") or {}
+    paragraphs = plain_paragraphs(markdown)
+    citations: dict[str, list[dict]] = {}
+    for c in bundle.get("validation", {}).get("verified_citations", []):
+        if c.get("status") == "resolved":
+            citations.setdefault(c["claim"], []).append(c)
+    candidates = []  # (id, claim fields)
+    if result.get("summary"):
+        candidates.append(("summary", {"kind": "summary", "label": "Summary", "explanation": result["summary"].get("text"),
+                                       "agency_id": None, "impact": None, "effect": None, "key_point": False}))
+    scope = result.get("all_state_agencies_scope") or {}
+    if scope.get("applies"):
+        candidates.append(("all_state_agencies_scope", {"kind": "scope", "label": "All state agencies",
+                           "explanation": scope.get("explanation"), "agency_id": None, "impact": None,
+                           "effect": None, "key_point": True}))
+    for field in ("policy_tags", "locations", "affected_groups", "major_effects", "agencies"):
+        for i, item in enumerate(result.get(field) or []):
+            claim = {"kind": HIGHLIGHT_KINDS[field], "explanation": item.get("explanation"), "agency_id": None,
+                     "impact": None, "effect": None, "key_point": False}
+            if field == "agencies":
+                claim.update(label=item.get("name"), agency_id=item.get("registry_id"), impact=item.get("impact"),
+                             key_point=item.get("impact") == "direct")
+            elif field == "major_effects":
+                claim.update(label=item.get("label"), effect=item.get("effect"),
+                             key_point=item.get("effect") in KEY_EFFECTS)
+            else:
+                claim["label"] = item.get({"policy_tags": "tag", "locations": "name", "affected_groups": "group"}[field])
+            candidates.append((f"{field}:{i}", claim))
+    claims, unlocated = [], []
+    for claim_id, fields in candidates:
+        if claim_id not in citations:
+            continue
+        ranges = []
+        for c in citations[claim_id]:
+            if c.get("source_type") != "bill":
+                continue
+            found = locate_quote(c.get("quote") or "", paragraphs)
+            for r in found or []:
+                if r not in ranges:
+                    ranges.append(r)
+        if ranges:
+            claims.append({"id": claim_id, **fields, "ranges": sorted(ranges, key=lambda r: (r["p"], r["start"]))})
+        else:
+            unlocated.append(claim_id)
+    return {"format": "texas-bill-luna-highlights-v1", "bill_id": bundle.get("bill_id"), "text_version": version_code,
+            "text_sha256": hashlib.sha256(markdown.encode("utf-8")).hexdigest(), "reviewed_at": reviewed_at,
+            "claims": claims, "unlocated": unlocated}
+
+
+def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path) -> int:
+    done = 0
+    for path in sorted((cache_dir / "reviews").glob("*.json")):
+        try:
+            bundle = json.loads(path.read_text("utf-8"))
+            if (not isinstance(bundle, dict) or not isinstance(bundle.get("result"), dict)
+                    or bundle.get("bill_id") != path.stem
+                    or bundle.get("document", {}).get("version") != "introduced"):
+                continue
+            source = text_dir / path.stem / "I.md"
+            if not source.is_file():
+                continue
+            markdown = source.read_text("utf-8")
+            stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
+            entry = highlight_entry(bundle, stamp.replace("+00:00", "Z"), markdown, "I")
+            payload = (json.dumps(entry, sort_keys=False, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
+            target = out_dir / (path.stem + ".json")
+            if not (target.is_file() and target.read_bytes() == payload):
+                out_dir.mkdir(parents=True, exist_ok=True)
+                temporary = target.with_name(target.name + ".tmp")
+                temporary.write_bytes(payload)
+                os.chmod(temporary, 0o644)
+                os.replace(temporary, target)
+            done += 1
+        except Exception:
+            continue  # One bad bundle or text file never stops the rest.
+    return done
+
+
 def utc_stamp(seconds_from_now: float = 0) -> str:
     moment = dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=seconds_from_now)
     return moment.isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -741,6 +871,13 @@ def main():
             except OSError as error:
                 print("Tag publish failed:", type(error).__name__, flush=True)
                 raise SystemExit(3)
+            if args.snapshot:
+                try:
+                    print("Published Luna highlights for",
+                          publish_highlights(args.cache_dir, args.snapshot.parent / "text",
+                                             args.publish_tags.parent / "highlights"), "bills", flush=True)
+                except Exception as error:
+                    print("Highlight publish failed:", type(error).__name__, flush=True)
 
 
 if __name__ == "__main__":

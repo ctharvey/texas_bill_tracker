@@ -1,6 +1,13 @@
 # Changelog
 
 ## 2026-11-10
+- Bill text on the site: the hourly data run converts each version's official HTML to Markdown
+  (`live/text/<BILL>/<code>.md` plus `index.json`; additions as `<ins>`, deletions as `<del>`, sections as
+  headings), downloading only new or changed versions, at most 400 per run. The review worker publishes
+  `live/luna/highlights/<BILL>.json` from existing reviews (no model calls): each verified claim's quote located
+  in the text by exact match, rule-derived key points, and unmatched claims listed as unlocated. The drawer's
+  "Bill text" section shows the text with a version picker, key points, highlight filters by kind and agency,
+  Luna's explanation on click, and the official text link. tags.json is unchanged.
 - Sorting compares bill numbers as numbers (HB 99 before HB 100): the agencies, hearing and author-prominence
   sorts break ties by number instead of the data file's order, the data file itself is ordered that way, and
   agent search breaks ties the same way.

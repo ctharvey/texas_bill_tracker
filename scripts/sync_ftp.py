@@ -11,12 +11,16 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import ftplib
+import hashlib
+from html.parser import HTMLParser
 import io
+import itertools
 import json
 import os
 from pathlib import Path, PurePosixPath
 import re
 import sys
+from urllib.parse import urlsplit
 import xml.etree.ElementTree as ET
 
 
@@ -161,7 +165,50 @@ def parse_bill_xml(raw: bytes, path: str) -> dict | None:
     subject_lists = [e for e in root.iter() if local_tag(e.tag) == "subjects"]
     if subject_lists:
         record["subjects"] = parse_subjects(subject_lists[0])
+    billtext = next((e for e in root.iter() if local_tag(e.tag) == "billtext"), None)
+    if billtext is not None:
+        record["text_versions"] = parse_text_versions(billtext)
+    for key, value in root.attrib.items():
+        if local_tag(key) == "lastupdate" and value.strip():
+            record["source_updated"] = value.strip()
+            break
     return record
+
+
+TEXT_URL_PATH = "/bills/90R/billtext/HTML/"
+TEXT_FILE_RE = re.compile(r"^[A-Za-z]+\d{5}([A-Za-z0-9]{1,8})\.htm$", re.I)
+
+
+def text_url_path(url: str) -> str | None:
+    """Path part of a TLC 90R bill-text HTML FTP URL, or None for anything else."""
+    try:
+        parts = urlsplit(url)
+        host = (parts.hostname or "").lower()
+    except ValueError:
+        return None
+    if parts.scheme.lower() != "ftp" or host != HOST or not parts.path.startswith(TEXT_URL_PATH):
+        return None
+    return parts.path
+
+
+def parse_text_versions(billtext: ET.Element) -> list[dict]:
+    """Bill-text versions (billtext/docTypes/bill/versions/version) in document order."""
+    def children(element: ET.Element, tag: str):
+        return [c for c in element if local_tag(c.tag) == tag]
+    found, codes = [], set()
+    for doctypes in children(billtext, "doctypes"):
+        for bill in children(doctypes, "bill"):
+            for versions in children(bill, "versions"):
+                for version in children(versions, "version"):
+                    url = first_text(version, "ftphtmlurl")
+                    path = text_url_path(url)
+                    match = TEXT_FILE_RE.match(PurePosixPath(path).name) if path else None
+                    if not match or match.group(1) in codes:
+                        continue
+                    code = match.group(1)
+                    codes.add(code)
+                    found.append({"code": code, "name": first_text(version, "versiondescription") or code, "html": url})
+    return found
 
 
 SUBJECT_CODE = re.compile(r"\s*\(([A-Z0-9]{3,8})\)\s*$")
@@ -251,6 +298,305 @@ def enumerate_xml(conn: ftplib.FTP) -> list[str]:
     return sorted(set(p for p in paths if not p.lower().endswith('/history.xml')))
 
 
+class _LineParser(HTMLParser):
+    """Collect one entry per <tr>: the characters of its cells after the first, as (char, kind) pairs.
+
+    kind is 'ins' inside <u>, 'del' inside <s>, else None. Markup state resets at each row end.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.lines: list[tuple[list, bool]] = []
+        self.row: list | None = None
+        self.cell: list | None = None
+        self.kind: str | None = None
+        self.center = False
+        self.skip = 0
+
+    def _end_cell(self) -> None:
+        if self.cell is not None and self.row is not None:
+            self.row.append(self.cell)
+        self.cell = None
+        self.kind = None
+
+    def end_row(self) -> None:
+        self._end_cell()
+        if self.row:
+            # The first cell holds the PGLN line marker; join the rest ("By: Cole" + "H.B. No. 1001").
+            cells = self.row[1:] if len(self.row) > 1 else self.row
+            joined: list = []
+            for i, cell in enumerate(cells):
+                if i:
+                    joined.append((" ", None))
+                joined.extend(cell)
+            self.lines.append((joined, self.center))
+        self.row = None
+        self.center = False
+        self.kind = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "tr":
+            self.end_row()
+            self.row = []
+        elif tag in ("td", "th"):
+            self._end_cell()
+            if self.row is None:
+                self.row = []
+            self.cell = []
+        elif tag == "u":
+            self.kind = "ins"
+        elif tag == "s":
+            self.kind = "del"
+        elif tag == "center":
+            self.center = True
+        elif tag == "br" and self.cell is not None:
+            self.cell.append((" ", self.kind))
+        elif tag in ("style", "script"):
+            self.skip += 1
+
+    def handle_startendtag(self, tag, attrs):
+        if tag not in ("u", "s", "td", "th", "tr", "center", "style", "script"):
+            self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag):
+        if tag in ("td", "th"):
+            self._end_cell()
+        elif tag == "tr":
+            self.end_row()
+        elif (tag == "u" and self.kind == "ins") or (tag == "s" and self.kind == "del"):
+            self.kind = None
+        elif tag in ("style", "script"):
+            self.skip = max(0, self.skip - 1)
+
+    def handle_data(self, data):
+        if not self.skip and self.cell is not None:
+            self.cell.extend((ch, self.kind) for ch in data)
+
+
+_BLANK = re.compile(r"[\s\xa0]")
+_HEADING = re.compile(r"(?:SECTION|ARTICLE)\s+\d+[A-Za-z]*\.(?!\d)")
+_LEAD_FORMAT = re.compile(r"[ \t]*[\r\n][ \t\r\n\f]*")
+_LEAD_INDENT = re.compile(r"[ \xa0]*")
+
+
+def _normalize(chars: list) -> list:
+    """Collapse whitespace to single spaces, trim, and let whitespace join same-kind neighbours."""
+    items: list[tuple[str, str | None]] = []
+    for ch, kind in chars:
+        if _BLANK.match(ch):
+            if items and items[-1][0] == " ":
+                continue
+            items.append((" ", kind))
+        else:
+            items.append((ch, kind))
+    while items and items[0][0] == " ":
+        items.pop(0)
+    while items and items[-1][0] == " ":
+        items.pop()
+    for i, (ch, _) in enumerate(items):
+        if ch == " ":
+            before, after = items[i - 1][1], items[i + 1][1]
+            items[i] = (" ", before if before == after else None)
+    return items
+
+
+def _escape(text: str, start: bool = False) -> str:
+    out = []
+    digits_end = 0
+    if start:
+        while digits_end < len(text) and text[digits_end].isascii() and text[digits_end].isdigit():
+            digits_end += 1
+    for i, ch in enumerate(text):
+        special = ch in "\\`*_[]<>"
+        if start and not special:
+            if i == 0 and ch in "#+-=":
+                special = True
+            elif digits_end and i == digits_end and ch in ".)":
+                special = True
+        out.append("\\" + ch if special else ch)
+    return "".join(out)
+
+
+def _render(chars: list) -> str:
+    parts = []
+    for n, (kind, group) in enumerate(itertools.groupby(chars, key=lambda item: item[1])):
+        text = "".join(ch for ch, _ in group)
+        if kind is None:
+            parts.append(_escape(text, start=(n == 0)))
+        else:
+            tag = "ins" if kind == "ins" else "del"
+            parts.append(f"<{tag}>{_escape(text)}</{tag}>")
+    return "".join(parts)
+
+
+def bill_text_markdown(html: str, number: str, version_name: str) -> str:
+    """Convert TLC bill-text HTML to the paragraph-per-line Markdown of the bill-text format."""
+    parser = _LineParser()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception as exc:  # HTMLParser is lenient, but never let odd markup escape as a new error type.
+        raise ValueError(f"unparseable bill text HTML: {exc}") from exc
+    parser.end_row()
+    paragraphs: list[list] = []
+    current: list | None = None
+    previous_center = False
+    for chars, center in parser.lines:
+        text = "".join(ch for ch, _ in chars)
+        formatting = _LEAD_FORMAT.match(text)
+        if formatting:
+            chars, text = chars[formatting.end():], text[formatting.end():]
+        if not any(not _BLANK.match(ch) for ch in text):
+            if current is not None:
+                paragraphs.append(current)
+            current, previous_center = None, False
+            continue
+        indent = len(_LEAD_INDENT.match(text).group())
+        if current is None or indent >= 2 or center or previous_center:
+            if current is not None:
+                paragraphs.append(current)
+            current = list(chars)
+        else:
+            current = current + [(" ", None)] + list(chars)
+        previous_center = center
+    if current is not None:
+        paragraphs.append(current)
+    lines = []
+    for paragraph in paragraphs:
+        chars = _normalize(paragraph)
+        if not chars:
+            continue
+        match = _HEADING.match("".join(ch for ch, _ in chars))
+        if match:
+            head, rest = _normalize(chars[:match.end()]), _normalize(chars[match.end():])
+            lines.append("### " + _render(head))
+            if rest:
+                lines.append(_render(rest))
+        else:
+            lines.append(_render(chars))
+    if not lines:
+        raise ValueError("no text lines found in bill text HTML")
+    title = f"# {_escape(number)} - {_escape(version_name)}"
+    return "\n\n".join([title, *lines]) + "\n"
+
+
+_TAGS = re.compile(r"</?(?:ins|del)>")
+
+
+def plain_paragraphs(markdown: str) -> list[str]:
+    """Plain projection per paragraph (index 0 is the title line); the coordinate space for highlights."""
+    result = []
+    for line in markdown.split("\n"):
+        if not line:
+            continue
+        if line.startswith("### "):
+            line = line[4:]
+        elif line.startswith("# "):
+            line = line[2:]
+        result.append(re.sub(r"\\(.)", r"\1", _TAGS.sub("", line), flags=re.S))
+    return result
+
+
+TEXT_INDEX_FORMAT = "texas-bill-text-index-v1"
+BILL_DIR_RE = re.compile(r"^[A-Z]{2,4}\d{1,5}$")
+CODE_RE = re.compile(r"^[A-Za-z0-9]{1,8}$")
+
+
+def _atomic_write(path: Path, data: bytes) -> None:
+    temp = path.with_name(path.name + ".tmp")
+    temp.write_bytes(data)
+    os.replace(temp, path)
+
+
+def _decode_html(raw: bytes) -> str:
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("cp1252")
+
+
+def _source_modified(conn, bill: dict, path: str) -> str | None:
+    if bill.get("source_updated"):
+        return str(bill["source_updated"])
+    try:
+        return str(conn.sendcmd(f"MDTM {path}")).split()[-1]
+    except Exception:
+        return None
+
+
+def _load_index(path: Path) -> dict[str, dict]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return {v["code"]: v for v in data.get("versions", []) if isinstance(v, dict) and "code" in v}
+    except (OSError, ValueError, AttributeError, TypeError, KeyError):
+        return {}
+
+
+def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int) -> dict:
+    """Write text_dir/<BILL>/<CODE>.md and index.json for each bill's TLC text versions."""
+    counts = {"bills": 0, "versions": 0, "downloaded": 0, "unchanged": 0, "deferred": 0, "failed": 0}
+    now = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+    for bill in bills:
+        versions = bill.get("text_versions") or []
+        bill_id = str(bill.get("id", ""))
+        if not versions or not BILL_DIR_RE.match(bill_id):
+            continue
+        counts["bills"] += 1
+        bill_dir = text_dir / bill_id
+        index_path = bill_dir / "index.json"
+        previous = _load_index(index_path)
+        entries = []
+        for version in versions:
+            counts["versions"] += 1
+            code, url = str(version.get("code", "")), str(version.get("html", ""))
+            path = text_url_path(url)
+            if not CODE_RE.match(code) or not path:
+                counts["failed"] += 1
+                continue
+            md_path = bill_dir / f"{code}.md"
+            old = previous.get(code)
+            exists = md_path.is_file()
+            current = _source_modified(conn, bill, path)
+            if exists and old is not None and (not current or old.get("source_modified") == current):
+                counts["unchanged"] += 1
+                entries.append(old)
+                continue
+            if exists and old is None and not current:
+                counts["unchanged"] += 1
+                data = md_path.read_bytes()
+                entries.append({"code": code, "name": version.get("name", code), "path": f"{code}.md", "source_url": url,
+                                "source_modified": "", "sha256": hashlib.sha256(data).hexdigest(), "generated_at": now})
+                continue
+            if counts["downloaded"] >= max_texts:
+                counts["deferred"] += 1
+                if exists and old is not None:
+                    entries.append(old)
+                continue
+            counts["downloaded"] += 1
+            try:
+                html = _decode_html(ftp_bytes(conn, path))
+                data = bill_text_markdown(html, str(bill.get("number") or bill_id), str(version.get("name", code))).encode("utf-8")
+                bill_dir.mkdir(parents=True, exist_ok=True)
+                _atomic_write(md_path, data)
+            except (*ftplib.all_errors, ValueError) as exc:
+                counts["failed"] += 1
+                print(f"text {bill_id}/{code}: {exc}", file=sys.stderr)
+                if exists and old is not None:
+                    entries.append(old)
+                continue
+            entries.append({"code": code, "name": version.get("name", code), "path": f"{code}.md", "source_url": url,
+                            "source_modified": current or "", "sha256": hashlib.sha256(data).hexdigest(), "generated_at": now})
+        if entries:
+            index = {"format": TEXT_INDEX_FORMAT, "bill_id": bill_id, "versions": entries}
+            try:
+                bill_dir.mkdir(parents=True, exist_ok=True)
+                _atomic_write(index_path, (json.dumps(index, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+            except OSError as exc:
+                counts["failed"] += 1
+                print(f"text {bill_id}/index.json: {exc}", file=sys.stderr)
+    return counts
+
+
 HEARTBEAT = dt.timedelta(hours=6)
 
 
@@ -318,6 +664,8 @@ def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out',type=Path,default=OUT)
     parser.add_argument('--max-files',type=int,default=25000)
+    parser.add_argument('--text-dir',type=Path,default=None)
+    parser.add_argument('--max-texts',type=int,default=400)
     args=parser.parse_args()
     prior=json.loads(args.out.read_text(encoding='utf-8')) if args.out.exists() else {'bills':[]}
     with ftplib.FTP(HOST,timeout=55) as conn:
@@ -327,6 +675,13 @@ def main() -> int:
     temp.write_text(json.dumps(snapshot,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     os.replace(temp,args.out)
     print(json.dumps(stats,indent=2))
+    try:
+        with ftplib.FTP(HOST,timeout=55) as conn:
+            conn.login('anonymous','legislative-research@example.invalid')
+            text_counts=sync_texts(conn,snapshot['bills'],args.text_dir or args.out.parent/'text',args.max_texts)
+        print(json.dumps({'texts':text_counts},indent=2))
+    except Exception as exc:  # Text files are secondary; never fail a written snapshot.
+        print(f"TEXT SYNC FAILED, snapshot unaffected: {exc}",file=sys.stderr)
     return 0
 
 
