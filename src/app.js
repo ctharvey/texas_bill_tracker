@@ -1,7 +1,6 @@
-import {reviewModel, renderReview} from './review.js';
+import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText} from './review.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, watchlistFile, parseWatchlistFile} from './prefs.js';
 import {createSyncClient} from './sync.js';
-import {parseBillMarkdown, validHighlights, sha256Hex, renderBillText} from './billtext.js';
 import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, searchTerms} from './taxonomy.js';
 
 const $ = (selector, root=document) => root.querySelector(selector);
