@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {companionIndex, companionRuns, normalizeCompanions, searchTerms} from '../src/taxonomy.js';
+import {companionGroups, companionIndex, normalizeCompanions, searchTerms} from '../src/taxonomy.js';
 
 test('normalizeCompanions keeps valid ids and drops malformed, self and duplicate entries', () => {
   const out = normalizeCompanions([{id: 'SB 132', author: 'Menéndez', relation: 'Identical'}, {id: 'sb132'}, {id: 'HB267'},
@@ -25,12 +25,18 @@ test('companionIndex links both directions and prefers the bill\'s own listing',
   assert.deepEqual(companionIndex([...bills].reverse()).get('SB9'), index.get('SB9'));
 });
 
-test('companionRuns ties adjacent companions into pairs only', () => {
-  const index = new Map([['A', [{id: 'B'}]], ['B', [{id: 'A'}, {id: 'C'}]], ['C', [{id: 'B'}]]]);
-  const ids = runs => runs.map(r => r.map(b => b.id));
-  assert.deepEqual(ids(companionRuns([{id: 'A'}, {id: 'B'}, {id: 'C'}], index)), [['A', 'B'], ['C']]);
-  assert.deepEqual(ids(companionRuns([{id: 'A'}, {id: 'X'}, {id: 'B'}], index)), [['A'], ['X'], ['B']]);
-  assert.deepEqual(ids(companionRuns([], index)), []);
+test('companionGroups pulls companions in the list together at the first one\'s position', () => {
+  const index = new Map([['A', [{id: 'B'}]], ['B', [{id: 'A'}, {id: 'C'}]], ['C', [{id: 'B'}]], ['D', [{id: 'Z'}]]]);
+  const ids = groups => groups.map(g => g.map(b => b.id));
+  const b = id => ({id});
+  // B sits far from A in the sort; it moves up next to A. Chains (A-B-C) form one group.
+  assert.deepEqual(ids(companionGroups([b('A'), b('X'), b('Y'), b('B')], index)), [['A', 'B'], ['X'], ['Y']]);
+  assert.deepEqual(ids(companionGroups([b('X'), b('C'), b('A'), b('B')], index)), [['X'], ['C', 'A', 'B']]);
+  // A companion that is not in the list changes nothing.
+  assert.deepEqual(ids(companionGroups([b('D'), b('X')], index)), [['D'], ['X']]);
+  assert.deepEqual(ids(companionGroups([], index)), []);
+  const list = [b('A'), b('X'), b('B'), b('C'), b('Y')];
+  assert.equal(companionGroups(list, index).flat().length, list.length);
 });
 
 test('searchTerms reads pasted bill numbers with hidden characters or long forms', () => {

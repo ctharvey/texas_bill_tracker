@@ -411,15 +411,23 @@ export function companionIndex(bills) {
   return new Map([...links].map(([id, m]) => [id, [...m.values()].sort((a, b) => a.id.localeCompare(b.id, 'en', {numeric: true}))]));
 }
 
-// Mark neighbours in a list that are companions of each other: returns one group per run, [[b], [c, d], ...].
-export function companionRuns(list, index) {
-  const runs = [];
+// Pull companions that are both in a list together: each bill plus every companion (and their companions) also in
+// the list, placed where the first of them sits in the list's order. Returns [[b], [c, d], ...]; every bill once.
+export function companionGroups(list, index) {
+  const pos = new Map(list.map((b, i) => [b.id, i]));
+  const placed = new Set(), groups = [];
   for (const b of list) {
-    const last = runs.at(-1);
-    if (last && last.length < 2 && (index.get(last[0].id) || []).some(c => c.id === b.id)) last.push(b);
-    else runs.push([b]);
+    if (placed.has(b.id)) continue;
+    const group = [], queue = [b];
+    placed.add(b.id);
+    while (queue.length) {
+      const x = queue.shift();
+      group.push(x);
+      for (const c of index.get(x.id) || []) if (pos.has(c.id) && !placed.has(c.id)) { placed.add(c.id); queue.push(list[pos.get(c.id)]); }
+    }
+    groups.push(group.sort((x, y) => pos.get(x.id) - pos.get(y.id)));
   }
-  return runs;
+  return groups;
 }
 
 export function officialUrl(bill) {

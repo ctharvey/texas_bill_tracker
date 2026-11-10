@@ -56,6 +56,30 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(ids('q=%22water+rights%22')[0], ['HB11'])
         self.assertEqual(ids('q=%22rights+water%22')[0], [])     # A phrase keeps its order.
 
+    def test_companions_in_results_are_listed_together_and_marked(self):
+        late = lambda d: {'category': 'Filed', 'date': d}
+        data = {**AGENT_DATA, 'bills': AGENT_DATA['bills'] + [
+            record('HB30', 'Relating to dam safety.', last_action=late('2026-11-12'),
+                   companions=[{'id': 'SB30', 'number': 'SB 30', 'relation': 'Identical'}]),
+            record('HB31', 'Relating to dam inspections.', last_action=late('2026-11-11')),
+            record('SB30', 'Relating to dam safety.', chamber='Senate', last_action=late('2026-11-01'),
+                   companions=[{'id': 'HB30', 'number': 'HB 30', 'relation': 'Identical'}]),
+            record('HB32', 'Relating to dam fees.', last_action=late('2026-11-10'),
+                   companions=[{'id': 'SB99', 'number': 'SB 99', 'relation': 'Similar'}])]}
+        params = search_bills.parse_params('q=dam')
+        found = search_bills.search(index(data), params)
+        # SB30 sorts last on its own; it moves up next to its companion HB30.
+        self.assertEqual([r['id'] for *_, r, _ in found['results']], ['HB30', 'SB30', 'HB31', 'HB32'])
+        out = search_bills.as_json(found, params)['results']
+        self.assertEqual(out[0]['companions'], [{'id': 'SB30', 'number': 'SB 30', 'relation': 'Identical', 'in_results': True}])
+        self.assertEqual(out[3]['companions'][0]['in_results'], False)
+        md = search_bills.as_markdown(found, params)
+        self.assertIn('listed next to each other', md)
+        self.assertIn('| SB 30 (identical), also in these results |', md)
+        self.assertIn('| SB 99 (similar) |', md)
+        # No companion pair on the page, no note.
+        self.assertNotIn('listed next to each other', search_bills.as_markdown(search_bills.search(index(), params := search_bills.parse_params('q=firearm')), params))
+
     def test_synonym_groups_work_in_both_directions(self):
         data = {**AGENT_DATA, 'bills': AGENT_DATA['bills'] + [
             record('HB20', 'Relating to rifle ranges.'),

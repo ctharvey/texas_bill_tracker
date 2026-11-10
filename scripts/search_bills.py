@@ -253,6 +253,43 @@ def parse_params(query_string: str) -> dict:
             "format": "json" if raw.get("format") == "json" else "md"}
 
 
+def group_companions(results: list) -> list:
+    """Move companion bills that are both in the results next to each other, at the first one's position.
+
+    Mirrors companionGroups in src/taxonomy.js; record companions already run in both directions."""
+    pos = {x[2]["id"]: i for i, x in enumerate(results)}
+    placed, out = set(), []
+    for x in results:
+        if x[2]["id"] in placed:
+            continue
+        placed.add(x[2]["id"])
+        queue, group = [x], []
+        while queue:
+            y = queue.pop(0)
+            group.append(y)
+            for c in y[2].get("companions") or []:
+                cid = c.get("id") if isinstance(c, dict) else None
+                if cid in pos and cid not in placed:
+                    placed.add(cid)
+                    queue.append(results[pos[cid]])
+        out += sorted(group, key=lambda y: pos[y[2]["id"]])
+    return out
+
+
+def companions_of(r: dict, result_ids) -> list[dict]:
+    return [{"id": c["id"], "number": c.get("number") or c["id"], "relation": c.get("relation"),
+             "in_results": c["id"] in result_ids}
+            for c in r.get("companions") or [] if isinstance(c, dict) and c.get("id")]
+
+
+def companion_cell(r: dict, result_ids) -> str:
+    parts = []
+    for c in companions_of(r, result_ids):
+        text = c["number"] + (" (" + c["relation"].lower() + ")" if c["relation"] else "")
+        parts.append(text + (", also in these results" if c["in_results"] else ""))
+    return cell("; ".join(parts))
+
+
 def search(index: Index, params: dict) -> dict:
     ids, alternatives = parse_query(params["q"])
     filters, results, mode = params["filters"], [], "all"
@@ -305,6 +342,7 @@ def search(index: Index, params: dict) -> dict:
     # Most recent action first, then (stable) best match first.
     results.sort(key=lambda x: ((x[2].get("last_action") or {}).get("date") or "", x[2]["id"]), reverse=True)
     results.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    results = group_companions(results)
     page = results[params["offset"]:params["offset"] + params["limit"]]
     # Counts for each word (one alternative) or each alternative (OR), so a query can be narrowed or widened.
     if len(alternatives) > 1:
@@ -339,6 +377,7 @@ def search(index: Index, params: dict) -> dict:
             "members": list(dict.fromkeys(members))[:6], "per_term": per_term, "meta": index.meta,
             "alternatives": [a["text"] for a in alternatives], "ids": ids,
             "member_count": len({n for names in index.members.values() for n in names}),
+            "result_ids": frozenset(x[2]["id"] for x in results),
             "caption_only": bool(terms or phrases or filters.get("location"))}
 
 
@@ -385,6 +424,7 @@ def as_json(found: dict, params: dict) -> dict:
                          "agencies": [a.get("name") for a in r.get("agencies") or []],
                          "locations": [l.get("name") for l in r.get("locations") or []],
                          "full_text_reviewed": bool(r.get("full_text_review")),
+                         "companions": companions_of(r, found.get("result_ids", ())),
                          "last_action": r.get("last_action"), "matched_in": sorted(LABELS.get(w, w) for w in where),
                          "markdown": f"{AGENT}bills/{r['id']}.md", "json": f"{AGENT}bills/{r['id']}.json"}
                         for *_, r, where in found["results"]]}
@@ -472,16 +512,20 @@ def as_markdown(found: dict, params: dict, disclaimer: str = "") -> str:
     else:
         start = found["offset"] + 1
         end = found["offset"] + len(found["results"])
+        ids = found.get("result_ids", ())
+        linked = any(c["in_results"] for *_, r, _ in found["results"] for c in companions_of(r, ids))
         lines += [f"Showing {start}-{end}." if found["results"] else "No results on this page.", "",
-                  "| Bill | Title | Authors | Party | Topics | Agencies | Review | Last action | Date | Matched in |",
-                  "|---|---|---|---|---|---|---|---|---|---|"]
+                  *(["Companion bills that both match are listed next to each other; the Companions column marks them "
+                     "\"also in these results\".", ""] if linked else []),
+                  "| Bill | Title | Authors | Party | Topics | Agencies | Review | Last action | Date | Companions | Matched in |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|"]
         for *_, r, where in found["results"]:
             last = r.get("last_action") or {}
             lines.append(f"| [{cell(r.get('number') or r['id'])}]({AGENT}bills/{r['id']}.md) | {cell(r.get('title'))} | "
                          f"{cell(', '.join(authors_of(r)))} | {cell((r.get('authorship_party') or {}).get('label'))} | "
                          f"{cell('; '.join(r.get('topics') or []))} | {cell('; '.join(a.get('name') or '' for a in r.get('agencies') or [])) or 'none tagged'} | "
                          f"{'full text' if r.get('full_text_review') else 'caption'} | {cell(last.get('category'))} | {last.get('date') or ''} | "
-                         f"{cell(', '.join(sorted(LABELS.get(w, w) for w in where)))} |")
+                         f"{companion_cell(r, ids)} | {cell(', '.join(sorted(LABELS.get(w, w) for w in where)))} |")
         lines.append("")
         nxt = found["offset"] + found["limit"]
         if nxt < total:

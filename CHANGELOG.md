@@ -3,6 +3,10 @@
 ## 2026-11-10
 - Sync service listens with a backlog of 512 instead of socketserver's 5, so a burst of connections waits instead
   of being dropped into a 1 s client retry (seen from 100 requests a second in a load test).
+- Companion bills in results: when a bill and its companion both match, the companion moves up next to it and the
+  two cards are drawn flush in one framed block headed "Companion bills · HB 445 + SB 329 · identical"; "Load more"
+  never splits a block. Agent search lists them together, adds a Companions column ("also in these results") and
+  a `companions` list per JSON result.
 - The page revalidates its bill, tag, roster and review-status JSON (`cache: 'no-cache'`) instead of always
   downloading it, so a returning visitor gets a 304. Sync container limits raised to 1 CPU, 512 MB and 256 pids.
 - Companion bills: the data refresh keeps the `<companions>` field from the bill history (it was dropped), and links

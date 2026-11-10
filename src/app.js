@@ -1,7 +1,7 @@
 import {reviewModel, renderReview} from './review.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, watchlistFile, parseWatchlistFile} from './prefs.js';
 import {createSyncClient} from './sync.js';
-import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionRuns, searchTerms} from './taxonomy.js';
+import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, searchTerms} from './taxonomy.js';
 
 const $ = (selector, root=document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -353,7 +353,7 @@ function companionBlock(b){
   const byId=new Map(state.bills.map(x=>[x.id,x]));
   const rows=list.map(c=>{const other=byId.get(c.id);const last=other?lastActionInfo(other):null;
     return `<div class="companion-row"><div><strong>${other?`<button class="text-link companion-open" data-open="${esc(c.id)}">${esc(c.number)}</button>`:esc(c.number)}</strong> <span class="chamber-pill">${esc(c.id.startsWith('H')?'House':'Senate')}</span> <small>${esc(relationText(c))}${c.author?` · by ${esc(c.author)}`:''}</small><p>${other?esc(other.title):'Not in this snapshot yet; it appears here within about an hour of the Legislative Council publishing it.'}</p></div>${last?`<span class="tag action-tag action-${esc(last.key)}">${esc(last.label)}${last.date?` · ${esc(shortDate(last.date))}`:''}</span>`:''}</div>`}).join('');
-  return `<section class="drawer-section companion-section"><h3>Companion ${list.length===1?'bill':'bills'} (${list.length})</h3><p>A companion is a matching bill filed in the other chamber, so the same proposal can move in both at once. “Identical” and “similar” are the Legislative Council's description.</p>${rows}</section>`;
+  return `<section class="drawer-section companion-section"><h3>Companion ${list.length===1?'bill':'bills'} (${list.length})</h3><p>A companion is a matching bill, usually filed in the other chamber so the same proposal can move in both at once. “Identical”, “similar” and “duplicate” are the Legislative Council's description.</p>${rows}</section>`;
 }
 
 function filteredBills(){
@@ -384,13 +384,18 @@ function renderResults(){
   const list=filteredBills();
   $('#result-count').textContent=`${list.length} ${list.length===1?'bill':'bills'}`;
   $('#result-note').textContent=state.meta?.data_mode==='curated'?' · within curated sample':' · matching filters';
-  const visible=list.slice(0,state.visibleCount);
-  // Companion bills that land next to each other are drawn as one joined pair.
+  // Companions that are both in the results are pulled together and drawn as one joined block.
+  // Paging counts whole groups, so a group is never split across "Load more".
   companionsOf('');  // Refreshes the index when the bill list changed.
-  const runs=companionRuns(visible,companionCache.index);
-  const pairMarkup=([a,b])=>{const c=companionsOf(a.id).find(x=>x.id===b.id);return `<div class="companion-pair" role="group" aria-label="${esc(`${a.number} and ${b.number} are companion bills`)}">${billCard(a)}<div class="pair-link" aria-hidden="true"><span>Companion bills · ${esc(relationText(c||{}))}</span></div>${billCard(b)}</div>`};
-  $('#bill-list').innerHTML=list.length?runs.map(run=>run.length===2?pairMarkup(run):billCard(run[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p></div>`;
-  $('#results-bottom').innerHTML=`${list.length>state.visibleCount?`<button class="outline-button" id="load-more">Load 30 more · showing ${visible.length} of ${list.length}</button><div style="height:12px"></div>`:''}${esc(state.meta?.coverage_note||'Check the official record for authoritative status.')}`;
+  const shown=[];let shownCount=0;
+  for(const g of companionGroups(list,companionCache.index)){if(shownCount>=state.visibleCount)break;shown.push(g);shownCount+=g.length}
+  const groupMarkup=g=>{
+    const ids=new Set(g.map(b=>b.id));
+    const relations=[...new Set(g.flatMap(b=>companionsOf(b.id).filter(c=>ids.has(c.id)).map(relationText)))];
+    const names=g.map(b=>b.number).join(' + ');
+    return `<div class="companion-group" role="group" aria-label="${esc(`${names}: companion bills`)}"><div class="companion-group-head"><span aria-hidden="true">⇄</span> Companion bills · ${esc(names)}${relations.length?` · ${esc(relations.join(', '))}`:''}</div>${g.map(billCard).join('')}</div>`};
+  $('#bill-list').innerHTML=list.length?shown.map(g=>g.length>1?groupMarkup(g):billCard(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p></div>`;
+  $('#results-bottom').innerHTML=`${list.length>shownCount?`<button class="outline-button" id="load-more">Load 30 more · showing ${shownCount} of ${list.length}</button><div style="height:12px"></div>`:''}${esc(state.meta?.coverage_note||'Check the official record for authoritative status.')}`;
   persistState();
 }
 

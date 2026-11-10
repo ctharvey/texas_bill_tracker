@@ -409,7 +409,8 @@ cosponsors to the other chamber. The `author` display string remains for compati
 `companions` is a list of `{id, author, relation}` parsed from the history's `<companions>` field
 ("SB 132 by Menendez, Identical"); it is absent when the source has no such field. The tracker links
 companions in both directions, since the other chamber's bill may not list it back yet, shows them on
-cards and in the drawer, and frames two companions together when they are next to each other in a list.
+cards and in the drawer. When companions both appear in a result list, they are moved next to each other (to
+where the first sits in the sort) and drawn as one framed block; agent search lists them together the same way.
 
 ### Input data schema
 
