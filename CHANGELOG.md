@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-10
+- The page revalidates its bill, tag, roster and review-status JSON (`cache: 'no-cache'`) instead of always
+  downloading it, so a returning visitor gets a 304. Sync container limits raised to 1 CPU, 512 MB and 256 pids.
 - Releases serve the scripts and stylesheet from `assets/<digest>/`, a content-hashed copy of `src/`, so Cloudflare
   and browsers cache them for a year; a deploy points `index.html` at the new folder. Needs the deployer reinstalled.
 - Agent search, after a fifth LLM probe: `OR` splits the query into alternatives that can be several words or a

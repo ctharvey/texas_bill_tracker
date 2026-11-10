@@ -35,7 +35,7 @@ async function init(){
     let data,loadedFrom,loadedBills;
     for(const url of urls){
       try{
-        const response=await fetch(url,{cache:'no-store',signal:timeoutSignal(7500)});
+        const response=await fetch(url,{cache:'no-cache',signal:timeoutSignal(7500)});
         if(!response.ok)throw Error(`HTTP ${response.status}`);
         const candidate=await response.json();
         if(candidate.session!=='90R'||!Array.isArray(candidate.bills)||!candidate.bills.length)throw Error('Invalid bill snapshot');
@@ -48,7 +48,7 @@ async function init(){
     if(!data)throw Error('Unable to load bill snapshot');
     data.loaded_from=loadedFrom==='./live/bills.json'?'Live server snapshot':'Bundled fallback snapshot';
     try{
-      const response=await fetch('./live/luna/tags.json',{cache:'no-store',signal:timeoutSignal(7500)});
+      const response=await fetch('./live/luna/tags.json',{cache:'no-cache',signal:timeoutSignal(7500)});
       if(!response.ok)throw Error(`HTTP ${response.status}`);
       const tags=await response.json();
       if(tags?.format!=='texas-bill-luna-tags-v1'||!tags.bills||typeof tags.bills!=='object'||Array.isArray(tags.bills))throw Error('Unrecognized tags format');
@@ -58,7 +58,7 @@ async function init(){
     await loadReviewStatus();
     for(const url of ['./live/members.json','./data/members.json']){
       try{
-        const response=await fetch(url,{cache:'no-store',signal:timeoutSignal(7500)});
+        const response=await fetch(url,{cache:'no-cache',signal:timeoutSignal(7500)});
         if(!response.ok)throw Error(`HTTP ${response.status}`);
         const roster=await response.json();
         if(roster?.format!=='texas-bill-members-v1'||!roster.members||typeof roster.members!=='object'||Array.isArray(roster.members))throw Error('Unrecognized roster format');
@@ -260,7 +260,7 @@ async function importWatchlist(file){
 
 async function loadReviewStatus(){
   try{
-    const response=await fetch('./live/luna/status.json',{cache:'no-store',signal:timeoutSignal(7500)});
+    const response=await fetch('./live/luna/status.json',{cache:'no-cache',signal:timeoutSignal(7500)});
     if(!response.ok)throw Error(`HTTP ${response.status}`);
     const status=await response.json();
     if(status?.format!=='texas-bill-luna-status-v1'||!Array.isArray(status.reviewed))throw Error('Unrecognized status format');

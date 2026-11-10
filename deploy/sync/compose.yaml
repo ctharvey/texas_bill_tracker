@@ -10,9 +10,11 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    mem_limit: 128m
-    cpus: 0.5
-    pids_limit: 64
+    # ThreadingHTTPServer starts one thread per request, so pids_limit caps concurrent requests. Python's GIL keeps
+    # it near one core, so more than 1 CPU buys little.
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
     restart: unless-stopped
     environment:
       PYTHONDONTWRITEBYTECODE: '1'
