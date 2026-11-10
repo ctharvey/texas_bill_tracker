@@ -148,6 +148,7 @@ function applyFilters(raw){
 function applyLocation(initial){
   const p=parseHash(location.hash);
   if(p.hasFilters)applyFilters(p.filters);
+  else if(p.list)applyFilters({});  // A share link shows its whole list, even in a tab with filters set.
   else if(initial&&!p.list&&!p.bill&&!p.sync)applyFilters(readJson(prefsKey)?.filters);
   if(p.list){state.sharedList=p.list;state.sharedMode='link'}
   else if(!initial&&state.sharedMode==='link'){state.sharedList=null;state.sharedMode=null}
