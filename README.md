@@ -155,6 +155,19 @@ There are no logins. People keep and move their choices in five ways:
   Live since 2026-11-10: the shared gateway (cth.hosting) proxies `/api/sync*` to the `texas-bill-sync`
   container on `edge-bills`; deployment and updates are in `deploy/sync/README.md`.
 
+### Agent edition (agent.bills.ctharvey.me)
+
+The tracker draws everything with JavaScript, so agents get the same information as static Markdown and JSON at
+`https://agent.bills.ctharvey.me/` (`index.md` = `llms.txt`). `scripts/build_agent.mjs` reuses the tracker's own
+pipeline (`normalizeBill`, Luna overlay, roster, hearing and last-action rules in `src/taxonomy.js`, links from
+`src/prefs.js`) and writes `bills/<ID>.md|.json`, index pages that stand in for each filter (topics, agencies, last
+action, hearing status, chamber, members), `recent.md`, `review-progress.md`, `saving.md` and `data/bills.json`.
+Output is deterministic; files change only when their data does and stale pages are removed.
+
+`scripts/texas-bill-agent.service`/`.timer` (root, hourly at :50) runs it in a pinned, network-less node container
+as `texas-bill-atlas`, writing only `live/agent`. The gateway serves that folder for the subdomain (cth.hosting
+`08-agent.bills.ctharvey.me.caddy`). The main page links to it in its head, footer and `<noscript>`.
+
 ### Live bill snapshot
 
 `scripts/texas-bill-data.service` and `.timer` run `sync_ftp.py` hourly at :17 on the VPS as `texas-bill-atlas`,

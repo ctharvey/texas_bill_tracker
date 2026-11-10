@@ -1,0 +1,15 @@
+[Unit]
+Description=Build the agent edition (Markdown/JSON) of Texas Bill Atlas for agent.bills.ctharvey.me
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+# Root only to start a short-lived, network-less node container; the build itself runs as texas-bill-atlas and
+# can write only live/agent. Code comes from the same main commit the deployer publishes.
+RuntimeDirectory=texas-bill-agent
+RuntimeDirectoryMode=0755
+ExecStartPre=/bin/sh -c 'set -e; cd "$RUNTIME_DIRECTORY"; mkdir -p scripts src; for f in scripts/build_agent.mjs src/taxonomy.js src/prefs.js; do /usr/sbin/runuser -u texas-bill-atlas -- /usr/bin/git --git-dir=/var/lib/texas-bill-atlas/repository.git show "main:$$f" > "$$f"; done; chmod -R a+rX .'
+ExecStartPre=/usr/bin/install -d -m 0755 -o texas-bill-atlas -g texas-bill-atlas /var/www/html/texas-bill-atlas/live/agent
+ExecStart=/bin/sh -c 'exec /usr/bin/docker run --rm --name texas-bill-agent-build --network none --read-only --cap-drop ALL --security-opt no-new-privileges --memory 512m --pids-limit 64 --user "$$(id -u texas-bill-atlas):$$(id -g texas-bill-atlas)" -v "$RUNTIME_DIRECTORY:/app:ro" -v /var/www/html/texas-bill-atlas/live:/live:ro -v /var/www/html/texas-bill-atlas/live/agent:/out node@sha256:0e1754758c2df4cfa3e68d59e2e1b7374bb7fd9ea6328eaaacf15cc934af8202 node /app/scripts/build_agent.mjs --snapshot /live/bills.json --tags /live/luna/tags.json --members /live/members.json --status /live/luna/status.json --out /out'
+TimeoutStartSec=600

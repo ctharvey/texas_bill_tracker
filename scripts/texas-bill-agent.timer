@@ -1,0 +1,9 @@
+[Unit]
+Description=Hourly agent edition build for Texas Bill Atlas (after the :17 data refresh and :35 review run)
+
+[Timer]
+OnCalendar=*-*-* *:50:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

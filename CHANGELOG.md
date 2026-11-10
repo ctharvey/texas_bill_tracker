@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-10
+- Agent edition at agent.bills.ctharvey.me: hourly Markdown/JSON for every bill and filter view, built from the
+  tracker's own pipeline in a network-less container; the main page links to it. Back now closes an open bill.
 - "Saving your info" page (`#saving`, under Reference): how the watchlist, remembered filters, view links, share
   links, export/import, private sync links and RSS feeds work, and what is stored where; linked from the Watchlist.
 - Saving without accounts: views, filters and open bills live in the URL (copy link); share links open a
