@@ -3,6 +3,11 @@
 ## 2026-11-10
 - Releases serve the scripts and stylesheet from `assets/<digest>/`, a content-hashed copy of `src/`, so Cloudflare
   and browsers cache them for a year; a deploy points `index.html` at the new folder. Needs the deployer reinstalled.
+- Agent search, after a fifth LLM probe: `OR` splits the query into alternatives that can be several words or a
+  quoted phrase (`lottery OR casino OR sports betting` used to need every word after the first OR); the page shows
+  how it read the query. A partial-match headline no longer claims "127 bills matched unicorn tax" and names the
+  words that matched nothing; a name with no bills says no member by that name is in the data; results gain
+  Authors and Party columns; filter-only results say which filter matched; `/search` lists the exact topic names.
 - Agent search, after a fourth LLM probe: `OR` between words; THC and hemp join the cannabis synonyms; a partial
   match shows only the bills matching the most words plus a count per word; "did you mean" for misspelled member
   names; results note that unreviewed bills are searched by caption only; known topic names and agency ids match

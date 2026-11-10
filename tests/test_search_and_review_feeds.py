@@ -76,13 +76,49 @@ class SearchTests(unittest.TestCase):
         find = lambda q: search_bills.search(index(data), search_bills.parse_params(q))
         self.assertEqual(sorted(r['id'] for *_, r, _ in find('q=thc+hemp+marijuana')['results']), ['HB40', 'HB41'])
         self.assertEqual(sorted(r['id'] for *_, r, _ in find('q=groundwater+OR+firearm')['results']), ['HB10', 'HB11'])
-        self.assertEqual(find('q=groundwater+OR+firearm')['terms'], ['groundwater or firearm'])
+        self.assertEqual(find('q=groundwater+OR+firearm')['alternatives'], ['groundwater', 'firearm'])
         found = find('q=property+tax+homestead+zebra&chamber=senate')
         self.assertEqual((found['mode'], [r['id'] for *_, r, _ in found['results']]), ('any', ['HB42']))  # Top tier only.
         self.assertEqual([t['total'] for t in found['per_term']], [2, 2, 1, 0])
         text = search_bills.as_markdown(found, search_bills.parse_params('q=property+tax+homestead+zebra&chamber=senate'))
         self.assertIn('Each word on its own', text)
         self.assertIn('searched by caption', text)
+
+    def test_or_splits_multi_word_and_quoted_alternatives(self):
+        data = {**AGENT_DATA, 'bills': AGENT_DATA['bills'] + [
+            record('HB60', 'Relating to school safety plans.'),
+            record('HB61', 'Relating to school district police departments.'),
+            record('HB62', 'Relating to sports betting.'),
+            record('HB63', 'Relating to a homestead exemption for persons 65 or older.'),
+            record('HB64', 'Relating to traffic safety.')]}
+        find = lambda q: search_bills.search(index(data), search_bills.parse_params(q))
+        ids_of = lambda q: sorted(r['id'] for *_, r, _ in find(q)['results'])
+        self.assertEqual(ids_of('q=school+safety+OR+school+police'), ['HB60', 'HB61'])
+        self.assertEqual(ids_of('q=lottery+OR+casino+OR+sports+betting'), ['HB62'])
+        self.assertEqual(ids_of('q=senior+OR+%2265+or+older%22'), ['HB63'])  # "or" inside quotes is literal.
+        found = find('q=school+safety+OR+school+police')
+        self.assertEqual(found['alternatives'], ['school safety', 'school police'])
+        self.assertEqual([t['total'] for t in found['per_term']], [1, 1])
+        text = search_bills.as_markdown(found, search_bills.parse_params('q=school+safety+OR+school+police'))
+        self.assertIn('Read as alternatives', text)
+        self.assertIn('| Authors | Party |', text)
+
+    def test_partial_headline_names_unmatched_words_and_missing_members(self):
+        found = search_bills.search(index(), search_bills.parse_params('q=unicorn+groundwater'))
+        text = search_bills.as_markdown(found, search_bills.parse_params('q=unicorn+groundwater'))
+        self.assertIn('No bill matches every word of unicorn groundwater', text)
+        self.assertIn('unicorn matched nothing', text)
+        self.assertNotIn('matched unicorn groundwater', text)
+        found = search_bills.search(index(), search_bills.parse_params('q=creighton'))
+        self.assertIn('No member by that name is in the data either',
+                      search_bills.as_markdown(found, search_bills.parse_params('q=creighton')))
+        self.assertTrue(search_bills.as_json(found, search_bills.parse_params('q=creighton'))['no_matching_member'])
+
+    def test_filter_only_results_say_which_filter_matched(self):
+        found = search_bills.search(index(), search_bills.parse_params('location=harris'))
+        self.assertEqual(search_bills.as_json(found, search_bills.parse_params('location=harris'))['results'][0]['matched_in'],
+                         ['location=harris'])
+        self.assertIn('`Environment & water`', search_bills.usage({}, index().topic_names))
 
     def test_member_did_you_mean_and_exact_agency_ids(self):
         data = {**AGENT_DATA, 'bills': AGENT_DATA['bills'] + [

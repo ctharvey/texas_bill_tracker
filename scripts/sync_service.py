@@ -287,7 +287,7 @@ class App:
             if wants_json:
                 return self.json(200, {"format": "texas-bill-atlas-search-v1", "usage": f"{search_bills.AGENT}search",
                                        "error": None, "results": []})
-            return 200, {"Content-Type": "text/markdown; charset=utf-8"}, search_bills.usage(index.meta).encode("utf-8")
+            return 200, {"Content-Type": "text/markdown; charset=utf-8"}, search_bills.usage(index.meta, index.topic_names).encode("utf-8")
         found = search_bills.search(index, params)
         if wants_json:
             return 200, {"Content-Type": "application/json"}, json.dumps(search_bills.as_json(found, params)).encode("utf-8")

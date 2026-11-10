@@ -99,6 +99,7 @@ class Index:
     def __init__(self, path: Path):
         self.path, self.mtime, self.lock = path, None, threading.Lock()
         self.meta, self.docs, self.vocab, self.members, self.topics, self.agency_ids = {}, [], [], {}, set(), set()
+        self.topic_names = []
 
     def get(self):
         with self.lock:
@@ -136,41 +137,50 @@ class Index:
         self.docs, self.vocab = docs, sorted(vocab)
         # Member-name words -> the members they name, for "did you mean" on misspelled names.
         self.members = {w: sorted(names) for w, names in members.items()}
-        self.topics = {t.lower() for r, _, _ in docs for t in r.get("topics") or []}
+        self.topic_names = sorted({t for r, _, _ in docs for t in r.get("topics") or []})
+        self.topics = {t.lower() for t in self.topic_names}
         self.agency_ids = {(a.get("id") or "").lower() for r, _, _ in docs for a in r.get("agencies") or []} - {""}
         self.meta = {k: data.get(k) for k in ("bill_data_as_of", "tags_as_of", "roster_as_of", "count", "coverage")}
 
 
 def parse_query(q: str) -> tuple[list[str], list[list[str]], list[str], list[str]]:
-    """Phrases (quoted), word terms (each a list of alternatives), bill ids, and each term as the user typed it."""
+    """Bill ids named in the query, and its alternatives: the query split on a standalone OR outside quotes. Each
+    alternative has quoted phrases, word terms (each a list of synonyms) and the words as typed (labels)."""
     lowered = q.lower()
     ids = [f"{m[1].upper()}{m[2]}" for m in BILL_REF.finditer(lowered)]
     rest = BILL_REF.sub(" ", lowered)
+    # Quoted text keeps its own "or" ("65 or older"); only a bare "or" separates alternatives.
+    pieces = re.split(r'("[^"]*")', rest)
+    parts, current = [], ""
+    for piece in pieces:
+        if piece.startswith('"'):
+            current += f" {piece} "
+            continue
+        chunks = re.split(r"\bor\b", piece)
+        current += chunks[0]
+        for chunk in chunks[1:]:
+            parts.append(current)
+            current = chunk
+    parts.append(current)
+    return ids, [a for a in (parse_alternative(p) for p in parts) if a["phrases"] or a["terms"]]
+
+
+def parse_alternative(text: str) -> dict:
     phrases, terms, labels = [], [], []
-    for p in re.findall(r'"([^"]+)"', rest):
+    for p in re.findall(r'"([^"]+)"', text):
         key = " ".join(stem(w) for w in words(p))
         if key in SYNONYMS:  # A quoted synonym phrase ("school choice") widens like a word.
             terms.append(list(dict.fromkeys([" ".join(words(p))] + SYNONYMS[key])))
             labels.append(f'"{" ".join(words(p))}"')
         elif words(p):
             phrases.append(" ".join(words(p)))
-    rest = re.sub(r'"[^"]*"', " ", rest)
-    join_next = False
-    for w in words(rest):
-        if w == "or":  # "a or b" (any case) is one term that either word satisfies.
-            join_next = bool(terms)
-            continue
+    for w in words(re.sub(r'"[^"]*"', " ", text)):
         if w in STOP or len(w) < 2:
             continue
-        alternatives = [w] + SYNONYMS.get(stem(w), [])
-        if join_next:
-            terms[-1] = list(dict.fromkeys(terms[-1] + alternatives))
-            labels[-1] += f" or {w}"
-        else:
-            terms.append(list(dict.fromkeys(alternatives)))
-            labels.append(w)
-        join_next = False
-    return phrases, terms, ids, labels
+        terms.append(list(dict.fromkeys([w] + SYNONYMS.get(stem(w), []))))
+        labels.append(w)
+    shown = " ".join([f'"{p}"' for p in phrases] + labels)
+    return {"phrases": phrases, "terms": terms, "labels": labels, "text": shown}
 
 
 def term_hit(alternatives: list[str], tokens: dict, lowered: dict) -> tuple[int, set]:
@@ -244,45 +254,50 @@ def parse_params(query_string: str) -> dict:
 
 
 def search(index: Index, params: dict) -> dict:
-    phrases, terms, ids, labels = parse_query(params["q"])
+    ids, alternatives = parse_query(params["q"])
     filters, results, mode = params["filters"], [], "all"
     exact = {"_topic_exact": (filters.get("topic") or "").lower() in index.topics,
              "_agency_exact": (filters.get("agency") or "").lower() in index.agency_ids}
     pool = [d for d in index.docs if matches_filters(d[0], {**filters, **exact})]
+    filter_labels = {f"{k}={v}" for k, v in filters.items()}
+
+    def match(alt: dict, tokens: dict, lowered: dict) -> tuple[int, int, set] | None:
+        """(words matched, score, fields) when every quoted phrase matches; None otherwise."""
+        score, hits, where = 0, 0, set()
+        for phrase in alt["phrases"]:
+            fields = [name for name, _ in FIELDS if phrase in lowered[name]]
+            if not fields:
+                return None
+            score, where = score + 5, where | set(fields)
+        for synonyms in alt["terms"]:
+            weight, fields = term_hit(synonyms, tokens, lowered)
+            if weight:
+                hits, score, where = hits + 1, score + weight, where | fields
+        return hits, score, where
 
     def scored(require_all: bool) -> list:
         found = []
         for r, tokens, lowered in pool:
             named = r["id"] in ids
-            if not named and not terms and not phrases:
-                continue  # Only bill numbers were asked for.
-            score, hits, where = (100, 0, {"bill number"}) if named else (0, 0, set())
-            missing_phrase = False
-            for phrase in phrases:
-                fields = [name for name, _ in FIELDS if phrase in lowered[name]]
-                if fields:
-                    score += 5
-                    where.update(fields)
-                else:
-                    missing_phrase = True
-            if missing_phrase and not named:
-                continue
-            for alternatives in terms:
-                weight, fields = term_hit(alternatives, tokens, lowered)
-                if weight:
-                    hits, score = hits + 1, score + weight
-                    where.update(fields)
-            if not named and terms and (hits < len(terms) if require_all else hits == 0):
-                continue
-            found.append((hits, score, r, where))
+            best = (100, 0, {"bill number"}) if named else None
+            for alt in alternatives:
+                m = match(alt, tokens, lowered)
+                if m is None or (m[0] < len(alt["terms"]) if require_all else (alt["terms"] and not m[0])):
+                    continue
+                # Rank by the share of an alternative's words matched, then score.
+                m = (m[0] / max(1, len(alt["terms"])), m[1], m[2])
+                if best is None or (not named and m[:2] > best[:2]):
+                    best = m
+            if best is not None:
+                found.append((best[0], best[1], r, best[2]))
         return found
 
-    if not phrases and not terms and not ids:
-        results = [(0, 0, r, set()) for r, _, _ in pool] if filters else []
+    if not alternatives and not ids:
+        results = [(0, 0, r, set(filter_labels)) for r, _, _ in pool] if filters else []
         mode = "filters"
     else:
         results = scored(True)
-        if not results and len(terms) > 1:
+        if not results and len(alternatives) == 1 and len(alternatives[0]["terms"]) > 1:
             # Only the bills matching the most words; a long tail of one-word matches buries the answer.
             results, mode = scored(False), "any"
             best = max((x[0] for x in results), default=0)
@@ -291,11 +306,22 @@ def search(index: Index, params: dict) -> dict:
     results.sort(key=lambda x: ((x[2].get("last_action") or {}).get("date") or "", x[2]["id"]), reverse=True)
     results.sort(key=lambda x: (x[0], x[1]), reverse=True)
     page = results[params["offset"]:params["offset"] + params["limit"]]
-    # Bills matching each word on its own (within the filters), so a partial match can be narrowed or widened.
-    per_term = [{"term": label, "total": sum(1 for _, tokens, lowered in pool if term_hit(t, tokens, lowered)[0])}
-                for label, t in zip(labels, terms)] if len(terms) > 1 or (terms and not results) else []
+    # Counts for each word (one alternative) or each alternative (OR), so a query can be narrowed or widened.
+    if len(alternatives) > 1:
+        per_term = [{"term": alt["text"], "total": sum(1 for _, tokens, lowered in pool
+                     if (m := match(alt, tokens, lowered)) is not None and m[0] == len(alt["terms"]))}
+                    for alt in alternatives]
+    elif alternatives and (len(alternatives[0]["terms"]) > 1 or not results):
+        per_term = [{"term": label, "total": sum(1 for _, tokens, lowered in pool if term_hit(t, tokens, lowered)[0])}
+                    for label, t in zip(alternatives[0]["labels"], alternatives[0]["terms"])]
+    else:
+        per_term = []
+    terms = [t for alt in alternatives for t in alt["terms"]]
+    phrases = [p for alt in alternatives for p in alt["phrases"]]
     suggestions, members = [], []
-    unmatched = [w for t, n in zip(terms, per_term) if not n["total"] for w in words(t[0])]
+    counted = {t["term"]: t["total"] for t in per_term}
+    unmatched = [w for alt in alternatives for label, t in zip(alt["labels"], alt["terms"])
+                 if counted.get(label, counted.get(alt["text"], 1)) == 0 for w in words(t[0])]
     if not results:
         unmatched += [w for p in phrases for w in p.split()]
     seen = set(index.vocab)
@@ -311,7 +337,8 @@ def search(index: Index, params: dict) -> dict:
             "query": params["q"], "mode": mode, "filters": filters, "total": len(results), "offset": params["offset"],
             "limit": params["limit"], "results": page, "suggestions": list(dict.fromkeys(suggestions))[:6],
             "members": list(dict.fromkeys(members))[:6], "per_term": per_term, "meta": index.meta,
-            "terms": labels, "phrases": phrases, "ids": ids,
+            "alternatives": [a["text"] for a in alternatives], "ids": ids,
+            "member_count": len({n for names in index.members.values() for n in names}),
             "caption_only": bool(terms or phrases or filters.get("location"))}
 
 
@@ -335,9 +362,15 @@ def coverage_note(meta: dict) -> str:
             "caption, caption-based tags and members only, so bills that only their full text ties to this can be missing.")
 
 
+def authors_of(r: dict) -> list[str]:
+    return [p.get("full_name") or p.get("name") or "" for p in ((r.get("people") or {}).get("authors") or [])]
+
+
 def as_json(found: dict, params: dict) -> dict:
     nxt = found["offset"] + found["limit"]
     return {"format": "texas-bill-atlas-search-v1", "query": found["query"], "mode": found["mode"],
+            "read_as_alternatives": found["alternatives"],
+            "no_matching_member": bool(not found["total"] and found["alternatives"] and not found["members"]),
             "filters": found["filters"], "total": found["total"], "offset": found["offset"], "limit": found["limit"],
             "data_as_of": found["meta"].get("bill_data_as_of"), "tags_as_of": found["meta"].get("tags_as_of"),
             "coverage": found["meta"].get("coverage"), "suggestions": found["suggestions"],
@@ -347,7 +380,8 @@ def as_json(found: dict, params: dict) -> dict:
             "not_in_data": found["missing_ids"],
             "next": link(params, offset=nxt, format="json") if nxt < found["total"] else None,
             "results": [{"id": r["id"], "number": r.get("number"), "title": r.get("title"), "status": r.get("status"),
-                         "filed_at": r.get("filed_at"), "chamber": r.get("chamber"), "topics": r.get("topics") or [],
+                         "filed_at": r.get("filed_at"), "chamber": r.get("chamber"), "authors": authors_of(r),
+                         "authorship_party": (r.get("authorship_party") or {}).get("label"), "topics": r.get("topics") or [],
                          "agencies": [a.get("name") for a in r.get("agencies") or []],
                          "locations": [l.get("name") for l in r.get("locations") or []],
                          "full_text_reviewed": bool(r.get("full_text_review")),
@@ -356,7 +390,9 @@ def as_json(found: dict, params: dict) -> dict:
                         for *_, r, where in found["results"]]}
 
 
-def usage(meta: dict) -> str:
+def usage(meta: dict, topics: list[str] = ()) -> str:
+    topic_line = (f"\nTopic names (exact values; anything else matches part of a name): {', '.join(f'`{t}`' for t in topics)}.\n"
+                  if topics else "")
     return f"""# Search Texas Bill Atlas
 
 `GET {AGENT}search?q=<words>` returns matching bills as Markdown; add `&format=json` for JSON.
@@ -364,9 +400,12 @@ def usage(meta: dict) -> str:
 - Words match their forms (firearm, firearms; school, schools). Quote a phrase: `q="water rights"`.
 - Common synonyms find each other: gun, firearm, handgun, rifle and weapon return the same bills; voucher, "school
   choice" and "education savings account" do too; aquifer and groundwater; marijuana, cannabis, THC and hemp.
-- Every word must match. Join alternatives with OR: `q=lottery OR casino`. If no bill matches every word, the bills
-  matching the most words are shown, with a count for each word on its own, and the page says so.
-- Misspelled member names get a "did you mean" (`q=jonson` suggests Ann Johnson).
+- Every word must match. OR separates alternatives, each matched on its own: `q=lottery OR casino OR sports betting`
+  finds bills about lotteries, casinos, or sports betting (both words); `q=school safety OR "school police"` works
+  too. To keep a word in every alternative, repeat it: `q=property tax senior OR property tax elderly`. The results
+  page shows how the query was read. If no bill matches every word of a query without OR, the bills matching the
+  most words are shown, with a count for each word on its own, and the page says which words matched nothing.
+- Misspelled member names get a "did you mean" (`q=jonson` suggests Ann Johnson). A name with no bills says so.
 - Bill numbers work: `q=HB 5` or `q=sb12`.
 - Filters (with or without q): `chamber=House|Senate`, `topic=<topic name, or part of one>`, `agency=<id, or words of its name>`,
   `location=<part of a place name, e.g. Harris>`, `party=democratic|republican|bipartisan`, `reviewed=yes|no`,
@@ -377,7 +416,7 @@ def usage(meta: dict) -> str:
 - Tracker links: the tracker keeps its filters after `#`, which never reaches a server. `{SITE}#all?topic=Education&agency=tea`
   is the same view as `{AGENT}search?topic=Education&agency=tea`; the topic, agency and chamber values carry over.
   `query=` becomes `q=`.
-
+{topic_line}
 Searched: titles and captions, topics, agencies, Luna full-text summaries, member names, affected groups, locations,
 impacts and recorded actions. Only {(meta.get('coverage') or {}).get('full_text_reviewed', 'some')} bills have a full-text review so far; for
 the rest only the caption and caption-based tags are searchable.
@@ -391,20 +430,32 @@ Examples: [{AGENT}search?q=groundwater]({AGENT}search?q=groundwater) ·
 
 def as_markdown(found: dict, params: dict, disclaimer: str = "") -> str:
     meta, total = found["meta"], found["total"]
-    described = " ".join([f'"{p}"' for p in found["phrases"]] + found["terms"] + found["ids"]) or "(filters only)"
+    described = " OR ".join(found["alternatives"])
+    described = " ".join(x for x in (described, " ".join(found["ids"])) if x) or "(filters only)"
     filters = ", ".join(f"{k}={v}" for k, v in found["filters"].items())
     as_of = f"Bill data as of {meta.get('bill_data_as_of') or 'unknown'}; full-text tags as of {meta.get('tags_as_of') or 'not available yet'}."
-    lines = [f"# Search: {cell(params['q']) or '(no words)'}", ""]
+    lines = [f"# Search: {cell(params['q']) or f'filters only ({filters})'}", ""]
+    if len(found["alternatives"]) > 1:
+        lines += ["Read as alternatives (each side of OR is matched on its own, all its words required): "
+                  + " · ".join(f"`{a}`" for a in found["alternatives"]), ""]
     if found["mode"] == "any":
-        lines += ["No bill matches every word, so these are the bills matching the most words. Search fewer words, or "
-                  "join alternatives with OR (`q=hemp OR marijuana`).", ""]
-    lines += [f"{total} {'bill' if total == 1 else 'bills'} matched {described}{f' with {filters}' if filters else ''}. {as_of}", ""]
+        matched = [t["term"] for t in found["per_term"] if t["total"]]
+        lines += [f"No bill matches every word of {described}{f' with {filters}' if filters else ''}. Showing the {total} "
+                  f"{'bill' if total == 1 else 'bills'} matching the most of them ({', '.join(matched) or 'none'}); "
+                  f"{', '.join(t['term'] for t in found['per_term'] if not t['total']) or 'no word'} matched nothing. "
+                  "Search fewer words, or join alternatives with OR (`q=hemp OR marijuana`). " + as_of, ""]
+    else:
+        lines += [f"{total} {'bill' if total == 1 else 'bills'} matched {described}{f' with {filters}' if filters else ''}. {as_of}", ""]
     if found["per_term"]:
-        lines += ["Each word on its own: " + " · ".join(f"[{cell(t['term'])}]({link(params, q=t['term'], offset=0)}) ({t['total']})"
-                                                       for t in found["per_term"]), ""]
+        lines += [("Each alternative on its own: " if len(found["alternatives"]) > 1 else "Each word on its own: ")
+                  + " · ".join(f"[{cell(t['term'])}]({link(params, q=t['term'], offset=0)}) ({t['total']})"
+                               for t in found["per_term"]), ""]
     if found["members"]:
         lines += ["Did you mean a member? " + "; ".join(f"[{cell(m)}]({link(params, q=m.split(' (')[0], offset=0)})"
                                                          for m in found["members"]), ""]
+    elif not total and found["alternatives"]:
+        lines += [f"No member by that name is in the data either: the {found['member_count']} members who have authored or "
+                  f"sponsored a bill are listed at {AGENT}authors/index.md. A member who has filed nothing yet has no page.", ""]
     if found["caption_only"] and total:
         lines += [coverage_note(meta), ""]
     if found["missing_ids"]:
@@ -422,11 +473,12 @@ def as_markdown(found: dict, params: dict, disclaimer: str = "") -> str:
         start = found["offset"] + 1
         end = found["offset"] + len(found["results"])
         lines += [f"Showing {start}-{end}." if found["results"] else "No results on this page.", "",
-                  "| Bill | Title | Topics | Agencies | Review | Last action | Date | Matched in |",
-                  "|---|---|---|---|---|---|---|---|"]
+                  "| Bill | Title | Authors | Party | Topics | Agencies | Review | Last action | Date | Matched in |",
+                  "|---|---|---|---|---|---|---|---|---|---|"]
         for *_, r, where in found["results"]:
             last = r.get("last_action") or {}
             lines.append(f"| [{cell(r.get('number') or r['id'])}]({AGENT}bills/{r['id']}.md) | {cell(r.get('title'))} | "
+                         f"{cell(', '.join(authors_of(r)))} | {cell((r.get('authorship_party') or {}).get('label'))} | "
                          f"{cell('; '.join(r.get('topics') or []))} | {cell('; '.join(a.get('name') or '' for a in r.get('agencies') or [])) or 'none tagged'} | "
                          f"{'full text' if r.get('full_text_review') else 'caption'} | {cell(last.get('category'))} | {last.get('date') or ''} | "
                          f"{cell(', '.join(sorted(LABELS.get(w, w) for w in where)))} |")

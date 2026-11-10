@@ -177,10 +177,14 @@ Search: `https://agent.bills.ctharvey.me/search?q=<words>` (Markdown, or `format
 service (`scripts/search_bills.py`) from `live/agent/data/bills.json`, reloaded when it changes. It matches word
 forms, quoted phrases, two-way synonym groups (gun/firearm/rifle, voucher/"school choice"/"education savings
 account") and bill numbers across titles, captions, topics, agencies, full-text summaries, members, affected groups,
-locations and actions, with `OR` between alternatives and filters for chamber, topic, agency, location, party,
-review and filing dates (a known topic name or agency id matches exactly, as in the tracker). It replaced the old
-`words/<word>.md` keyword pages. A partial match shows only the bills matching the most words, with a count per word,
-misspelled member names get a "did you mean", and results say how many bills are searchable by caption only; it says when nothing matches, why that may be, and which named bills are not in the data yet.
+locations and actions, with filters for chamber, topic, agency, location, party, review and filing dates (a known
+topic name or agency id matches exactly, as in the tracker; `/search` lists the topic names). It replaced the old
+`words/<word>.md` keyword pages. `OR` splits the query into alternatives, each several words or a quoted phrase and
+matched on its own (`school safety OR "school police"`); the page shows how it read the query, with a count per
+alternative. A partial match without OR shows only the bills matching the most words and names the words that matched
+nothing. Misspelled member names get a "did you mean", a name with no bills says so, results list authors and
+authorship party, filter-only results say which filter matched, and results say how many bills are searchable by
+caption only; it says when nothing matches, why that may be, and which named bills are not in the data yet.
 
 `scripts/texas-bill-agent.service`/`.timer` (root, hourly at :50) runs it in a pinned, network-less node container
 as `texas-bill-atlas`, writing only `live/agent`. The gateway serves that folder for the subdomain (cth.hosting
