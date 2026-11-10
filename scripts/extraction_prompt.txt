@@ -8,6 +8,8 @@ from the caption alone. Existing quoted law is context, not proof that every dis
 Bracketed deleted wording is not operative proposed wording. PDF line counters and AA artifacts are not policy.
 Keep substantive named bodies even when the supplied vocabulary has no match. A vocabulary match must use
 the exact canonical ID/name. Otherwise use an unresolved or proposed identity; do not invent a canonical ID.
+Only registry_match may have a non-null registry_id. For unresolved, grouped, proposed or conditionally
+created/designated bodies use null, never an empty string or a made-up identifier.
 
 The vocabulary is incomplete and includes branches, divisions, systems and offices. Preserve their entity
 types rather than claiming all are independent agencies. All state agencies is a cross-cutting scope marker,
@@ -36,6 +38,8 @@ reporter, not by the agency. Separate an action's timing from the notice timing 
 exact days as on, deadlines as no_later_than, and prerequisites as no_earlier_than. A meeting held at least
 15 days after notice is a meeting point at least 15 days after notice, not a meeting lasting 15 days. A comment
 period open for at least 30 days has a minimum duration; it has no invented closing deadline at day 30.
+Preserve business-day offsets with unit business_days; do not convert them to ordinary days or guess a
+holiday calendar. A business-day count does not by itself establish the resulting absolute calendar date.
 
 Use both candidates of an earlier-of/later-of expression in choose_point; never hide the comparison in an
 anchor_event string or substitute an unrelated event. Preserve pool submission as pool submission, not

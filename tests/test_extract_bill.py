@@ -192,6 +192,49 @@ class SchemaAndExecutionTests(unittest.TestCase):
                                          "start_inclusive": True, "end_inclusive": None}, "within_window")]
         self.assertIn("Unknown interval endpoint inclusivity", self.validate(value)["review_reasons"])
 
+    def test_hb529_unmatched_entities_allow_null_and_reject_empty_ids(self):
+        import jsonschema
+        value = result()
+        entity = {"entity_ref": "board", "registry_id": None, "name": "Board", "roles": ["Planning"],
+                  "resolution": "unresolved_existing", "entity_type": "board", "mention_only": False,
+                  "basis": "explicit", "creation_options": {"establish_new": False, "designate_existing": False},
+                  "evidence": [{"span_ids": ["P001S001"]}]}
+        for resolution, options in (
+            ("unresolved_existing", (False, False)), ("grouping", (False, False)),
+            ("proposed_new", (True, False)), ("creation_or_designation", (True, True)),
+        ):
+            with self.subTest(resolution=resolution):
+                entity["resolution"] = resolution
+                entity["registry_id"] = None
+                entity["creation_options"] = dict(zip(("establish_new", "designate_existing"), options))
+                value["entities"] = [entity]
+                self.assertEqual(self.validate(value)["errors"], [])
+                entity["registry_id"] = ""
+                with self.assertRaises(jsonschema.ValidationError): self.validate(value)
+
+    def test_canonical_registry_match_requires_nonempty_id(self):
+        import jsonschema
+        value = result()
+        value["entities"] = [{
+            "entity_ref": "commission", "registry_id": "tceq", "name": "Texas Commission on Environmental Quality",
+            "resolution": "registry_match", "entity_type": "commission", "roles": [], "mention_only": False,
+            "basis": "explicit", "creation_options": {"establish_new": False, "designate_existing": False},
+            "evidence": [{"span_ids": ["P001S001"]}]}]
+        self.assertEqual(self.validate(value)["errors"], [])
+        for missing in (None, ""):
+            value["entities"][0]["registry_id"] = missing
+            with self.assertRaises(jsonschema.ValidationError): self.validate(value)
+
+    def test_hb529_business_day_offset_is_preserved_without_conversion(self):
+        value = result()
+        point = {"kind": "relative_point", "anchor_event": "submission to commission", "offset_value": 10,
+                 "unit": "business_days", "direction": "after"}
+        value["timing_rules"] = [timing({"kind": "point", "point": point}, "no_later_than")]
+        self.assertEqual(self.validate(value)["errors"], [])
+        self.assertEqual(value["timing_rules"][0]["temporal"]["point"]["unit"], "business_days")
+        with self.assertRaises(ValueError):
+            extraction.resolve_calendar(point, dt.date(2029, 1, 1))
+
     def test_incompatible_deadline_duration_is_not_representable(self):
         import jsonschema
         value = result(); value["timing_rules"] = [timing(
