@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-10
+- "Saving your info" page (`#saving`, under Reference): how the watchlist, remembered filters, view links, share
+  links, export/import, private sync links and RSS feeds work, and what is stored where; linked from the Watchlist.
 - Saving without accounts: views, filters and open bills live in the URL (copy link); share links open a
   read-only shared list; last filters are remembered; watchlist export/import; per-bill RSS feeds built hourly
   from newly recorded action dates; private sync links, live via the `texas-bill-sync` container on `edge-bills`

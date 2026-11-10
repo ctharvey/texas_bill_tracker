@@ -14,6 +14,11 @@ test('URL state round-trips filters, shared list and open bill, omitting default
   assert.equal(buildHash('agencies', filters), '#agencies');
 });
 
+test('the saving page has its own linkable view', () => {
+  assert.equal(parseHash('#saving').view, 'saving');
+  assert.equal(buildHash('saving', {...FILTER_DEFAULTS, topic: 'Water'}), '#saving');
+});
+
 test('hash parsing rejects junk and unknown views', () => {
   const p = parseHash('#nope?list=HB5,<script>,hb 7,HB5&bill=../x&sync=short&topic=' + 'x'.repeat(300));
   assert.equal(p.view, 'all');
