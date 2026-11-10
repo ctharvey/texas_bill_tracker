@@ -403,10 +403,10 @@ function filteredBills(){
   });
   const byNumber=(a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true});
   const info=new Map(list.map(b=>[b.id,lastActionInfo(b)]));const la=b=>info.get(b.id);
-  const sorters={newest:(a,b)=>(b.filed_at||'').localeCompare(a.filed_at||'')||a.id.localeCompare(b.id,undefined,{numeric:true}),
+  const sorters={newest:(a,b)=>(b.filed_at||'').localeCompare(a.filed_at||'')||byNumber(a,b),
     latest:(a,b)=>(la(b).date||'').localeCompare(la(a).date||'')||la(b).rank-la(a).rank||byNumber(a,b),
     oldest:(a,b)=>(la(a).date||'9').localeCompare(la(b).date||'9')||la(a).rank-la(b).rank||byNumber(a,b),
-    actionstage:(a,b)=>la(b).rank-la(a).rank||(la(b).date||'').localeCompare(la(a).date||'')||byNumber(a,b),number:(a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}),agencies:(a,b)=>realAgencies(b).length-realAgencies(a).length,hearing:(a,b)=>assessHearing(b).level-assessHearing(a).level,influence:(a,b)=>authorInfluence(b).level-authorInfluence(a).level};
+    actionstage:(a,b)=>la(b).rank-la(a).rank||(la(b).date||'').localeCompare(la(a).date||'')||byNumber(a,b),number:byNumber,agencies:(a,b)=>realAgencies(b).length-realAgencies(a).length||byNumber(a,b),hearing:(a,b)=>assessHearing(b).level-assessHearing(a).level||byNumber(a,b),influence:(a,b)=>authorInfluence(b).level-authorInfluence(a).level||byNumber(a,b)};
   return list.sort(sorters[state.sort]);
 }
 

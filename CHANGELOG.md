@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-10
+- Sorting compares bill numbers as numbers (HB 99 before HB 100): the agencies, hearing and author-prominence
+  sorts break ties by number instead of the data file's order, the data file itself is ordered that way, and
+  agent search breaks ties the same way.
 - Official subjects: the data refresh keeps the Legislative Council's subject index from the bill history
   (`<subjects>`, e.g. "Artificial Intelligence"), and both searches match it, so a bill with a vague caption is
   found before its full-text review (HB 280 for "artificial intelligence"). The drawer and agent pages list them.

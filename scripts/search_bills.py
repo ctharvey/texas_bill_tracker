@@ -254,6 +254,12 @@ def parse_params(query_string: str) -> dict:
             "format": "json" if raw.get("format") == "json" else "md"}
 
 
+def bill_order(bill_id: str) -> tuple[str, int]:
+    """Sort key that compares bill numbers as numbers: 'HB99' < 'HB100'."""
+    match = re.fullmatch(r"([A-Z]+)(\d+)", bill_id or "")
+    return (match.group(1), int(match.group(2))) if match else (bill_id or "", 0)
+
+
 def group_companions(results: list) -> list:
     """Move companion bills that are both in the results next to each other, at the first one's position.
 
@@ -341,7 +347,9 @@ def search(index: Index, params: dict) -> dict:
             best = max((x[0] for x in results), default=0)
             results = [x for x in results if x[0] == best]
     # Most recent action first, then (stable) best match first.
-    results.sort(key=lambda x: ((x[2].get("last_action") or {}).get("date") or "", x[2]["id"]), reverse=True)
+    # Best match first, then most recent action, then bill number as a number (HB 99 before HB 100); stable sorts.
+    results.sort(key=lambda x: bill_order(x[2]["id"]))
+    results.sort(key=lambda x: (x[2].get("last_action") or {}).get("date") or "", reverse=True)
     results.sort(key=lambda x: (x[0], x[1]), reverse=True)
     results = group_companions(results)
     page = results[params["offset"]:params["offset"] + params["limit"]]

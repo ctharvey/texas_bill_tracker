@@ -32,6 +32,10 @@ class BillParserTests(unittest.TestCase):
         bill = parse_bill_xml(b'<billhistory bill="90(R) HB 269"><caption>Relating to water.</caption></billhistory>', 'HB00269.xml')
         self.assertNotIn('companions', bill)
 
+    def test_bill_order_compares_numbers(self):
+        from sync_ftp import bill_order
+        self.assertEqual(sorted(['HB100', 'HB99', 'SB2', 'HB9', 'HJR10'], key=bill_order), ['HB9', 'HB99', 'HB100', 'HJR10', 'SB2'])
+
     def test_official_subjects_parsed_without_codes(self):
         xml = b'''<billhistory bill="90(R) HB 280"><caption>Relating to dynamic pricing.</caption><subjects>
           <subject>Artificial Intelligence (IQ7C5)</subject><subject>Business &amp; Commerce--General (I0050)</subject>

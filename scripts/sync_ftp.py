@@ -182,6 +182,12 @@ def parse_subjects(element: ET.Element) -> list[str]:
 COMPANION = re.compile(r"\b(HJR|SJR|HCR|SCR|HB|SB|HR|SR)\s*0*([1-9]\d{0,4})\b(?:\s+by\s+([^,;\n]+?))?\s*(?:,\s*([A-Za-z][A-Za-z ]{0,30}?))?\s*(?=[;\n]|$|\b(?:HJR|SJR|HCR|SCR|HB|SB|HR|SR)\s*\d)")
 
 
+def bill_order(bill_id: str) -> tuple[str, int]:
+    """Sort key that compares bill numbers as numbers: 'HB99' < 'HB100'."""
+    match = re.fullmatch(r"([A-Z]+)(\d+)", bill_id or "")
+    return (match.group(1), int(match.group(2))) if match else (bill_id or "", 0)
+
+
 def parse_companions(text: str, bill_id: str) -> list[dict]:
     """'SB 132 by Menéndez, Identical' -> [{'id': 'SB132', 'author': 'Menéndez', 'relation': 'Identical'}]."""
     found, seen = [], set()
@@ -301,7 +307,8 @@ def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000) -> tuple[
         'coverage_note': f"{len(parsed)} bill histories read from the official bulk FTP; {len(merged)} combined records. Agency inferences are based on available captions and curated overrides.",
         'sources': ['ftp://ftp.legis.state.tx.us/bills/90r/billhistory/', 'https://capitol.texas.gov/billlookup/filedownloads.aspx'],
         'author_profiles': prior.get('author_profiles',{}),
-        'bills': sorted(merged.values(), key=lambda b:(b.get('filed_at') or '',b['id']),reverse=True),
+        # Newest filing first, then by bill number as a number (HB 99 before HB 100), not as text.
+        'bills': sorted(sorted(merged.values(), key=lambda b: bill_order(b['id'])), key=lambda b: b.get('filed_at') or '', reverse=True),
     }
     snapshot['generated_at'] = choose_generated_at(prior, snapshot, dt.datetime.now(dt.timezone.utc))
     return snapshot, {'listed':len(paths),'parsed':len(parsed),'combined':len(merged),'transfer_errors':len(errors)}

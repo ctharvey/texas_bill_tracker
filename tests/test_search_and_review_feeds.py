@@ -56,6 +56,11 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(ids('q=%22water+rights%22')[0], ['HB11'])
         self.assertEqual(ids('q=%22rights+water%22')[0], [])     # A phrase keeps its order.
 
+    def test_ties_order_bill_numbers_as_numbers(self):
+        data = {**AGENT_DATA, 'bills': [record(i, 'Relating to ferries.') for i in ('HB100', 'HB99', 'HB9', 'HB1000')]}
+        found = search_bills.search(index(data), search_bills.parse_params('q=ferry'))
+        self.assertEqual([r['id'] for *_, r, _ in found['results']], ['HB9', 'HB99', 'HB100', 'HB1000'])
+
     def test_official_subjects_find_bills_with_vague_captions(self):
         data = {**AGENT_DATA, 'bills': AGENT_DATA['bills'] + [
             record('HB280', 'Relating to a prohibition on certain personalized dynamic pricing models.',
