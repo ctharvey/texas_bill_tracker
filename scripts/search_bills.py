@@ -47,9 +47,9 @@ def _synonyms() -> dict[str, list[str]]:
     for word, wider in BROADER.items():
         table.setdefault(stem(word), []).extend(wider)
     return {k: list(dict.fromkeys(v)) for k, v in table.items()}
-FIELDS = (("title", 3), ("topics", 4), ("agencies", 4), ("people", 3), ("summary", 2), ("groups", 2),
+FIELDS = (("title", 3), ("subjects", 4), ("topics", 4), ("agencies", 4), ("people", 3), ("summary", 2), ("groups", 2),
           ("locations", 2), ("impacts", 1), ("actions", 1))
-LABELS = {"title": "title/caption", "topics": "topics", "agencies": "agencies", "people": "members",
+LABELS = {"title": "title/caption", "subjects": "official subjects", "topics": "topics", "agencies": "agencies", "people": "members",
           "summary": "full-text summary", "groups": "affected groups", "locations": "locations",
           "impacts": "impacts", "actions": "actions"}
 
@@ -82,6 +82,7 @@ def record_fields(r: dict) -> dict[str, str]:
     review = r.get("full_text_review") or {}
     return {
         "title": f"{r.get('title') or ''} {r.get('caption') or ''}",
+        "subjects": " ; ".join(r.get("subjects") or []),
         "topics": " ; ".join(r.get("topics") or []),
         "agencies": " ; ".join(f"{a.get('name') or ''} {a.get('id') or ''}" for a in r.get("agencies") or []),
         "people": " ; ".join(people),
@@ -396,9 +397,9 @@ def coverage_note(meta: dict) -> str:
     coverage = meta.get("coverage") or {}
     reviewed, bills = coverage.get("full_text_reviewed"), coverage.get("bills")
     if not isinstance(reviewed, int) or not isinstance(bills, int):
-        return "Bills without a full-text review are searched by caption, caption-based tags and members only."
+        return "Bills without a full-text review are searched by caption, official subjects, caption-based tags and members only."
     return (f"Only {reviewed} of {bills} bills have a full-text review so far; the other {bills - reviewed} are searched by "
-            "caption, caption-based tags and members only, so bills that only their full text ties to this can be missing.")
+            "caption, official subjects, caption-based tags and members only, so bills that only their full text ties to this can be missing.")
 
 
 def authors_of(r: dict) -> list[str]:
@@ -505,7 +506,7 @@ def as_markdown(found: dict, params: dict, disclaimer: str = "") -> str:
         coverage = meta.get("coverage") or {}
         lines += ["No bill in the current data matches. This does not mean no bill concerns it: only "
                   f"{coverage.get('full_text_reviewed', 'some')} of {coverage.get('bills', 'the')} bills have a full-text review so far, "
-                  "and the rest are searchable by caption only. Try a broader or different word, or browse "
+                  "and the rest are searchable by caption and official subjects only. Try a broader or different word, or browse "
                   f"[topics]({AGENT}topics/index.md) and [agencies]({AGENT}agencies/index.md).", ""]
         if found["suggestions"]:
             lines += ["Similar words in the data: " + ", ".join(f"[{w}]({link(params, q=w, offset=0)})" for w in found["suggestions"]), ""]

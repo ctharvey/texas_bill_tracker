@@ -72,6 +72,7 @@ export function billRecord(b) {
     companions: (b.companionLinks || []).map(c => ({id: c.id, number: c.number, author: c.author || null,
       relation: c.relation || null, in_snapshot: Boolean(c.title), title: c.title,
       markdown: c.title ? `${AGENT}bills/${c.id}.md` : null})),
+    subjects: b.subjects,
     topics: b.topics,
     agencies: b.agencies.map(a => ({id: a.id, name: b.agencyNames[a.id], relationship: a.relationship,
       source: a.source === 'luna' ? 'luna-full-text' : 'caption-rules', reason: a.reason || ''})),
@@ -115,6 +116,7 @@ function billMarkdown(b, coverage, reviewState = '', queueNote = '') {
 - Hearing status: ${r.hearing.status}. ${cell(r.hearing.detail)}
 - Authorship: ${cell(r.authorship_party.label)}. ${cell(r.authorship_party.detail)}
 - Author prominence: ${cell(r.author_prominence.label)}. ${r.author_prominence.factors.map(cell).join('; ')}
+- Official subjects (Legislative Council index): ${r.subjects === null ? 'not in this snapshot yet' : r.subjects.length ? r.subjects.map(cell).join('; ') : 'none listed'}
 - Companion bills: ${r.companions.length ? r.companions.map(c => `${c.in_snapshot ? `[${c.number}](${c.markdown})` : `${c.number} (not in this snapshot yet)`}${c.relation ? `, ${cell(c.relation).toLowerCase()}` : ''}${c.author ? `, by ${cell(c.author)}` : ''}`).join('; ') : 'none listed in the source data'}
 
 ## Caption

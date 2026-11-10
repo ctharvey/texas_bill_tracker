@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-10
+- Official subjects: the data refresh keeps the Legislative Council's subject index from the bill history
+  (`<subjects>`, e.g. "Artificial Intelligence"), and both searches match it, so a bill with a vague caption is
+  found before its full-text review (HB 280 for "artificial intelligence"). The drawer and agent pages list them.
 - The explorer and the Watchlist keep separate filters: opening the Watchlist no longer applies the explorer's
   search and filters, and they come back on returning to the explorer. Remembered filters are the explorer's.
 - Sync service listens with a backlog of 512 instead of socketserver's 5, so a burst of connections waits instead

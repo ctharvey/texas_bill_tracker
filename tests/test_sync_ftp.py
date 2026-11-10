@@ -32,6 +32,15 @@ class BillParserTests(unittest.TestCase):
         bill = parse_bill_xml(b'<billhistory bill="90(R) HB 269"><caption>Relating to water.</caption></billhistory>', 'HB00269.xml')
         self.assertNotIn('companions', bill)
 
+    def test_official_subjects_parsed_without_codes(self):
+        xml = b'''<billhistory bill="90(R) HB 280"><caption>Relating to dynamic pricing.</caption><subjects>
+          <subject>Artificial Intelligence (IQ7C5)</subject><subject>Business &amp; Commerce--General (I0050)</subject>
+          <subject>Artificial Intelligence (IQ7C5)</subject></subjects></billhistory>'''
+        bill = parse_bill_xml(xml, 'HB 280.xml')
+        self.assertEqual(bill['subjects'], ['Artificial Intelligence', 'Business & Commerce--General'])
+        self.assertEqual(parse_bill_xml(b'<billhistory bill="90(R) HB 281"><caption>Relating to water.</caption><subjects /></billhistory>', 'HB 281.xml')['subjects'], [])
+        self.assertNotIn('subjects', parse_bill_xml(b'<billhistory bill="90(R) HB 282"><caption>Relating to water.</caption></billhistory>', 'HB 282.xml'))
+
     def test_companions_self_reference_dropped(self):
         xml = b'<billhistory bill="90(R) HB 5"><caption>Relating to x.</caption><companions>HB 5 by Cole; HJR 5 by Cole, Similar</companions></billhistory>'
         bill = parse_bill_xml(xml, 'HB00005.xml')

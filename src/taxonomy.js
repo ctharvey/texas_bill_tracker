@@ -359,7 +359,9 @@ export function normalizeBill(raw, profiles) {
     last_action:raw.last_action || raw.status || 'Filed',
     status:raw.status || 'Filed',
     last_action_date:raw.last_action_date || raw.filed_at || '',
-    companions:normalizeCompanions(raw.companions, key)};
+    companions:normalizeCompanions(raw.companions, key),
+    // Official Legislative Council subject index; null when the source does not report it (older snapshots).
+    subjects:Array.isArray(raw.subjects)?[...new Set(raw.subjects.filter(s=>typeof s==='string'&&s.trim()).map(s=>s.trim().slice(0,120)))]:null};
   return autoTagBill(bill);
 }
 

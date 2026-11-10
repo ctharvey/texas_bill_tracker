@@ -406,6 +406,10 @@ Empty official lists mean none listed in the snapshot; missing fields in local i
 shown as not reported. Authors/coauthors belong to the originating chamber and sponsors/
 cosponsors to the other chamber. The `author` display string remains for compatibility.
 
+`subjects` is the Legislative Council's subject index from the history's `<subjects>` field, without the index
+codes ("Artificial Intelligence (IQ7C5)" becomes "Artificial Intelligence"); it is absent in older snapshots.
+Both searches match it, so bills with vague captions are found before their full-text review.
+
 `companions` is a list of `{id, author, relation}` parsed from the history's `<companions>` field
 ("SB 132 by Menendez, Identical"); it is absent when the source has no such field. The tracker links
 companions in both directions, since the other chamber's bill may not list it back yet, shows them on

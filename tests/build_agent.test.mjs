@@ -47,6 +47,14 @@ test('bill records use the tracker pipeline: Luna overlay, roster, hearing and l
   assert.ok(!files.has('bills/XX1.json'));
 });
 
+test('official subjects reach the agent record and page; older snapshots say they are not reported', () => {
+  const files = build({snapshot: snapshot([{...BILLS[0], subjects: ['Artificial Intelligence', 'Water--General']}, BILLS[1]])});
+  assert.deepEqual(JSON.parse(files.get('bills/HB5.json')).subjects, ['Artificial Intelligence', 'Water--General']);
+  assert.match(files.get('bills/HB5.md'), /- Official subjects \(Legislative Council index\): Artificial Intelligence; Water--General/);
+  assert.equal(JSON.parse(files.get('bills/SB12.json')).subjects, null);
+  assert.match(files.get('bills/SB12.md'), /- Official subjects \(Legislative Council index\): not in this snapshot yet/);
+});
+
 test('companion bills appear on both bills, and a companion not in the snapshot is labelled', () => {
   const bills = [{...BILLS[0], companions: [{id: 'SB12', author: 'Hughes', relation: 'Identical'}, {id: 'SB99', author: 'Doe'}]},
     BILLS[1]];

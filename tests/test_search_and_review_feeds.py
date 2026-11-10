@@ -56,6 +56,16 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(ids('q=%22water+rights%22')[0], ['HB11'])
         self.assertEqual(ids('q=%22rights+water%22')[0], [])     # A phrase keeps its order.
 
+    def test_official_subjects_find_bills_with_vague_captions(self):
+        data = {**AGENT_DATA, 'bills': AGENT_DATA['bills'] + [
+            record('HB280', 'Relating to a prohibition on certain personalized dynamic pricing models.',
+                   subjects=['Artificial Intelligence', 'Consumer Protection'])]}
+        params = search_bills.parse_params('q=%22artificial+intelligence%22')
+        found = search_bills.search(index(data), params)
+        self.assertEqual([r['id'] for *_, r, _ in found['results']], ['HB280'])
+        self.assertEqual(search_bills.as_json(found, params)['results'][0]['matched_in'], ['official subjects'])
+        self.assertEqual([r['id'] for *_, r, _ in search_bills.search(index(data), search_bills.parse_params('q=ai'))['results']], ['HB280'])
+
     def test_companions_in_results_are_listed_together_and_marked(self):
         late = lambda d: {'category': 'Filed', 'date': d}
         data = {**AGENT_DATA, 'bills': AGENT_DATA['bills'] + [

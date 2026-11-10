@@ -158,7 +158,25 @@ def parse_bill_xml(raw: bytes, path: str) -> dict | None:
         record["committee"] = committees[-1][:200]
     if any(local_tag(element.tag) == "companions" for element in root.iter()):
         record["companions"] = parse_companions(first_text(root, "companions"), bill_id)
+    subject_lists = [e for e in root.iter() if local_tag(e.tag) == "subjects"]
+    if subject_lists:
+        record["subjects"] = parse_subjects(subject_lists[0])
     return record
+
+
+SUBJECT_CODE = re.compile(r"\s*\(([A-Z0-9]{3,8})\)\s*$")
+
+
+def parse_subjects(element: ET.Element) -> list[str]:
+    """The Legislative Council's subject index: 'Artificial Intelligence (IQ7C5)' -> 'Artificial Intelligence'."""
+    found = []
+    for item in element:
+        if local_tag(item.tag) != "subject":
+            continue
+        name = SUBJECT_CODE.sub("", " ".join(" ".join(item.itertext()).split()))[:120]
+        if name and name not in found:
+            found.append(name)
+    return found[:40]
 
 
 COMPANION = re.compile(r"\b(HJR|SJR|HCR|SCR|HB|SB|HR|SR)\s*0*([1-9]\d{0,4})\b(?:\s+by\s+([^,;\n]+?))?\s*(?:,\s*([A-Za-z][A-Za-z ]{0,30}?))?\s*(?=[;\n]|$|\b(?:HJR|SJR|HCR|SCR|HB|SB|HR|SR)\s*\d)")
