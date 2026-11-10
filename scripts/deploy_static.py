@@ -58,6 +58,8 @@ def main() -> None:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(content)
                 path.chmod(0o644)
+            # Server-written data (live/bills.json, live/luna/tags.json) outlives releases.
+            (staging / 'live').symlink_to(Path('..') / '..' / 'live', target_is_directory=True)
             if not release.exists():
                 staging.rename(release)
             link = ROOT / '.next'

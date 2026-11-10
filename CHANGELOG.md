@@ -15,6 +15,10 @@
   all-agencies scope marker as an agency; fix hashchange crash, spaced bill-number search, the scheduled-hearings
   stat, CSV round-trip and import rollback, topic word boundaries and unsafe profile links.
 - Remove the unused GitHub Pages workflow and orphaned `.openai/hosting.json`.
+- Public Luna tags: the review worker publishes citation-verified claims to `live/luna/tags.json`; the tracker
+  overlays them on each bill (topics, agencies, effects, groups, locations, summary) with a "Luna · full text" label.
+- Live data: the hourly FTP import moves to `texas-bill-data.timer` on the server writing `live/bills.json`; the
+  tracker loads it before the bundled snapshot; `refresh-bills.yml` is manual only; releases get a `live` symlink.
 
 ## 2026-11-09
 

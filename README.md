@@ -10,7 +10,7 @@ An independent, open-source bill tracker for the Texas Legislature's **90th Regu
 - Show author institutional influence **only when a verified role or tenure fact has been entered**. No party-only influence assumptions.
 - Show referral, scheduled hearing and hearing held as separate procedural signals. A prefiled bill without committee evidence is *not rated*, never assigned an invented probability.
 - Maintain a device-local watchlist, view bill details and source links, export filtered CSV, and import CSV/JSON datasets locally.
-- Include a conservative bulk updater for the [Texas Legislative Council's official FTP service](https://capitol.texas.gov/billlookup/filedownloads.aspx) and a GitHub Actions workflow for the hourly sync.
+- Include a conservative bulk updater for the [Texas Legislative Council's official FTP service](https://capitol.texas.gov/billlookup/filedownloads.aspx) run hourly by a server timer (a manual GitHub workflow refreshes the bundled fallback).
 - On the hosted app, read the repository's current `data/bills.json` snapshot, falling back to the locally bundled snapshot if GitHub cannot be reached. The UI reports which source was loaded.
 
 ## Running locally
@@ -84,13 +84,22 @@ definitions alongside the requested section, and never follow model-supplied URL
 Source-content changes invalidate targeted reuse; retrieval-date-only changes do not. Other codes and
 oversized/missing sources remain explicit review work. Raw first-pass and resolution responses are preserved.
 
-Worker results are written to `<cache-dir>/reviews/<bill-id>.json`, always with `publishable: false`. A
-`ready_for_review` result still needs human approval. This change does not automatically expose that private
-directory, add classifications to `data/bills.json`, or enable public AI classifications.
+Worker results are written to `<cache-dir>/reviews/<bill-id>.json`. The full bundles (evidence, raw
+responses, statutes) stay private. With `--publish-tags <path>`, each run ends by writing a public
+`texas-bill-luna-tags-v1` overlay containing only claims whose citations resolved against the bill text:
+summary, policy tags, agencies, statewide scope, locations, affected groups and major effects. A field whose
+claims all failed verification is left out, and the tracker keeps its caption inference for that field.
 
-The production review timer was enabled on the existing VPS on November 9, 2026. Server-side replay of the
-seeded pilot cache incurred no new model spending; pilot costs are retained in the daily ledger. Generated
-analyses remain private and unapproved, including any semantic questions or capacity-deferred cleanup.
+On the VPS the overlay is `/var/www/html/texas-bill-atlas/live/luna/tags.json`, served as `./live/luna/tags.json`
+through a `live -> ../../live` symlink the deployer adds to every release. The tracker labels Luna-tagged bills
+"Luna · full text" and shows the summary, review date and locations in the drawer.
+
+### Live bill snapshot
+
+`scripts/texas-bill-data.service` and `.timer` run `sync_ftp.py` hourly at :17 on the VPS as `texas-bill-atlas`,
+reading the script from the deployer's bare repository and writing `/var/www/html/texas-bill-atlas/live/bills.json`.
+The tracker loads `./live/bills.json` first and falls back to the bundled `data/bills.json` with a warning
+banner. The GitHub workflow `refresh-bills.yml` is now manual only and refreshes that bundled fallback.
 
 Hourly operation uses `scripts/texas-bill-review.service` and `.timer`, a dedicated `texas-bill-review` account,
 and `/var/lib/texas-bill-review/{repository,venv,cache}`. The repository stays on `main` and pulls with

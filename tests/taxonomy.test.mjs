@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {autoTagBill,assessHearing,authorInfluence,officialUrl,AGENCY_NAME,memberNames,snapshotAgeHours,matchAuthorProfile,SCOPE_AGENCY_ID} from '../src/taxonomy.js';
+import {autoTagBill,assessHearing,authorInfluence,officialUrl,AGENCY_NAME,memberNames,snapshotAgeHours,matchAuthorProfile,SCOPE_AGENCY_ID,applyLunaTags} from '../src/taxonomy.js';
 
 test('tags all relevant detected agencies instead of picking one',()=>{
   const b=autoTagBill({title:'Medicaid, voter registration and public school changes',caption:'Changes to Medicaid eligibility, voter registration and school districts'});
@@ -108,4 +108,34 @@ test('import coercion tolerates string tags and null actions',()=>{
   assert.deepEqual(b.constituencies,['Teachers','Students']);
   assert.equal(assessHearing({actions:[null,'Public hearing held']}).label,'Heard');
   assert.equal(SCOPE_AGENCY_ID,'all-state-agencies');
+});
+
+const lunaBase=()=>({id:'HB1',topics:['Old'],agencies:[{id:'tea',relationship:'related',reason:'kw'},{id:SCOPE_AGENCY_ID,relationship:'related',reason:'kw'}],impacts:['Old impact'],constituencies:['Old group']});
+test('applyLunaTags replaces fields and maps agencies',()=>{
+  const entry={reviewed_at:'2026-11-10T04:37:12Z',status:'ready_for_review',text_version:'introduced',summary:'S',unverified_omitted:2,
+    policy_tags:[{tag:'Healthcare'}],agencies:[{id:'hhsc',name:'HHSC',impact:'direct',explanation:'named'},{id:'tdi',impact:'inferred',explanation:'maybe'}],
+    all_state_agencies:{applies:false,explanation:'no'},locations:[{name:'Texas',kind:'statewide'}],affected_groups:[{group:'Patients'}],major_effects:[{effect:'rulemaking',label:'Rulemaking'}]};
+  const out=applyLunaTags(lunaBase(),entry,{tdi:'Texas Department of Insurance'});
+  assert.deepEqual(out.topics,['Healthcare']);
+  assert.deepEqual(out.agencies,[{id:'hhsc',name:'HHSC',relationship:'direct',reason:'named',source:'luna'},{id:'tdi',name:'Texas Department of Insurance',relationship:'inferred',reason:'maybe',source:'luna'}]);
+  assert.deepEqual(out.impacts,['Rulemaking']);assert.deepEqual(out.constituencies,['Patients']);assert.deepEqual(out.locations,[{name:'Texas',kind:'statewide'}]);
+  assert.deepEqual(out.luna.fields,['topics','agencies','impacts','constituencies','locations']);
+  assert.equal(out.luna.unverified_omitted,2);assert.equal(out.luna.summary,'S');
+});
+test('applyLunaTags keeps caption values for absent keys',()=>{
+  const out=applyLunaTags(lunaBase(),{reviewed_at:'x',summary:'S',policy_tags:[{tag:'Taxes'}]});
+  assert.deepEqual(out.topics,['Taxes']);
+  assert.deepEqual(out.agencies,lunaBase().agencies);assert.deepEqual(out.impacts,['Old impact']);assert.deepEqual(out.constituencies,['Old group']);assert.deepEqual(out.locations,[]);
+  assert.deepEqual(out.luna.fields,['topics']);
+});
+test('applyLunaTags treats empty arrays as none found',()=>{
+  const out=applyLunaTags(lunaBase(),{policy_tags:[],agencies:[],major_effects:[],affected_groups:[],locations:[]});
+  assert.deepEqual([out.topics,out.agencies,out.impacts,out.constituencies,out.locations],[[],[],[],[],[]]);
+  assert.deepEqual(out.luna.fields,['topics','agencies','impacts','constituencies','locations']);
+});
+test('applyLunaTags adds the scope marker only when applies is true',()=>{
+  const yes=applyLunaTags(lunaBase(),{agencies:[],all_state_agencies:{applies:true,explanation:'all'}});
+  assert.deepEqual(yes.agencies.map(a=>a.id),[SCOPE_AGENCY_ID]);assert.equal(yes.agencies[0].source,'luna');
+  const no=applyLunaTags(lunaBase(),{agencies:[{id:'tea',impact:'direct',explanation:'e'}],all_state_agencies:{applies:false,explanation:'x'}});
+  assert.deepEqual(no.agencies.map(a=>a.id),['tea']);
 });

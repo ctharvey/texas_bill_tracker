@@ -469,6 +469,56 @@ def download_document(bill_id: str, root: Path, ftp_factory=ftplib.FTP) -> dict:
         return document
 
 
+TAG_FIELDS = {"policy_tags": ("tag", "explanation"), "locations": ("name", "kind", "explanation"),
+              "affected_groups": ("group", "explanation"), "major_effects": ("effect", "label", "explanation")}
+
+
+def public_entry(bundle: dict, reviewed_at: str) -> dict | None:
+    """Verified claims only; a field whose every claim failed verification is omitted (caption fallback)."""
+    result = bundle.get("result")
+    if not isinstance(result, dict):
+        return None
+    verified = {c["claim"] for c in bundle.get("validation", {}).get("verified_citations", [])
+                if c.get("status") == "resolved"}
+    entry, omitted = {"reviewed_at": reviewed_at, "status": bundle.get("status"),
+                      "text_version": bundle.get("document", {}).get("version")}, 0
+    if "summary" in verified:
+        entry["summary"] = result["summary"]["text"]
+    for field, keys in {**TAG_FIELDS, "agencies": None}.items():
+        items = result.get(field) or []
+        kept = [item for i, item in enumerate(items) if f"{field}:{i}" in verified]
+        omitted += len(items) - len(kept)
+        if kept or not items:
+            entry[field] = ([{"id": a["registry_id"], "name": a["name"], "impact": a["impact"],
+                              "explanation": a["explanation"]} for a in kept] if field == "agencies"
+                            else [{k: item.get(k) for k in keys} for item in kept])
+    scope = result.get("all_state_agencies_scope") or {}
+    if scope.get("applies") is False or (scope.get("applies") and "all_state_agencies_scope" in verified):
+        entry["all_state_agencies"] = {"applies": bool(scope["applies"]), "explanation": scope.get("explanation")}
+    elif scope.get("applies"):
+        omitted += 1
+    entry["unverified_omitted"] = omitted
+    return entry
+
+
+def publish_tags(cache_dir: Path, out: Path, registry: list[dict]) -> int:
+    bills = {}
+    for path in sorted((cache_dir / "reviews").glob("*.json")):
+        try:
+            bundle = json.loads(path.read_text("utf-8"))
+        except (OSError, ValueError):
+            continue
+        stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
+        entry = public_entry(bundle, stamp.replace("+00:00", "Z"))
+        if entry and bundle.get("bill_id") == path.stem:
+            bills[path.stem] = entry
+    atomic_json(out, {"format": "texas-bill-luna-tags-v1", "model": classification.MODEL,
+                      "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                      "agencies": {a["id"]: a["name"] for a in registry}, "bills": bills})
+    os.chmod(out, 0o644)  # Served publicly; the worker's UMask=0077 would otherwise hide it.
+    return len(bills)
+
+
 DOWNLOAD_ERRORS = (ftplib.Error, OSError, EOFError, ValueError)
 OUTAGE_LIMIT = 5  # Consecutive new failures treated as an outage (FTP down, disk full) rather than bad bills.
 
@@ -501,6 +551,10 @@ def main():
     parser.add_argument("--run-budget", type=float, default=.1)
     parser.add_argument("--max-minutes", type=float, default=50,
                         help="Wall-clock limit checked between bills, never mid-request")
+    parser.add_argument("--snapshot", type=Path, default=ROOT / "data/bills.json",
+                        help="Bill list to work through (the live server snapshot in production)")
+    parser.add_argument("--publish-tags", type=Path,
+                        help="After the run, write verified Luna tags for every reviewed bill to this public file")
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
     detailed.check_cache_location(args.cache_dir)
@@ -510,7 +564,7 @@ def main():
         parser.error("--max-minutes must be positive")
     with ResponseCache(args.cache_dir / "worker-lock")._lock("worker"):
         budget = Budget(args.cache_dir / "budget.json", args.daily_budget, args.run_budget)
-        snapshot = json.loads((ROOT / "data/bills.json").read_text("utf-8"))
+        snapshot = json.loads(args.snapshot.read_text("utf-8"))
         ids = args.bill_id or [b["id"] for b in snapshot["bills"]]
         queue_path = args.cache_dir / "queue.json"
         queue = json.loads(queue_path.read_text("utf-8")) if queue_path.exists() else {"seen": [], "cursor": 0}
@@ -588,6 +642,13 @@ def main():
             if bundle.get("stop_run"):
                 print("Deferred: budget/capacity guard during review questions", flush=True); break
         print("New model spending this run: $%.6f" % budget.run_spent)
+        if args.publish_tags:
+            try:
+                print("Published Luna tags for", publish_tags(args.cache_dir, args.publish_tags,
+                                                               detailed.load_registry()), "bills", flush=True)
+            except OSError as error:
+                print("Tag publish failed:", type(error).__name__, flush=True)
+                raise SystemExit(3)
 
 
 if __name__ == "__main__":

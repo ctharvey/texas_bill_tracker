@@ -1,0 +1,20 @@
+[Unit]
+Description=Import Texas bill histories from the official bulk FTP into the live snapshot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=texas-bill-atlas
+Group=texas-bill-atlas
+RuntimeDirectory=texas-bill-data
+UMask=0022
+# sync_ftp.py comes from the same main commit the deployer publishes; it uses the standard library only.
+ExecStartPre=/bin/sh -c '/usr/bin/git --git-dir=/var/lib/texas-bill-atlas/repository.git show main:scripts/sync_ftp.py > "$RUNTIME_DIRECTORY/sync_ftp.py"'
+ExecStart=/bin/sh -c 'exec /usr/bin/python3 "$RUNTIME_DIRECTORY/sync_ftp.py" --out /var/www/html/texas-bill-atlas/live/bills.json'
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/html/texas-bill-atlas/live
+TimeoutStartSec=2700

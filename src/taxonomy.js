@@ -179,6 +179,27 @@ export function autoTagBill(bill) {
   return {...bill, topics, agencies, impacts, ...(bill.constituencies == null ? {} : {constituencies: toArray(bill.constituencies)})};
 }
 
+// Overlay Luna's full-text review (tags.json entry) on a bill; an absent key keeps the caption-inferred value, an empty array means "none found".
+export function applyLunaTags(bill, entry, registryNames = {}) {
+  if (!entry || typeof entry !== 'object') return bill;
+  const has = k => Array.isArray(entry[k]);
+  const col = (k, f) => entry[k].map(f).filter(v => typeof v === 'string' && v);
+  const out = {...bill, locations: Array.isArray(bill.locations) ? bill.locations : []};
+  const fields = [];
+  if (has('policy_tags')) { out.topics = col('policy_tags', x => x?.tag); fields.push('topics'); }
+  const scope = entry.all_state_agencies?.applies === true;
+  if (has('agencies') || entry.all_state_agencies != null) {
+    const list = has('agencies') ? entry.agencies.filter(a => a && typeof a.id === 'string' && a.id !== SCOPE_AGENCY_ID).map(a => ({id:a.id, name:a.name || registryNames[a.id] || AGENCY_NAME[a.id] || a.id, relationship:a.impact === 'direct' ? 'direct' : 'inferred', reason:a.explanation || '', source:'luna'})) : (bill.agencies || []).filter(a => a.id !== SCOPE_AGENCY_ID);
+    if (scope) list.push({id:SCOPE_AGENCY_ID, name:AGENCY_NAME[SCOPE_AGENCY_ID], relationship:'direct', reason:entry.all_state_agencies.explanation || '', source:'luna'});
+    out.agencies = list; fields.push('agencies');
+  }
+  if (has('major_effects')) { out.impacts = col('major_effects', x => x?.label); fields.push('impacts'); }
+  if (has('affected_groups')) { out.constituencies = col('affected_groups', x => x?.group); fields.push('constituencies'); }
+  if (has('locations')) { out.locations = entry.locations.filter(l => l && typeof l.name === 'string'); fields.push('locations'); }
+  out.luna = {reviewed_at:entry.reviewed_at, status:entry.status, summary:entry.summary, text_version:entry.text_version, unverified_omitted:entry.unverified_omitted || 0, fields};
+  return out;
+}
+
 // Evidence-based procedural outlook, not a probability of enactment.
 export function assessHearing(bill) {
   const a = toArray(bill.actions).filter(a => a != null).map(a => typeof a === 'string' ? a : a.description || '').join(' ').toLowerCase();

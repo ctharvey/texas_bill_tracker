@@ -1,13 +1,7 @@
 name: Refresh Texas bill data
+# Manual only: the hourly import runs on the server (texas-bill-data.timer). This refreshes the bundled fallback.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/sync_ftp.py'
-      - '.github/workflows/refresh-bills.yml'
-  schedule:
-    - cron: '17 * * * *'
 concurrency:
   group: texas-bill-sync
   cancel-in-progress: false
