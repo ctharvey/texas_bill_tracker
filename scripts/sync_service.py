@@ -355,6 +355,13 @@ def make_handler(app: App):
     return Handler
 
 
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+    # socketserver listens with a backlog of 5; under load the kernel then drops new connections and clients wait a
+    # 1 s retry (seen from 100 requests a second in the 2026-11-10 load test).
+    request_queue_size = 512
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, required=True, help="Private SQLite file outside the web root")
@@ -369,8 +376,7 @@ def main() -> int:
     app = App(Store(args.db), Snapshot(args.snapshot), trust_proxy=args.trust_proxy,
               allowed_origins=args.allowed_origin or ("https://bills.ctharvey.me",),
               search=search_bills.Index(args.search_data) if args.search_data else None, reviews=Reviews(args.tags))
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(app))
-    server.daemon_threads = True
+    server = Server((args.host, args.port), make_handler(app))
     print(f"Sync service listening on {args.host}:{args.port}", flush=True)
     server.serve_forever()
     return 0

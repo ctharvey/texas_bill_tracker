@@ -1,6 +1,7 @@
 """Per-bill feeds, dated actions, and the private sync service (keys, versions, limits, feeds)."""
 import json
 from pathlib import Path
+import socket
 import sqlite3
 import sys
 import tempfile
@@ -211,6 +212,20 @@ class SyncHttpTests(unittest.TestCase):
     def test_oversized_body_is_refused_before_reading(self):
         status, _, _ = self.request('POST', raw=b'{"data": {"watch": []}, "pad": "' + b'x' * svc.MAX_BODY + b'"}')
         self.assertEqual(status, 413)
+
+
+class ListenBacklogTests(unittest.TestCase):
+    def test_burst_of_connections_waits_instead_of_being_dropped(self):
+        # Nothing accepts yet, as when every handler thread is busy; socketserver's default backlog of 5 drops the rest.
+        server = svc.Server(('127.0.0.1', 0), svc.make_handler(None)); self.addCleanup(server.server_close)
+        clients = []
+        try:
+            for _ in range(64):
+                clients.append(socket.create_connection(server.server_address, timeout=1))
+        finally:
+            for client in clients:
+                client.close()
+        self.assertEqual(len(clients), 64)
 
 
 if __name__ == '__main__':
