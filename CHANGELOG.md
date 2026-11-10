@@ -2,6 +2,9 @@
 
 ## 2026-11-09
 
+- Fix unmatched entity IDs to accept null and reject empty strings; add explicit business-day units following
+  the held-out HB529 evaluation. Schema changes invalidate response reuse; prior raw responses stay intact.
+
 - Add optional Terra Flex full-text extraction with explicit actor certainty, atomic obligation instructions,
   event-relative calendar types and unknown interval boundaries. Keep outputs private and pending review.
 - Reuse responses persistently by complete text/configuration; protect concurrent calls and uncertain failures.

@@ -93,6 +93,9 @@ modality per obligation, coupled deadline/duration shapes, ordinal-weekday/event
 qualifying-year selection and nullable interval inclusivity. For example, first Monday in June three years after
 the census remains an event-relative rule. `resolve_calendar` resolves supported calendar types only after a
 verified anchor date is supplied. It rejects nonexistent dates instead of rolling them to another month.
+Unmatched/grouped/proposed entities use a null registry ID; only canonical matches use a nonempty ID.
+Business-day counts have an explicit `business_days` unit. They are not converted to calendar days or resolved
+against a guessed holiday calendar.
 
 Code derives counts and evidence reverse links; the model does not repeat a second bookkeeping table. Unknown
 evidence, bad references/dates, unresolved/inferred actors, embedded modal verbs, uncited potentially operative

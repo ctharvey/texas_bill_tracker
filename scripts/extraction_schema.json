@@ -18,7 +18,7 @@
             "type": "object",
             "properties": {
               "registry_id": {
-                "type": "string"
+                "type": "null"
               },
               "name": {
                 "type": "string"
@@ -99,7 +99,7 @@
             "type": "object",
             "properties": {
               "registry_id": {
-                "type": "string"
+                "type": "null"
               },
               "name": {
                 "type": "string"
@@ -180,7 +180,8 @@
             "type": "object",
             "properties": {
               "registry_id": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1
               },
               "name": {
                 "type": "string"
@@ -188,7 +189,87 @@
               "resolution": {
                 "type": "string",
                 "enum": [
-                  "registry_match",
+                  "registry_match"
+                ]
+              },
+              "entity_type": {
+                "type": "string"
+              },
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mention_only": {
+                "type": "boolean"
+              },
+              "basis": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "inferred"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/evidence"
+                },
+                "minItems": 1
+              },
+              "creation_options": {
+                "type": "object",
+                "properties": {
+                  "establish_new": {
+                    "type": "boolean",
+                    "enum": [
+                      false
+                    ]
+                  },
+                  "designate_existing": {
+                    "type": "boolean",
+                    "enum": [
+                      false
+                    ]
+                  }
+                },
+                "required": [
+                  "establish_new",
+                  "designate_existing"
+                ],
+                "additionalProperties": false
+              },
+              "entity_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "registry_id",
+              "name",
+              "resolution",
+              "entity_type",
+              "roles",
+              "mention_only",
+              "basis",
+              "evidence",
+              "creation_options",
+              "entity_ref"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "registry_id": {
+                "type": "null"
+              },
+              "name": {
+                "type": "string"
+              },
+              "resolution": {
+                "type": "string",
+                "enum": [
                   "unresolved_existing",
                   "grouping"
                 ]
@@ -695,7 +776,8 @@
                       "hours",
                       "days",
                       "months",
-                      "years"
+                      "years",
+                      "business_days"
                     ]
                   },
                   "comparison": {
@@ -799,7 +881,8 @@
                       "hours",
                       "days",
                       "months",
-                      "years"
+                      "years",
+                      "business_days"
                     ]
                   },
                   "comparison": {
@@ -903,7 +986,8 @@
                       "hours",
                       "days",
                       "months",
-                      "years"
+                      "years",
+                      "business_days"
                     ]
                   },
                   "comparison": {
@@ -1149,7 +1233,8 @@
                 "hours",
                 "days",
                 "months",
-                "years"
+                "years",
+                "business_days"
               ]
             },
             "direction": {
