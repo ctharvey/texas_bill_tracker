@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-10
+- Review worker: `--no-spending-cap` disables the $1/day and $0.10/run ceilings while keeping reservations,
+  the ledger and double-billing checks; `--order reverse` reviews from the bottom of the snapshot up. The
+  production unit uses both until the backlog completes.
 - Last action: cards show a categorized last-action tag with chamber and date; new "Last action" filter and
   sorts by latest action, oldest last action and last-action stage.
 - Members-elect: party and district for the 41 new members from the SOS unofficial 2026 general election

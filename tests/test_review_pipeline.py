@@ -31,6 +31,24 @@ class BudgetTests(unittest.TestCase):
         for daily, run in ((1.01, .1), (1, 2), (0, 0), (1, -1)):
             with self.assertRaises(ValueError): pipeline.Budget(self.path, daily, run)
 
+    def test_uncapped_budget_must_disable_both_limits(self):
+        for daily, run in ((None, .1), (1, None)):
+            with self.assertRaises(ValueError): pipeline.Budget(self.path, daily, run)
+
+    def test_uncapped_budget_records_spend_and_keeps_billing_safety(self):
+        budget = pipeline.Budget(self.path, None, None)
+        with patch.object(classification, 'response_cost', return_value=(0, 5.0)):
+            budget.send(self.request, sender=lambda _: raw())
+            budget.send({**self.request, 'input': 'Second'}, sender=lambda _: raw())
+        self.assertEqual(budget.run_spent, 10.0)
+        with self.assertRaises(pipeline.AlreadyBilled):
+            budget.send(self.request, sender=lambda _: self.fail('No double charge'))
+        def timeout(_): raise TimeoutError('Unknown submission')
+        with self.assertRaises(TimeoutError): budget.send({**self.request, 'input': 'Third'}, sender=timeout)
+        with self.assertRaises(pipeline.OutcomeUnresolved):
+            pipeline.Budget(self.path, None, None).send({**self.request, 'input': 'Fourth'},
+                                                        sender=lambda _: self.fail('Unknown charge stops new calls'))
+
     def test_budget_stops_before_sender_and_persists_across_runs(self):
         budget = pipeline.Budget(self.path, .001, .001)
         with self.assertRaises(pipeline.BudgetExceeded):

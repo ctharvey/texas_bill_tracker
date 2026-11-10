@@ -60,8 +60,11 @@ def ledger_day() -> str:
 
 class Budget:
     """One worker lock covers this ledger; unknown submission outcomes retain their reservation."""
-    def __init__(self, path: Path, daily_limit: float, run_limit: float):
-        if not 0 < daily_limit <= 1 or not 0 < run_limit <= daily_limit:
+    def __init__(self, path: Path, daily_limit: float | None, run_limit: float | None):
+        # None/None disables the spending ceilings only; reservation and double-billing checks still apply.
+        if (daily_limit is None) != (run_limit is None):
+            raise ValueError("Disable both limits or neither")
+        if daily_limit is not None and (not 0 < daily_limit <= 1 or not 0 < run_limit <= daily_limit):
             raise ValueError("Limits must satisfy 0 < run limit <= daily limit <= $1")
         self.path, self.daily_limit, self.run_limit = path, daily_limit, run_limit
         self.run_spent = 0.0
@@ -86,7 +89,8 @@ class Budget:
         outstanding = sum(v["reserved"] for day in self.ledger.values() for v in day.values()
                           if v.get("state") == "pending")
         spent = sum(v.get("cost", 0) for v in self.ledger[self.day].values())
-        if spent + outstanding + ceiling > self.daily_limit or self.run_spent + ceiling > self.run_limit:
+        if self.daily_limit is not None and (spent + outstanding + ceiling > self.daily_limit
+                                             or self.run_spent + ceiling > self.run_limit):
             raise BudgetExceeded("Spending ceiling reached; remaining work stays queued")
         self.ledger[self.day][key] = {"state": "pending", "reserved": ceiling}
         atomic_json(self.path, self.ledger)
@@ -549,6 +553,10 @@ def main():
                         help="Optional cap; by default a run continues serially until a spending guard stops it")
     parser.add_argument("--daily-budget", type=float, default=1)
     parser.add_argument("--run-budget", type=float, default=.1)
+    parser.add_argument("--no-spending-cap", action="store_true",
+                        help="Ignore the daily and run budgets; calls are still reserved and recorded in the ledger")
+    parser.add_argument("--order", choices=("forward", "reverse"), default="forward",
+                        help="Work through the snapshot from the top (forward) or the bottom (reverse)")
     parser.add_argument("--max-minutes", type=float, default=50,
                         help="Wall-clock limit checked between bills, never mid-request")
     parser.add_argument("--snapshot", type=Path, default=ROOT / "data/bills.json",
@@ -563,9 +571,12 @@ def main():
     if args.max_minutes <= 0:
         parser.error("--max-minutes must be positive")
     with ResponseCache(args.cache_dir / "worker-lock")._lock("worker"):
-        budget = Budget(args.cache_dir / "budget.json", args.daily_budget, args.run_budget)
+        limits = (None, None) if args.no_spending_cap else (args.daily_budget, args.run_budget)
+        budget = Budget(args.cache_dir / "budget.json", *limits)
         snapshot = json.loads(args.snapshot.read_text("utf-8"))
         ids = args.bill_id or [b["id"] for b in snapshot["bills"]]
+        if args.order == "reverse" and not args.bill_id:
+            ids = ids[::-1]
         queue_path = args.cache_dir / "queue.json"
         queue = json.loads(queue_path.read_text("utf-8")) if queue_path.exists() else {"seen": [], "cursor": 0}
         candidates = args.bill_id[:args.max_bills] if args.bill_id else queue_candidates(ids, queue, args.max_bills)

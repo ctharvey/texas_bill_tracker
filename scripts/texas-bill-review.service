@@ -12,7 +12,7 @@ EnvironmentFile=/etc/texas-bill-review.env
 Environment=TZ=America/Chicago
 UMask=0077
 ExecStartPre=/usr/bin/git pull --ff-only
-ExecStart=/var/lib/texas-bill-review/venv/bin/python scripts/review_pipeline.py --cache-dir /var/lib/texas-bill-review/cache --daily-budget 1 --run-budget 0.10 --execute --snapshot /var/www/html/texas-bill-atlas/live/bills.json --publish-tags /var/www/html/texas-bill-atlas/live/luna/tags.json
+ExecStart=/var/lib/texas-bill-review/venv/bin/python scripts/review_pipeline.py --cache-dir /var/lib/texas-bill-review/cache --no-spending-cap --order reverse --execute --snapshot /var/www/html/texas-bill-atlas/live/bills.json --publish-tags /var/www/html/texas-bill-atlas/live/luna/tags.json
 # No start timeout: killing a run mid-request strands its billing reservation and blocks later calls.
 TimeoutStartSec=infinity
 NoNewPrivileges=true
