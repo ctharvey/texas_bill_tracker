@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-10
+- "Newest" puts the latest filings first within a day: filing dates have no time, so same-day bills now sort by
+  type and then highest number first (numbers are assigned in filing order) instead of lowest first.
 - Bill text on the site: the hourly data run converts each version's official HTML to Markdown
   (`live/text/<BILL>/<code>.md` plus `index.json`; additions as `<ins>`, deletions as `<del>`, sections as
   headings), downloading only new or changed versions, at most 400 per run. The review worker publishes

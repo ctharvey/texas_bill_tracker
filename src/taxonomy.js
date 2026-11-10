@@ -377,6 +377,14 @@ export function searchTerms(query) {
   return {q, compact: /^(hb|sb|hjr|sjr|hcr|scr|hr|sr)\d{1,5}$/.test(ref) ? ref : q.replace(/\s+/g, '')};
 }
 
+// Same-day order for "newest": bill type A-Z (HB, HCR, HJR, HR, SB, ...), then the higher number first, since
+// numbers are assigned in filing order and the source has no filing time.
+export function newestFirst(a, b) {
+  const pa = String(a).match(/^([A-Z]+)(\d+)$/), pb = String(b).match(/^([A-Z]+)(\d+)$/);
+  if (!pa || !pb) return String(a).localeCompare(String(b));
+  return pa[1].localeCompare(pb[1]) || Number(pb[2]) - Number(pa[2]);
+}
+
 const BILL_KEY = /^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)\d{1,5}$/;
 const billNumber = id => id.replace(/^(HJR|SJR|HCR|SCR|HB|SB|HR|SR)/, '$1 ');
 

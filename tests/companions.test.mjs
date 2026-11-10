@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {companionGroups, companionIndex, normalizeCompanions, searchTerms} from '../src/taxonomy.js';
+import {companionGroups, companionIndex, newestFirst, normalizeCompanions, searchTerms} from '../src/taxonomy.js';
+
+test('newestFirst puts the higher number first within a bill type, numerically', () => {
+  assert.deepEqual(['HB1011', 'SB332', 'HB1100', 'HB999', 'SB4', 'HJR2'].sort(newestFirst),
+    ['HB1100', 'HB1011', 'HB999', 'HJR2', 'SB332', 'SB4']);
+});
 
 test('normalizeCompanions keeps valid ids and drops malformed, self and duplicate entries', () => {
   const out = normalizeCompanions([{id: 'SB 132', author: 'Menéndez', relation: 'Identical'}, {id: 'sb132'}, {id: 'HB267'},
