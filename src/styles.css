@@ -6,6 +6,15 @@
 @media(max-width:380px){.nav-count{display:none}.nav-item{padding:9px}.stat-card{padding:13px}.stat-icon{display:none}.bill-card{grid-template-columns:1fr}.bill-right{flex-direction:row;align-items:center}.outlook-label{display:none}.bill-open{padding:0}.detail-drawer{padding:22px 19px}}
 .influence-pill{font-size:9px;color:#6b6e9e;background:#f3f3fa;border-radius:4px;padding:4px 7px;font-weight:700}
 .luna-pill{font-size:9px;color:#2f6b4f;background:#eaf5ef;border-radius:4px;padding:4px 7px;font-weight:700}
+.bill-card.party-dem{border-left:4px solid #3d6fb8;background:linear-gradient(90deg,#eef3fb,#fff 45%)}
+.bill-card.party-rep{border-left:4px solid #c0463c;background:linear-gradient(90deg,#fbefee,#fff 45%)}
+.bill-card.party-bipartisan{border-left:4px solid #7a4fb0;background:linear-gradient(90deg,#f3eefb,#fff 45%)}
+.bill-card.party-unknown{border-left:4px solid #d5dce3}
+.party-pill{font-size:9px;border-radius:4px;padding:4px 7px;font-weight:700;color:#5f6b76;background:#f0f3f6}
+.party-pill.party-dem{color:#1f4f93;background:#e3ecf9}.party-pill.party-rep{color:#9a2b23;background:#f9e3e1}.party-pill.party-bipartisan{color:#5b3590;background:#ece3f8}
+.party-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;background:#c3cbd3;vertical-align:middle}
+.party-dot.party-dem{background:#3d6fb8}.party-dot.party-rep{background:#c0463c}
+.member-list{list-style:none;padding:0;margin:4px 0 10px}.member-list li{padding:4px 0;font-size:12px;line-height:1.5}.member-list small{color:#748697}
 .luna-block{background:#f6faf8;border-left:3px solid #2f6b4f;padding:10px 14px;border-radius:4px}
 .agency-combobox{position:relative;flex:0 1 250px;min-width:185px;max-width:100%}
 .agency-combobox input{width:100%;border:1px solid #e1e8ee;background:#fbfcfd;border-radius:7px;color:#5d6f80;padding:9px 29px 9px 12px;font-size:11px;outline:0}

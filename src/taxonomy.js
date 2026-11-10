@@ -200,6 +200,70 @@ export function applyLunaTags(bill, entry, registryNames = {}) {
   return out;
 }
 
+// Member roster (texas-bill-members-v1): identity is the exact (chamber, TLO display name) pair; no surname guessing.
+const ROLE_GROUPS = [['authors', 'origin'], ['coauthors', 'origin'], ['sponsors', 'other'], ['cosponsors', 'other']];
+export function billChamber(bill) { return /^H/i.test(bill.id || '') ? 'house' : 'senate'; }
+
+export function attachMembers(bill, roster) {
+  const members = roster && typeof roster.members === 'object' && roster.members ? roster.members : null;
+  if (!members) return bill;
+  const origin = billChamber(bill), other = origin === 'house' ? 'senate' : 'house';
+  const people = {};
+  for (const [key, side] of ROLE_GROUPS) {
+    const chamber = side === 'origin' ? origin : other;
+    people[key] = bill[key] == null ? null : toArray(bill[key]).map(name => {
+      const m = members[`${chamber}|${name}`];
+      return {name, member: m && typeof m === 'object' ? m : null};
+    });
+  }
+  const out = {...bill, people};
+  const primary = people.authors?.[0]?.member;
+  if (primary && !(bill.author_profile && Object.keys(bill.author_profile).length) && primary.years_served > 0) {
+    out.author_profile = {seniority_years: primary.years_served, source: primary.links?.lrl || primary.links?.tlo};
+  }
+  return out;
+}
+
+function partyCounts(list) {
+  const counts = {}; let unknown = 0;
+  for (const p of list || []) { const party = p.member?.party; if (party) counts[party] = (counts[party] || 0) + 1; else unknown++; }
+  return {counts, unknown};
+}
+
+// Tint by authorship party: blue/red for the primary author, purple when authors and coauthors span both parties.
+export function authorshipParty(bill) {
+  const people = bill.people;
+  if (!people) return {tint:'unknown', label:'Author party unknown', detail:'Member roster not loaded.', authors:null, coauthors:null};
+  const authors = partyCounts(people.authors), coauthors = partyCounts(people.coauthors);
+  const known = new Set([...Object.keys(authors.counts), ...Object.keys(coauthors.counts)]);
+  const unknown = authors.unknown + coauthors.unknown;
+  const primary = people.authors?.[0]?.member?.party || null;
+  let tint = 'unknown', label = 'Author party unknown';
+  if (known.has('Democratic') && known.has('Republican')) { tint = 'bipartisan'; label = unknown ? 'Bipartisan authors · party data incomplete' : 'Bipartisan authors'; }
+  else if (primary === 'Democratic') { tint = 'dem'; label = 'Democratic author'; }
+  else if (primary === 'Republican') { tint = 'rep'; label = 'Republican author'; }
+  else if (primary) { label = `${primary} author`; }
+  const describe = (name, c) => {
+    const parts = Object.entries(c.counts).map(([party, n]) => `${n} ${party}`);
+    if (c.unknown) parts.push(`${c.unknown} unknown`);
+    return parts.length ? `${name}: ${parts.join(', ')}` : '';
+  };
+  const detail = [describe('Authors', authors), describe('Coauthors', coauthors)].filter(Boolean).join(' · ') || 'No authors listed.';
+  return {tint, label, detail, authors, coauthors};
+}
+
+export function memberSummary(member) {
+  if (!member) return 'Not matched to the 90th Legislature roster';
+  const bits = [];
+  if (member.party) bits.push(member.party);
+  if (member.district) bits.push(`${member.chamber === 'house' ? 'HD' : 'SD'} ${member.district}`);
+  else if (member.new_to_chamber && member.service?.length) bits.push(`new to the ${member.chamber === 'house' ? 'House' : 'Senate'}`);
+  if (member.years_served > 0) bits.push(`${member.years_served} ${member.years_served === 1 ? 'year' : 'years'} served`);
+  if (member.first_year) bits.push(`since ${member.first_year}`);
+  if (!member.service?.length) bits.push('member-elect; no prior service on record');
+  return bits.join(' · ');
+}
+
 // Evidence-based procedural outlook, not a probability of enactment.
 export function assessHearing(bill) {
   const a = toArray(bill.actions).filter(a => a != null).map(a => typeof a === 'string' ? a : a.description || '').join(' ').toLowerCase();

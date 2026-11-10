@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path('/var/www/html/texas-bill-atlas')
 STATE = Path('/var/lib/texas-bill-atlas')
 REPOSITORY = STATE / 'repository.git'
-FILES = ('index.html', 'src/app.js', 'src/taxonomy.js', 'src/styles.css', 'src/review.js', 'data/bills.json')
+FILES = ('index.html', 'src/app.js', 'src/taxonomy.js', 'src/styles.css', 'src/review.js', 'data/members.json', 'data/bills.json')
 KEEP_RELEASES = 10
 
 

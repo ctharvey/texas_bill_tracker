@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-10
+- Member roster: `sync_members.py` joins the TLO 90th roster to LRL party, district and tenure; bill cards are
+  tinted blue/red by primary author party, purple for bipartisan authorship, neutral when unknown; the drawer
+  shows each member's party, district and tenure; daily `texas-bill-members.timer` refreshes `live/members.json`.
 
 - Review worker: failed downloads/reads go to a `failed` queue instead of being marked seen; five consecutive
   new download failures stop the run; oversized or already-billed requests flag only that bill; budget and

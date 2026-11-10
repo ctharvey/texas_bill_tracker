@@ -94,6 +94,21 @@ On the VPS the overlay is `/var/www/html/texas-bill-atlas/live/luna/tags.json`, 
 through a `live -> ../../live` symlink the deployer adds to every release. The tracker labels Luna-tagged bills
 "Luna · full text" and shows the summary, review date and locations in the drawer.
 
+### Member roster and party tint
+
+`scripts/sync_members.py` builds `texas-bill-members-v1`: every 90th Legislature member from Texas Legislature
+Online (member code and the exact display name bill histories use), joined to the Legislative Reference
+Library for party, district and service history through the 89th. Authors resolve only by exact
+(chamber, display name); the LRL join needs the same surname and an agreeing given name (nickname or prefix),
+and ambiguity leaves a member unmatched. Members-elect without an LRL record keep party and district unknown.
+
+Cards are tinted by authorship: blue for a Democratic primary author, red for Republican, purple when the
+authors and coauthors include both parties, neutral when the primary author's party is unknown. Every tint
+has a text label. The drawer lists each author, coauthor, sponsor and cosponsor with party, district and
+tenure, linked to LRL or TLO. Roster tenure feeds author influence when no curated profile exists.
+`data/members.json` ships with each release; `texas-bill-members.timer` refreshes `live/members.json` daily
+on the VPS (about 180 page requests at one per second), and the tracker prefers the live copy.
+
 ### Live bill snapshot
 
 `scripts/texas-bill-data.service` and `.timer` run `sync_ftp.py` hourly at :17 on the VPS as `texas-bill-atlas`,

@@ -1,0 +1,4518 @@
+{
+ "format": "texas-bill-members-v1",
+ "session": "90R",
+ "generated_at": "2026-11-10T14:41:21.281399Z",
+ "sources": [
+  "https://capitol.texas.gov/Members/Members.aspx",
+  "https://lrl.texas.gov/legeLeaders/members/lrlhome.cfm"
+ ],
+ "counts": {
+  "house": 150,
+  "senate": 29
+ },
+ "without_service_record": [
+  "Bailey",
+  "Bord",
+  "Bowen",
+  "Breaux",
+  "Butler",
+  "Callas",
+  "Carranza",
+  "Carraway",
+  "Castellano",
+  "Childs",
+  "Dudding",
+  "Dunn",
+  "Evbagharu",
+  "Ezeonu",
+  "Garibay",
+  "Geesaman",
+  "Guerrero Saenz",
+  "Hardaway",
+  "Herbert",
+  "Ibanez",
+  "Jeffreys",
+  "Jimenez",
+  "Kellum",
+  "Lomick",
+  "Lopez-Resendez",
+  "McGee",
+  "McLaughlin",
+  "Mizani",
+  "O'Brien Duzan",
+  "Ochoa",
+  "Plaisance",
+  "Rabroker",
+  "Reyna",
+  "Salinas",
+  "Sethi",
+  "Smith",
+  "Spencer",
+  "Thigpen",
+  "Turner",
+  "Williams",
+  "Wooten"
+ ],
+ "members": {
+  "house|Alders": {
+   "chamber": "house",
+   "code": "A4395",
+   "display_name": "Alders",
+   "full_name": "Daniel Alders",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "6",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "6",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5927",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4395",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5927"
+   }
+  },
+  "house|Anchía": {
+   "chamber": "house",
+   "code": "A2150",
+   "display_name": "Anchía",
+   "full_name": "Rafael Anchía",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "103",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "103",
+     "years": "2005 - 2027",
+     "legislatures": "79th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2005,
+   "years_served": 22,
+   "new_to_chamber": false,
+   "lrl_id": "5608",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2150",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5608"
+   }
+  },
+  "house|Bailey": {
+   "chamber": "house",
+   "code": "A4805",
+   "display_name": "Bailey",
+   "full_name": "Brad Bailey",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4805"
+   }
+  },
+  "house|Barry": {
+   "chamber": "house",
+   "code": "A4405",
+   "display_name": "Barry",
+   "full_name": "Jeff Barry",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "29",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "29",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5933",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4405",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5933"
+   }
+  },
+  "house|Bell, Keith": {
+   "chamber": "house",
+   "code": "A3695",
+   "display_name": "Bell, Keith",
+   "full_name": "Keith Bell",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "4",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "4",
+     "years": "2019 - 2027",
+     "legislatures": "86th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2019,
+   "years_served": 8,
+   "new_to_chamber": false,
+   "lrl_id": "5823",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3695",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5823"
+   }
+  },
+  "house|Bernal": {
+   "chamber": "house",
+   "code": "A3110",
+   "display_name": "Bernal",
+   "full_name": "Diego Bernal",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "123",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "123",
+     "years": "2015 - 2027",
+     "legislatures": "84th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2015,
+   "years_served": 12,
+   "new_to_chamber": false,
+   "lrl_id": "5790",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3110",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5790"
+   }
+  },
+  "house|Bhojani": {
+   "chamber": "house",
+   "code": "A4115",
+   "display_name": "Bhojani",
+   "full_name": "Salman Bhojani",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "92",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "92",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5894",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4115",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5894"
+   }
+  },
+  "house|Bonnen": {
+   "chamber": "house",
+   "code": "A2875",
+   "display_name": "Bonnen",
+   "full_name": "Greg Bonnen",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "24",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "24",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 14,
+   "new_to_chamber": false,
+   "lrl_id": "5731",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2875",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5731"
+   }
+  },
+  "house|Bord": {
+   "chamber": "house",
+   "code": "A4815",
+   "display_name": "Bord",
+   "full_name": "Stefanie Bord",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4815"
+   }
+  },
+  "house|Bowen": {
+   "chamber": "house",
+   "code": "A5100",
+   "display_name": "Bowen",
+   "full_name": "Scott Bowen",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A5100"
+   }
+  },
+  "house|Bowers": {
+   "chamber": "house",
+   "code": "A3565",
+   "display_name": "Bowers",
+   "full_name": "Rhetta Bowers",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "113",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "113",
+     "years": "2019 - 2027",
+     "legislatures": "86th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2019,
+   "years_served": 8,
+   "new_to_chamber": false,
+   "lrl_id": "5841",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3565",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5841"
+   }
+  },
+  "house|Breaux": {
+   "chamber": "house",
+   "code": "A4820",
+   "display_name": "Breaux",
+   "full_name": "Darlene Breaux",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4820"
+   }
+  },
+  "house|Bryant": {
+   "chamber": "house",
+   "code": "A4120",
+   "display_name": "Bryant",
+   "full_name": "John Bryant",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "114",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "114",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "1974 - 1983",
+     "legislatures": "63rd - 67th",
+     "party": "D"
+    }
+   ],
+   "first_year": 1974,
+   "years_served": 13,
+   "new_to_chamber": false,
+   "lrl_id": "499",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4120",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=499"
+   }
+  },
+  "house|Buckley": {
+   "chamber": "house",
+   "code": "A3585",
+   "display_name": "Buckley",
+   "full_name": "Brad Buckley",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "54",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "54",
+     "years": "2019 - 2027",
+     "legislatures": "86th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2019,
+   "years_served": 8,
+   "new_to_chamber": false,
+   "lrl_id": "5832",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3585",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5832"
+   }
+  },
+  "house|Bucy": {
+   "chamber": "house",
+   "code": "A3595",
+   "display_name": "Bucy",
+   "full_name": "John Bucy III",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "136",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "136",
+     "years": "2019 - 2027",
+     "legislatures": "86th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2019,
+   "years_served": 8,
+   "new_to_chamber": false,
+   "lrl_id": "5851",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3595",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5851"
+   }
+  },
+  "house|Burrows": {
+   "chamber": "house",
+   "code": "A3055",
+   "display_name": "Burrows",
+   "full_name": "Dustin Burrows",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "83",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "83",
+     "years": "2015 - 2027",
+     "legislatures": "84th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2015,
+   "years_served": 12,
+   "new_to_chamber": false,
+   "lrl_id": "5778",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3055",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5778"
+   }
+  },
+  "house|Butler": {
+   "chamber": "house",
+   "code": "A4825",
+   "display_name": "Butler",
+   "full_name": "Tom Butler",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4825"
+   }
+  },
+  "house|Callas": {
+   "chamber": "house",
+   "code": "A4830",
+   "display_name": "Callas",
+   "full_name": "Ray Callas",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4830"
+   }
+  },
+  "house|Campos": {
+   "chamber": "house",
+   "code": "A3950",
+   "display_name": "Campos",
+   "full_name": "Liz Campos",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "119",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "119",
+     "years": "2021 - 2027",
+     "legislatures": "87th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2021,
+   "years_served": 6,
+   "new_to_chamber": false,
+   "lrl_id": "5866",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3950",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5866"
+   }
+  },
+  "house|Canales": {
+   "chamber": "house",
+   "code": "A2340",
+   "display_name": "Canales",
+   "full_name": "Terry Canales",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "40",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "40",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 14,
+   "new_to_chamber": false,
+   "lrl_id": "5736",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2340",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5736"
+   }
+  },
+  "house|Carranza": {
+   "chamber": "house",
+   "code": "A4835",
+   "display_name": "Carranza",
+   "full_name": "Kristian Carranza",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4835"
+   }
+  },
+  "house|Carraway": {
+   "chamber": "house",
+   "code": "A4840",
+   "display_name": "Carraway",
+   "full_name": "Angie Carraway",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4840"
+   }
+  },
+  "house|Castellano": {
+   "chamber": "house",
+   "code": "A4845",
+   "display_name": "Castellano",
+   "full_name": "Cecilia Castellano",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4845"
+   }
+  },
+  "house|Childs": {
+   "chamber": "house",
+   "code": "A4855",
+   "display_name": "Childs",
+   "full_name": "Staci Childs",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4855"
+   }
+  },
+  "house|Cole": {
+   "chamber": "house",
+   "code": "A3625",
+   "display_name": "Cole",
+   "full_name": "Sheryl Cole",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "46",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "46",
+     "years": "2019 - 2027",
+     "legislatures": "86th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2019,
+   "years_served": 8,
+   "new_to_chamber": false,
+   "lrl_id": "5829",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3625",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5829"
+   }
+  },
+  "house|Collier": {
+   "chamber": "house",
+   "code": "A2360",
+   "display_name": "Collier",
+   "full_name": "Nicole Collier",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "95",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "95",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 14,
+   "new_to_chamber": false,
+   "lrl_id": "5748",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2360",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5748"
+   }
+  },
+  "house|Cortez": {
+   "chamber": "house",
+   "code": "A2365",
+   "display_name": "Cortez",
+   "full_name": "Philip Cortez",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "117",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "117",
+     "years": "2017 - 2027",
+     "legislatures": "85th - 89th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2013 - 2015",
+     "legislatures": "83rd",
+     "party": "D"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 12,
+   "new_to_chamber": false,
+   "lrl_id": "5755",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2365",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5755"
+   }
+  },
+  "house|Craddick": {
+   "chamber": "house",
+   "code": "A2610",
+   "display_name": "Craddick",
+   "full_name": "Tom Craddick",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "82",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "82",
+     "years": "1969 - 2027",
+     "legislatures": "61st - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 1969,
+   "years_served": 58,
+   "new_to_chamber": false,
+   "lrl_id": "109",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2610",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=109"
+   }
+  },
+  "house|Curry": {
+   "chamber": "house",
+   "code": "A4415",
+   "display_name": "Curry",
+   "full_name": "Pat Curry",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "56",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "56",
+     "years": "2024 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2024,
+   "years_served": 3,
+   "new_to_chamber": false,
+   "lrl_id": "5939",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4415",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5939"
+   }
+  },
+  "house|Darby": {
+   "chamber": "house",
+   "code": "A2645",
+   "display_name": "Darby",
+   "full_name": "Drew Darby",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "72",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "72",
+     "years": "2007 - 2027",
+     "legislatures": "80th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2007,
+   "years_served": 20,
+   "new_to_chamber": false,
+   "lrl_id": "5642",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2645",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5642"
+   }
+  },
+  "house|Davis, Aicha": {
+   "chamber": "house",
+   "code": "A4465",
+   "display_name": "Davis, Aicha",
+   "full_name": "Aicha Davis",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "109",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "109",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5921",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4465",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5921"
+   }
+  },
+  "house|Davis, Yvonne": {
+   "chamber": "house",
+   "code": "A2625",
+   "display_name": "Davis, Yvonne",
+   "full_name": "Yvonne Davis",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "111",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "111",
+     "years": "1993 - 2027",
+     "legislatures": "73rd - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 1993,
+   "years_served": 34,
+   "new_to_chamber": false,
+   "lrl_id": "116",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2625",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=116"
+   }
+  },
+  "house|DeAyala": {
+   "chamber": "house",
+   "code": "A4135",
+   "display_name": "DeAyala",
+   "full_name": "Mano DeAyala",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "133",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "133",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5901",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4135",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5901"
+   }
+  },
+  "house|Dean": {
+   "chamber": "house",
+   "code": "A3515",
+   "display_name": "Dean",
+   "full_name": "Jay Dean",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "7",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "7",
+     "years": "2017 - 2027",
+     "legislatures": "85th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2017,
+   "years_served": 10,
+   "new_to_chamber": false,
+   "lrl_id": "5818",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3515",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5818"
+   }
+  },
+  "house|Dorazio": {
+   "chamber": "house",
+   "code": "A4145",
+   "display_name": "Dorazio",
+   "full_name": "Mark Dorazio",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "122",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "122",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5898",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4145",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5898"
+   }
+  },
+  "house|Dudding": {
+   "chamber": "house",
+   "code": "A5090",
+   "display_name": "Dudding",
+   "full_name": "Janet Dudding",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A5090"
+   }
+  },
+  "house|Dunn": {
+   "chamber": "house",
+   "code": "A4860",
+   "display_name": "Dunn",
+   "full_name": "Zack Dunn",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4860"
+   }
+  },
+  "house|Dutton": {
+   "chamber": "house",
+   "code": "A2650",
+   "display_name": "Dutton",
+   "full_name": "Harold V. Dutton, Jr.",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "142",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "142",
+     "years": "1985 - 2027",
+     "legislatures": "69th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 1985,
+   "years_served": 42,
+   "new_to_chamber": false,
+   "lrl_id": "123",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2650",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=123"
+   }
+  },
+  "house|Evbagharu": {
+   "chamber": "house",
+   "code": "A4865",
+   "display_name": "Evbagharu",
+   "full_name": "Odus Evbagharu",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4865"
+   }
+  },
+  "house|Ezeonu": {
+   "chamber": "house",
+   "code": "A4870",
+   "display_name": "Ezeonu",
+   "full_name": "Junior Ezeonu",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4870"
+   }
+  },
+  "house|Fairly": {
+   "chamber": "house",
+   "code": "A4480",
+   "display_name": "Fairly",
+   "full_name": "Caroline Fairly",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "87",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "87",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5916",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4480",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5916"
+   }
+  },
+  "house|Flores": {
+   "chamber": "house",
+   "code": "A4150",
+   "display_name": "Flores",
+   "full_name": "Lulu Flores",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "51",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "51",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5884",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4150",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5884"
+   }
+  },
+  "house|Frank": {
+   "chamber": "house",
+   "code": "A2385",
+   "display_name": "Frank",
+   "full_name": "James B. Frank",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "69",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "69",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 14,
+   "new_to_chamber": false,
+   "lrl_id": "5739",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2385",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5739"
+   }
+  },
+  "house|Garcia Hernandez, Cassandra": {
+   "chamber": "house",
+   "code": "A4495",
+   "display_name": "Garcia Hernandez, Cassandra",
+   "full_name": "Cassandra Garcia Hernandez",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "115",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "115",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5922",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4495",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5922"
+   }
+  },
+  "house|Garcia, Josey": {
+   "chamber": "house",
+   "code": "A4170",
+   "display_name": "Garcia, Josey",
+   "full_name": "Josey Garcia",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "124",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "124",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5899",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4170",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5899"
+   }
+  },
+  "house|Garcia, Linda": {
+   "chamber": "house",
+   "code": "A4485",
+   "display_name": "Garcia, Linda",
+   "full_name": "Linda Garcia",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "107",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "107",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5919",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4485",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5919"
+   }
+  },
+  "house|Garibay": {
+   "chamber": "house",
+   "code": "A4875",
+   "display_name": "Garibay",
+   "full_name": "Montserrat Garibay",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4875"
+   }
+  },
+  "house|Geesaman": {
+   "chamber": "house",
+   "code": "A4880",
+   "display_name": "Geesaman",
+   "full_name": "Dennis Geesaman",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4880"
+   }
+  },
+  "house|Gerdes": {
+   "chamber": "house",
+   "code": "A4195",
+   "display_name": "Gerdes",
+   "full_name": "Stan Gerdes",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "17",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "17",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5897",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4195",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5897"
+   }
+  },
+  "house|Geren": {
+   "chamber": "house",
+   "code": "A2945",
+   "display_name": "Geren",
+   "full_name": "Charlie Geren",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "99",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "99",
+     "years": "2001 - 2027",
+     "legislatures": "77th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2001,
+   "years_served": 26,
+   "new_to_chamber": false,
+   "lrl_id": "176",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2945",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=176"
+   }
+  },
+  "house|Gervin-Hawkins": {
+   "chamber": "house",
+   "code": "A3445",
+   "display_name": "Gervin-Hawkins",
+   "full_name": "Barbara Gervin-Hawkins",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "120",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "120",
+     "years": "2017 - 2027",
+     "legislatures": "85th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2017,
+   "years_served": 10,
+   "new_to_chamber": false,
+   "lrl_id": "5806",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3445",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5806"
+   }
+  },
+  "house|González, Jessica": {
+   "chamber": "house",
+   "code": "A3335",
+   "display_name": "González, Jessica",
+   "full_name": "Jessica González",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "104",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "104",
+     "years": "2019 - 2027",
+     "legislatures": "86th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2019,
+   "years_served": 8,
+   "new_to_chamber": false,
+   "lrl_id": "5837",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3335",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5837"
+   }
+  },
+  "house|González, Mary": {
+   "chamber": "house",
+   "code": "A2410",
+   "display_name": "González, Mary",
+   "full_name": "Mary E. González",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "75",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "75",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 14,
+   "new_to_chamber": false,
+   "lrl_id": "5742",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2410",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5742"
+   }
+  },
+  "house|Guerrero Saenz": {
+   "chamber": "house",
+   "code": "A4885",
+   "display_name": "Guerrero Saenz",
+   "full_name": "Stephanie Guerrero Saenz",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4885"
+   }
+  },
+  "house|Guillen": {
+   "chamber": "house",
+   "code": "A3045",
+   "display_name": "Guillen",
+   "full_name": "Ryan Guillen",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "31",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "31",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "R"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2003 - 2023",
+     "legislatures": "78th - 87th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2003,
+   "years_served": 24,
+   "new_to_chamber": false,
+   "lrl_id": "5552",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3045",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5552"
+   }
+  },
+  "house|Gámez": {
+   "chamber": "house",
+   "code": "A4095",
+   "display_name": "Gámez",
+   "full_name": "Erin Gámez",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "38",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "38",
+     "years": "2022 - 2027",
+     "legislatures": "87th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2022,
+   "years_served": 5,
+   "new_to_chamber": false,
+   "lrl_id": "5876",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4095",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5876"
+   }
+  },
+  "house|Hardaway": {
+   "chamber": "house",
+   "code": "A4890",
+   "display_name": "Hardaway",
+   "full_name": "Jay Hardaway",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4890"
+   }
+  },
+  "house|Harris": {
+   "chamber": "house",
+   "code": "A3580",
+   "display_name": "Harris",
+   "full_name": "Cody Harris",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "8",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "8",
+     "years": "2019 - 2027",
+     "legislatures": "86th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2019,
+   "years_served": 8,
+   "new_to_chamber": false,
+   "lrl_id": "5825",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3580",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5825"
+   }
+  },
+  "house|Harrison": {
+   "chamber": "house",
+   "code": "A4085",
+   "display_name": "Harrison",
+   "full_name": "Brian Harrison",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "10",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "10",
+     "years": "2021 - 2027",
+     "legislatures": "87th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2021,
+   "years_served": 6,
+   "new_to_chamber": false,
+   "lrl_id": "5875",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4085",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5875"
+   }
+  },
+  "house|Hayes": {
+   "chamber": "house",
+   "code": "A4165",
+   "display_name": "Hayes",
+   "full_name": "Richard Hayes",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "57",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "57",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5886",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4165",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5886"
+   }
+  },
+  "house|Hefner": {
+   "chamber": "house",
+   "code": "A3505",
+   "display_name": "Hefner",
+   "full_name": "Cole Hefner",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "5",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "5",
+     "years": "2017 - 2027",
+     "legislatures": "85th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2017,
+   "years_served": 10,
+   "new_to_chamber": false,
+   "lrl_id": "5813",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3505",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5813"
+   }
+  },
+  "house|Herbert": {
+   "chamber": "house",
+   "code": "A5105",
+   "display_name": "Herbert",
+   "full_name": "Zach Herbert",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A5105"
+   }
+  },
+  "house|Hernandez": {
+   "chamber": "house",
+   "code": "A3155",
+   "display_name": "Hernandez",
+   "full_name": "Ana Hernandez",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "143",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "143",
+     "years": "2005 - 2027",
+     "legislatures": "79th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2005,
+   "years_served": 22,
+   "new_to_chamber": false,
+   "lrl_id": "5616",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3155",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5616"
+   }
+  },
+  "house|Holt": {
+   "chamber": "house",
+   "code": "A4535",
+   "display_name": "Holt",
+   "full_name": "Janis Holt",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "18",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "18",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5931",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4535",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5931"
+   }
+  },
+  "house|Hopper": {
+   "chamber": "house",
+   "code": "A4555",
+   "display_name": "Hopper",
+   "full_name": "Andy Hopper",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "64",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "64",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5912",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4555",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5912"
+   }
+  },
+  "house|Howard": {
+   "chamber": "house",
+   "code": "A3310",
+   "display_name": "Howard",
+   "full_name": "Donna Howard",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "48",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "48",
+     "years": "2006 - 2027",
+     "legislatures": "79th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2006,
+   "years_served": 21,
+   "new_to_chamber": false,
+   "lrl_id": "5618",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3310",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5618"
+   }
+  },
+  "house|Hunter": {
+   "chamber": "house",
+   "code": "A3365",
+   "display_name": "Hunter",
+   "full_name": "Todd Hunter",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "32",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "32",
+     "years": "2009 - 2027",
+     "legislatures": "81st - 89th",
+     "party": "R"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "1989 - 1997",
+     "legislatures": "71st - 74th",
+     "party": "D"
+    }
+   ],
+   "first_year": 1989,
+   "years_served": 26,
+   "new_to_chamber": false,
+   "lrl_id": "158",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3365",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=158"
+   }
+  },
+  "house|Ibanez": {
+   "chamber": "house",
+   "code": "A4895",
+   "display_name": "Ibanez",
+   "full_name": "Sandy Ibanez",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4895"
+   }
+  },
+  "house|Isaac": {
+   "chamber": "house",
+   "code": "A4265",
+   "display_name": "Isaac",
+   "full_name": "Carrie Isaac",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "73",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "73",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5891",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4265",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5891"
+   }
+  },
+  "house|Jeffreys": {
+   "chamber": "house",
+   "code": "A4905",
+   "display_name": "Jeffreys",
+   "full_name": "Holly Jeffreys",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4905"
+   }
+  },
+  "house|Jimenez": {
+   "chamber": "house",
+   "code": "A4910",
+   "display_name": "Jimenez",
+   "full_name": "Chris Jimenez",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4910"
+   }
+  },
+  "house|Johnson": {
+   "chamber": "house",
+   "code": "A3985",
+   "display_name": "Johnson",
+   "full_name": "Ann Johnson",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "134",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "134",
+     "years": "2021 - 2027",
+     "legislatures": "87th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2021,
+   "years_served": 6,
+   "new_to_chamber": false,
+   "lrl_id": "5867",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3985",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5867"
+   }
+  },
+  "house|Jones, Jolanda": {
+   "chamber": "house",
+   "code": "A4105",
+   "display_name": "Jones, Jolanda",
+   "full_name": "Jolanda Jones",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "147",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "147",
+     "years": "2022 - 2027",
+     "legislatures": "87th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2022,
+   "years_served": 5,
+   "new_to_chamber": false,
+   "lrl_id": "5877",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4105",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5877"
+   }
+  },
+  "house|Jones, Venton": {
+   "chamber": "house",
+   "code": "A4275",
+   "display_name": "Jones, Venton",
+   "full_name": "Venton Jones",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "100",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "100",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5896",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4275",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5896"
+   }
+  },
+  "house|Kellum": {
+   "chamber": "house",
+   "code": "A4915",
+   "display_name": "Kellum",
+   "full_name": "A'Yonna Kellum",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4915"
+   }
+  },
+  "house|Kerwin": {
+   "chamber": "house",
+   "code": "A4575",
+   "display_name": "Kerwin",
+   "full_name": "Helen Kerwin",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "58",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "58",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5940",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4575",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5940"
+   }
+  },
+  "house|King": {
+   "chamber": "house",
+   "code": "A2455",
+   "display_name": "King",
+   "full_name": "Ken King",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "88",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "88",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 14,
+   "new_to_chamber": false,
+   "lrl_id": "5744",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2455",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5744"
+   }
+  },
+  "house|Lalani": {
+   "chamber": "house",
+   "code": "A4285",
+   "display_name": "Lalani",
+   "full_name": "Suleman Lalani",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "76",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "76",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5892",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4285",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5892"
+   }
+  },
+  "house|Landgraf": {
+   "chamber": "house",
+   "code": "A3040",
+   "display_name": "Landgraf",
+   "full_name": "Brooks Landgraf",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "81",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "81",
+     "years": "2015 - 2027",
+     "legislatures": "84th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2015,
+   "years_served": 12,
+   "new_to_chamber": false,
+   "lrl_id": "5777",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3040",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5777"
+   }
+  },
+  "house|Leach": {
+   "chamber": "house",
+   "code": "A2475",
+   "display_name": "Leach",
+   "full_name": "Jeff Leach",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "67",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "67",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 14,
+   "new_to_chamber": false,
+   "lrl_id": "5722",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2475",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5722"
+   }
+  },
+  "house|Leo Wilson": {
+   "chamber": "house",
+   "code": "A4290",
+   "display_name": "Leo Wilson",
+   "full_name": "Terri Leo Wilson",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "23",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "23",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5903",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4290",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5903"
+   }
+  },
+  "house|Little": {
+   "chamber": "house",
+   "code": "A4615",
+   "display_name": "Little",
+   "full_name": "Mitch Little",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "65",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "65",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5913",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4615",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5913"
+   }
+  },
+  "house|Lomick": {
+   "chamber": "house",
+   "code": "A4920",
+   "display_name": "Lomick",
+   "full_name": "Ericka Lomick",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4920"
+   }
+  },
+  "house|Longoria": {
+   "chamber": "house",
+   "code": "A2485",
+   "display_name": "Longoria",
+   "full_name": "Oscar Longoria",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "35",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "35",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 14,
+   "new_to_chamber": false,
+   "lrl_id": "5735",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2485",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5735"
+   }
+  },
+  "house|Lopez-Resendez": {
+   "chamber": "house",
+   "code": "A4925",
+   "display_name": "Lopez-Resendez",
+   "full_name": "Samantha Lopez-Resendez",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4925"
+   }
+  },
+  "house|Louderback": {
+   "chamber": "house",
+   "code": "A4620",
+   "display_name": "Louderback",
+   "full_name": "AJ Louderback",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "30",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "30",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5934",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4620",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5934"
+   }
+  },
+  "house|Lowe": {
+   "chamber": "house",
+   "code": "A4643",
+   "display_name": "Lowe",
+   "full_name": "David Lowe",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "91",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "91",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5917",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4643",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5917"
+   }
+  },
+  "house|Lozano": {
+   "chamber": "house",
+   "code": "A2065",
+   "display_name": "Lozano",
+   "full_name": "J. M. Lozano",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "43",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "43",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "R"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2011 - 2013",
+     "legislatures": "82nd",
+     "party": "D"
+    }
+   ],
+   "first_year": 2011,
+   "years_served": 16,
+   "new_to_chamber": false,
+   "lrl_id": "5692",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2065",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5692"
+   }
+  },
+  "house|Luther": {
+   "chamber": "house",
+   "code": "A4645",
+   "display_name": "Luther",
+   "full_name": "Shelley Luther",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "62",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "62",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5911",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4645",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5911"
+   }
+  },
+  "house|Manuel": {
+   "chamber": "house",
+   "code": "A4255",
+   "display_name": "Manuel",
+   "full_name": "Christian Manuel",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "22",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "22",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5882",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4255",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5882"
+   }
+  },
+  "house|Martinez": {
+   "chamber": "house",
+   "code": "A3780",
+   "display_name": "Martinez",
+   "full_name": "Armando Martinez",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "39",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "39",
+     "years": "2005 - 2027",
+     "legislatures": "79th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2005,
+   "years_served": 22,
+   "new_to_chamber": false,
+   "lrl_id": "5601",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3780",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5601"
+   }
+  },
+  "house|Martinez Fischer": {
+   "chamber": "house",
+   "code": "A2835",
+   "display_name": "Martinez Fischer",
+   "full_name": "Trey Martinez Fischer",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "116",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "116",
+     "years": "2019 - 2027",
+     "legislatures": "86th - 89th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2001 - 2017",
+     "legislatures": "77th - 84th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2001,
+   "years_served": 24,
+   "new_to_chamber": false,
+   "lrl_id": "205",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2835",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=205"
+   }
+  },
+  "house|McGee": {
+   "chamber": "house",
+   "code": "A4940",
+   "display_name": "McGee",
+   "full_name": "Sara McGee",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4940"
+   }
+  },
+  "house|McLaughlin": {
+   "chamber": "house",
+   "code": "A4935",
+   "display_name": "McLaughlin",
+   "full_name": "Beth McLaughlin",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4935"
+   }
+  },
+  "house|Metcalf": {
+   "chamber": "house",
+   "code": "A2900",
+   "display_name": "Metcalf",
+   "full_name": "Will Metcalf",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "16",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "16",
+     "years": "2014 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2014,
+   "years_served": 13,
+   "new_to_chamber": false,
+   "lrl_id": "5789",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2900",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5789"
+   }
+  },
+  "house|Meyer": {
+   "chamber": "house",
+   "code": "A3075",
+   "display_name": "Meyer",
+   "full_name": "Morgan Meyer",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "108",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "108",
+     "years": "2015 - 2027",
+     "legislatures": "84th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2015,
+   "years_served": 12,
+   "new_to_chamber": false,
+   "lrl_id": "5782",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3075",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5782"
+   }
+  },
+  "house|Meza": {
+   "chamber": "house",
+   "code": "A3455",
+   "display_name": "Meza",
+   "full_name": "Thresa \"Terry\" Meza",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "105",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "105",
+     "years": "2019 - 2027",
+     "legislatures": "86th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2019,
+   "years_served": 8,
+   "new_to_chamber": false,
+   "lrl_id": "5838",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3455",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5838"
+   }
+  },
+  "house|Mizani": {
+   "chamber": "house",
+   "code": "A4945",
+   "display_name": "Mizani",
+   "full_name": "Armin Mizani",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4945"
+   }
+  },
+  "house|Money": {
+   "chamber": "house",
+   "code": "A4670",
+   "display_name": "Money",
+   "full_name": "Brent Money",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "2",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "2",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5926",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4670",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5926"
+   }
+  },
+  "house|Moody": {
+   "chamber": "house",
+   "code": "A3850",
+   "display_name": "Moody",
+   "full_name": "Joe Moody",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "78",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "78",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2009 - 2011",
+     "legislatures": "81st",
+     "party": "D"
+    }
+   ],
+   "first_year": 2009,
+   "years_served": 16,
+   "new_to_chamber": false,
+   "lrl_id": "5660",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3850",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5660"
+   }
+  },
+  "house|Morales Shaw": {
+   "chamber": "house",
+   "code": "A4035",
+   "display_name": "Morales Shaw",
+   "full_name": "Penny Morales Shaw",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "148",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "148",
+     "years": "2021 - 2027",
+     "legislatures": "87th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2021,
+   "years_served": 6,
+   "new_to_chamber": false,
+   "lrl_id": "5869",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4035",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5869"
+   }
+  },
+  "house|Morales, Christina": {
+   "chamber": "house",
+   "code": "A3910",
+   "display_name": "Morales, Christina",
+   "full_name": "Christina Morales",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "145",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "145",
+     "years": "2019 - 2027",
+     "legislatures": "86th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2019,
+   "years_served": 8,
+   "new_to_chamber": false,
+   "lrl_id": "5853",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3910",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5853"
+   }
+  },
+  "house|Morales, Eddie": {
+   "chamber": "house",
+   "code": "A4000",
+   "display_name": "Morales, Eddie",
+   "full_name": "Eddie Morales",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "74",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "74",
+     "years": "2021 - 2027",
+     "legislatures": "87th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2021,
+   "years_served": 6,
+   "new_to_chamber": false,
+   "lrl_id": "5863",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4000",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5863"
+   }
+  },
+  "house|Morgan": {
+   "chamber": "house",
+   "code": "A4675",
+   "display_name": "Morgan",
+   "full_name": "Matt Morgan",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "26",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "26",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5932",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4675",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5932"
+   }
+  },
+  "house|Muñoz": {
+   "chamber": "house",
+   "code": "A2060",
+   "display_name": "Muñoz",
+   "full_name": "Sergio Muñoz, Jr.",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "36",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "36",
+     "years": "2011 - 2027",
+     "legislatures": "82nd - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2011,
+   "years_served": 16,
+   "new_to_chamber": false,
+   "lrl_id": "5691",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2060",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5691"
+   }
+  },
+  "house|O'Brien Duzan": {
+   "chamber": "house",
+   "code": "A4955",
+   "display_name": "O'Brien Duzan",
+   "full_name": "Katie O'Brien Duzan",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4955"
+   }
+  },
+  "house|Ochoa": {
+   "chamber": "house",
+   "code": "A4965",
+   "display_name": "Ochoa",
+   "full_name": "Oziel Ochoa, Jr.",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4965"
+   }
+  },
+  "house|Olcott": {
+   "chamber": "house",
+   "code": "A4705",
+   "display_name": "Olcott",
+   "full_name": "Mike Olcott",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "60",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "60",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5908",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4705",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5908"
+   }
+  },
+  "house|Oliverson": {
+   "chamber": "house",
+   "code": "A3535",
+   "display_name": "Oliverson",
+   "full_name": "Tom Oliverson",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "130",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "130",
+     "years": "2017 - 2027",
+     "legislatures": "85th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2017,
+   "years_served": 10,
+   "new_to_chamber": false,
+   "lrl_id": "5812",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3535",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5812"
+   }
+  },
+  "house|Ordaz": {
+   "chamber": "house",
+   "code": "A4015",
+   "display_name": "Ordaz",
+   "full_name": "Claudia Ordaz",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "79",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "79",
+     "years": "2021 - 2027",
+     "legislatures": "87th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2021,
+   "years_served": 6,
+   "new_to_chamber": false,
+   "lrl_id": "5861",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4015",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5861"
+   }
+  },
+  "house|Orr": {
+   "chamber": "house",
+   "code": "A4340",
+   "display_name": "Orr",
+   "full_name": "Angelia Orr",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "13",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "13",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5880",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4340",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5880"
+   }
+  },
+  "house|Patterson": {
+   "chamber": "house",
+   "code": "A3655",
+   "display_name": "Patterson",
+   "full_name": "Jared Patterson",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "106",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "106",
+     "years": "2019 - 2027",
+     "legislatures": "86th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2019,
+   "years_served": 8,
+   "new_to_chamber": false,
+   "lrl_id": "5839",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3655",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5839"
+   }
+  },
+  "house|Perez, Mary Ann": {
+   "chamber": "house",
+   "code": "A2535",
+   "display_name": "Perez, Mary Ann",
+   "full_name": "Mary Ann Perez",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "144",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "144",
+     "years": "2017 - 2027",
+     "legislatures": "85th - 89th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2013 - 2015",
+     "legislatures": "83rd",
+     "party": "D"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 12,
+   "new_to_chamber": false,
+   "lrl_id": "5758",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2535",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5758"
+   }
+  },
+  "house|Perez, Vincent": {
+   "chamber": "house",
+   "code": "A4710",
+   "display_name": "Perez, Vincent",
+   "full_name": "Vincent Perez",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "77",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "77",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5914",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4710",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5914"
+   }
+  },
+  "house|Pierson": {
+   "chamber": "house",
+   "code": "A4715",
+   "display_name": "Pierson",
+   "full_name": "Katrina Pierson",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "33",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "33",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5935",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4715",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5935"
+   }
+  },
+  "house|Plaisance": {
+   "chamber": "house",
+   "code": "A5050",
+   "display_name": "Plaisance",
+   "full_name": "Kristen Plaisance",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A5050"
+   }
+  },
+  "house|Plesa": {
+   "chamber": "house",
+   "code": "A4345",
+   "display_name": "Plesa",
+   "full_name": "Mihaela Plesa",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "70",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "70",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5890",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4345",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5890"
+   }
+  },
+  "house|Rabroker": {
+   "chamber": "house",
+   "code": "A5095",
+   "display_name": "Rabroker",
+   "full_name": "Amelia Rabroker",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A5095"
+   }
+  },
+  "house|Raymond": {
+   "chamber": "house",
+   "code": "A4215",
+   "display_name": "Raymond",
+   "full_name": "Richard Peña Raymond",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "42",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "42",
+     "years": "2001 - 2027",
+     "legislatures": "77th - 89th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "1993 - 1999",
+     "legislatures": "73rd - 75th",
+     "party": "D"
+    }
+   ],
+   "first_year": 1993,
+   "years_served": 32,
+   "new_to_chamber": false,
+   "lrl_id": "228",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4215",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=228"
+   }
+  },
+  "house|Reyna": {
+   "chamber": "house",
+   "code": "A4975",
+   "display_name": "Reyna",
+   "full_name": "Adrian Reyna",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4975"
+   }
+  },
+  "house|Reynolds": {
+   "chamber": "house",
+   "code": "A2040",
+   "display_name": "Reynolds",
+   "full_name": "Ron Reynolds",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "27",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "27",
+     "years": "2011 - 2027",
+     "legislatures": "82nd - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2011,
+   "years_served": 16,
+   "new_to_chamber": false,
+   "lrl_id": "5686",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2040",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5686"
+   }
+  },
+  "house|Richardson": {
+   "chamber": "house",
+   "code": "A4735",
+   "display_name": "Richardson",
+   "full_name": "Keresa Richardson",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "61",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "61",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5909",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4735",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5909"
+   }
+  },
+  "house|Rodríguez Ramos": {
+   "chamber": "house",
+   "code": "A3735",
+   "display_name": "Rodríguez Ramos",
+   "full_name": "Ana-María Rodríguez Ramos",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "102",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "102",
+     "years": "2019 - 2027",
+     "legislatures": "86th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2019,
+   "years_served": 8,
+   "new_to_chamber": false,
+   "lrl_id": "5836",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3735",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5836"
+   }
+  },
+  "house|Romero": {
+   "chamber": "house",
+   "code": "A3060",
+   "display_name": "Romero",
+   "full_name": "Ramon Romero, Jr.",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "90",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "90",
+     "years": "2015 - 2027",
+     "legislatures": "84th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2015,
+   "years_served": 12,
+   "new_to_chamber": false,
+   "lrl_id": "5779",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3060",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5779"
+   }
+  },
+  "house|Rose": {
+   "chamber": "house",
+   "code": "A2555",
+   "display_name": "Rose",
+   "full_name": "Toni Rose",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "110",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "110",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 14,
+   "new_to_chamber": false,
+   "lrl_id": "5752",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2555",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5752"
+   }
+  },
+  "house|Salinas": {
+   "chamber": "house",
+   "code": "A5045",
+   "display_name": "Salinas",
+   "full_name": "Julio Salinas",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A5045"
+   }
+  },
+  "house|Schoolcraft": {
+   "chamber": "house",
+   "code": "A4745",
+   "display_name": "Schoolcraft",
+   "full_name": "Alan Schoolcraft",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "44",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "44",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "1981 - 1993",
+     "legislatures": "67th - 72nd",
+     "party": "R"
+    }
+   ],
+   "first_year": 1981,
+   "years_served": 14,
+   "new_to_chamber": false,
+   "lrl_id": "396",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4745",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=396"
+   }
+  },
+  "house|Sethi": {
+   "chamber": "house",
+   "code": "A5055",
+   "display_name": "Sethi",
+   "full_name": "Pooja Sethi",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A5055"
+   }
+  },
+  "house|Shaheen": {
+   "chamber": "house",
+   "code": "A2995",
+   "display_name": "Shaheen",
+   "full_name": "Matt Shaheen",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "66",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "66",
+     "years": "2015 - 2027",
+     "legislatures": "84th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2015,
+   "years_served": 12,
+   "new_to_chamber": false,
+   "lrl_id": "5775",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2995",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5775"
+   }
+  },
+  "house|Shofner": {
+   "chamber": "house",
+   "code": "A4755",
+   "display_name": "Shofner",
+   "full_name": "Joanne Shofner",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "11",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "11",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5928",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4755",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5928"
+   }
+  },
+  "house|Simmons": {
+   "chamber": "house",
+   "code": "A4765",
+   "display_name": "Simmons",
+   "full_name": "Lauren Simmons",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "146",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "146",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5925",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4765",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5925"
+   }
+  },
+  "house|Slawson": {
+   "chamber": "house",
+   "code": "A4055",
+   "display_name": "Slawson",
+   "full_name": "Shelby Slawson",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "59",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "59",
+     "years": "2021 - 2027",
+     "legislatures": "87th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2021,
+   "years_served": 6,
+   "new_to_chamber": false,
+   "lrl_id": "5859",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4055",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5859"
+   }
+  },
+  "house|Smith": {
+   "chamber": "house",
+   "code": "A5060",
+   "display_name": "Smith",
+   "full_name": "Tyler Smith",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A5060"
+   }
+  },
+  "house|Spencer": {
+   "chamber": "house",
+   "code": "A5070",
+   "display_name": "Spencer",
+   "full_name": "Chris Spencer",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A5070"
+   }
+  },
+  "house|Spiller": {
+   "chamber": "house",
+   "code": "A4075",
+   "display_name": "Spiller",
+   "full_name": "David Spiller",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "68",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "68",
+     "years": "2021 - 2027",
+     "legislatures": "87th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2021,
+   "years_served": 6,
+   "new_to_chamber": false,
+   "lrl_id": "5874",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4075",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5874"
+   }
+  },
+  "house|Tepper": {
+   "chamber": "house",
+   "code": "A4360",
+   "display_name": "Tepper",
+   "full_name": "Carl Tepper",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "84",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "84",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5879",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4360",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5879"
+   }
+  },
+  "house|Thigpen": {
+   "chamber": "house",
+   "code": "A5065",
+   "display_name": "Thigpen",
+   "full_name": "Rocky Thigpen",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A5065"
+   }
+  },
+  "house|Thompson": {
+   "chamber": "house",
+   "code": "A4630",
+   "display_name": "Thompson",
+   "full_name": "Senfronia Thompson",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "141",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "141",
+     "years": "1973 - 2027",
+     "legislatures": "63rd - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 1973,
+   "years_served": 54,
+   "new_to_chamber": false,
+   "lrl_id": "243",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4630",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=243"
+   }
+  },
+  "house|Troxclair": {
+   "chamber": "house",
+   "code": "A4385",
+   "display_name": "Troxclair",
+   "full_name": "Ellen Troxclair",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "19",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "19",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5881",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4385",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5881"
+   }
+  },
+  "house|Turner": {
+   "chamber": "house",
+   "code": "A5075",
+   "display_name": "Turner",
+   "full_name": "Ebony Turner",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A5075"
+   }
+  },
+  "house|Vasut": {
+   "chamber": "house",
+   "code": "A4065",
+   "display_name": "Vasut",
+   "full_name": "Cody Vasut",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "25",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "25",
+     "years": "2021 - 2027",
+     "legislatures": "87th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2021,
+   "years_served": 6,
+   "new_to_chamber": false,
+   "lrl_id": "5872",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4065",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5872"
+   }
+  },
+  "house|Virdell": {
+   "chamber": "house",
+   "code": "A4775",
+   "display_name": "Virdell",
+   "full_name": "Wes Virdell",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "53",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "53",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5937",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4775",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5937"
+   }
+  },
+  "house|Walle": {
+   "chamber": "house",
+   "code": "A4930",
+   "display_name": "Walle",
+   "full_name": "Armando Walle",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "140",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "140",
+     "years": "2009 - 2027",
+     "legislatures": "81st - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2009,
+   "years_served": 18,
+   "new_to_chamber": false,
+   "lrl_id": "5671",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4930",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5671"
+   }
+  },
+  "house|Ward Johnson": {
+   "chamber": "house",
+   "code": "A4785",
+   "display_name": "Ward Johnson",
+   "full_name": "Charlene Ward Johnson",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "139",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "139",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5924",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4785",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5924"
+   }
+  },
+  "house|Wharton": {
+   "chamber": "house",
+   "code": "A4795",
+   "display_name": "Wharton",
+   "full_name": "Trey Wharton",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "12",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "12",
+     "years": "2025 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5929",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A4795",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5929"
+   }
+  },
+  "house|Williams": {
+   "chamber": "house",
+   "code": "A5085",
+   "display_name": "Williams",
+   "full_name": "Michelle Williams",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A5085"
+   }
+  },
+  "house|Wilson": {
+   "chamber": "house",
+   "code": "A3525",
+   "display_name": "Wilson",
+   "full_name": "Terry M. Wilson",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "20",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "20",
+     "years": "2017 - 2027",
+     "legislatures": "85th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2017,
+   "years_served": 10,
+   "new_to_chamber": false,
+   "lrl_id": "5811",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3525",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5811"
+   }
+  },
+  "house|Wooten": {
+   "chamber": "house",
+   "code": "A5080",
+   "display_name": "Wooten",
+   "full_name": "Denise Wooten",
+   "party": null,
+   "party_source": null,
+   "district": null,
+   "service": [],
+   "first_year": null,
+   "years_served": null,
+   "new_to_chamber": true,
+   "lrl_id": null,
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A5080"
+   }
+  },
+  "house|Wu": {
+   "chamber": "house",
+   "code": "A2865",
+   "display_name": "Wu",
+   "full_name": "Gene Wu",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "137",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "137",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 14,
+   "new_to_chamber": false,
+   "lrl_id": "5759",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A2865",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5759"
+   }
+  },
+  "house|Zwiener": {
+   "chamber": "house",
+   "code": "A3710",
+   "display_name": "Zwiener",
+   "full_name": "Erin Zwiener",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "45",
+   "service": [
+    {
+     "chamber": "house",
+     "district": "45",
+     "years": "2019 - 2027",
+     "legislatures": "86th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2019,
+   "years_served": 8,
+   "new_to_chamber": false,
+   "lrl_id": "5828",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=H&Code=A3710",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5828"
+   }
+  },
+  "senate|Alvarado": {
+   "chamber": "senate",
+   "code": "A1315",
+   "display_name": "Alvarado",
+   "full_name": "Carol Alvarado",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "6",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "6",
+     "years": "2018 - 2029",
+     "legislatures": "85th - 90th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2009 - 2018",
+     "legislatures": "81st - 85th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2009,
+   "years_served": 18,
+   "new_to_chamber": false,
+   "lrl_id": "5670",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1315",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5670"
+   }
+  },
+  "senate|Ashby": {
+   "chamber": "senate",
+   "code": "A1405",
+   "display_name": "Ashby",
+   "full_name": "Trent Ashby",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": null,
+   "service": [
+    {
+     "chamber": "house",
+     "district": "9",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 14,
+   "new_to_chamber": true,
+   "lrl_id": "5737",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1405",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5737"
+   }
+  },
+  "senate|Bettencourt": {
+   "chamber": "senate",
+   "code": "A1055",
+   "display_name": "Bettencourt",
+   "full_name": "Paul Bettencourt",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "7",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "7",
+     "years": "2015 - 2029",
+     "legislatures": "84th - 90th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2015,
+   "years_served": 12,
+   "new_to_chamber": false,
+   "lrl_id": "5764",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1055",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5764"
+   }
+  },
+  "senate|Blanco": {
+   "chamber": "senate",
+   "code": "A1330",
+   "display_name": "Blanco",
+   "full_name": "César Blanco",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "29",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "29",
+     "years": "2021 - 2029",
+     "legislatures": "87th - 90th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2015 - 2021",
+     "legislatures": "84th - 86th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2015,
+   "years_served": 12,
+   "new_to_chamber": false,
+   "lrl_id": "5776",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1330",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5776"
+   }
+  },
+  "senate|Campbell": {
+   "chamber": "senate",
+   "code": "A1010",
+   "display_name": "Campbell",
+   "full_name": "Donna Campbell",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "25",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "25",
+     "years": "2013 - 2029",
+     "legislatures": "83rd - 90th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2013,
+   "years_served": 14,
+   "new_to_chamber": false,
+   "lrl_id": "5720",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1010",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5720"
+   }
+  },
+  "senate|Cook, David": {
+   "chamber": "senate",
+   "code": "A1445",
+   "display_name": "Cook, David",
+   "full_name": "David Cook",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": null,
+   "service": [
+    {
+     "chamber": "house",
+     "district": "96",
+     "years": "2021 - 2027",
+     "legislatures": "87th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2021,
+   "years_served": 6,
+   "new_to_chamber": true,
+   "lrl_id": "5865",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1445",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5865"
+   }
+  },
+  "senate|Cook, Molly": {
+   "chamber": "senate",
+   "code": "A1365",
+   "display_name": "Cook, Molly",
+   "full_name": "Molly Cook",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "15",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "15",
+     "years": "2024 - 2029",
+     "legislatures": "88th - 90th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2024,
+   "years_served": 3,
+   "new_to_chamber": false,
+   "lrl_id": "5907",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1365",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5907"
+   }
+  },
+  "senate|Flores": {
+   "chamber": "senate",
+   "code": "A1195",
+   "display_name": "Flores",
+   "full_name": "Pete Flores",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "24",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "24",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "R"
+    },
+    {
+     "chamber": "senate",
+     "district": null,
+     "years": "2018 - 2021",
+     "legislatures": "85th - 86th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2018,
+   "years_served": 7,
+   "new_to_chamber": false,
+   "lrl_id": "5822",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1195",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5822"
+   }
+  },
+  "senate|Gutierrez": {
+   "chamber": "senate",
+   "code": "A1335",
+   "display_name": "Gutierrez",
+   "full_name": "Roland Gutierrez",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "19",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "19",
+     "years": "2021 - 2027",
+     "legislatures": "87th - 89th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2008 - 2021",
+     "legislatures": "80th - 86th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2008,
+   "years_served": 19,
+   "new_to_chamber": false,
+   "lrl_id": "5651",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1335",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5651"
+   }
+  },
+  "senate|Hagenbuch": {
+   "chamber": "senate",
+   "code": "A1380",
+   "display_name": "Hagenbuch",
+   "full_name": "Brent Hagenbuch",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "30",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "30",
+     "years": "2025 - 2029",
+     "legislatures": "89th - 90th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5920",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1380",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5920"
+   }
+  },
+  "senate|Hall": {
+   "chamber": "senate",
+   "code": "A1050",
+   "display_name": "Hall",
+   "full_name": "Bob Hall",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "2",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "2",
+     "years": "2015 - 2027",
+     "legislatures": "84th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2015,
+   "years_served": 12,
+   "new_to_chamber": false,
+   "lrl_id": "5763",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1050",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5763"
+   }
+  },
+  "senate|Hinojosa, Adam": {
+   "chamber": "senate",
+   "code": "A1385",
+   "display_name": "Hinojosa, Adam",
+   "full_name": "Adam Hinojosa",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "27",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "27",
+     "years": "2025 - 2029",
+     "legislatures": "89th - 90th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2025,
+   "years_served": 2,
+   "new_to_chamber": false,
+   "lrl_id": "5910",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1385",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5910"
+   }
+  },
+  "senate|Hinojosa, Juan \"Chuy\"": {
+   "chamber": "senate",
+   "code": "A1250",
+   "display_name": "Hinojosa, Juan \"Chuy\"",
+   "full_name": "Juan Hinojosa",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "20",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "20",
+     "years": "2003 - 2029",
+     "legislatures": "78th - 90th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "1997 - 2003",
+     "legislatures": "75th - 77th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "1981 - 1991",
+     "legislatures": "67th - 71st",
+     "party": "D"
+    }
+   ],
+   "first_year": 1981,
+   "years_served": 40,
+   "new_to_chamber": false,
+   "lrl_id": "179",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1250",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=179"
+   }
+  },
+  "senate|Huffman": {
+   "chamber": "senate",
+   "code": "A1260",
+   "display_name": "Huffman",
+   "full_name": "Joan Huffman",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "17",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "17",
+     "years": "2008 - 2029",
+     "legislatures": "80th - 90th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2008,
+   "years_served": 19,
+   "new_to_chamber": false,
+   "lrl_id": "5673",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1260",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5673"
+   }
+  },
+  "senate|Hughes": {
+   "chamber": "senate",
+   "code": "A1135",
+   "display_name": "Hughes",
+   "full_name": "Bryan Hughes",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "1",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "1",
+     "years": "2017 - 2027",
+     "legislatures": "85th - 89th",
+     "party": "R"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2003 - 2017",
+     "legislatures": "78th - 84th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2003,
+   "years_served": 24,
+   "new_to_chamber": false,
+   "lrl_id": "5544",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1135",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5544"
+   }
+  },
+  "senate|King": {
+   "chamber": "senate",
+   "code": "A1345",
+   "display_name": "King",
+   "full_name": "Phil King",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "10",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "10",
+     "years": "2023 - 2029",
+     "legislatures": "88th - 90th",
+     "party": "R"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "1999 - 2023",
+     "legislatures": "76th - 87th",
+     "party": "R"
+    }
+   ],
+   "first_year": 1999,
+   "years_served": 28,
+   "new_to_chamber": false,
+   "lrl_id": "192",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1345",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=192"
+   }
+  },
+  "senate|Kolkhorst": {
+   "chamber": "senate",
+   "code": "A1105",
+   "display_name": "Kolkhorst",
+   "full_name": "Lois Kolkhorst",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "18",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "18",
+     "years": "2014 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "R"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2001 - 2014",
+     "legislatures": "77th - 83rd",
+     "party": "R"
+    }
+   ],
+   "first_year": 2001,
+   "years_served": 26,
+   "new_to_chamber": false,
+   "lrl_id": "195",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1105",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=195"
+   }
+  },
+  "senate|Ligon": {
+   "chamber": "senate",
+   "code": "A1395",
+   "display_name": "Ligon",
+   "full_name": "Brett Ligon",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "4",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "4",
+     "years": "2026 - 2027",
+     "legislatures": "89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2026,
+   "years_served": 1,
+   "new_to_chamber": false,
+   "lrl_id": "5942",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1395",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5942"
+   }
+  },
+  "senate|Menéndez": {
+   "chamber": "senate",
+   "code": "A1110",
+   "display_name": "Menéndez",
+   "full_name": "José Menéndez",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "26",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "26",
+     "years": "2015 - 2027",
+     "legislatures": "84th - 89th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2001 - 2015",
+     "legislatures": "77th - 84th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2001,
+   "years_served": 26,
+   "new_to_chamber": false,
+   "lrl_id": "210",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1110",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=210"
+   }
+  },
+  "senate|Miles": {
+   "chamber": "senate",
+   "code": "A1115",
+   "display_name": "Miles",
+   "full_name": "Borris Miles",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "13",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "13",
+     "years": "2017 - 2027",
+     "legislatures": "85th - 89th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2011 - 2017",
+     "legislatures": "82nd - 84th",
+     "party": "D"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2007 - 2009",
+     "legislatures": "80th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2007,
+   "years_served": 18,
+   "new_to_chamber": false,
+   "lrl_id": "5632",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1115",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5632"
+   }
+  },
+  "senate|Parker": {
+   "chamber": "senate",
+   "code": "A1355",
+   "display_name": "Parker",
+   "full_name": "Tan Parker",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "12",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "12",
+     "years": "2023 - 2029",
+     "legislatures": "88th - 90th",
+     "party": "R"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2007 - 2023",
+     "legislatures": "80th - 87th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2007,
+   "years_served": 20,
+   "new_to_chamber": false,
+   "lrl_id": "5630",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1355",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5630"
+   }
+  },
+  "senate|Paul": {
+   "chamber": "senate",
+   "code": "A1425",
+   "display_name": "Paul",
+   "full_name": "Dennis Paul",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": null,
+   "service": [
+    {
+     "chamber": "house",
+     "district": "129",
+     "years": "2015 - 2027",
+     "legislatures": "84th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2015,
+   "years_served": 12,
+   "new_to_chamber": true,
+   "lrl_id": "5785",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1425",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5785"
+   }
+  },
+  "senate|Paxton": {
+   "chamber": "senate",
+   "code": "A1285",
+   "display_name": "Paxton",
+   "full_name": "Angela Paxton",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "8",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "8",
+     "years": "2019 - 2029",
+     "legislatures": "86th - 90th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2019,
+   "years_served": 8,
+   "new_to_chamber": false,
+   "lrl_id": "5847",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1285",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5847"
+   }
+  },
+  "senate|Perry": {
+   "chamber": "senate",
+   "code": "A1045",
+   "display_name": "Perry",
+   "full_name": "Charles Perry",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "28",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "28",
+     "years": "2014 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "R"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2011 - 2014",
+     "legislatures": "82nd - 83rd",
+     "party": "R"
+    }
+   ],
+   "first_year": 2011,
+   "years_served": 16,
+   "new_to_chamber": false,
+   "lrl_id": "5705",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1045",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5705"
+   }
+  },
+  "senate|Rehmet": {
+   "chamber": "senate",
+   "code": "A1390",
+   "display_name": "Rehmet",
+   "full_name": "Taylor Rehmet",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "9",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "9",
+     "years": "2026 - 2027",
+     "legislatures": "89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 2026,
+   "years_served": 1,
+   "new_to_chamber": false,
+   "lrl_id": "5941",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1390",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5941"
+   }
+  },
+  "senate|Schwertner": {
+   "chamber": "senate",
+   "code": "A1025",
+   "display_name": "Schwertner",
+   "full_name": "Charles Schwertner",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "5",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "5",
+     "years": "2013 - 2027",
+     "legislatures": "83rd - 89th",
+     "party": "R"
+    },
+    {
+     "chamber": "house",
+     "district": null,
+     "years": "2011 - 2013",
+     "legislatures": "82nd",
+     "party": "R"
+    }
+   ],
+   "first_year": 2011,
+   "years_served": 16,
+   "new_to_chamber": false,
+   "lrl_id": "5685",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1025",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5685"
+   }
+  },
+  "senate|Sparks": {
+   "chamber": "senate",
+   "code": "A1375",
+   "display_name": "Sparks",
+   "full_name": "Kevin Sparks",
+   "party": "Republican",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "31",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "31",
+     "years": "2023 - 2027",
+     "legislatures": "88th - 89th",
+     "party": "R"
+    }
+   ],
+   "first_year": 2023,
+   "years_served": 4,
+   "new_to_chamber": false,
+   "lrl_id": "5902",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1375",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=5902"
+   }
+  },
+  "senate|West": {
+   "chamber": "senate",
+   "code": "A1625",
+   "display_name": "West",
+   "full_name": "Royce West",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "23",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "23",
+     "years": "1993 - 2029",
+     "legislatures": "73rd - 90th",
+     "party": "D"
+    }
+   ],
+   "first_year": 1993,
+   "years_served": 34,
+   "new_to_chamber": false,
+   "lrl_id": "45",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1625",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=45"
+   }
+  },
+  "senate|Zaffirini": {
+   "chamber": "senate",
+   "code": "A1700",
+   "display_name": "Zaffirini",
+   "full_name": "Judith Zaffirini",
+   "party": "Democratic",
+   "party_source": "Texas Legislative Reference Library, latest recorded service",
+   "district": "21",
+   "service": [
+    {
+     "chamber": "senate",
+     "district": "21",
+     "years": "1987 - 2027",
+     "legislatures": "70th - 89th",
+     "party": "D"
+    }
+   ],
+   "first_year": 1987,
+   "years_served": 40,
+   "new_to_chamber": false,
+   "lrl_id": "43",
+   "links": {
+    "tlo": "https://capitol.texas.gov/Members/MemberInfo.aspx?Leg=90&Chamber=S&Code=A1700",
+    "lrl": "https://lrl.texas.gov/legeLeaders/members/memberDisplay.cfm?memberID=43"
+   }
+  }
+ }
+}

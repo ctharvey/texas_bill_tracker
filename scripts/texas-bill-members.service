@@ -1,0 +1,20 @@
+[Unit]
+Description=Refresh the live Texas legislator roster (capitol.texas.gov identity, LRL party and tenure)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=texas-bill-atlas
+Group=texas-bill-atlas
+RuntimeDirectory=texas-bill-members
+UMask=0022
+# sync_members.py comes from the same main commit the deployer publishes; it uses the standard library only.
+ExecStartPre=/bin/sh -c '/usr/bin/git --git-dir=/var/lib/texas-bill-atlas/repository.git show main:scripts/sync_members.py > "$RUNTIME_DIRECTORY/sync_members.py"'
+ExecStart=/bin/sh -c 'exec /usr/bin/python3 "$RUNTIME_DIRECTORY/sync_members.py" --out /var/www/html/texas-bill-atlas/live/members.json'
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/html/texas-bill-atlas/live
+TimeoutStartSec=1800

@@ -1,0 +1,60 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {attachMembers, authorshipParty, memberSummary, authorInfluence} from '../src/taxonomy.js';
+
+const member = (chamber, name, party, extra = {}) => ({chamber, display_name: name, full_name: name, party,
+  district: '1', service: party ? [{chamber, district: '1', years: '2015 - 2027', party: party[0]}] : [],
+  years_served: party ? 12 : null, first_year: party ? 2015 : null, new_to_chamber: !party, links: {tlo: 'https://capitol.texas.gov/x'}, ...extra});
+const roster = {format: 'texas-bill-members-v1', members: {
+  'house|Bucy': member('house', 'Bucy', 'Democratic'),
+  'house|Landgraf': member('house', 'Landgraf', 'Republican'),
+  'house|Moody': member('house', 'Moody', 'Democratic'),
+  'house|Bailey': member('house', 'Bailey', null),
+  'senate|Zaffirini': member('senate', 'Zaffirini', 'Democratic'),
+  'senate|Bucy': member('senate', 'Bucy', 'Republican'),
+}};
+const bill = (id, authors, coauthors = []) => attachMembers({id, authors, coauthors, sponsors: [], cosponsors: null}, roster);
+
+test('primary Democratic author tints blue and Republican tints red', () => {
+  assert.equal(authorshipParty(bill('HB1', ['Bucy', 'Moody'])).tint, 'dem');
+  assert.equal(authorshipParty(bill('HB2', ['Landgraf'])).label, 'Republican author');
+});
+
+test('authors spanning both parties tint purple, including via a coauthor', () => {
+  assert.equal(authorshipParty(bill('HB3', ['Bucy', 'Landgraf'])).tint, 'bipartisan');
+  const p = authorshipParty(bill('HB4', ['Landgraf'], ['Moody', 'Bailey']));
+  assert.equal(p.tint, 'bipartisan');
+  assert.equal(p.label, 'Bipartisan authors · party data incomplete');
+  assert.match(p.detail, /Coauthors: 1 Democratic, 1 unknown/);
+});
+
+test('members resolve by exact chamber and display name, never by surname alone', () => {
+  // Senate bill: a House "Bucy" must not lend his party to an unknown Senate author.
+  assert.equal(authorshipParty(bill('SB1', ['Bucy'])).tint, 'rep');
+  assert.equal(authorshipParty(bill('SB2', ['Landgraf'])).tint, 'unknown');
+  assert.equal(authorshipParty(bill('HB5', ['Bucy, John'])).label, 'Author party unknown');
+});
+
+test('unknown primary author stays neutral even with known coauthors of one party', () => {
+  assert.equal(authorshipParty(bill('HB6', ['Bailey'], ['Moody'])).tint, 'unknown');
+  assert.equal(authorshipParty({id: 'HB7', authors: ['Bucy']}).tint, 'unknown');  // No roster loaded.
+});
+
+test('sponsors use the other chamber and do not affect the authorship tint', () => {
+  const b = attachMembers({id: 'SB9', authors: ['Zaffirini'], coauthors: [], sponsors: ['Landgraf'], cosponsors: []}, roster);
+  assert.equal(b.people.sponsors[0].member.party, 'Republican');
+  assert.equal(authorshipParty(b).tint, 'dem');
+});
+
+test('roster tenure feeds author influence only when no curated profile exists', () => {
+  assert.equal(authorInfluence(bill('HB8', ['Bucy'])).label, 'Established member');
+  const curated = attachMembers({id: 'HB9', authors: ['Bucy'], author_profile: {seniority_years: 3}}, roster);
+  assert.equal(curated.author_profile.seniority_years, 3);
+  assert.equal(authorInfluence(bill('HB10', ['Bailey'])).level, 0);
+});
+
+test('member summary is explicit about missing records', () => {
+  assert.equal(memberSummary(null), 'Not matched to the 90th Legislature roster');
+  assert.match(memberSummary(roster.members['house|Bailey']), /member-elect; no prior service on record/);
+  assert.equal(memberSummary(roster.members['house|Bucy']), 'Democratic · HD 1 · 12 years served · since 2015');
+});
