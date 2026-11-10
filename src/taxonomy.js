@@ -5,6 +5,44 @@ export function memberNames(value){
   return [...new Set(names.filter(name=>typeof name==='string').map(name=>name.trim()).filter(Boolean))];
 }
 
+export const SCOPE_AGENCY_ID = 'all-state-agencies';
+
+export function snapshotAgeHours(generatedAt, now = Date.now()) {
+  const then = generatedAt ? new Date(generatedAt).getTime() : NaN;
+  const current = now instanceof Date ? now.getTime() : Number(now);
+  if (!Number.isFinite(then) || !Number.isFinite(current)) return null;
+  return Math.max(0, (current - then) / 3600000);
+}
+
+const NAME_SUFFIXES = new Set(['jr','sr','ii','iii','iv','v']);
+const surnameKeys = name => {
+  const tokens = String(name || '').replace(/,/g, ' ').split(/\s+/).filter(Boolean);
+  while (tokens.length > 1 && NAME_SUFFIXES.has(tokens[tokens.length - 1].toLowerCase().replace(/\./g, ''))) tokens.pop();
+  if (!tokens.length) return [];
+  const keys = [tokens[tokens.length - 1]];
+  if (tokens.length >= 3) keys.push(tokens.slice(-2).join(' '));
+  return keys.map(k => k.toLowerCase());
+};
+
+// Bill authors are surnames ("Zaffirini", possibly "A | B"); profiles are keyed by full name.
+export function matchAuthorProfile(author, profiles) {
+  if (!profiles || typeof profiles !== 'object' || typeof author !== 'string') return undefined;
+  const first = author.split('|')[0].trim();
+  if (!first) return undefined;
+  if (Object.hasOwn(profiles, first)) return profiles[first];
+  const index = new Map();
+  for (const key of Object.keys(profiles)) for (const s of new Set(surnameKeys(key))) index.set(s, [...(index.get(s) || []), key]);
+  const wanted = surnameKeys(first);
+  for (const s of [wanted.length > 1 ? wanted[1] : null, wanted[0]].filter(Boolean)) {
+    const hits = index.get(s);
+    if (hits && hits.length === 1) return profiles[hits[0]];
+    if (hits && hits.length > 1) return undefined;
+  }
+  return undefined;
+}
+
+const toArray = value => Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[;,]/).map(s => s.trim()).filter(Boolean) : [];
+
 export const AGENCIES = [
   // Virtual scope tag, not a single agency. Keep it in the same filter vocabulary.
   ['all-state-agencies','All state agencies (cross-cutting)'],
@@ -48,7 +86,7 @@ export const POLICY_AREAS = [
   {name:'Healthcare', pattern:/medicaid|medicare|health care|healthcare|hospital|patient|physician|nurs(e|ing)/i},
   {name:'Medicaid', pattern:/medicaid/i},
   {name:'Elections', pattern:/vot(er|ing)|election|ballot|candidate|campaign finance|registration application/i},
-  {name:'Taxes', pattern:/tax(es|ation)?|appraisal|property valuation|exemption|ad valorem/i},
+  {name:'Taxes', pattern:/\btax(es|ation)?\b|appraisal|property valuation|exemption|ad valorem/i},
   {name:'State spending', pattern:/appropriat|state fund|education savings account|medicaid expansion/i},
   {name:'Energy & utilities', pattern:/electric|utility|utilities|grid|power generation|energy|transmission/i},
   {name:'Data centers', pattern:/data cent(er|re)|large electricity users|large load/i},
@@ -62,7 +100,7 @@ export const POLICY_AREAS = [
   {name:'Environment & water', pattern:/water|waste|air quality|environment|flood|aquifer|groundwater/i},
   {name:'Transportation', pattern:/highway|transportation|airport|motor vehicle|roadway|road safety/i},
   {name:'Parks & conservation', pattern:/state park|wildlife|public land|habitat|conservation/i},
-  {name:'Agriculture', pattern:/agricultur|livestock|crop|farm|ranch/i},
+  {name:'Agriculture', pattern:/agricultur|livestock|crop|farm|\branch(es|ing)?\b/i},
   {name:'Civil rights', pattern:/discriminat|voter registration rejection|civil right|equal protection/i},
   {name:'Criminal justice', pattern:/prison|probation|criminal offense|sentenc|correctional|jail/i},
   {name:'Economic development', pattern:/incentive|economic development|investment|job creation/i},
@@ -102,7 +140,7 @@ const LIMITED_AGENCIES = /\b(?:certain|specified|designated|selected|some|partic
 
 const EFFECT_SIGNALS = [
   ['Funding & appropriations', /appropriat|grant program|state fund|budget|funding/i],
-  ['Taxes & incentives', /tax|incentive|abatement|exemption/i],
+  ['Taxes & incentives', /\btax(es|ation)?\b|incentive|abatement|exemption/i],
   ['Rulemaking', /rulemaking|adopt rules|promulgate/i],
   ['Enforcement & penalties', /penalt|offense|punish|enforce|license suspension/i],
   ['Reporting & oversight', /annual report|audit|reporting requirement|oversight/i],
@@ -113,8 +151,8 @@ const EFFECT_SIGNALS = [
 
 export function autoTagBill(bill) {
   const text = [bill.title, bill.caption, bill.description, bill.full_text_excerpt].filter(Boolean).join(' ');
-  const topics = [...new Set([...(bill.topics || []), ...POLICY_AREAS.filter(t => t.pattern.test(text)).map(t => t.name)])];
-  const agencies = (bill.agencies || []).map(a => typeof a === 'string' ? {id:a, relationship:'related', reason:'Imported tag; review evidence'} : a);
+  const topics = [...new Set([...toArray(bill.topics), ...POLICY_AREAS.filter(t => t.pattern.test(text)).map(t => t.name)])];
+  const agencies = toArray(bill.agencies).filter(a => a && (typeof a === 'string' || typeof a.id === 'string')).map(a => typeof a === 'string' ? {id:a, relationship:'related', reason:'Imported tag; review evidence'} : a);
   const known = new Set(agencies.map(a => a.id));
   for (const signal of AGENCY_SIGNALS) {
     if (known.has(signal.id)) continue;
@@ -136,14 +174,14 @@ export function autoTagBill(bill) {
       });
     }
   }
-  const impacts = [...new Set([...(bill.impacts || []), ...EFFECT_SIGNALS.filter(([,pattern])=>pattern.test(text)).map(([name])=>name)])];
+  const impacts = [...new Set([...toArray(bill.impacts), ...EFFECT_SIGNALS.filter(([,pattern])=>pattern.test(text)).map(([name])=>name)])];
   if (agencies.some(a=>a.id==='all-state-agencies') && !impacts.includes('Cross-agency scope')) impacts.push('Cross-agency scope');
-  return {...bill, topics, agencies, impacts};
+  return {...bill, topics, agencies, impacts, ...(bill.constituencies == null ? {} : {constituencies: toArray(bill.constituencies)})};
 }
 
 // Evidence-based procedural outlook, not a probability of enactment.
 export function assessHearing(bill) {
-  const a = (bill.actions || []).map(a => typeof a === 'string' ? a : a.description || '').join(' ').toLowerCase();
+  const a = toArray(bill.actions).filter(a => a != null).map(a => typeof a === 'string' ? a : a.description || '').join(' ').toLowerCase();
   const committee = bill.committee || (bill.status || '').match(/referred to (.+)/i)?.[1];
   const hearing = !!bill.hearing_date || /scheduled for (public )?hearing|hearing scheduled/.test(a);
   const held = /public hearing held|hearing conducted|testimony taken/.test(a);

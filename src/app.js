@@ -1,5 +1,5 @@
 import {reviewModel, renderReview} from './review.js';
-import {AGENCIES, AGENCY_NAME, autoTagBill, assessHearing, authorInfluence, officialUrl, memberNames} from './taxonomy.js';
+import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours} from './taxonomy.js';
 
 const $ = (selector, root=document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -13,7 +13,12 @@ const dateText = iso => iso ? new Date(`${String(iso).slice(0,10)}T12:00:00Z`).t
 const stampText = iso => iso ? new Date(iso).toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Chicago'})+' CT' : 'Unknown';
 const unique = a => [...new Set(a)];
 
-function normalized(raw){
+const realAgencies = b => b.agencies.filter(a=>a.id!==SCOPE_AGENCY_ID);
+const safeHref = value => {try{const u=new URL(String(value));return u.protocol==='https:'||u.protocol==='http:'?u.href:''}catch{return ''}};
+const timeoutSignal = ms => {if(typeof AbortSignal!=='undefined'&&typeof AbortSignal.timeout==='function')return AbortSignal.timeout(ms);const c=new AbortController();setTimeout(()=>c.abort(),ms);return c.signal};
+const NAME_TO_AGENCY_ID = new Map(AGENCIES.flatMap(a=>[[a.name.toLowerCase(),a.id],[a.id.toLowerCase(),a.id]]));
+
+function normalized(raw,profiles){
   const key=String(raw.id||raw.number||raw.bill_number||'').replace(/\s/g,'').toUpperCase();
   if(!/^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)\d{1,5}$/.test(key))return null;
   const number=key.replace(/^(HJR|SJR|HCR|SCR|HB|SB|HR|SR)/,'$1 ');
@@ -26,7 +31,7 @@ function normalized(raw){
     coauthors:raw.coauthors==null?null:memberNames(raw.coauthors),
     sponsors:raw.sponsors==null?null:memberNames(raw.sponsors),
     cosponsors:raw.cosponsors==null?null:memberNames(raw.cosponsors),
-    author_profile:raw.author_profile||state.meta?.author_profiles?.[raw.author||raw.primary_author]||{},
+    author_profile:raw.author_profile||matchAuthorProfile(raw.author||raw.primary_author,profiles)||{},
     filed_at:raw.filed_at||raw.status_date||'',
     last_action:raw.last_action||raw.status||'Filed',
     status:raw.status||'Filed',
@@ -45,20 +50,23 @@ async function init(){
     const urls=local?['./data/bills.json','https://raw.githubusercontent.com/ctharvey/texas_bill_tracker/main/data/bills.json']:[
       'https://raw.githubusercontent.com/ctharvey/texas_bill_tracker/main/data/bills.json','./data/bills.json'
     ];
-    let data,loadedFrom;
+    let data,loadedFrom,loadedBills;
     for(const url of urls){
       try{
-        const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(7500)});
+        const response=await fetch(url,{cache:'no-store',signal:timeoutSignal(7500)});
         if(!response.ok)throw Error(`HTTP ${response.status}`);
         const candidate=await response.json();
         if(candidate.session!=='90R'||!Array.isArray(candidate.bills)||!candidate.bills.length)throw Error('Invalid bill snapshot');
-        data=candidate;loadedFrom=url;break;
+        if(url.includes('raw.githubusercontent.com')&&(candidate.data_mode!=='official-ftp'||candidate.bills.length<1000))throw Error('Remote snapshot failed validation');
+        const bills=candidate.bills.map(raw=>normalized(raw,candidate.author_profiles)).filter(Boolean);
+        if(!bills.length)throw Error('No valid bills in snapshot');
+        data=candidate;loadedFrom=url;loadedBills=bills;break;
       }catch(error){console.warn(`Bill source unavailable: ${url}`,error.message)}
     }
     if(!data)throw Error('Unable to load bill snapshot');
     data.loaded_from=loadedFrom.includes('raw.githubusercontent.com')?'GitHub source snapshot':'Bundled fallback snapshot';
     state.meta=data;
-    state.bills=(data.bills||[]).map(normalized).filter(Boolean);
+    state.bills=loadedBills;
   }catch(error){
     state.meta={data_mode:'unavailable',coverage_note:'The current dataset could not be loaded. Use Data & imports to load a local CSV or JSON file.'};
   }
@@ -73,8 +81,9 @@ async function init(){
     if(event.key==='Escape')closeDrawer();
   });
   $('#drawer-scrim').addEventListener('click',closeDrawer);
-  window.addEventListener('hashchange',()=>setView(location.hash.slice(1)||'all'));
-  setView(['all','watchlist','agencies','method','data'].includes(location.hash.slice(1))?location.hash.slice(1):'all');
+  const knownView=hash=>['all','watchlist','agencies','method','data'].includes(hash)?hash:'all';
+  window.addEventListener('hashchange',()=>setView(knownView(location.hash.slice(1))));
+  setView(knownView(location.hash.slice(1)));
 }
 
 function setView(view){
@@ -89,15 +98,24 @@ function setView(view){
 function renderNotice(){
   const curated=state.meta?.data_mode==='curated';
   const unavailable=state.meta?.data_mode==='unavailable';
-  const copy=unavailable?'<strong>Dataset unavailable.</strong> '+esc(state.meta.coverage_note):curated?'<strong>Curated opening-day snapshot.</strong> This is a selection of confirmed filings, not the full 90R docket. Automated official bulk-feed sync is prepared but not yet verified.':'<strong>Bulk-data snapshot.</strong> Derived from the legislature’s published files; changes may lag the official record.';
-  $('#source-notice').innerHTML=`<span class="notice-icon">${curated?'◷':unavailable?'!':'✓'}</span><div>${copy} <a href="#data" data-view="data">Coverage & sources →</a></div>`;
-  $('#footer-timestamp').textContent=`Snapshot: ${stampText(state.meta?.generated_at)}`;
+  const imported=state.meta?.data_mode==='local import';
+  const fallback=state.meta?.loaded_from==='Bundled fallback snapshot';
+  const age=curated||unavailable||imported?null:snapshotAgeHours(state.meta?.generated_at);
+  const stale=age!==null&&age>8;
+  const ageText=age>=48?`${Math.floor(age/24)} days`:`${Math.floor(age)} hours`;
+  const staleCopy=stale?` <strong>Stale: this snapshot is ${ageText} old.</strong> The automated refresh may have stopped; check the official record for current status.`:'';
+  const fileName=state.meta?.source_file||String(state.meta?.coverage_note||'').replace(/^Local file:\s*/,'').replace(/\.\s*Imported rows.*$/,'');
+  const copy=unavailable?'<strong>Dataset unavailable.</strong> '+esc(state.meta.coverage_note):curated?'<strong>Curated opening-day snapshot.</strong> This is a selection of confirmed filings, not the full 90R docket. Automated official bulk-feed sync is prepared but not yet verified.':imported?`<strong>Local file, not official data.</strong> Showing rows imported from ${esc(fileName)}; they have not been verified against the legislature’s published files.`:fallback?`<strong>Showing the bundled copy.</strong> The live GitHub dataset could not be loaded, so this is the bundled snapshot generated ${esc(stampText(state.meta.generated_at))}; it may be out of date.${staleCopy}`:stale?`<strong>Bulk-data snapshot may be out of date.</strong> Generated ${esc(stampText(state.meta.generated_at))}.${staleCopy}`:'<strong>Bulk-data snapshot.</strong> Derived from the legislature’s published files; changes may lag the official record.';
+  const warn=unavailable||imported||fallback||stale;
+  $('#source-notice').className=`source-notice${warn?' warn':''}`;
+  $('#source-notice').innerHTML=`<span class="notice-icon">${curated?'◷':warn?'!':'✓'}</span><div>${copy} <a href="#data" data-view="data">Coverage & sources →</a></div>`;
+  $('#footer-timestamp').textContent=`${imported?'Imported':'Snapshot'}: ${stampText(state.meta?.generated_at)}`;
 }
 
 function renderOverview(){
   const bills=state.view==='watchlist'?state.bills.filter(b=>state.watch.has(b.id)):state.bills;
   const agencies=unique(bills.flatMap(b=>b.agencies.map(a=>a.id))).filter(id=>id!=='all-state-agencies').length;
-  const scheduled=bills.filter(b=>assessHearing(b).level>=3).length;
+  const scheduled=bills.filter(b=>assessHearing(b).level===3).length;
   const today=bills.filter(b=>b.filed_at===new Date().toLocaleDateString('sv-SE',{timeZone:'America/Chicago'})).length;
   const cards=[
     ['Bills in view',bills.length,'▦',state.meta?.data_mode==='curated'?'Curated sample, not session total':'Imported dataset'],
@@ -145,9 +163,10 @@ function filteredBills(){
     if(state.outlook&&assessHearing(b).label!==state.outlook)return false;
     if(state.stage){const st=(b.status||'').toLowerCase();const outlook=assessHearing(b).label.toLowerCase();if(!st.includes(state.stage.toLowerCase())&&outlook!==state.stage.toLowerCase())return false}
     const q=state.query.trim().toLowerCase();
-    return !q||[b.id,b.title,b.caption,b.author,...b.authors,...(b.coauthors||[]),...(b.sponsors||[]),...(b.cosponsors||[]),b.last_action,...b.topics,...b.impacts,...b.agencies.map(a=>AGENCY_NAME[a.id]||a.id)].join(' ').toLowerCase().includes(q);
+    const compact=q.replace(/\s+/g,'');
+    return !q||b.id.toLowerCase().includes(compact)||[b.id,b.number,b.title,b.caption,b.author,...b.authors,...(b.coauthors||[]),...(b.sponsors||[]),...(b.cosponsors||[]),b.last_action,...b.topics,...b.impacts,...b.agencies.map(a=>AGENCY_NAME[a.id]||a.id)].join(' ').toLowerCase().includes(q);
   });
-  const sorters={newest:(a,b)=>(b.filed_at||'').localeCompare(a.filed_at||'')||a.id.localeCompare(b.id,undefined,{numeric:true}),number:(a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}),agencies:(a,b)=>b.agencies.length-a.agencies.length,hearing:(a,b)=>assessHearing(b).level-assessHearing(a).level,influence:(a,b)=>authorInfluence(b).level-authorInfluence(a).level};
+  const sorters={newest:(a,b)=>(b.filed_at||'').localeCompare(a.filed_at||'')||a.id.localeCompare(b.id,undefined,{numeric:true}),number:(a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}),agencies:(a,b)=>realAgencies(b).length-realAgencies(a).length,hearing:(a,b)=>assessHearing(b).level-assessHearing(a).level,influence:(a,b)=>authorInfluence(b).level-authorInfluence(a).level};
   return list.sort(sorters[state.sort]);
 }
 
@@ -162,13 +181,15 @@ function renderResults(){
 
 function billCard(b){
   const h=assessHearing(b);const watched=state.watch.has(b.id);const influence=authorInfluence(b);
-  const agencyTags=b.agencies.slice(0,2).map(a=>`<span class="tag agency" title="${esc(a.reason||'')}">${esc((AGENCY_NAME[a.id]||a.id).replace(/^Texas /,'').replace(/ Department of /,' · '))}</span>`).join('');
-  return `<article class="bill-card"><div class="bill-left"><div class="bill-head"><span class="bill-number">${esc(b.number)}</span><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span>${influence.level?`<span class="influence-pill">◆ ${esc(influence.label)}</span>`:''}</div><h3 class="bill-title">${esc(b.title)}</h3><p class="bill-description">${esc(b.caption)}</p><div class="bill-tags">${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${agencyTags}${b.agencies.length>2?`<span class="tag agency">+${b.agencies.length-2} agencies</span>`:''}</div><div class="bill-meta"><span>By <b>${esc(b.authors[0]||b.author)}</b></span><span>${b.authors.length?`${b.authors.length} ${b.authors.length===1?'author':'authors'}`:'Authors not reported'}</span><span>${b.coauthors===null?'Coauthors not reported':`${b.coauthors.length} ${b.coauthors.length===1?'coauthor':'coauthors'}`}</span><span>${b.cosponsors===null?'Cosponsors not reported':`${b.cosponsors.length} ${b.cosponsors.length===1?'cosponsor':'cosponsors'}`}</span><span>Filed ${dateText(b.filed_at)}</span><span>${b.agencies.length} agency ${b.agencies.length===1?'link':'links'}</span></div></div><div class="bill-right"><button class="watch-button" data-watch="${b.id}" aria-label="${watched?'Remove from':'Add to'} watchlist" aria-pressed="${watched}">${watched?'★':'☆'}</button><div><div class="outlook-label">Hearing progress</div><div class="outlook-value">${esc(h.label)}</div><button class="bill-open" data-open="${b.id}">Bill details →</button></div></div></article>`;
+  const real=realAgencies(b);
+  const scopeTag=b.agencies.length>real.length?'<span class="tag" title="Cross-cutting scope marker, not an agency">Statewide scope</span>':'';
+  const agencyTags=scopeTag+real.slice(0,2).map(a=>`<span class="tag agency" title="${esc(a.reason||'')}">${esc((AGENCY_NAME[a.id]||a.id).replace(/^Texas /,'').replace(/ Department of /,' · '))}</span>`).join('');
+  return `<article class="bill-card"><div class="bill-left"><div class="bill-head"><span class="bill-number">${esc(b.number)}</span><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span>${influence.level?`<span class="influence-pill">◆ ${esc(influence.label)}</span>`:''}</div><h3 class="bill-title">${esc(b.title)}</h3><p class="bill-description">${esc(b.caption)}</p><div class="bill-tags">${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${agencyTags}${real.length>2?`<span class="tag agency">+${real.length-2} agencies</span>`:''}</div><div class="bill-meta"><span>By <b>${esc(b.authors[0]||b.author)}</b></span><span>${b.authors.length?`${b.authors.length} ${b.authors.length===1?'author':'authors'}`:'Authors not reported'}</span><span>${b.coauthors===null?'Coauthors not reported':`${b.coauthors.length} ${b.coauthors.length===1?'coauthor':'coauthors'}`}</span><span>${b.cosponsors===null?'Cosponsors not reported':`${b.cosponsors.length} ${b.cosponsors.length===1?'cosponsor':'cosponsors'}`}</span><span>Filed ${dateText(b.filed_at)}</span><span>${real.length} agency ${real.length===1?'link':'links'}</span></div></div><div class="bill-right"><button class="watch-button" data-watch="${b.id}" aria-label="${watched?'Remove from':'Add to'} watchlist" aria-pressed="${watched}">${watched?'★':'☆'}</button><div><div class="outlook-label">Hearing progress</div><div class="outlook-value">${esc(h.label)}</div><button class="bill-open" data-open="${b.id}">Bill details →</button></div></div></article>`;
 }
 
 function agenciesMarkup(){
-  const counts=new Map();for(const b of state.bills)for(const a of b.agencies)counts.set(a.id,(counts.get(a.id)||0)+1);
-  const agencies=AGENCIES.slice().sort((a,b)=>(counts.get(b.id)||0)-(counts.get(a.id)||0)||a.name.localeCompare(b.name));
+  const counts=new Map();for(const b of state.bills)for(const a of realAgencies(b))counts.set(a.id,(counts.get(a.id)||0)+1);
+  const agencies=AGENCIES.filter(a=>a.id!==SCOPE_AGENCY_ID).sort((a,b)=>(counts.get(b.id)||0)-(counts.get(a.id)||0)||a.name.localeCompare(b.name));
   return `<div class="section-head"><div><div class="section-overline">IMPACT DIRECTORY</div><h2>Texas state agencies</h2></div><span class="subtitle">${counts.size} with possible links in this snapshot</span></div><div class="info-callout"><strong>Why an agency index?</strong> One bill can change the work of several state agencies. “Direct” means the supplied material names an agency; “possible” means an inferred policy connection. An agency absent from a caption is not proof it is unaffected—full bill text review is needed for comprehensive coverage.</div><div class="agency-grid" style="margin-top:18px">${agencies.map(a=>`<button class="agency-card" data-agency-pick="${esc(a.id)}"><span class="agency-code">${esc(a.id.toUpperCase())}</span><strong>${esc(a.name)}</strong><span class="hits">${counts.get(a.id)||0} ${counts.get(a.id)===1?'bill':'bills'} in snapshot →</span></button>`).join('')}</div>`;
 }
 
@@ -193,7 +214,7 @@ function showDrawer(id){
   const h=assessHearing(b),influence=authorInfluence(b);
   const agencyRows=b.agencies.length?b.agencies.map(a=>`<div class="agency-row"><div><strong>${esc(AGENCY_NAME[a.id]||a.id)}</strong><p>${esc(a.reason||'Relationship not yet annotated')}</p></div><span class="confidence ${a.relationship==='direct'?'direct':''}">${a.relationship==='direct'?'Direct':'Possible'}</span></div>`).join(''):'<p>No agency has been tagged yet. This does not establish that none are affected.</p>';
   const watched=state.watch.has(b.id);
-  $('#detail-drawer').innerHTML=`<div class="drawer-top"><span class="drawer-number">90R / ${esc(b.number)}</span><button class="drawer-close" id="drawer-close" aria-label="Close bill details">×</button></div><div class="drawer-pills"><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span></div><h2 style="margin-top:14px">${esc(b.title)}</h2><p class="drawer-caption">${esc(b.caption)}</p><div class="drawer-pills">${b.topics.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div><div class="drawer-meta-grid"><div><small>Filed by</small><strong>${esc(b.author)}</strong></div><div><small>Filed on</small><strong>${dateText(b.filed_at)}</strong></div><div><small>Most recent action</small><strong>${esc(b.last_action)}</strong></div><div><small>Hearing status</small><strong>${esc(h.label)}</strong></div></div><section class="drawer-section"><h3>Hearing progress & evidence</h3><div class="evidence-card"><strong>${esc(h.label)} · ${h.level===0?'No rating yet':'Verified procedural signal'}</strong><p>${esc(h.detail)}</p><ul>${h.facts.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div></section><section class="drawer-section"><h3>Authors & sponsors</h3><p>Authors and coauthors serve in the originating chamber; sponsors and cosponsors serve in the other chamber. Authors include primary and joint/additional primary authors as listed by TLC. Counts reflect this source snapshot.</p>${[['Authors',b.authors],['Coauthors',b.coauthors],['Sponsors',b.sponsors],['Cosponsors',b.cosponsors]].map(([label,names])=>`<h4>${label}${names===null?'':` (${names.length})`}</h4><p>${names===null?'Not reported in this dataset':names.length?names.map(esc).join(' · '):'None listed in the source snapshot'}</p>`).join('')}</section><section class="drawer-section"><h3>Author prominence</h3><div class="evidence-card"><strong>${esc(influence.label)}</strong><p>${esc(influence.factors.join(' · '))}</p>${b.author_profile?.source?`<p><a class="text-link" href="${esc(b.author_profile.source)}" target="_blank" rel="noopener noreferrer">Verified member biography ↗</a></p>`:''}</div></section><section class="drawer-section"><h3>Potentially affected agencies (${b.agencies.length})</h3><p>All known tags are listed. Possible links are model/rule inferences, not confirmed legal obligations.</p>${agencyRows}</section><section class="drawer-section"><h3>Types of impact</h3><div class="drawer-pills">${b.impacts.length?b.impacts.map(t=>`<span class="tag related">${esc(t)}</span>`).join(''):'<span class="tag">Pending analysis</span>'}</div></section>${b.constituencies?.length?`<section class="drawer-section"><h3>People and institutions affected</h3><div class="drawer-pills">${b.constituencies.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></section>`:''}<section class="drawer-section"><h3>Source & verification</h3><p>Review the bill history and latest text before relying on any classification. <a class="text-link" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a></p></section><div class="drawer-actions"><a class="primary-button" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Read official bill ↗</a><button class="outline-button" data-watch="${b.id}">${watched?'★ Remove from watchlist':'☆ Follow this bill'}</button></div>`;
+  $('#detail-drawer').innerHTML=`<div class="drawer-top"><span class="drawer-number">90R / ${esc(b.number)}</span><button class="drawer-close" id="drawer-close" aria-label="Close bill details">×</button></div><div class="drawer-pills"><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span></div><h2 style="margin-top:14px">${esc(b.title)}</h2><p class="drawer-caption">${esc(b.caption)}</p><div class="drawer-pills">${b.topics.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div><div class="drawer-meta-grid"><div><small>Filed by</small><strong>${esc(b.author)}</strong></div><div><small>Filed on</small><strong>${dateText(b.filed_at)}</strong></div><div><small>Most recent action</small><strong>${esc(b.last_action)}</strong></div><div><small>Hearing status</small><strong>${esc(h.label)}</strong></div></div><section class="drawer-section"><h3>Hearing progress & evidence</h3><div class="evidence-card"><strong>${esc(h.label)} · ${h.level===0?'No rating yet':'Verified procedural signal'}</strong><p>${esc(h.detail)}</p><ul>${h.facts.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div></section><section class="drawer-section"><h3>Authors & sponsors</h3><p>Authors and coauthors serve in the originating chamber; sponsors and cosponsors serve in the other chamber. Authors include primary and joint/additional primary authors as listed by TLC. Counts reflect this source snapshot.</p>${[['Authors',b.authors],['Coauthors',b.coauthors],['Sponsors',b.sponsors],['Cosponsors',b.cosponsors]].map(([label,names])=>`<h4>${label}${names===null?'':` (${names.length})`}</h4><p>${names===null?'Not reported in this dataset':names.length?names.map(esc).join(' · '):'None listed in the source snapshot'}</p>`).join('')}</section><section class="drawer-section"><h3>Author prominence</h3><div class="evidence-card"><strong>${esc(influence.label)}</strong><p>${esc(influence.factors.join(' · '))}</p>${safeHref(b.author_profile?.source)?`<p><a class="text-link" href="${esc(safeHref(b.author_profile.source))}" target="_blank" rel="noopener noreferrer">Verified member biography ↗</a></p>`:''}</div></section><section class="drawer-section"><h3>Potentially affected agencies (${realAgencies(b).length})</h3><p>All known tags are listed. Possible links are model/rule inferences, not confirmed legal obligations.</p>${agencyRows}</section><section class="drawer-section"><h3>Types of impact</h3><div class="drawer-pills">${b.impacts.length?b.impacts.map(t=>`<span class="tag related">${esc(t)}</span>`).join(''):'<span class="tag">Pending analysis</span>'}</div></section>${b.constituencies?.length?`<section class="drawer-section"><h3>People and institutions affected</h3><div class="drawer-pills">${b.constituencies.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></section>`:''}<section class="drawer-section"><h3>Source & verification</h3><p>Review the bill history and latest text before relying on any classification. <a class="text-link" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a></p></section><div class="drawer-actions"><a class="primary-button" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Read official bill ↗</a><button class="outline-button" data-watch="${b.id}">${watched?'★ Remove from watchlist':'☆ Follow this bill'}</button></div>`;
   const reviewSection=document.createElement('section');reviewSection.className='drawer-section';
   const heading=document.createElement('h3');heading.textContent='Full text & highlighted evidence';
   const area=document.createElement('div');
@@ -308,10 +329,10 @@ function handleChange(e){
   if(e.target.id==='import-file'&&e.target.files?.length)importFile(e.target.files[0]);
 }
 
-function csvCell(value){const s=String(value??'');return /[",\n\r]/.test(s)?`"${s.replaceAll('"','""')}"`:s}
+function csvCell(value){let s=String(value??'');if(/^[=+\-@]/.test(s))s=`'${s}`;return /[",\n\r]/.test(s)?`"${s.replaceAll('"','""')}"`:s}
 function exportCsv(){
   const rows=[['id','title','author','chamber','status','filed_at','hearing_progress','policy_areas','agencies','agency_relationships','official_url','authors','author_count','coauthors','coauthor_count','sponsors','sponsor_count','cosponsors','cosponsor_count'],...filteredBills().map(b=>[b.id,b.title,b.author,b.chamber,b.status,b.filed_at,assessHearing(b).label,b.topics.join('|'),b.agencies.map(a=>AGENCY_NAME[a.id]||a.id).join('|'),b.agencies.map(a=>a.relationship||'related').join('|'),officialUrl(b),b.authors.join('|'),b.authors.length,b.coauthors?.join('|')??'',b.coauthors?.length??'',b.sponsors?.join('|')??'',b.sponsors?.length??'',b.cosponsors?.join('|')??'',b.cosponsors?.length??''])];
-  const blob=new Blob([rows.map(row=>row.map(csvCell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download='texas-90R-bills.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
+  const blob=new Blob(['﻿'+rows.map(row=>row.map(csvCell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download='texas-90R-bills.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
 }
 
 function parseCsv(text){
@@ -319,7 +340,13 @@ function parseCsv(text){
   for(let i=0;i<text.length;i++){const c=text[i];if(quoted){if(c==='"'&&text[i+1]==='"'){field+='"';i++}else if(c==='"')quoted=false;else field+=c}else if(c==='"')quoted=true;else if(c===','){row.push(field);field=''}else if(c==='\n'){row.push(field.replace(/\r$/,''));rows.push(row);row=[];field=''}else field+=c}
   if(field||row.length){row.push(field);rows.push(row)}
   const headers=rows.shift()?.map(s=>s.trim().replace(/^\uFEFF/,'').toLowerCase())||[];
-  return rows.filter(row=>row.some(Boolean)).map(row=>Object.fromEntries(headers.map((key,i)=>[key,row[i]||'']))).map(o=>({...o,topics:o.topics?o.topics.split('|'):[],agencies:o.agencies?o.agencies.split('|'):[],impacts:o.impacts?o.impacts.split('|'):[]}));
+  return rows.filter(row=>row.some(Boolean)).map(row=>Object.fromEntries(headers.map((key,i)=>[key,(row[i]||'').replace(/^'(?=[=+\-@])/,'')]))).map(o=>{
+    const list=v=>v?v.split('|').map(s=>s.trim()).filter(Boolean):[];
+    const topics=list(o.policy_areas||o.topics);
+    const agencies=list(o.agencies).map(v=>NAME_TO_AGENCY_ID.get(v.toLowerCase())||v);
+    const optional={};for(const k of ['coauthors','sponsors','cosponsors'])optional[k]=o[k]?o[k]:null;
+    return {...o,...optional,topics,agencies,impacts:list(o.impacts)};
+  });
 }
 
 async function importFile(file){
@@ -328,10 +355,15 @@ async function importFile(file){
     const contents=await file.text();const data=file.name.toLowerCase().endsWith('.csv')?parseCsv(contents):JSON.parse(contents);
     const rows=Array.isArray(data)?data:data.bills;
     if(!Array.isArray(rows))throw Error('Expected an array of bills or an object with a bills array');
-    const valid=rows.map(normalized).filter(Boolean);
+    const profiles=!Array.isArray(data)&&data.author_profiles&&typeof data.author_profiles==='object'?data.author_profiles:null;
+    const valid=rows.filter(r=>r&&typeof r==='object').map(raw=>normalized(raw,profiles)).filter(Boolean);
     if(!valid.length)throw Error('No valid Texas bill numbers found');
-    state.bills=valid;state.meta={session:'90R',data_mode:'local import',generated_at:new Date().toISOString(),coverage_note:`Local file: ${file.name}. Imported rows are visible only during this session.`};
-    Object.assign(state,{topic:'',agency:'',chamber:'',stage:'',outlook:'',query:'',visibleCount:30});setView('all');location.hash='all';toast(`Imported ${valid.length} bills`);
+    const previous={bills:state.bills,meta:state.meta,topic:state.topic,agency:state.agency,chamber:state.chamber,stage:state.stage,outlook:state.outlook,query:state.query,visibleCount:state.visibleCount,view:state.view};
+    try{
+      state.bills=valid;state.meta={session:'90R',data_mode:'local import',source_file:file.name,generated_at:new Date().toISOString(),coverage_note:`Local file: ${file.name}. Imported rows are visible only during this session.`};
+      Object.assign(state,{topic:'',agency:'',chamber:'',stage:'',outlook:'',query:'',visibleCount:30});setView('all');
+    }catch(renderError){Object.assign(state,previous);setView(previous.view);throw renderError}
+    location.hash='all';toast(`Imported ${valid.length} bills`);
   }catch(err){toast(`Import failed: ${err.message}`)}
 }
 
