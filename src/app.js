@@ -1,7 +1,7 @@
 import {reviewModel, renderReview} from './review.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, watchlistFile, parseWatchlistFile} from './prefs.js';
 import {createSyncClient} from './sync.js';
-import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours} from './taxonomy.js';
+import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill} from './taxonomy.js';
 
 const $ = (selector, root=document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -23,26 +23,7 @@ const safeHref = value => {try{const u=new URL(String(value));return u.protocol=
 const timeoutSignal = ms => {if(typeof AbortSignal!=='undefined'&&typeof AbortSignal.timeout==='function')return AbortSignal.timeout(ms);const c=new AbortController();setTimeout(()=>c.abort(),ms);return c.signal};
 const NAME_TO_AGENCY_ID = new Map(AGENCIES.flatMap(a=>[[a.name.toLowerCase(),a.id],[a.id.toLowerCase(),a.id]]));
 
-function normalized(raw,profiles){
-  const key=String(raw.id||raw.number||raw.bill_number||'').replace(/\s/g,'').toUpperCase();
-  if(!/^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)\d{1,5}$/.test(key))return null;
-  const number=key.replace(/^(HJR|SJR|HCR|SCR|HB|SB|HR|SR)/,'$1 ');
-  const chamber=key.startsWith('H')?'House':'Senate';
-  const bill={...raw,id:key,number,chamber,
-    title:raw.title||raw.description||raw.caption||'No caption available',
-    caption:raw.caption||raw.description||raw.title||'',
-    author:raw.author||raw.primary_author||'Author not yet available',
-    authors:memberNames(raw.authors??(typeof raw.author==='string'&&!raw.author.startsWith('Author not')?raw.author:raw.primary_author)),
-    coauthors:raw.coauthors==null?null:memberNames(raw.coauthors),
-    sponsors:raw.sponsors==null?null:memberNames(raw.sponsors),
-    cosponsors:raw.cosponsors==null?null:memberNames(raw.cosponsors),
-    author_profile:raw.author_profile||matchAuthorProfile(raw.author||raw.primary_author,profiles)||{},
-    filed_at:raw.filed_at||raw.status_date||'',
-    last_action:raw.last_action||raw.status||'Filed',
-    status:raw.status||'Filed',
-    last_action_date:raw.last_action_date||raw.filed_at||''};
-  return autoTagBill(bill);
-}
+const normalized=normalizeBill;
 
 async function init(){
   const now=new Date();
@@ -145,8 +126,19 @@ function applyFilters(raw){
 }
 
 // Returns a sync key from the URL, if any, for setupSync to resolve.
+// The address without its open bill; when only the bill differs, Back/Forward just open or close the drawer.
+const withoutBill=hash=>String(hash||'').replace(/([?&])bill=[^&]*&?/,'$1').replace(/[?&]$/,'');
+let drawerPushed=false;  // The open bill added a history entry, so closing it steps back over that entry.
+
 function applyLocation(initial){
   const p=parseHash(location.hash);
+  if(!initial&&withoutBill(location.hash)===withoutBill(currentHash())){
+    // Forward onto a bill entry: the entry below it is the same page without the bill, so closing steps back.
+    if(p.bill&&p.bill!==state.openBill&&state.bills.some(b=>b.id===p.bill)){showDrawer(p.bill);drawerPushed=true}
+    else if(!p.bill&&state.openBill){drawerPushed=false;closeDrawer()}
+    return p.sync;
+  }
+  if(!p.bill&&state.openBill){drawerPushed=false;closeDrawer()}
   if(p.hasFilters)applyFilters(p.filters);
   else if(p.list)applyFilters({});  // A share link shows its whole list, even in a tab with filters set.
   else if(initial&&!p.list&&!p.bill&&!p.sync)applyFilters(readJson(prefsKey)?.filters);
@@ -157,11 +149,18 @@ function applyLocation(initial){
   return p.sync;
 }
 
-function persistState(){
-  const hash=buildHash(state.view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
+function currentHash(){
+  return buildHash(state.view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null});
-  if(location.hash!==hash)try{history.replaceState(null,'',hash)}catch{}
+}
+
+// push=true adds a history entry (opening a bill), so Back closes it instead of leaving the site.
+function persistState(push=false){
+  const hash=currentHash();
+  let pushed=false;
+  if(location.hash!==hash)try{if(push){history.pushState(null,'',hash);pushed=true}else history.replaceState(null,'',hash)}catch{}
   if((state.view==='all'||state.view==='watchlist')&&!state.sharedList)writeJson(prefsKey,{filters:pickFilters(state)});
+  return pushed;
 }
 
 function saveWatchLocal(){if(STORAGE_OK)writeJson(storageKey,[...state.watch])}
@@ -464,7 +463,7 @@ function memberItem({name,member}){
   return `<li><span class="party-dot party-${letter}" aria-hidden="true"></span>${link?`<a class="text-link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`:`<strong>${esc(label)}</strong>`} <small>${esc(memberSummary(member))}</small></li>`;
 }
 
-function showDrawer(id){
+function showDrawer(id,push=false){
   const b=state.bills.find(b=>b.id===id);if(!b)return;
   const h=assessHearing(b),influence=authorInfluence(b),party=authorshipParty(b),last=lastActionInfo(b);
   const agencyRows=b.agencies.length?b.agencies.map(a=>`<div class="agency-row"><div><strong>${esc(agencyName(a.id))}</strong><p>${esc(a.reason||'Relationship not yet annotated')}</p></div><span class="confidence ${a.relationship==='direct'?'direct':''}">${a.source==='luna'?`Luna · ${a.relationship==='direct'?'direct':'inferred'}`:a.relationship==='direct'?'Direct':'Possible'}</span></div>`).join(''):'<p>No agency has been tagged yet. This does not establish that none are affected.</p>';
@@ -480,10 +479,17 @@ function showDrawer(id){
   local.addEventListener('change',async()=>{try{const file=local.files[0];if(!file)return;if(file.size>15*1024*1024)throw Error('Select a file smaller than 15 MB');const bundle=JSON.parse(await file.text());reviewModel(bundle);if(bundle.bill_id!==b.id)throw Error('This review belongs to '+bundle.bill_id);reviews.set(b.id,bundle);draw();toast('Private review opened');}catch(error){toast('Review could not be opened: '+error.message)}});
   reviewSection.append(heading,load,local,area);$('#detail-drawer').append(reviewSection);draw();
   $('#detail-drawer').hidden=false;$('#drawer-scrim').hidden=false;document.body.style.overflow='hidden';$('#drawer-close').focus();
-  state.openBill=b.id;persistState();
+  state.openBill=b.id;
+  if(persistState(push&&!drawerPushed))drawerPushed=true;
 }
 
-function closeDrawer(){$('#detail-drawer').hidden=true;$('#drawer-scrim').hidden=true;document.body.style.overflow='';if(state.openBill){state.openBill=null;persistState()}}
+function closeDrawer(){
+  $('#detail-drawer').hidden=true;$('#drawer-scrim').hidden=true;document.body.style.overflow='';
+  if(!state.openBill)return;
+  state.openBill=null;
+  // Step back over the entry the bill added, so a later Back does not land on the same page again.
+  if(drawerPushed){drawerPushed=false;history.back()}else persistState();
+}
 
 function showAgencyChoices(query=''){
   const input=$('#filter-agency'),popup=$('#agency-options');
@@ -559,7 +565,7 @@ function handleClick(e){
   }
   hideAgencyChoices();
   const nav=e.target.closest('[data-view]');if(nav){e.preventDefault();location.hash=nav.dataset.view;setView(nav.dataset.view);return}
-  const open=e.target.closest('[data-open]');if(open){showDrawer(open.dataset.open);return}
+  const open=e.target.closest('[data-open]');if(open){showDrawer(open.dataset.open,true);return}
   if(e.target.closest('#copy-view-link,#share-watch,#export-watch,#import-watch,#shared-add,#shared-close,[id^="sync-"]')){handleSaveClick(e.target);return}
   const star=e.target.closest('[data-watch]');if(star){const id=star.dataset.watch;changeWatch(state.watch.has(id)?'remove':'add',[id]);renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(!$('#detail-drawer').hidden)showDrawer(id);toast(state.watch.has(id)?`${id} added to your watchlist`:`${id} removed from your watchlist`);return}
   const topic=e.target.closest('[data-topic]');if(topic){state.topic=topic.dataset.topic;state.visibleCount=30;renderContent();return}

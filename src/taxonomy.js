@@ -340,6 +340,28 @@ export function authorInfluence(bill) {
   return {label:p.leadership_position || p.committee_chair ? 'High institutional access' : p.seniority_years >= 12 ? 'Established member' : 'Tenure documented', factors,level:p.leadership_position || p.committee_chair ? 3 : p.seniority_years >= 12 ? 2 : 1};
 }
 
+// One snapshot row -> the bill shape the tracker and the agent pages use; null for an invalid bill id.
+export function normalizeBill(raw, profiles) {
+  const key = String(raw.id || raw.number || raw.bill_number || '').replace(/\s/g, '').toUpperCase();
+  if (!/^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)\d{1,5}$/.test(key)) return null;
+  const number = key.replace(/^(HJR|SJR|HCR|SCR|HB|SB|HR|SR)/, '$1 ');
+  const chamber = key.startsWith('H') ? 'House' : 'Senate';
+  const bill = {...raw, id:key, number, chamber,
+    title:raw.title || raw.description || raw.caption || 'No caption available',
+    caption:raw.caption || raw.description || raw.title || '',
+    author:raw.author || raw.primary_author || 'Author not yet available',
+    authors:memberNames(raw.authors ?? (typeof raw.author === 'string' && !raw.author.startsWith('Author not') ? raw.author : raw.primary_author)),
+    coauthors:raw.coauthors == null ? null : memberNames(raw.coauthors),
+    sponsors:raw.sponsors == null ? null : memberNames(raw.sponsors),
+    cosponsors:raw.cosponsors == null ? null : memberNames(raw.cosponsors),
+    author_profile:raw.author_profile || matchAuthorProfile(raw.author || raw.primary_author, profiles) || {},
+    filed_at:raw.filed_at || raw.status_date || '',
+    last_action:raw.last_action || raw.status || 'Filed',
+    status:raw.status || 'Filed',
+    last_action_date:raw.last_action_date || raw.filed_at || ''};
+  return autoTagBill(bill);
+}
+
 export function officialUrl(bill) {
   const number = (bill.id || bill.number || '').replace(/\s+/g,'').toUpperCase();
   return `https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill=${encodeURIComponent(number)}`;
