@@ -20,6 +20,23 @@ def bundle(changes: dict[str, bytes] | None = None) -> dict[str, bytes]:
     return files | (changes or {})
 
 
+class ShippedModuleTests(unittest.TestCase):
+    def test_every_module_the_page_imports_is_deployed(self):
+        # The installed deployer copies FILES only; an import of anything else 404s and the page never starts.
+        import re
+        src = Path(__file__).resolve().parents[1] / 'src'
+        shipped = {name for name in deploy.FILES if name.startswith('src/')}
+        pending, seen = ['src/app.js'], set()
+        while pending:
+            name = pending.pop()
+            if name in seen:
+                continue
+            seen.add(name)
+            self.assertIn(name, shipped, f'{name} is imported by the page but not in deploy_static.FILES')
+            text = (src.parent / name).read_text(encoding='utf-8')
+            pending += [f'src/{m}' for m in re.findall(r"""from\s+['"]\./([\w.-]+\.js)['"]""", text)]
+
+
 class VersionedAssetTests(unittest.TestCase):
     def test_copies_modules_and_points_the_page_at_them(self):
         digest, files = deploy.versioned_assets(bundle())
