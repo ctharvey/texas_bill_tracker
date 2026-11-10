@@ -320,7 +320,7 @@ def extract(document: dict, registry: list[dict], cache_root: Path, *, execute: 
         cached = cache.execute(request, submit)
     except NotSubmitted as error:
         return {"action": "not_submitted", "request_key": key, "message": str(error),
-                "new_api_cost_estimate": [0, 0], "publishable": False}
+                "reason_type": type(error).__name__, "new_api_cost_estimate": [0, 0], "publishable": False}
     raw = cached.response
     estimate = (cost_estimator or response_cost)(raw)
     report = {"request_key": key, "text_hash": document["text_hash"], "cache_hit": cached.cache_hit,

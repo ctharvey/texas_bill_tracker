@@ -12,13 +12,14 @@ import json
 import os
 from pathlib import Path
 import re
+import time
 from collections import Counter
 from urllib.request import Request, urlopen
 
 import classify_bill as classification
 import extract_bill as detailed
 from extraction_cache import (
-    CapacityUnavailable, NotSubmitted, ResponseCache, atomic_json, canonical_hash,
+    CacheCoolingDown, CapacityUnavailable, NotSubmitted, ResponseCache, atomic_json, canonical_hash,
 )
 
 ROOT = detailed.ROOT
@@ -33,6 +34,30 @@ class BudgetExceeded(NotSubmitted):
     pass
 
 
+class OutcomeUnresolved(NotSubmitted):
+    """An earlier billing outcome is unknown; no further calls until reconciled."""
+
+
+class AlreadyBilled(NotSubmitted):
+    """This exact request was billed before; its response cache must be restored."""
+
+
+class LongContext(NotSubmitted):
+    """The request exceeds the reviewed pricing range."""
+
+
+# Only these not-submitted reasons are specific to one bill. Every other one (budget, unresolved billing,
+# missing key or dependencies) is environmental and stops the run, so bills are never marked seen in bulk.
+PER_BILL_NOT_SUBMITTED = ("LongContext", "AlreadyBilled")
+LEDGER_ZONE = "America/Chicago"
+
+
+def ledger_day() -> str:
+    # Recomputed per call so a run spanning Chicago midnight books spend to the correct day.
+    from zoneinfo import ZoneInfo
+    return dt.datetime.now(ZoneInfo(LEDGER_ZONE)).date().isoformat()
+
+
 class Budget:
     """One worker lock covers this ledger; unknown submission outcomes retain their reservation."""
     def __init__(self, path: Path, daily_limit: float, run_limit: float):
@@ -40,21 +65,23 @@ class Budget:
             raise ValueError("Limits must satisfy 0 < run limit <= daily limit <= $1")
         self.path, self.daily_limit, self.run_limit = path, daily_limit, run_limit
         self.run_spent = 0.0
-        self.day = dt.datetime.now().date().isoformat()  # Service pins TZ=America/Chicago.
+        self.day = ledger_day()
         self.ledger = json.loads(path.read_text("utf-8")) if path.exists() else {}
         self.ledger.setdefault(self.day, {})
 
     def send(self, request: dict, sender=detailed.send_request) -> dict:
+        self.day = ledger_day()
+        self.ledger.setdefault(self.day, {})
         key = ResponseCache.key(request)
         if any(row.get("state") == "pending" for day in self.ledger.values() for row in day.values()):
-            raise NotSubmitted("A prior billing outcome is unresolved; new calls are blocked")
+            raise OutcomeUnresolved("A prior billing outcome is unresolved; new calls are blocked")
         if any(key in day for day in self.ledger.values()):
-            raise NotSubmitted("This request was already billed; restore its response cache before proceeding")
+            raise AlreadyBilled("This request was already billed; restore its response cache before proceeding")
         # UTF-8 bytes conservatively bound tokens, including the response schema. Reserve the
         # most expensive cache-write rate for every input token and all allowed output tokens.
         size = len(json.dumps(request, ensure_ascii=False).encode("utf-8"))
         if size > 272000:
-            raise NotSubmitted("Long-context requests require separate pricing review")
+            raise LongContext("Long-context requests require separate pricing review")
         ceiling = (size * .125 + request["max_output_tokens"] * .25) / 1e6
         outstanding = sum(v["reserved"] for day in self.ledger.values() for v in day.values()
                           if v.get("state") == "pending")
@@ -354,13 +381,19 @@ def resolve(question, result, document, registry, cache_root, budget, execute, s
 def run_document(document, registry, cache_root, budget, execute=False, max_questions=3):
     first = classification.classify(document, registry, cache_root, execute=execute, sender=budget.send)
     if "result" not in first:
-        return {"bill_id": document["bill_id"],
-                "status": "deferred" if first.get("action") == "not_submitted" else "needs_review",
-                "first_pass": first, "publishable": False}
+        if first.get("action") != "not_submitted":
+            status = "needs_review"
+        elif not execute:
+            status = "prepared"  # Dry run: nothing reviewed, so the bill must not be marked seen.
+        elif first.get("reason_type") in PER_BILL_NOT_SUBMITTED:
+            status = "needs_review"  # Per-bill obstacle; later bills still run.
+        else:
+            status = "deferred"
+        return {"bill_id": document["bill_id"], "status": status, "first_pass": first, "publishable": False}
     original = first["result"]
     questions = questions_for(original, document, first)
     derived, resolutions, pending, sources = copy.deepcopy(original), [], [], []
-    new_calls = 0
+    new_calls, stop_run = 0, None
     for index, question in enumerate(questions):
         before_spending = budget.run_spent
         try:
@@ -385,6 +418,7 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
             pending.append({**question, "reason": reason})
             if isinstance(error, (BudgetExceeded, CapacityUnavailable)):
                 pending.extend({**q, "reason": "Deferred with preceding request"} for q in questions[index+1:])
+                stop_run = reason  # The whole run stops; this bill keeps its pending questions in retry.
                 break
     resolved_ids = {r["question"]["id"] for r in resolutions if r["result"]["status"] == "resolved"}
     derived["uncertainties"] = [q for q in derived["uncertainties"] if canonical_hash(q)[:16] not in resolved_ids]
@@ -393,7 +427,8 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
     return {"format": "texas-bill-review-v1", "bill_id": document["bill_id"], "document": document,
             "result": derived, "validation": validation, "questions": questions, "resolutions": resolutions,
             "pending_questions": pending, "first_pass_request_key": first["request_key"],
-            "status": "needs_review" if pending or validation["errors"] else "ready_for_review", "publishable": False}
+            "status": "needs_review" if pending or validation["errors"] else "ready_for_review", "publishable": False,
+            "stop_run": stop_run}
 
 
 def download_document(bill_id: str, root: Path, ftp_factory=ftplib.FTP) -> dict:
@@ -422,20 +457,38 @@ def download_document(bill_id: str, root: Path, ftp_factory=ftplib.FTP) -> dict:
         temporary = pdf.with_suffix(".download")
         with temporary.open("wb") as stream:
             ftp.retrbinary("RETR " + remote, stream.write)
-        document = detailed.read_pdf(temporary, bill_id, "90R", "introduced")
+        try:
+            document = detailed.read_pdf(temporary, bill_id, "90R", "introduced")
+        except Exception as error:
+            if type(error).__module__.split(".")[0] == "pypdf":
+                raise ValueError("Unreadable bill PDF") from error  # Per-bill failure, not a worker fault.
+            raise
         temporary.replace(pdf)
         document.update(source_url="ftp://ftp.legis.state.tx.us" + remote, ftp_modified=modified)
         atomic_json(record, document)
         return document
 
 
+DOWNLOAD_ERRORS = (ftplib.Error, OSError, EOFError, ValueError)
+OUTAGE_LIMIT = 5  # Consecutive new failures treated as an outage (FTP down, disk full) rather than bad bills.
+
+
+def record_failure(queue: dict, bill_id: str, stage: str, error: Exception) -> None:
+    # Store only the type: messages can carry request or transport details.
+    count = queue['failed'].get(bill_id, {}).get('count', 0) + 1
+    queue['failed'][bill_id] = {'count': count, 'stage': stage, 'reason': type(error).__name__}
+
+
 def queue_candidates(ids: list[str], queue: dict, limit: int | None = None) -> list[str]:
-    unseen = [x for x in ids if x not in queue['seen']]
-    known = [x for x in ids if x in queue['seen']]
+    failed = queue.get('failed', {})
+    unseen = [x for x in ids if x not in queue['seen'] and x not in failed]
+    known = [x for x in ids if x in queue['seen'] and x not in failed]
+    # Failed bills (e.g. PDF not posted yet) follow new work so they cannot block it.
+    failing = [x for x in ids if x in failed]
     offset = queue['cursor'] % max(1, len(known))
     # Bound retry priority so unavailable work cannot starve newly filed bills.
     retries = [x for x in queue.get('retry', []) if x in ids][:3 if limit is None else min(3, limit)]
-    return list(dict.fromkeys(retries + unseen + known[offset:] + known[:offset]))[:limit]
+    return list(dict.fromkeys(retries + unseen + failing + known[offset:] + known[:offset]))[:limit]
 
 
 def main():
@@ -446,11 +499,15 @@ def main():
                         help="Optional cap; by default a run continues serially until a spending guard stops it")
     parser.add_argument("--daily-budget", type=float, default=1)
     parser.add_argument("--run-budget", type=float, default=.1)
+    parser.add_argument("--max-minutes", type=float, default=50,
+                        help="Wall-clock limit checked between bills, never mid-request")
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
     detailed.check_cache_location(args.cache_dir)
     if args.max_bills is not None and args.max_bills < 1:
         parser.error("--max-bills must be at least 1")
+    if args.max_minutes <= 0:
+        parser.error("--max-minutes must be positive")
     with ResponseCache(args.cache_dir / "worker-lock")._lock("worker"):
         budget = Budget(args.cache_dir / "budget.json", args.daily_budget, args.run_budget)
         snapshot = json.loads((ROOT / "data/bills.json").read_text("utf-8"))
@@ -458,32 +515,78 @@ def main():
         queue_path = args.cache_dir / "queue.json"
         queue = json.loads(queue_path.read_text("utf-8")) if queue_path.exists() else {"seen": [], "cursor": 0}
         candidates = args.bill_id[:args.max_bills] if args.bill_id else queue_candidates(ids, queue, args.max_bills)
-        queue.setdefault('retry', [])
+        queue.setdefault('retry', []); queue.setdefault('failed', {})
+        deadline = time.monotonic() + args.max_minutes * 60
+        new_failures = 0
         for bill_id in candidates:
+            if time.monotonic() > deadline:
+                print("Stopped: run time limit; remaining work stays queued", flush=True); break
             try:
                 document = download_document(bill_id, args.cache_dir)
-                bundle = run_document(document, detailed.load_registry(), args.cache_dir, budget, args.execute)
-                atomic_json(args.cache_dir / "reviews" / (bill_id + ".json"), bundle)
-                retryable = any(q.get('reason', '').startswith(('CapacityUnavailable', 'CacheCoolingDown',
-                    'NotSubmitted', 'Deferred')) for q in bundle.get('pending_questions', []))
-                if retryable and bill_id not in queue['retry']:
-                    queue['retry'].append(bill_id)
-                if not retryable and bill_id in queue['retry']:
-                    queue['retry'].remove(bill_id)
-                print(bill_id, bundle["status"], flush=True)
-                if bundle["status"] == "deferred":
-                    break
-            except (BudgetExceeded, CapacityUnavailable):
-                print("Deferred: budget/capacity guard", flush=True); break
+            except DOWNLOAD_ERRORS as error:
+                # A failed bill is never marked seen; it keeps a place after new work.
+                new_failures += bill_id not in queue['failed']
+                record_failure(queue, bill_id, 'download', error)
+                atomic_json(queue_path, queue)
+                print(bill_id, "download_failed", type(error).__name__, flush=True)
+                if new_failures >= OUTAGE_LIMIT:
+                    print("Stopped: repeated new failures; FTP or storage may be unavailable", flush=True); break
+                continue
             except Exception as error:
+                print(bill_id, "stopped", type(error).__name__, flush=True)
+                raise SystemExit(2)
+            try:
+                bundle = run_document(document, detailed.load_registry(), args.cache_dir, budget, args.execute)
+            except CacheCoolingDown:
+                # Per-request cooldown: skip this bill now and retry it early in a later run.
+                if bill_id in queue['seen'] and bill_id not in queue['retry']:
+                    queue['retry'].append(bill_id)
+                atomic_json(queue_path, queue)
+                print(bill_id, "deferred CacheCoolingDown", flush=True)
+                continue
+            except (BudgetExceeded, CapacityUnavailable) as error:
+                if bill_id in queue['seen'] and bill_id not in queue['retry']:
+                    queue['retry'].append(bill_id)
+                atomic_json(queue_path, queue)
                 print(bill_id, "deferred", type(error).__name__, flush=True)
-                if not isinstance(error, (ftplib.Error, OSError, ValueError)):
-                    raise SystemExit(2)
+                print("Deferred: budget/capacity guard", flush=True); break
+            except (OSError, ValueError) as error:
+                new_failures += bill_id not in queue['failed']
+                record_failure(queue, bill_id, 'processing', error)
+                atomic_json(queue_path, queue)
+                print(bill_id, "failed", type(error).__name__, flush=True)
+                if new_failures >= OUTAGE_LIMIT:
+                    print("Stopped: repeated new failures; FTP or storage may be unavailable", flush=True); break
+                continue
+            except Exception as error:
+                print(bill_id, "stopped", type(error).__name__, flush=True)
+                raise SystemExit(2)
+            new_failures = 0
+            status = bundle["status"]
+            if status in ("deferred", "prepared"):
+                # Nothing was reviewed: leave queue state and any earlier review untouched.
+                print(bill_id, status, bundle["first_pass"].get("reason_type", ""), flush=True)
+                if status == "deferred":
+                    print("Deferred: budget/capacity guard", flush=True); break
+                continue
+            review_path = args.cache_dir / "reviews" / (bill_id + ".json")
+            if "result" in bundle or not review_path.exists():
+                atomic_json(review_path, bundle)
+            retryable = any(q.get('reason', '').startswith(('CapacityUnavailable', 'CacheCoolingDown',
+                'NotSubmitted', 'BudgetExceeded', 'Deferred')) for q in bundle.get('pending_questions', []))
+            if retryable and bill_id not in queue['retry']:
+                queue['retry'].append(bill_id)
+            if not retryable and bill_id in queue['retry']:
+                queue['retry'].remove(bill_id)
+            queue['failed'].pop(bill_id, None)
             if bill_id not in queue["seen"]:
                 queue["seen"].append(bill_id)
             else:
                 queue["cursor"] += 1
             atomic_json(queue_path, queue)
+            print(bill_id, status, flush=True)
+            if bundle.get("stop_run"):
+                print("Deferred: budget/capacity guard during review questions", flush=True); break
         print("New model spending this run: $%.6f" % budget.run_spent)
 
 
