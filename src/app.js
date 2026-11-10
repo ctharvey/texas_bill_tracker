@@ -1,9 +1,9 @@
 import {reviewModel, renderReview} from './review.js';
-import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours} from './taxonomy.js';
+import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours} from './taxonomy.js';
 
 const $ = (selector, root=document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state = {view:'all',bills:[],watch:new Set(),query:'',topic:'',agency:'',chamber:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30,meta:null,luna:null,roster:null};
+const state = {view:'all',bills:[],watch:new Set(),query:'',topic:'',agency:'',chamber:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30,meta:null,luna:null,roster:null,reviewStatus:null};
 const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last action',actionstage:'Last action stage',number:'Bill number',agencies:'Most agencies',hearing:'Hearing progress',influence:'Author influence'};
 const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
 const reviews = new Map();
@@ -72,6 +72,7 @@ async function init(){
       state.luna={...tags,agencies:tags.agencies&&typeof tags.agencies==='object'?tags.agencies:{}};
       loadedBills=loadedBills.map(b=>Object.hasOwn(tags.bills,b.id)&&tags.bills[b.id]&&typeof tags.bills[b.id]==='object'?applyLunaTags(b,tags.bills[b.id],state.luna.agencies):b);
     }catch(error){state.luna=null;console.warn('Luna tags unavailable',error.message)}
+    await loadReviewStatus();
     for(const url of ['./live/members.json','./data/members.json']){
       try{
         const response=await fetch(url,{cache:'no-store',signal:timeoutSignal(7500)});
@@ -98,15 +99,35 @@ async function init(){
     if(event.key==='Escape')closeDrawer();
   });
   $('#drawer-scrim').addEventListener('click',closeDrawer);
-  const knownView=hash=>['all','watchlist','agencies','method','data'].includes(hash)?hash:'all';
+  const knownView=hash=>['all','watchlist','agencies','review','method','data'].includes(hash)?hash:'all';
   window.addEventListener('hashchange',()=>setView(knownView(location.hash.slice(1))));
   setView(knownView(location.hash.slice(1)));
+  // Keep the progress view current while it is open; other views never refetch.
+  setInterval(async()=>{
+    if(state.view!=='review'||document.visibilityState!=='visible')return;
+    const before=state.reviewStatus?.updated_at;await loadReviewStatus();
+    if(state.view==='review'&&state.reviewStatus?.updated_at!==before){
+      const open=[...document.querySelectorAll('.review-group')].map(d=>d.open);
+      renderOverview();renderContent();
+      document.querySelectorAll('.review-group').forEach((d,i)=>{if(i<open.length)d.open=open[i]});
+    }
+  },60000);
+}
+
+async function loadReviewStatus(){
+  try{
+    const response=await fetch('./live/luna/status.json',{cache:'no-store',signal:timeoutSignal(7500)});
+    if(!response.ok)throw Error(`HTTP ${response.status}`);
+    const status=await response.json();
+    if(status?.format!=='texas-bill-luna-status-v1'||!Array.isArray(status.reviewed))throw Error('Unrecognized status format');
+    state.reviewStatus=status;
+  }catch(error){console.warn('Review status unavailable',error.message)}
 }
 
 function setView(view){
   state.view=view;
   document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===view));
-  const heads={all:['See what’s moving.<br><em>Know what it changes.</em>','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],watchlist:['Your watchlist.<br><em>Keep the signal.</em>','Bills you are following on this device, with a clear view of their movement.'],agencies:['Follow the agencies.<br><em>Not just the bills.</em>','Explore where legislation might land across Texas government.'],method:['The scoring method.<br><em>No black boxes.</em>','Signals and uncertainty are displayed separately from verified legislative actions.'],data:['Behind the tracker.<br><em>Follow the source.</em>','Understand coverage, refreshes, and how to load or export bill data.']};
+  const heads={all:['See what’s moving.<br><em>Know what it changes.</em>','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],watchlist:['Your watchlist.<br><em>Keep the signal.</em>','Bills you are following on this device, with a clear view of their movement.'],agencies:['Follow the agencies.<br><em>Not just the bills.</em>','Explore where legislation might land across Texas government.'],review:['Full-text review.<br><em>Bill by bill.</em>','Which bills Luna has read in full, which it is working on, and what is still waiting.'],method:['The scoring method.<br><em>No black boxes.</em>','Signals and uncertainty are displayed separately from verified legislative actions.'],data:['Behind the tracker.<br><em>Follow the source.</em>','Understand coverage, refreshes, and how to load or export bill data.']};
   $('#page-title').innerHTML=heads[view][0];$('#page-subtitle').textContent=heads[view][1];
   $('#overview').hidden=!['all','watchlist'].includes(view);
   renderNotice();renderOverview();renderContent();
@@ -143,12 +164,15 @@ function renderOverview(){
   $('#overview').innerHTML=cards.map(([label,count,icon,foot,accent])=>`<div class="stat-card"><div class="stat-top"><span>${label}</span><span class="stat-icon">${icon}</span></div><div class="stat-value ${accent||''}">${count.toLocaleString()}</div><div class="stat-foot">${foot}</div></div>`).join('');
   $('#nav-all').textContent=state.bills.length;
   $('#nav-watch').textContent=state.watch.size;
+  const progress=reviewProgress(state.bills.map(b=>b.id),state.reviewStatus,Object.keys(state.luna?.bills||{}));
+  $('#nav-review').textContent=progress.reviewed.length+progress.inProgress.length;
 }
 
 function renderContent(){
   const el=$('#dynamic-content');
   if(state.view==='all'||state.view==='watchlist')el.innerHTML=explorerMarkup();
   else if(state.view==='agencies')el.innerHTML=agenciesMarkup();
+  else if(state.view==='review')el.innerHTML=reviewMarkup();
   else if(state.view==='method')el.innerHTML=methodMarkup();
   else el.innerHTML=dataMarkup();
   if(state.view==='all'||state.view==='watchlist')renderResults();
@@ -216,6 +240,31 @@ function agenciesMarkup(){
   const counts=new Map();for(const b of state.bills)for(const a of realAgencies(b))counts.set(a.id,(counts.get(a.id)||0)+1);
   const agencies=unique([...AGENCIES.map(a=>a.id),...Object.keys(state.luna?.agencies||{})]).filter(id=>id!==SCOPE_AGENCY_ID).map(id=>({id,name:agencyName(id)})).sort((a,b)=>(counts.get(b.id)||0)-(counts.get(a.id)||0)||a.name.localeCompare(b.name));
   return `<div class="section-head"><div><div class="section-overline">IMPACT DIRECTORY</div><h2>Texas state agencies</h2></div><span class="subtitle">${counts.size} with possible links in this snapshot</span></div><div class="info-callout"><strong>Why an agency index?</strong> One bill can change the work of several state agencies. “Direct” means the supplied material names an agency; “possible” means an inferred policy connection. An agency absent from a caption is not proof it is unaffected—full bill text review is needed for comprehensive coverage.</div><div class="agency-grid" style="margin-top:18px">${agencies.map(a=>`<button class="agency-card" data-agency-pick="${esc(a.id)}"><span class="agency-code">${esc(a.id.toUpperCase())}</span><strong>${esc(a.name)}</strong><span class="hits">${counts.get(a.id)||0} ${counts.get(a.id)===1?'bill':'bills'} in snapshot →</span></button>`).join('')}</div>`;
+}
+
+function reviewMarkup(){
+  const ids=state.bills.map(b=>b.id),status=state.reviewStatus,tagged=state.luna?.bills||{};
+  const p=reviewProgress(ids,status,Object.keys(tagged));
+  const total=ids.length||1,pct=n=>Math.round(n/total*1000)/10;
+  const minutes=status?.updated_at?(Date.now()-Date.parse(status.updated_at))/60000:null;
+  const stale=Boolean(status?.running)&&minutes>90;
+  const line=!status?'Live worker status is unavailable, so bills with published Luna tags are counted as reviewed.'
+    :stale?`The worker last reported ${esc(stampText(status.updated_at))} and may have stopped.`
+    :status.running?`Reviewing now · updated ${esc(stampText(status.updated_at))}`
+    :`Idle between hourly runs · last update ${esc(stampText(status.updated_at))}`;
+  const chip=(id,note='')=>`<button class="review-chip${tagged[id]?' tagged':''}" data-open="${esc(id)}" title="${tagged[id]?'Luna tags published':'Reviewed; no verified tags published'}${note?' · '+esc(note):''}">${esc(id)}</button>`;
+  const group=(title,list,empty,open=true)=>`<details class="review-group"${open?' open':''}><summary><strong>${title}</strong> <span>${list.length.toLocaleString()}</span></summary>${list.length?`<div class="review-chips">${list.join('')}</div>`:`<p class="review-empty">${empty}</p>`}</details>`;
+  const counts=[['Reviewed',p.reviewed.length,'done'],['In progress',p.inProgress.length+(p.current?1:0),'progress'],['Failed',p.failed.length,'failed'],['Not started',p.notStarted.length,'waiting']];
+  const now=p.current&&!stale?`<div class="review-now"><span class="review-pulse" aria-hidden="true"></span><div><small>Reviewing now</small>${chip(p.current)}</div>${p.upcoming.length?`<div><small>Up next</small>${p.upcoming.map(id=>chip(id)).join('')}</div>`:''}</div>`:'';
+  return `<div class="section-head"><div><div class="section-overline">LUNA FULL-TEXT REVIEW</div><h2>Review progress</h2></div><span class="subtitle">${line}</span></div>
+  <div class="review-bar" role="img" aria-label="${p.reviewed.length} reviewed, ${p.inProgress.length} in progress, ${p.failed.length} failed, ${p.notStarted.length} not started of ${ids.length}">${counts.map(([,n,cls])=>`<span class="seg ${cls}" style="width:${pct(n)}%"></span>`).join('')}</div>
+  <div class="review-counts">${counts.map(([label,n,cls])=>`<div class="review-count ${cls}"><span class="dot"></span><strong>${n.toLocaleString()}</strong><span>${label} · ${pct(n)}%</span></div>`).join('')}</div>
+  ${now}
+  ${group('In progress',[...(p.current?[chip(p.current,'being reviewed now')]:[]),...p.inProgress.map(id=>chip(id,'queued to finish open review questions'))],'Nothing is being reviewed or waiting on a retry.')}
+  ${group('Failed',p.failed.map(f=>chip(f.id,f.stage?`${f.stage} failed`:'failed')),'No failures.',p.failed.length>0)}
+  ${group('Reviewed',p.reviewed.map(id=>chip(id)),'No bills reviewed yet.')}
+  ${group('Not started',p.notStarted.map(id=>chip(id)),'Every bill has been picked up.',false)}
+  <p class="review-legend"><span class="review-chip tagged">HB1</span> verified Luna tags published · <span class="review-chip">HB1</span> reviewed, no claims verified against the text yet. Failed bills are usually ones whose text the legislature has not posted; they are retried automatically.</p>`;
 }
 
 function methodMarkup(){

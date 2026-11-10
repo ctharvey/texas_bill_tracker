@@ -523,6 +523,26 @@ def publish_tags(cache_dir: Path, out: Path, registry: list[dict]) -> int:
     return len(bills)
 
 
+def publish_status(out: Path, queue: dict, *, current: str | None, upcoming: list[str], running: bool) -> None:
+    # Public progress view: bill ids and states only, never costs, reasons or review content.
+    atomic_json(out, {"format": "texas-bill-luna-status-v1",
+                      "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                      "running": running, "current": current, "upcoming": upcoming,
+                      "reviewed": list(queue.get("seen", [])), "retry": list(queue.get("retry", [])),
+                      "failed": {k: v.get("stage") for k, v in queue.get("failed", {}).items()}})
+    os.chmod(out, 0o644)
+
+
+def try_publish_status(out: Path | None, queue: dict, **kwargs) -> None:
+    if out is None:
+        return
+    try:
+        publish_status(out, queue, **kwargs)
+    except OSError as error:
+        # Progress display only; never stop a review run over it.
+        print("Status publish failed:", type(error).__name__, flush=True)
+
+
 DOWNLOAD_ERRORS = (ftplib.Error, OSError, EOFError, ValueError)
 OUTAGE_LIMIT = 5  # Consecutive new failures treated as an outage (FTP down, disk full) rather than bad bills.
 
@@ -583,75 +603,81 @@ def main():
         queue.setdefault('retry', []); queue.setdefault('failed', {})
         deadline = time.monotonic() + args.max_minutes * 60
         new_failures = 0
-        for bill_id in candidates:
-            if time.monotonic() > deadline:
-                print("Stopped: run time limit; remaining work stays queued", flush=True); break
-            try:
-                document = download_document(bill_id, args.cache_dir)
-            except DOWNLOAD_ERRORS as error:
-                # A failed bill is never marked seen; it keeps a place after new work.
-                new_failures += bill_id not in queue['failed']
-                record_failure(queue, bill_id, 'download', error)
-                atomic_json(queue_path, queue)
-                print(bill_id, "download_failed", type(error).__name__, flush=True)
-                if new_failures >= OUTAGE_LIMIT:
-                    print("Stopped: repeated new failures; FTP or storage may be unavailable", flush=True); break
-                continue
-            except Exception as error:
-                print(bill_id, "stopped", type(error).__name__, flush=True)
-                raise SystemExit(2)
-            try:
-                bundle = run_document(document, detailed.load_registry(), args.cache_dir, budget, args.execute)
-            except CacheCoolingDown:
-                # Per-request cooldown: skip this bill now and retry it early in a later run.
-                if bill_id in queue['seen'] and bill_id not in queue['retry']:
-                    queue['retry'].append(bill_id)
-                atomic_json(queue_path, queue)
-                print(bill_id, "deferred CacheCoolingDown", flush=True)
-                continue
-            except (BudgetExceeded, CapacityUnavailable) as error:
-                if bill_id in queue['seen'] and bill_id not in queue['retry']:
-                    queue['retry'].append(bill_id)
-                atomic_json(queue_path, queue)
-                print(bill_id, "deferred", type(error).__name__, flush=True)
-                print("Deferred: budget/capacity guard", flush=True); break
-            except (OSError, ValueError) as error:
-                new_failures += bill_id not in queue['failed']
-                record_failure(queue, bill_id, 'processing', error)
-                atomic_json(queue_path, queue)
-                print(bill_id, "failed", type(error).__name__, flush=True)
-                if new_failures >= OUTAGE_LIMIT:
-                    print("Stopped: repeated new failures; FTP or storage may be unavailable", flush=True); break
-                continue
-            except Exception as error:
-                print(bill_id, "stopped", type(error).__name__, flush=True)
-                raise SystemExit(2)
-            new_failures = 0
-            status = bundle["status"]
-            if status in ("deferred", "prepared"):
-                # Nothing was reviewed: leave queue state and any earlier review untouched.
-                print(bill_id, status, bundle["first_pass"].get("reason_type", ""), flush=True)
-                if status == "deferred":
+        status_path = args.publish_tags.parent / "status.json" if args.publish_tags and args.execute else None
+        try:
+            for index, bill_id in enumerate(candidates):
+                if time.monotonic() > deadline:
+                    print("Stopped: run time limit; remaining work stays queued", flush=True); break
+                try_publish_status(status_path, queue, current=bill_id,
+                                   upcoming=candidates[index + 1:index + 6], running=True)
+                try:
+                    document = download_document(bill_id, args.cache_dir)
+                except DOWNLOAD_ERRORS as error:
+                    # A failed bill is never marked seen; it keeps a place after new work.
+                    new_failures += bill_id not in queue['failed']
+                    record_failure(queue, bill_id, 'download', error)
+                    atomic_json(queue_path, queue)
+                    print(bill_id, "download_failed", type(error).__name__, flush=True)
+                    if new_failures >= OUTAGE_LIMIT:
+                        print("Stopped: repeated new failures; FTP or storage may be unavailable", flush=True); break
+                    continue
+                except Exception as error:
+                    print(bill_id, "stopped", type(error).__name__, flush=True)
+                    raise SystemExit(2)
+                try:
+                    bundle = run_document(document, detailed.load_registry(), args.cache_dir, budget, args.execute)
+                except CacheCoolingDown:
+                    # Per-request cooldown: skip this bill now and retry it early in a later run.
+                    if bill_id in queue['seen'] and bill_id not in queue['retry']:
+                        queue['retry'].append(bill_id)
+                    atomic_json(queue_path, queue)
+                    print(bill_id, "deferred CacheCoolingDown", flush=True)
+                    continue
+                except (BudgetExceeded, CapacityUnavailable) as error:
+                    if bill_id in queue['seen'] and bill_id not in queue['retry']:
+                        queue['retry'].append(bill_id)
+                    atomic_json(queue_path, queue)
+                    print(bill_id, "deferred", type(error).__name__, flush=True)
                     print("Deferred: budget/capacity guard", flush=True); break
-                continue
-            review_path = args.cache_dir / "reviews" / (bill_id + ".json")
-            if "result" in bundle or not review_path.exists():
-                atomic_json(review_path, bundle)
-            retryable = any(q.get('reason', '').startswith(('CapacityUnavailable', 'CacheCoolingDown',
-                'NotSubmitted', 'BudgetExceeded', 'Deferred')) for q in bundle.get('pending_questions', []))
-            if retryable and bill_id not in queue['retry']:
-                queue['retry'].append(bill_id)
-            if not retryable and bill_id in queue['retry']:
-                queue['retry'].remove(bill_id)
-            queue['failed'].pop(bill_id, None)
-            if bill_id not in queue["seen"]:
-                queue["seen"].append(bill_id)
-            else:
-                queue["cursor"] += 1
-            atomic_json(queue_path, queue)
-            print(bill_id, status, flush=True)
-            if bundle.get("stop_run"):
-                print("Deferred: budget/capacity guard during review questions", flush=True); break
+                except (OSError, ValueError) as error:
+                    new_failures += bill_id not in queue['failed']
+                    record_failure(queue, bill_id, 'processing', error)
+                    atomic_json(queue_path, queue)
+                    print(bill_id, "failed", type(error).__name__, flush=True)
+                    if new_failures >= OUTAGE_LIMIT:
+                        print("Stopped: repeated new failures; FTP or storage may be unavailable", flush=True); break
+                    continue
+                except Exception as error:
+                    print(bill_id, "stopped", type(error).__name__, flush=True)
+                    raise SystemExit(2)
+                new_failures = 0
+                status = bundle["status"]
+                if status in ("deferred", "prepared"):
+                    # Nothing was reviewed: leave queue state and any earlier review untouched.
+                    print(bill_id, status, bundle["first_pass"].get("reason_type", ""), flush=True)
+                    if status == "deferred":
+                        print("Deferred: budget/capacity guard", flush=True); break
+                    continue
+                review_path = args.cache_dir / "reviews" / (bill_id + ".json")
+                if "result" in bundle or not review_path.exists():
+                    atomic_json(review_path, bundle)
+                retryable = any(q.get('reason', '').startswith(('CapacityUnavailable', 'CacheCoolingDown',
+                    'NotSubmitted', 'BudgetExceeded', 'Deferred')) for q in bundle.get('pending_questions', []))
+                if retryable and bill_id not in queue['retry']:
+                    queue['retry'].append(bill_id)
+                if not retryable and bill_id in queue['retry']:
+                    queue['retry'].remove(bill_id)
+                queue['failed'].pop(bill_id, None)
+                if bill_id not in queue["seen"]:
+                    queue["seen"].append(bill_id)
+                else:
+                    queue["cursor"] += 1
+                atomic_json(queue_path, queue)
+                print(bill_id, status, flush=True)
+                if bundle.get("stop_run"):
+                    print("Deferred: budget/capacity guard during review questions", flush=True); break
+        finally:
+            try_publish_status(status_path, queue, current=None, upcoming=[], running=False)
         print("New model spending this run: $%.6f" % budget.run_spent)
         if args.publish_tags:
             try:

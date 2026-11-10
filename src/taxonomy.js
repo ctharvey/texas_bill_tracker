@@ -283,6 +283,27 @@ export const LAST_ACTION_TYPES = [
 ];
 const ACTION_CHAMBER = {H:'House', S:'Senate', E:'Governor'};
 
+// Splits bill ids into review states. Precedence: current > failed > in progress (retry) > reviewed.
+// Without a worker status file, bills with published Luna tags count as reviewed.
+export function reviewProgress(ids, status, taggedIds = []) {
+  const list = v => Array.isArray(v) ? v.filter(x => typeof x === 'string') : [];
+  const failedMap = status?.failed && typeof status.failed === 'object' && !Array.isArray(status.failed) ? status.failed : {};
+  const current = status?.running && typeof status.current === 'string' ? status.current : null;
+  const retry = new Set(list(status?.retry));
+  const seen = new Set([...list(status?.reviewed), ...taggedIds]);
+  const known = new Set(ids);
+  const out = {current: known.has(current) ? current : null, upcoming: list(status?.upcoming).filter(id => known.has(id)),
+    reviewed: [], inProgress: [], failed: [], notStarted: []};
+  for (const id of ids) {
+    if (id === out.current) continue;
+    if (Object.hasOwn(failedMap, id)) out.failed.push({id, stage: typeof failedMap[id] === 'string' ? failedMap[id] : null});
+    else if (retry.has(id)) out.inProgress.push(id);
+    else if (seen.has(id)) out.reviewed.push(id);
+    else out.notStarted.push(id);
+  }
+  return out;
+}
+
 export function lastActionInfo(bill) {
   const raw = String(bill.last_action || '').trim();
   const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+([HSE])\s+(.*)$/);

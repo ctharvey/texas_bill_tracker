@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-10
+- Review progress: new tracker view showing reviewed, in-progress (current and retry), failed and not-started
+  bills, with the bill under review and the next ones up; the worker publishes `live/luna/status.json`.
 - Review worker: `--no-spending-cap` disables the $1/day and $0.10/run ceilings while keeping reservations,
   the ledger and double-billing checks; `--order reverse` reviews from the bottom of the snapshot up. The
   production unit uses both until the backlog completes.

@@ -111,6 +111,57 @@ class WorkerLoopTests(unittest.TestCase):
         self.assertEqual(queue['seen'], ['HB1', 'HB2'])
 
 
+class PublicStatusTests(WorkerLoopTests):
+    def setUp(self):
+        super().setUp()
+        self.tags = Path(self.temp.name) / 'live' / 'luna' / 'tags.json'; self.tags.parent.mkdir(parents=True)
+        self.status = self.tags.parent / 'status.json'
+        p = patch.object(pipeline, 'publish_tags', return_value=0); p.start(); self.addCleanup(p.stop)
+
+    def read(self):
+        return json.loads(self.status.read_text('utf-8'))
+
+    def test_status_names_current_bill_during_run_and_clears_after(self):
+        seen = {}
+        def run_document(doc, *a, **k):
+            seen[doc['bill_id']] = self.read(); return bundle(doc['bill_id'])
+        def download(bill_id, root):
+            if bill_id == 'HB3':
+                raise ftplib.error_perm('550 not posted')
+            return {'bill_id': bill_id}
+        queue = self.run_main(download, run_document, '--publish-tags', str(self.tags))
+        self.assertEqual((seen['HB2']['current'], seen['HB2']['running']), ('HB2', True))
+        self.assertEqual(seen['HB2']['upcoming'], ['HB3', 'HB4', 'HB5', 'HB6', 'HB7'])
+        self.assertEqual(seen['HB2']['reviewed'], ['HB1'])
+        final = self.read()
+        self.assertEqual((final['running'], final['current'], final['upcoming']), (False, None, []))
+        self.assertEqual(final['reviewed'], queue['seen'])
+        self.assertEqual(final['failed'], {'HB3': 'download'})  # Stage only; no error reasons.
+        self.assertEqual(set(final), {'format', 'updated_at', 'running', 'current', 'upcoming', 'reviewed', 'retry', 'failed'})
+
+    def test_crash_still_publishes_stopped_status(self):
+        def run_document(doc, *a, **k): raise RuntimeError('unexpected')
+        with self.assertRaises(SystemExit):
+            self.run_main(lambda b, r: {'bill_id': b}, run_document, '--publish-tags', str(self.tags))
+        self.assertFalse(self.read()['running'])
+
+    def test_no_status_without_publish_or_on_dry_run(self):
+        self.run_main(lambda b, r: {'bill_id': b}, lambda doc, *a, **k: bundle(doc['bill_id']))
+        self.assertFalse(self.status.exists())
+        argv = ['review_pipeline.py', '--cache-dir', str(self.cache), '--publish-tags', str(self.tags)]
+        with patch.object(sys, 'argv', argv), patch.object(pipeline, 'download_document', side_effect=lambda b, r: {'bill_id': b}), \
+                patch.object(pipeline, 'run_document', side_effect=lambda doc, *a, **k: {**bundle(doc['bill_id'], 'prepared'), 'first_pass': {}}):
+            pipeline.main()
+        self.assertFalse(self.status.exists())
+
+    def test_reverse_order_starts_at_the_bottom(self):
+        processed = []
+        def download(bill_id, root):
+            processed.append(bill_id); return {'bill_id': bill_id}
+        self.run_main(download, lambda doc, *a, **k: bundle(doc['bill_id']), '--order', 'reverse')
+        self.assertEqual(processed, self.ids[::-1])
+
+
 class FirstPassStatusTests(unittest.TestCase):
     def run_with(self, reason_type, execute=True):
         first = {'action': 'not_submitted', 'request_key': 'k', 'reason_type': reason_type}
