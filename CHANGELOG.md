@@ -2,6 +2,9 @@
 
 ## 2026-11-09
 
+- Remove the review worker's per-run bill cap. Runs proceed serially until the $0.10 run or $1/day guard
+  stops them; the service no longer has a start timeout that could kill a run mid-request.
+
 - Enable the private hourly review worker on the existing VPS with the authorized $1/day ceiling, protected
   credentials/cache, and priority retries that leave capacity for new bills. Verify live annotated review,
   mobile layout, watchlist persistence and the complete 1,262-record official snapshot.

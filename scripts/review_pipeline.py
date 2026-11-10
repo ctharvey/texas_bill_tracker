@@ -429,12 +429,12 @@ def download_document(bill_id: str, root: Path, ftp_factory=ftplib.FTP) -> dict:
         return document
 
 
-def queue_candidates(ids: list[str], queue: dict, limit: int) -> list[str]:
+def queue_candidates(ids: list[str], queue: dict, limit: int | None = None) -> list[str]:
     unseen = [x for x in ids if x not in queue['seen']]
     known = [x for x in ids if x in queue['seen']]
     offset = queue['cursor'] % max(1, len(known))
     # Bound retry priority so unavailable work cannot starve newly filed bills.
-    retries = [x for x in queue.get('retry', []) if x in ids][:min(3, limit)]
+    retries = [x for x in queue.get('retry', []) if x in ids][:3 if limit is None else min(3, limit)]
     return list(dict.fromkeys(retries + unseen + known[offset:] + known[:offset]))[:limit]
 
 
@@ -442,14 +442,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cache-dir", type=Path, required=True, help="Private persistent directory outside web root")
     parser.add_argument("--bill-id", action="append", default=[])
-    parser.add_argument("--max-bills", type=int, default=3)
+    parser.add_argument("--max-bills", type=int, default=None,
+                        help="Optional cap; by default a run continues serially until a spending guard stops it")
     parser.add_argument("--daily-budget", type=float, default=1)
     parser.add_argument("--run-budget", type=float, default=.1)
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
     detailed.check_cache_location(args.cache_dir)
-    if not 1 <= args.max_bills <= 20:
-        parser.error("Choose 1 to 20 bills per run")
+    if args.max_bills is not None and args.max_bills < 1:
+        parser.error("--max-bills must be at least 1")
     with ResponseCache(args.cache_dir / "worker-lock")._lock("worker"):
         budget = Budget(args.cache_dir / "budget.json", args.daily_budget, args.run_budget)
         snapshot = json.loads((ROOT / "data/bills.json").read_text("utf-8"))

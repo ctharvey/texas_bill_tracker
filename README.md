@@ -57,8 +57,9 @@ the affected claim's schema. Unsupported, invalid or unanswered corrections stay
 python scripts/review_pipeline.py --cache-dir /private/texas-bill-review --bill-id HB273 --execute
 ```
 
-Omit `--execute` to prepare/replay without spending. Without bill IDs, each run selects up to three unseen
-or rotating known bills from the official snapshot; `--max-bills` permits at most 20. Introduced PDFs use FTP
+Omit `--execute` to prepare/replay without spending. Without bill IDs, each run works serially through
+retries, unseen bills and then rotating known bills from the official snapshot until a spending guard stops it;
+`--max-bills` optionally caps the count. Introduced PDFs use FTP
 modification times to avoid unchanged downloads. The complete normalized text/configuration controls model
 reuse, so metadata-only changes do not cause another classification. Discovery of later text-version suffixes
 is not yet implemented; the worker explicitly processes introduced text and labels it accordingly.
