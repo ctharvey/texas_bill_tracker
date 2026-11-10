@@ -1,0 +1,1354 @@
+{
+  "type": "object",
+  "properties": {
+    "bill_id": {
+      "type": "string"
+    },
+    "legal_state": {
+      "type": "string",
+      "enum": [
+        "proposed_measure_not_verified_enacted"
+      ]
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "registry_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "resolution": {
+                "type": "string",
+                "enum": [
+                  "creation_or_designation"
+                ]
+              },
+              "entity_type": {
+                "type": "string"
+              },
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mention_only": {
+                "type": "boolean"
+              },
+              "basis": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "inferred"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/evidence"
+                },
+                "minItems": 1
+              },
+              "creation_options": {
+                "type": "object",
+                "properties": {
+                  "establish_new": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "designate_existing": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  }
+                },
+                "required": [
+                  "establish_new",
+                  "designate_existing"
+                ],
+                "additionalProperties": false
+              },
+              "entity_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "registry_id",
+              "name",
+              "resolution",
+              "entity_type",
+              "roles",
+              "mention_only",
+              "basis",
+              "evidence",
+              "creation_options",
+              "entity_ref"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "registry_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "resolution": {
+                "type": "string",
+                "enum": [
+                  "proposed_new"
+                ]
+              },
+              "entity_type": {
+                "type": "string"
+              },
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mention_only": {
+                "type": "boolean"
+              },
+              "basis": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "inferred"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/evidence"
+                },
+                "minItems": 1
+              },
+              "creation_options": {
+                "type": "object",
+                "properties": {
+                  "establish_new": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "designate_existing": {
+                    "type": "boolean",
+                    "enum": [
+                      false
+                    ]
+                  }
+                },
+                "required": [
+                  "establish_new",
+                  "designate_existing"
+                ],
+                "additionalProperties": false
+              },
+              "entity_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "registry_id",
+              "name",
+              "resolution",
+              "entity_type",
+              "roles",
+              "mention_only",
+              "basis",
+              "evidence",
+              "creation_options",
+              "entity_ref"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "registry_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "resolution": {
+                "type": "string",
+                "enum": [
+                  "registry_match",
+                  "unresolved_existing",
+                  "grouping"
+                ]
+              },
+              "entity_type": {
+                "type": "string"
+              },
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mention_only": {
+                "type": "boolean"
+              },
+              "basis": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "inferred"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/evidence"
+                },
+                "minItems": 1
+              },
+              "creation_options": {
+                "type": "object",
+                "properties": {
+                  "establish_new": {
+                    "type": "boolean",
+                    "enum": [
+                      false
+                    ]
+                  },
+                  "designate_existing": {
+                    "type": "boolean",
+                    "enum": [
+                      false
+                    ]
+                  }
+                },
+                "required": [
+                  "establish_new",
+                  "designate_existing"
+                ],
+                "additionalProperties": false
+              },
+              "entity_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "registry_id",
+              "name",
+              "resolution",
+              "entity_type",
+              "roles",
+              "mention_only",
+              "basis",
+              "evidence",
+              "creation_options",
+              "entity_ref"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "authority_changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "change_id": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "creates_body",
+              "creation_or_designation",
+              "transfers_authority",
+              "repeals_authority",
+              "changes_duty",
+              "retains_named_duty"
+            ]
+          },
+          "from_entity_refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "to_entity_refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "affected_entity_refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/evidence"
+            },
+            "minItems": 1
+          },
+          "trigger_entity_refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "change_id",
+          "operation",
+          "from_entity_refs",
+          "to_entity_refs",
+          "affected_entity_refs",
+          "description",
+          "evidence",
+          "trigger_entity_refs"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "all_state_agencies_scope": {
+      "type": "boolean"
+    },
+    "unresolved_identity_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "coverage_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "timing_rules": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "rule_id": {
+                "type": "string"
+              },
+              "actor": {
+                "$ref": "#/$defs/actor"
+              },
+              "action": {
+                "type": "string"
+              },
+              "constraint": {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "no_later_than",
+                  "no_earlier_than"
+                ]
+              },
+              "temporal": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "point"
+                    ]
+                  },
+                  "point": {
+                    "$ref": "#/$defs/point"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "point"
+                ],
+                "additionalProperties": false
+              },
+              "condition": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "exception": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/evidence"
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "rule_id",
+              "actor",
+              "action",
+              "constraint",
+              "temporal",
+              "condition",
+              "exception",
+              "evidence"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "rule_id": {
+                "type": "string"
+              },
+              "actor": {
+                "$ref": "#/$defs/actor"
+              },
+              "action": {
+                "type": "string"
+              },
+              "constraint": {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "no_later_than",
+                  "no_earlier_than"
+                ]
+              },
+              "temporal": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "choose_point"
+                    ]
+                  },
+                  "operation": {
+                    "type": "string",
+                    "enum": [
+                      "earlier_of",
+                      "later_of"
+                    ]
+                  },
+                  "points": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/point"
+                    },
+                    "minItems": 2
+                  }
+                },
+                "required": [
+                  "kind",
+                  "operation",
+                  "points"
+                ],
+                "additionalProperties": false
+              },
+              "condition": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "exception": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/evidence"
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "rule_id",
+              "actor",
+              "action",
+              "constraint",
+              "temporal",
+              "condition",
+              "exception",
+              "evidence"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "rule_id": {
+                "type": "string"
+              },
+              "actor": {
+                "$ref": "#/$defs/actor"
+              },
+              "action": {
+                "type": "string"
+              },
+              "constraint": {
+                "type": "string",
+                "enum": [
+                  "within_window"
+                ]
+              },
+              "temporal": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "window"
+                    ]
+                  },
+                  "start": {
+                    "$ref": "#/$defs/point"
+                  },
+                  "end": {
+                    "$ref": "#/$defs/point"
+                  },
+                  "start_inclusive": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "end_inclusive": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "start",
+                  "end",
+                  "start_inclusive",
+                  "end_inclusive"
+                ],
+                "additionalProperties": false
+              },
+              "condition": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "exception": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/evidence"
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "rule_id",
+              "actor",
+              "action",
+              "constraint",
+              "temporal",
+              "condition",
+              "exception",
+              "evidence"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "rule_id": {
+                "type": "string"
+              },
+              "actor": {
+                "$ref": "#/$defs/actor"
+              },
+              "action": {
+                "type": "string"
+              },
+              "constraint": {
+                "type": "string",
+                "enum": [
+                  "unresolved"
+                ]
+              },
+              "temporal": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "unresolved"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "reason"
+                ],
+                "additionalProperties": false
+              },
+              "condition": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "exception": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/evidence"
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "rule_id",
+              "actor",
+              "action",
+              "constraint",
+              "temporal",
+              "condition",
+              "exception",
+              "evidence"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "rule_id": {
+                "type": "string"
+              },
+              "actor": {
+                "$ref": "#/$defs/actor"
+              },
+              "action": {
+                "type": "string"
+              },
+              "constraint": {
+                "type": "string",
+                "enum": [
+                  "minimum_duration"
+                ]
+              },
+              "temporal": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "duration"
+                    ]
+                  },
+                  "value": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "hours",
+                      "days",
+                      "months",
+                      "years"
+                    ]
+                  },
+                  "comparison": {
+                    "type": "string",
+                    "enum": [
+                      "at_least"
+                    ]
+                  },
+                  "anchor_event": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "relation_to_anchor": {
+                    "type": "string",
+                    "enum": [
+                      "before",
+                      "after",
+                      "starting_at",
+                      "not_specified"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value",
+                  "unit",
+                  "comparison",
+                  "anchor_event",
+                  "relation_to_anchor"
+                ],
+                "additionalProperties": false
+              },
+              "condition": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "exception": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/evidence"
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "rule_id",
+              "actor",
+              "action",
+              "constraint",
+              "temporal",
+              "condition",
+              "exception",
+              "evidence"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "rule_id": {
+                "type": "string"
+              },
+              "actor": {
+                "$ref": "#/$defs/actor"
+              },
+              "action": {
+                "type": "string"
+              },
+              "constraint": {
+                "type": "string",
+                "enum": [
+                  "maximum_duration"
+                ]
+              },
+              "temporal": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "duration"
+                    ]
+                  },
+                  "value": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "hours",
+                      "days",
+                      "months",
+                      "years"
+                    ]
+                  },
+                  "comparison": {
+                    "type": "string",
+                    "enum": [
+                      "at_most"
+                    ]
+                  },
+                  "anchor_event": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "relation_to_anchor": {
+                    "type": "string",
+                    "enum": [
+                      "before",
+                      "after",
+                      "starting_at",
+                      "not_specified"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value",
+                  "unit",
+                  "comparison",
+                  "anchor_event",
+                  "relation_to_anchor"
+                ],
+                "additionalProperties": false
+              },
+              "condition": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "exception": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/evidence"
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "rule_id",
+              "actor",
+              "action",
+              "constraint",
+              "temporal",
+              "condition",
+              "exception",
+              "evidence"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "rule_id": {
+                "type": "string"
+              },
+              "actor": {
+                "$ref": "#/$defs/actor"
+              },
+              "action": {
+                "type": "string"
+              },
+              "constraint": {
+                "type": "string",
+                "enum": [
+                  "exact_duration"
+                ]
+              },
+              "temporal": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "duration"
+                    ]
+                  },
+                  "value": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "hours",
+                      "days",
+                      "months",
+                      "years"
+                    ]
+                  },
+                  "comparison": {
+                    "type": "string",
+                    "enum": [
+                      "exactly"
+                    ]
+                  },
+                  "anchor_event": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "relation_to_anchor": {
+                    "type": "string",
+                    "enum": [
+                      "before",
+                      "after",
+                      "starting_at",
+                      "not_specified"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value",
+                  "unit",
+                  "comparison",
+                  "anchor_event",
+                  "relation_to_anchor"
+                ],
+                "additionalProperties": false
+              },
+              "condition": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "exception": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/evidence"
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "rule_id",
+              "actor",
+              "action",
+              "constraint",
+              "temporal",
+              "condition",
+              "exception",
+              "evidence"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "unresolved_timing": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "obligations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "obligation_id": {
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/$defs/actor"
+          },
+          "modality": {
+            "type": "string",
+            "enum": [
+              "must",
+              "must_not",
+              "may"
+            ]
+          },
+          "action": {
+            "type": "string"
+          },
+          "condition_or_trigger": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/evidence"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "obligation_id",
+          "actor",
+          "modality",
+          "action",
+          "condition_or_trigger",
+          "evidence"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "coverage_limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "bill_id",
+    "legal_state",
+    "entities",
+    "authority_changes",
+    "all_state_agencies_scope",
+    "unresolved_identity_notes",
+    "coverage_notes",
+    "timing_rules",
+    "unresolved_timing",
+    "obligations",
+    "coverage_limitations"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "span_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^P[0-9]{3}S[0-9]{3}$"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "span_ids"
+      ],
+      "additionalProperties": false
+    },
+    "point": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "fixed_date"
+              ]
+            },
+            "date_iso": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "date_iso"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "recurring_calendar"
+              ]
+            },
+            "month": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "day": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 31
+            },
+            "year_modulus": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "year_remainder": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "month",
+            "day",
+            "year_modulus",
+            "year_remainder"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "relative_point"
+              ]
+            },
+            "anchor_event": {
+              "type": "string"
+            },
+            "offset_value": {
+              "type": "number",
+              "minimum": 0
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "hours",
+                "days",
+                "months",
+                "years"
+              ]
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "before",
+                "after",
+                "at"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "anchor_event",
+            "offset_value",
+            "unit",
+            "direction"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "calendar_relative_to_event"
+              ]
+            },
+            "anchor_event": {
+              "type": "string"
+            },
+            "year_offset": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "month": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "day": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 31
+            }
+          },
+          "required": [
+            "kind",
+            "anchor_event",
+            "year_offset",
+            "month",
+            "day"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "ordinal_weekday_relative_to_event"
+              ]
+            },
+            "anchor_event": {
+              "type": "string"
+            },
+            "year_offset": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "month": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "ordinal": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "weekday": {
+              "type": "string",
+              "enum": [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "anchor_event",
+            "year_offset",
+            "month",
+            "ordinal",
+            "weekday"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "next_matching_calendar"
+              ]
+            },
+            "anchor_event": {
+              "type": "string"
+            },
+            "month": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "day": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 31
+            },
+            "year_modulus": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "year_remainder": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "selection": {
+              "type": "string",
+              "enum": [
+                "next_matching_year_after_anchor",
+                "next_matching_date_after_anchor"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "anchor_event",
+            "month",
+            "day",
+            "year_modulus",
+            "year_remainder",
+            "selection"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "actor": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "basis": {
+              "type": "string",
+              "enum": [
+                "explicit",
+                "inferred"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "basis"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "null"
+            },
+            "basis": {
+              "type": "string",
+              "enum": [
+                "unspecified"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "basis"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

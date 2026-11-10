@@ -38,6 +38,83 @@ python3 scripts/sync_ftp.py
 
 The first verified official import read 1,059 bill histories on November 9, 2026. GitHub Actions is scheduled hourly, at minute 17 UTC (GitHub may delay scheduled jobs). Each snapshot records its actual generation time and coverage; it is a dated bulk snapshot rather than a real-time feed.
 
+### Optional full-text extraction (pending evaluation)
+
+`scripts/extract_bill.py` prepares a single Terra Flex/high request from a local official TLC full-bill PDF.
+It extracts entities, authority changes, obligations and timing into a **private review cache**. It does not
+write `data/bills.json`, run on the hourly history job, or publish classifications. The current tool does not
+implement the planned complete policy/geography taxonomy. The existing UI and metadata importer keep working
+without these optional dependencies:
+
+```sh
+python -m pip install -r requirements-extraction.txt
+python scripts/extract_bill.py --pdf /path/to/official-bill.pdf --bill-id HJR31 --session 90R --version introduced --source-url ftp://ftp.legis.state.tx.us/bills/90R/billtext/PDF/house_joint_resolutions/HJ00001_HJ00099/HJ00031I.pdf
+```
+
+By default this only prepares the request, or replays and revalidates an existing response. A **new paid call**
+requires `--execute` and `OPENAI_API_KEY` in the process environment. The tool does not load repository `.env`
+files or credentials from another project. It uses `gpt-6.1-terra`, Flex, high reasoning and a 48,000-token
+output allowance with SDK retries disabled. Only explicit capacity/rate rejections get bounded retries;
+quota/auth errors and unknown timeouts stop. No automatic model/tier fallback or repair/audit call is made.
+
+The cache persists across invocations at `%LOCALAPPDATA%/texas-bill-atlas/extraction` on Windows or
+`$XDG_CACHE_HOME/texas-bill-atlas/extraction` (default `~/.cache/...`) elsewhere. `--cache-dir` selects another
+private persistent location **outside the checkout/web root**, including the primary checkout when using a
+Git worktree. Ephemeral CI storage would need a persistent cache restored across jobs; no such job is enabled.
+
+Call reduction and cache rules:
+
+- Hash complete whitespace-normalized pages, text version and semantic request configuration. Preserve all
+  non-whitespace characters and page boundaries. A blank/image-only page stops extraction rather than silently
+  dropping it. PDF bytes and official source URL are retained as provenance.
+- Authors, status/actions, refresh timestamps and PDF metadata are excluded from model input and cache identity.
+  Repeating an hourly history update cannot invalidate an otherwise identical full-text request.
+- Model/settings, prompt, schema, canonical vocabulary, source text or text-version changes invalidate reuse.
+  The agency vocabulary is read from the app's `src/taxonomy.js`; the all-agencies marker stays separate.
+  If that declaration changes syntax, the reader fails rather than using a stale vocabulary.
+- A response hit avoids client construction, credentials and provider calls. Historical token usage/cost is
+  labelled separately; new estimated spending is zero. Returned invalid/incomplete output is retained and
+  revalidated, not silently paid for again. Validator improvements can recheck saved output without generation.
+- OS locks prevent identical concurrent submissions; writes are atomic. A pending crash, timeout or corrupt
+  entry blocks resubmission until its outcome is reconciled. Do not delete uncertain entries merely to retry:
+  inspect the private request/time and provider logs first. Known capacity rejections have a cooldown.
+
+Shared instructions/schema and vocabulary precede bill-specific content. An explicit 12-hour breakpoint targets
+prompt reuse across bills/hourly runs; the changing full bill has no write breakpoint in this single-call path.
+Provider prompt caching reduces input cost, while the application response cache skips a request entirely.
+Write lifetime details and reasoning-inclusive output usage are used for estimates at the documented Terra Flex
+rates; missing lifetime details produce a range. Provider prices and model aliases can change: review rates
+before rollout and change the prompt/schema revision or model identity deliberately when regeneration is intended.
+See [OpenAI prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching) and
+[Terra model pricing](https://developers.openai.com/api/docs/models/gpt-6.1-terra) for provider behavior and rates.
+
+Schema/validation fixes include actor certainty (`explicit`, `inferred`, or null/`unspecified`), one actor/action/
+modality per obligation, coupled deadline/duration shapes, ordinal-weekday/event-relative calendar relationships,
+qualifying-year selection and nullable interval inclusivity. For example, first Monday in June three years after
+the census remains an event-relative rule. `resolve_calendar` resolves supported calendar types only after a
+verified anchor date is supplied. It rejects nonexistent dates instead of rolling them to another month.
+
+Code derives counts and evidence reverse links; the model does not repeat a second bookkeeping table. Unknown
+evidence, bad references/dates, unresolved/inferred actors, embedded modal verbs, uncited potentially operative
+spans and a stable 5% quality sample generate review signals. These are conservative checks, not a proof of
+semantic accuracy or exhaustive coverage. Every result remains `pending_review` or `needs_review`, with
+`publishable: false`. No reviewer pass is automatically billed. The private `results/<request-key>.json` contains
+the extraction and validation; `responses/` retains the raw response and call state, and `requests/` the exact input.
+
+Before enabling classification, validate the revised contract on varied unseen bills and establish an explicit
+approval/publication path. Pilot results showed why valid JSON and resolvable citations alone are insufficient.
+No live call or unseen-bill evaluation was performed as part of implementing these fixes.
+
+Run all offline checks with optional dependencies installed:
+
+```sh
+python -m unittest discover -s tests -v
+node --test tests/*.test.mjs
+```
+
+The SDK test uses a mocked HTTP transport and no real credential. Optional schema/SDK tests skip when those
+dependencies are absent so the standard-library-only FTP workflow remains usable.
+
 ### Production deployment
 
 Production: https://bills.ctharvey.me on the existing VPS, 147.93.132.141.
