@@ -125,6 +125,18 @@ function applyFilters(raw){
   Object.assign(state,FILTER_DEFAULTS,clean,{visibleCount:30});
 }
 
+// The explorer and the Watchlist each keep their own filters: switching views stashes one set and restores the
+// other (the Watchlist starts unfiltered). filtersFor names the view whose filters are in state now.
+const FILTERED_VIEWS=new Set(['all','watchlist']);
+const viewFilters={};
+let filtersFor='all';
+function switchFilters(view){
+  if(!FILTERED_VIEWS.has(view)||filtersFor===view)return;
+  viewFilters[filtersFor]=pickFilters(state);
+  applyFilters(viewFilters[view]||{});
+  filtersFor=view;
+}
+
 // Returns a sync key from the URL, if any, for setupSync to resolve.
 // The address without its open bill; when only the bill differs, Back/Forward just open or close the drawer.
 const withoutBill=hash=>String(hash||'').replace(/([?&])bill=[^&]*&?/,'$1').replace(/[?&]$/,'');
@@ -139,9 +151,18 @@ function applyLocation(initial){
     return p.sync;
   }
   if(!p.bill&&state.openBill){drawerPushed=false;closeDrawer()}
+  // Filters in the address belong to the view it names; otherwise each view gets its own remembered set.
+  let urlFilters=true;
+  if(!initial&&(p.hasFilters||p.list)&&FILTERED_VIEWS.has(p.view)&&filtersFor!==p.view)viewFilters[filtersFor]=pickFilters(state);
   if(p.hasFilters)applyFilters(p.filters);
   else if(p.list)applyFilters({});  // A share link shows its whole list, even in a tab with filters set.
-  else if(initial&&!p.list&&!p.bill&&!p.sync)applyFilters(readJson(prefsKey)?.filters);
+  else if(initial&&!p.bill&&!p.sync){
+    // Remembered filters are the explorer's; a Watchlist opened directly starts unfiltered.
+    if(p.view==='watchlist'){viewFilters.all=readJson(prefsKey)?.filters||{};applyFilters({})}
+    else applyFilters(readJson(prefsKey)?.filters);
+  }
+  else urlFilters=initial;
+  if(urlFilters&&FILTERED_VIEWS.has(p.view))filtersFor=p.view;
   if(p.list){state.sharedList=p.list;state.sharedMode='link'}
   else if(!initial&&state.sharedMode==='link'){state.sharedList=null;state.sharedMode=null}
   setView(p.view);
@@ -159,7 +180,7 @@ function persistState(push=false){
   const hash=currentHash();
   let pushed=false;
   if(location.hash!==hash)try{if(push){history.pushState(null,'',hash);pushed=true}else history.replaceState(null,'',hash)}catch{}
-  if((state.view==='all'||state.view==='watchlist')&&!state.sharedList)writeJson(prefsKey,{filters:pickFilters(state)});
+  if(state.view==='all'&&filtersFor==='all'&&!state.sharedList)writeJson(prefsKey,{filters:pickFilters(state)});
   return pushed;
 }
 
@@ -269,6 +290,7 @@ async function loadReviewStatus(){
 }
 
 function setView(view){
+  switchFilters(view);
   state.view=view;
   document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===view));
   const heads={all:['See what’s moving.<br><em>Know what it changes.</em>','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],watchlist:['Your watchlist.<br><em>Keep the signal.</em>','Bills you are following on this device, with a clear view of their movement.'],agencies:['Follow the agencies.<br><em>Not just the bills.</em>','Explore where legislation might land across Texas government.'],review:['Full-text review.<br><em>Bill by bill.</em>','Which bills Luna has read in full, which it is working on, and what is still waiting.'],method:['The scoring method.<br><em>No black boxes.</em>','Signals and uncertainty are displayed separately from verified legislative actions.'],saving:['Save your work.<br><em>No account needed.</em>','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],data:['Behind the tracker.<br><em>Follow the source.</em>','Understand coverage, refreshes, and how to load or export bill data.']};
@@ -618,7 +640,7 @@ function handleClick(e){
     toast(op==='add'?`Watching ${names}`:`Removed ${names} from your watchlist`);return}
   const star=e.target.closest('[data-watch]');if(star){const id=star.dataset.watch;changeWatch(state.watch.has(id)?'remove':'add',[id]);renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(!$('#detail-drawer').hidden)showDrawer(id);toast(state.watch.has(id)?`${id} added to your watchlist`:`${id} removed from your watchlist`);return}
   const topic=e.target.closest('[data-topic]');if(topic){state.topic=topic.dataset.topic;state.visibleCount=30;renderContent();return}
-  const pick=e.target.closest('[data-agency-pick]');if(pick){state.agency=pick.dataset.agencyPick;state.visibleCount=30;state.view='all';location.hash='all';setView('all');return}
+  const pick=e.target.closest('[data-agency-pick]');if(pick){switchFilters('all');state.agency=pick.dataset.agencyPick;state.visibleCount=30;state.view='all';location.hash='all';setView('all');return}
   if(e.target.closest('#clear-filters')){Object.assign(state,{query:'',topic:'',agency:'',chamber:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30});renderContent();return}
   if(e.target.closest('#watch-filter')){state.onlyWatch=!state.onlyWatch;state.visibleCount=30;renderContent();return}
   if(e.target.closest('#load-more')){state.visibleCount+=30;renderResults();return}
@@ -674,7 +696,7 @@ async function importFile(file){
     const previous={bills:state.bills,meta:state.meta,topic:state.topic,agency:state.agency,chamber:state.chamber,stage:state.stage,action:state.action,outlook:state.outlook,query:state.query,visibleCount:state.visibleCount,view:state.view};
     try{
       state.bills=valid;state.meta={session:'90R',data_mode:'local import',source_file:file.name,generated_at:new Date().toISOString(),coverage_note:`Local file: ${file.name}. Imported rows are visible only during this session.`};
-      Object.assign(state,{topic:'',agency:'',chamber:'',stage:'',action:'',outlook:'',query:'',visibleCount:30});setView('all');
+      switchFilters('all');Object.assign(state,{topic:'',agency:'',chamber:'',stage:'',action:'',outlook:'',query:'',visibleCount:30});setView('all');
     }catch(renderError){Object.assign(state,previous);setView(previous.view);throw renderError}
     location.hash='all';toast(`Imported ${valid.length} bills`);
   }catch(err){toast(`Import failed: ${err.message}`)}

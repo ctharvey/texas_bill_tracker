@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-10
+- The explorer and the Watchlist keep separate filters: opening the Watchlist no longer applies the explorer's
+  search and filters, and they come back on returning to the explorer. Remembered filters are the explorer's.
 - Sync service listens with a backlog of 512 instead of socketserver's 5, so a burst of connections waits instead
   of being dropped into a 1 s client retry (seen from 100 requests a second in a load test).
 - Watch companion bills as a group: a "Watch all" button on each companion block and in the bill drawer's
