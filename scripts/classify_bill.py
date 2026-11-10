@@ -61,6 +61,8 @@ def build_request(document: dict, registry: list[dict]) -> dict:
     schema["properties"]["policy_tags"]["items"]["properties"]["tag"]["enum"] = tags
     instructions = (ROOT / "scripts/classification_prompt.txt").read_text("utf-8")
     instructions += "\nCANONICAL POLICY TAGS:\n" + json.dumps(tags, ensure_ascii=False)
+    if document.get("input_format") == "markdown":
+        instructions += "\n" + (ROOT / "scripts/markdown_input_note.txt").read_text("utf-8")
     request = detailed.build_request(document, registry, schema=schema, instructions=instructions)
     request.update(model=MODEL, max_output_tokens=12000)
     request["text"]["format"]["name"] = "texas_bill_classification_v1"
@@ -74,6 +76,8 @@ def build_request(document: dict, registry: list[dict]) -> dict:
 
 def resolve_quote(quote: str, hint: str, document: dict) -> dict:
     """Locate an exact excerpt; offsets are into normalized page text, end exclusive."""
+    if document.get("input_format") == "markdown":
+        quote = re.sub(r"</?(?:ins|del)>", "", quote)
     pages = document["pages"]
     source = " ".join(pages)
     page_starts, cursor = [], 0

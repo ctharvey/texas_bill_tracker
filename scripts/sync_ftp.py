@@ -172,7 +172,68 @@ def parse_bill_xml(raw: bytes, path: str) -> dict | None:
         if local_tag(key) == "lastupdate" and value.strip():
             record["source_updated"] = value.strip()
             break
+    events = parse_events(root)
+    if events:
+        record["events"] = events
+    if billtext is not None:
+        documents = parse_documents(billtext)
+        if documents:
+            record["documents"] = documents
     return record
+
+
+def parse_events(root: ET.Element) -> list[dict]:
+    """Every <action> in document order as {code, date, text}; last 400. [] when no action has a code."""
+    events = []
+    for element in root.iter():
+        if local_tag(element.tag) != "action":
+            continue
+        events.append({
+            "code": first_text(element, "actionnumber"),
+            "date": normalize_date(first_text(element, "date")),
+            "text": first_text(element, "actiondescription", "actiontext", "description")[:300],
+        })
+    if not any(event["code"] for event in events):
+        return []
+    return events[-400:]
+
+
+DOCUMENT_PATHS = {
+    "analysis": "/bills/90r/analysis/html/",
+    "fiscal_note": "/bills/90r/fiscalnotes/html/",
+}
+DOCUMENT_DOCTYPES = {"analysis": "analysis", "fiscalnote": "fiscal_note"}
+
+
+def parse_documents(billtext: ET.Element) -> list[dict]:
+    """Bill analyses and fiscal notes (billtext/docTypes/<type>/versions/version), deduped by (type, code)."""
+    def children(element: ET.Element, tag: str):
+        return [c for c in element if local_tag(c.tag) == tag]
+    found, seen = [], set()
+    for doctypes in children(billtext, "doctypes"):
+        for doctype in doctypes:
+            kind = DOCUMENT_DOCTYPES.get(local_tag(doctype.tag))
+            if not kind:
+                continue
+            for versions in children(doctype, "versions"):
+                for version in children(versions, "version"):
+                    url = first_text(version, "ftphtmlurl")
+                    try:
+                        parts = urlsplit(url)
+                        host = (parts.hostname or "").lower()
+                    except ValueError:
+                        continue
+                    if parts.scheme.lower() != "ftp" or host != HOST \
+                            or not parts.path.lower().startswith(DOCUMENT_PATHS[kind]):
+                        continue
+                    match = TEXT_FILE_RE.match(PurePosixPath(parts.path).name)
+                    if not match or (kind, match.group(1)) in seen:
+                        continue
+                    code = match.group(1)
+                    seen.add((kind, code))
+                    found.append({"type": kind, "code": code,
+                                  "name": first_text(version, "versiondescription") or code, "html": url})
+    return found
 
 
 TEXT_URL_PATH = "/bills/90R/billtext/HTML/"
@@ -597,6 +658,44 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int) -> dict:
     return counts
 
 
+HISTORY_FORMAT = "texas-bill-history-v1"
+
+
+def pop_history(bills: list[dict]) -> dict[str, dict]:
+    """Remove events/documents from each record in place; return {bill id: {events, documents, source_updated}}."""
+    histories = {}
+    for bill in bills:
+        events, documents = bill.pop("events", None), bill.pop("documents", None)
+        if events or documents:
+            histories[str(bill.get("id", ""))] = {
+                "events": events or [], "documents": documents or [], "source_updated": bill.get("source_updated")}
+    return histories
+
+
+def sync_history(histories: dict[str, dict], history_dir: Path) -> dict:
+    """Write history_dir/<BILL>/history.json atomically, only when its canonical JSON changed."""
+    counts = {"bills": 0, "written": 0, "unchanged": 0, "failed": 0}
+    for bill_id, info in histories.items():
+        if not BILL_DIR_RE.match(bill_id):
+            continue
+        counts["bills"] += 1
+        payload = {"format": HISTORY_FORMAT, "bill": bill_id, "source_updated": info.get("source_updated"),
+                   "events": info.get("events", []), "documents": info.get("documents", [])}
+        data = (json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+        path = history_dir / bill_id / "history.json"
+        try:
+            if path.is_file() and path.read_bytes() == data:
+                counts["unchanged"] += 1
+                continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _atomic_write(path, data)
+            counts["written"] += 1
+        except OSError as exc:
+            counts["failed"] += 1
+            print(f"history {bill_id}: {exc}", file=sys.stderr)
+    return counts
+
+
 HEARTBEAT = dt.timedelta(hours=6)
 
 
@@ -619,7 +718,7 @@ def choose_generated_at(previous: dict | None, new_payload: dict, now: dt.dateti
     return fresh
 
 
-def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000) -> tuple[dict, dict]:
+def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000, histories: dict | None = None) -> tuple[dict, dict]:
     paths = enumerate_xml(conn)
     if not paths:
         raise RuntimeError("The 90R bulk FTP bill-history listing is empty or unavailable")
@@ -656,6 +755,12 @@ def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000) -> tuple[
         # Newest filing first, then by bill number as a number (HB 99 before HB 100), not as text.
         'bills': sorted(sorted(merged.values(), key=lambda b: bill_order(b['id'])), key=lambda b: b.get('filed_at') or '', reverse=True),
     }
+    popped = pop_history(list(parsed.values()))
+    if histories is not None:
+        histories.update(popped)
+    for bill in merged.values():
+        bill.pop('events', None)
+        bill.pop('documents', None)
     snapshot['generated_at'] = choose_generated_at(prior, snapshot, dt.datetime.now(dt.timezone.utc))
     return snapshot, {'listed':len(paths),'parsed':len(parsed),'combined':len(merged),'transfer_errors':len(errors)}
 
@@ -666,15 +771,22 @@ def main() -> int:
     parser.add_argument('--max-files',type=int,default=25000)
     parser.add_argument('--text-dir',type=Path,default=None)
     parser.add_argument('--max-texts',type=int,default=400)
+    parser.add_argument('--history-dir',type=Path,default=None)
     args=parser.parse_args()
     prior=json.loads(args.out.read_text(encoding='utf-8')) if args.out.exists() else {'bills':[]}
     with ftplib.FTP(HOST,timeout=55) as conn:
         conn.login('anonymous','legislative-research@example.invalid')
-        snapshot,stats=synchronize(conn,prior,args.max_files)
+        histories={}
+        snapshot,stats=synchronize(conn,prior,args.max_files,histories)
     temp=args.out.with_suffix('.json.tmp')
     temp.write_text(json.dumps(snapshot,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     os.replace(temp,args.out)
     print(json.dumps(stats,indent=2))
+    try:
+        history_counts=sync_history(histories,args.history_dir or args.out.parent/'history')
+        print(json.dumps({'history':history_counts},indent=2))
+    except Exception as exc:  # History files are secondary; never fail a written snapshot.
+        print(f"HISTORY SYNC FAILED, snapshot unaffected: {exc}",file=sys.stderr)
     try:
         with ftplib.FTP(HOST,timeout=55) as conn:
             conn.login('anonymous','legislative-research@example.invalid')

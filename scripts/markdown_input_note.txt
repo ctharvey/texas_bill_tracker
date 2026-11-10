@@ -1,0 +1,4 @@
+BILL SOURCE FORMAT: The bill source below is official Markdown text, one paragraph per [P###S###] entry.
+<ins>...</ins> marks language the bill adds; <del>...</del> marks language the bill deletes. Unmarked text inside an amended section is existing law that the bill leaves in place.
+Classify the changes the bill makes, not existing law it merely leaves unchanged.
+Quote evidence verbatim WITHOUT the <ins>/<del> tags.

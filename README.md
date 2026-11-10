@@ -35,6 +35,9 @@ python3 scripts/sync_ftp.py
 ```
 
 `scripts/sync_ftp.py` enumerates `/bills/90r/billhistory`, parses each XML document, validates the bill number and caption, then atomically replaces `data/bills.json` **only if enough records parse successfully**. The previous file stays unchanged on a connectivity or schema failure. Manually reviewed impact tags survive metadata refreshes. The parser intentionally does not claim unobserved hearings or manufacture agency facts.
+The full coded action history (`actionNumber`, date, text; last 400) and the links to bill analyses and fiscal
+notes go to `live/history/<BILL>/history.json` (`texas-bill-history-v1`, `--history-dir`), written only on
+change and never into `bills.json`; a history-write failure never fails the snapshot.
 
 The first verified official import read 1,059 bill histories on November 9, 2026. GitHub Actions is scheduled hourly, at minute 17 UTC (GitHub may delay scheduled jobs). Each snapshot records its actual generation time and coverage; it is a dated bulk snapshot rather than a real-time feed. When nothing changed, the importer keeps the previous `generated_at` (so no commit is made) until it is six hours old, then writes a heartbeat; a snapshot more than eight hours old therefore means the refresh has stopped. Concurrent pushes to `main` are rebased and retried up to five times.
 
@@ -82,6 +85,13 @@ resubmission passes the same reservation and cache checks; a bill whose cooldown
 stays queued. Budget, quota/auth and unknown outcomes still stop the worker.
 `--no-spending-cap` skips the daily and per-run ceilings only (reservations, the ledger and the
 double-billing checks still apply); `--order reverse` works through the snapshot from the bottom up.
+`--question-effort` (default `medium`) sets reasoning for follow-up questions; the first pass stays `high`.
+`--input markdown` (default `pdf`) reads the data run's official Markdown (`live/text/<BILL>/I.md`, checked
+against `index.json`) instead of the PDF: one span per paragraph (`P###S###`, page = paragraph), with `<ins>`
+and `<del>` shown to Luna plus `scripts/markdown_input_note.txt`, and quotes matched with the tags removed.
+Missing or mismatched text is a download failure, retried after the next data run. Markdown requests have
+different cache keys, so switching re-reviews every bill. See
+`.agent/plans/texas-bill-tracker-staged-luna-review-plan-2026-11-10.md` (workspace) for the staged design.
 With `--publish-tags` and `--execute`, the worker also writes `live/luna/status.json`
 (`texas-bill-luna-status-v1`: the bill being reviewed, the next five, and the reviewed, retry and failed bill
 ids, with the failure stage only). It is rewritten before each bill and on every exit. The tracker's

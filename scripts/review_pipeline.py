@@ -252,7 +252,8 @@ def claim_at(result: dict, label: str) -> dict:
     return result[field][int(index)]
 
 
-def resolution_request(question: dict, result: dict, document: dict, sources: list[dict]) -> dict:
+def resolution_request(question: dict, result: dict, document: dict, sources: list[dict],
+                       effort: str = "high") -> dict:
     def obj(properties):
         return {"type": "object", "properties": properties, "required": list(properties), "additionalProperties": False}
     string = {"type": "string"}
@@ -312,7 +313,7 @@ def resolution_request(question: dict, result: dict, document: dict, sources: li
     text['evidence_options'] = bank
     schema['properties']['evidence_ids']['items']['enum'] = list(bank)
     return {"model": classification.MODEL, "service_tier": "flex", "store": False,
-            "reasoning": {"effort": "high"}, "max_output_tokens": 5000,
+            "reasoning": {"effort": effort}, "max_output_tokens": 5000,
             "prompt_cache_options": {"mode": "explicit", "ttl": "30m"},
             "text": {"format": {"type": "json_schema", "name": "targeted_bill_review_v1",
                                 "strict": True, "schema": schema}},
@@ -327,9 +328,9 @@ def resolution_request(question: dict, result: dict, document: dict, sources: li
                 {"role": "user", "content": [{"type": "input_text", "text": json.dumps(text, sort_keys=True)}]}]}
 
 
-def resolve(question, result, document, registry, cache_root, budget, execute, sources=None):
+def resolve(question, result, document, registry, cache_root, budget, execute, sources=None, effort="high"):
     sources = sources if sources is not None else statutory_sources(question, document, cache_root)
-    request = resolution_request(question, result, document, sources)
+    request = resolution_request(question, result, document, sources, effort)
     cache = ResponseCache(cache_root / "responses")
     atomic_json(cache_root / "requests" / (cache.key(request) + ".json"), request)
     def submit():
@@ -382,7 +383,7 @@ def resolve(question, result, document, registry, cache_root, budget, execute, s
             "question": question, "result": value, "sources": sources}, derived
 
 
-def run_document(document, registry, cache_root, budget, execute=False, max_questions=3):
+def run_document(document, registry, cache_root, budget, execute=False, max_questions=3, question_effort="high"):
     first = classification.classify(document, registry, cache_root, execute=execute, sender=budget.send)
     if "result" not in first:
         if first.get("action") != "not_submitted":
@@ -402,7 +403,7 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
         before_spending = budget.run_spent
         try:
             resolution, corrected = resolve(question, derived, document, registry, cache_root, budget,
-                                            execute and new_calls < max_questions)
+                                            execute and new_calls < max_questions, effort=question_effort)
             new_calls += not resolution["cache_hit"]
             resolutions.append(resolution)
             if resolution["result"]["status"] == "resolved":
@@ -472,6 +473,27 @@ def download_document(bill_id: str, root: Path, ftp_factory=ftplib.FTP) -> dict:
         document.update(source_url="ftp://ftp.legis.state.tx.us" + remote, ftp_modified=modified)
         atomic_json(record, document)
         return document
+
+
+def load_markdown_document(bill_id: str, text_dir: Path, version: str = "I") -> dict:
+    """Build a review document from the data run's Markdown text; any problem is a download-type failure."""
+    if not re.fullmatch(r"[A-Z]{2,4}\d{1,5}", bill_id) or not re.fullmatch(r"[A-Za-z0-9]{1,8}", version):
+        raise ValueError("Invalid bill ID or version")
+    folder = text_dir / bill_id
+    index = json.loads((folder / "index.json").read_text("utf-8"))
+    if not isinstance(index, dict) or not isinstance(index.get("versions"), list):
+        raise ValueError("Malformed text index")
+    entry = next((v for v in index["versions"] if isinstance(v, dict) and v.get("code") == version), None)
+    if entry is None:
+        raise ValueError("Text version not in index")
+    data = (folder / (version + ".md")).read_bytes()
+    if hashlib.sha256(data).hexdigest() != entry.get("sha256"):
+        raise ValueError("Markdown text does not match its index checksum")
+    # Highlight publishing recognises the introduced version by this label.
+    label = "introduced" if version == "I" else version
+    document = detailed.document_from_markdown(bill_id, "90R", label, data.decode("utf-8"))
+    document["text_sha256"] = entry["sha256"]
+    return document
 
 
 TAG_FIELDS = {"policy_tags": ("tag", "explanation"), "locations": ("name", "kind", "explanation"),
@@ -612,7 +634,13 @@ def highlight_entry(bundle: dict, reviewed_at: str, markdown: str, version_code:
         for c in citations[claim_id]:
             if c.get("source_type") != "bill":
                 continue
-            found = locate_quote(c.get("quote") or "", paragraphs)
+            document = bundle.get("document") or {}
+            if (document.get("input_format") == "markdown" and c.get("parts")
+                    and document.get("text_sha256") == hashlib.sha256(markdown.encode("utf-8")).hexdigest()):
+                # Markdown reviews cite plain coordinates directly: page = paragraph index + 1.
+                found = [{"p": part["page"] - 1, "start": part["start"], "end": part["end"]} for part in c["parts"]]
+            else:
+                found = locate_quote(c.get("quote") or "", paragraphs)
             for r in found or []:
                 if r not in ranges:
                     ranges.append(r)
@@ -704,7 +732,7 @@ def queue_candidates(ids: list[str], queue: dict, limit: int | None = None) -> l
     return list(dict.fromkeys(retries + unseen + failing + known[offset:] + known[:offset]))[:limit]
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cache-dir", type=Path, required=True, help="Private persistent directory outside web root")
     parser.add_argument("--bill-id", action="append", default=[])
@@ -723,6 +751,17 @@ def main():
     parser.add_argument("--publish-tags", type=Path,
                         help="After the run, write verified Luna tags for every reviewed bill to this public file")
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--input", choices=("pdf", "markdown"), default="pdf",
+                        help="Bill text source: the TLC PDF (default) or the data run's official Markdown text")
+    parser.add_argument("--text-dir", type=Path, default=None,
+                        help="Markdown text directory for --input markdown (default: <snapshot dir>/text)")
+    parser.add_argument("--question-effort", choices=("low", "medium", "high"), default="medium",
+                        help="Reasoning effort for targeted follow-up questions (first pass stays high)")
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
     detailed.check_cache_location(args.cache_dir)
     if args.max_bills is not None and args.max_bills < 1:
@@ -786,7 +825,10 @@ def main():
                     break
                 try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5], running=True)
                 try:
-                    document = download_document(bill_id, args.cache_dir)
+                    if args.input == "markdown":
+                        document = load_markdown_document(bill_id, args.text_dir or args.snapshot.parent / "text")
+                    else:
+                        document = download_document(bill_id, args.cache_dir)
                 except DOWNLOAD_ERRORS as error:
                     # A failed bill is never marked seen; it keeps a place after new work.
                     new_failures += bill_id not in queue['failed']
@@ -800,7 +842,8 @@ def main():
                     print(bill_id, "stopped", type(error).__name__, flush=True)
                     raise SystemExit(2)
                 try:
-                    bundle = run_document(document, detailed.load_registry(), args.cache_dir, budget, args.execute)
+                    bundle = run_document(document, detailed.load_registry(), args.cache_dir, budget, args.execute,
+                                          question_effort=args.question_effort)
                 except CacheCoolingDown:
                     # Per-request cooldown: skip this bill now and retry it early in a later run.
                     if bill_id in queue['seen'] and bill_id not in queue['retry']:

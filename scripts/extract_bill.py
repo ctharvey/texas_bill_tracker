@@ -87,6 +87,109 @@ def document_from_pages(bill_id: str, session: str, version: str, pages: list[st
             "spans": spans, "text_hash": canonical_hash(normalized), "source_revision": SOURCE_REVISION}
 
 
+MARKDOWN_SOURCE_REVISION = "markdown-paragraphs-v1"
+_MD_TAG = re.compile(r"</?(?:ins|del)>")
+
+
+def plain_paragraphs(markdown: str) -> list[str]:
+    """Plain projection of a bill-text Markdown file; paragraph 0 is the title line."""
+    paragraphs = []
+    for raw in markdown.split("\n\n"):
+        text = raw.rstrip("\n")
+        if not text.strip():
+            continue
+        for prefix in ("### ", "# "):
+            if text.startswith(prefix):
+                text = text[len(prefix):]
+                break
+        for tag in ("<ins>", "</ins>", "<del>", "</del>"):
+            text = text.replace(tag, "")
+        paragraphs.append(re.sub(r"\\(.)", r"\1", text))
+    return paragraphs
+
+
+def marked_paragraphs(markdown: str) -> list[tuple[str, list[int]]]:
+    """Per paragraph (same order as plain_paragraphs): marked text and, for each plain offset, the offset
+    of that character in the marked text. The marked text keeps <ins>/<del> and is otherwise unescaped
+    exactly like the plain text, so stripping the tags from it gives the plain paragraph."""
+    result = []
+    for raw in markdown.split("\n\n"):
+        text = raw.rstrip("\n")
+        if not text.strip():
+            continue
+        for prefix in ("### ", "# "):
+            if text.startswith(prefix):
+                text = text[len(prefix):]
+                break
+        pieces, position = [], 0  # (is_tag, content)
+        for match in _MD_TAG.finditer(text):
+            pieces.extend((False, ch) for ch in text[position:match.start()])
+            pieces.append((True, match[0]))
+            position = match.end()
+        pieces.extend((False, ch) for ch in text[position:])
+        chars = "".join(ch for tag, ch in pieces if not tag)
+        escapes = {m.start() for m in re.finditer(r"\\(.)", chars)}
+        marked, offsets, index, length = [], [], 0, 0
+        for is_tag, content in pieces:
+            if is_tag:
+                marked.append(content)
+                length += len(content)
+                continue
+            here, index = index, index + 1
+            if here in escapes:
+                continue  # The backslash itself is dropped; the next character is literal.
+            offsets.append(length)
+            marked.append(content)
+            length += 1
+        result.append(("".join(marked), offsets))
+    return result
+
+
+def document_from_markdown(bill_id: str, session: str, version_code: str, markdown: str) -> dict:
+    if not re.fullmatch(r"(?:HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9]\d{0,4}", bill_id):
+        raise ValueError("Invalid bill ID")
+    if not re.fullmatch(r"\d{2,3}[RS]\d?", session) or not version_code.strip():
+        raise ValueError("Invalid session or missing text version")
+    pages = plain_paragraphs(markdown)
+    marked_rows = marked_paragraphs(markdown)
+    if not pages or not any(page.strip() for page in pages) or len(marked_rows) != len(pages):
+        raise ValueError("Bill text Markdown has no text")
+    # Ids widen past 999 paragraphs (P1000S001); the classification schema puts no pattern on span_id.
+    spans, marked_texts = {}, []
+    for number, (text, (marked, offsets)) in enumerate(zip(pages, marked_rows), 1):
+        marked_texts.append(marked)
+        if not text.strip():
+            continue
+        if len(offsets) != len(text):
+            raise ValueError("Markdown plain/marked projections disagree")
+        start, ordinal = 0, 1
+        while start < len(text):
+            end = len(text)
+            if end - start > 600:
+                split = text.rfind(" ", start + 1, start + 600)
+                end = split if split > start else start + 600
+            low = offsets[start]
+            while marked[:low].endswith(("<ins>", "<del>")):
+                low -= 5
+            high = offsets[end - 1] + 1
+            while True:
+                closing = next((t for t in ("</ins>", "</del>") if marked.startswith(t, high)), None)
+                if closing is None:
+                    break
+                high += len(closing)
+            spans[f"P{number:03d}S{ordinal:03d}"] = {
+                "page": number, "start": start, "end": end, "text": text[start:end], "marked": marked[low:high],
+            }
+            start, ordinal = end, ordinal + 1
+            while start < len(text) and text[start].isspace():
+                start += 1
+    if not spans:
+        raise ValueError("Bill text Markdown has no text")
+    return {"bill_id": bill_id, "session": session, "version": version_code.strip(), "pages": pages,
+            "spans": spans, "text_hash": canonical_hash({"pages": pages, "marked": marked_texts}),
+            "source_revision": MARKDOWN_SOURCE_REVISION, "input_format": "markdown"}
+
+
 def read_pdf(path: Path, bill_id: str, session: str, version: str) -> dict:
     try:
         from pypdf import PdfReader
@@ -108,8 +211,10 @@ def build_request(document: dict, registry: list[dict], *, schema: dict | None =
     scope = [a for a in registry if a["id"] == "all-state-agencies"]
     vocabulary = json.dumps({"agencies": agencies, "scope_markers": scope}, ensure_ascii=False,
                             sort_keys=True, separators=(",", ":"))
-    source = "\n\n".join(f"[{key}; PDF page {span['page']}]\n{span['text']}"
-                         for key, span in document["spans"].items())
+    source = "\n\n".join(
+        f"[{key}; paragraph {span['page']}]\n{span['marked']}" if "marked" in span
+        else f"[{key}; PDF page {span['page']}]\n{span['text']}"
+        for key, span in document["spans"].items())
     # Only semantic identity enters the model request. URLs, timestamps, PDF metadata, authors and
     # legislative-history/status updates stay out, so hourly history refreshes cannot change this key.
     identity = {k: document[k] for k in ("bill_id", "session", "version", "source_revision", "text_hash")}
