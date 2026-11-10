@@ -156,7 +156,24 @@ def parse_bill_xml(raw: bytes, path: str) -> dict | None:
         record["action_dates"] = dated[-12:]
     if committees:
         record["committee"] = committees[-1][:200]
+    if any(local_tag(element.tag) == "companions" for element in root.iter()):
+        record["companions"] = parse_companions(first_text(root, "companions"), bill_id)
     return record
+
+
+COMPANION = re.compile(r"\b(HJR|SJR|HCR|SCR|HB|SB|HR|SR)\s*0*([1-9]\d{0,4})\b(?:\s+by\s+([^,;\n]+?))?\s*(?:,\s*([A-Za-z][A-Za-z ]{0,30}?))?\s*(?=[;\n]|$|\b(?:HJR|SJR|HCR|SCR|HB|SB|HR|SR)\s*\d)")
+
+
+def parse_companions(text: str, bill_id: str) -> list[dict]:
+    """'SB 132 by Menéndez, Identical' -> [{'id': 'SB132', 'author': 'Menéndez', 'relation': 'Identical'}]."""
+    found, seen = [], set()
+    for prefix, number, author, relation in COMPANION.findall(text or ""):
+        companion = f"{prefix}{number}"
+        if companion == bill_id or companion in seen:
+            continue
+        seen.add(companion)
+        found.append({"id": companion, "author": (author or "").strip()[:80], "relation": (relation or "").strip()[:40]})
+    return found[:10]
 
 
 def normalize_date(text: str) -> str:

@@ -3,6 +3,11 @@
 ## 2026-11-10
 - The page revalidates its bill, tag, roster and review-status JSON (`cache: 'no-cache'`) instead of always
   downloading it, so a returning visitor gets a 304. Sync container limits raised to 1 CPU, 512 MB and 256 pids.
+- Companion bills: the data refresh keeps the `<companions>` field from the bill history (it was dropped), and links
+  work in both directions. Cards get a "Companion" tag, the bill drawer lists each companion with its relation,
+  author and status, adjacent companions in a list are framed together, and agent pages and JSON list companions.
+- Search reads pasted bill numbers with hidden characters (zero-width spaces, non-breaking spaces) and the
+  "H.B. No. 267" and "House Bill 267" forms, which used to find nothing.
 - Releases serve the scripts and stylesheet from `assets/<digest>/`, a content-hashed copy of `src/`, so Cloudflare
   and browsers cache them for a year; a deploy points `index.html` at the new folder. Needs the deployer reinstalled.
 - Agent search, after a fifth LLM probe: `OR` splits the query into alternatives that can be several words or a

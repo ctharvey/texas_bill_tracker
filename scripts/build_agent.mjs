@@ -6,7 +6,7 @@ import {mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writ
 import {dirname, join, relative, sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {AGENCY_NAME, LAST_ACTION_TYPES, applyLunaTags, assessHearing, attachMembers, authorInfluence, authorshipParty,
-  lastActionInfo, memberSummary, normalizeBill, officialUrl, reviewProgress} from '../src/taxonomy.js';
+  companionIndex, lastActionInfo, memberSummary, normalizeBill, officialUrl, reviewProgress} from '../src/taxonomy.js';
 import {buildHash} from '../src/prefs.js';
 
 export const SITE = 'https://bills.ctharvey.me/';
@@ -41,7 +41,9 @@ export function loadBills({snapshot, tags = null, roster = null, minBills = 1000
   if (roster?.format === 'texas-bill-members-v1' && roster.members && typeof roster.members === 'object' && !Array.isArray(roster.members))
     bills = bills.map(b => attachMembers(b, roster));
   const agencyName = a => a.name || AGENCY_NAME[a.id] || lunaNames[a.id] || a.id;
-  return bills.map(b => ({...b, agencyNames: Object.fromEntries(b.agencies.map(a => [a.id, agencyName(a)])),
+  const companions = companionIndex(bills), byId = new Map(bills.map(b => [b.id, b]));
+  return bills.map(b => ({...b, companionLinks: (companions.get(b.id) || []).map(c => ({...c, title: byId.get(c.id)?.title || null})),
+    agencyNames: Object.fromEntries(b.agencies.map(a => [a.id, agencyName(a)])),
     lastAction: lastActionInfo(b), hearing: assessHearing(b)}));
 }
 
@@ -67,6 +69,9 @@ export function billRecord(b) {
     authorship_party: {label: party.label, detail: party.detail},
     author_prominence: {label: influence.label, factors: influence.factors},
     people: roles,
+    companions: (b.companionLinks || []).map(c => ({id: c.id, number: c.number, author: c.author || null,
+      relation: c.relation || null, in_snapshot: Boolean(c.title), title: c.title,
+      markdown: c.title ? `${AGENT}bills/${c.id}.md` : null})),
     topics: b.topics,
     agencies: b.agencies.map(a => ({id: a.id, name: b.agencyNames[a.id], relationship: a.relationship,
       source: a.source === 'luna' ? 'luna-full-text' : 'caption-rules', reason: a.reason || ''})),
@@ -110,6 +115,7 @@ function billMarkdown(b, coverage, reviewState = '', queueNote = '') {
 - Hearing status: ${r.hearing.status}. ${cell(r.hearing.detail)}
 - Authorship: ${cell(r.authorship_party.label)}. ${cell(r.authorship_party.detail)}
 - Author prominence: ${cell(r.author_prominence.label)}. ${r.author_prominence.factors.map(cell).join('; ')}
+- Companion bills: ${r.companions.length ? r.companions.map(c => `${c.in_snapshot ? `[${c.number}](${c.markdown})` : `${c.number} (not in this snapshot yet)`}${c.relation ? `, ${cell(c.relation).toLowerCase()}` : ''}${c.author ? `, by ${cell(c.author)}` : ''}`).join('; ') : 'none listed in the source data'}
 
 ## Caption
 

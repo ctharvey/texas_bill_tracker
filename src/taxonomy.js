@@ -358,8 +358,68 @@ export function normalizeBill(raw, profiles) {
     filed_at:raw.filed_at || raw.status_date || '',
     last_action:raw.last_action || raw.status || 'Filed',
     status:raw.status || 'Filed',
-    last_action_date:raw.last_action_date || raw.filed_at || ''};
+    last_action_date:raw.last_action_date || raw.filed_at || '',
+    companions:normalizeCompanions(raw.companions, key)};
   return autoTagBill(bill);
+}
+
+// Pasted text can carry invisible format characters (zero-width spaces, soft hyphens) or the official style
+// "H.B. No. 267" / "House Bill 267"; both used to match nothing until the number was retyped by hand.
+const BILL_WORDS = {'house bill': 'hb', 'senate bill': 'sb', 'house joint resolution': 'hjr', 'senate joint resolution': 'sjr',
+  'house concurrent resolution': 'hcr', 'senate concurrent resolution': 'scr', 'house resolution': 'hr', 'senate resolution': 'sr'};
+export function searchTerms(query) {
+  const q = String(query || '').normalize('NFKC').replace(/[­᠎​-‏‪-‮⁠-⁤﻿]/g, '')
+    .replace(/\s+/g, ' ').trim().toLowerCase();
+  const ref = q.replace(/^(house|senate) (joint resolution|concurrent resolution|bill|resolution)\b/, m => BILL_WORDS[m] || m)
+    .replace(/\bno\.?\s*(?=\d)/, '').replace(/[.\s]/g, '');
+  return {q, compact: /^(hb|sb|hjr|sjr|hcr|scr|hr|sr)\d{1,5}$/.test(ref) ? ref : q.replace(/\s+/g, '')};
+}
+
+const BILL_KEY = /^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)\d{1,5}$/;
+const billNumber = id => id.replace(/^(HJR|SJR|HCR|SCR|HB|SB|HR|SR)/, '$1 ');
+
+// Companions as the source lists them: [{id, author, relation}]. Malformed entries and self-references are dropped.
+export function normalizeCompanions(value, selfId = '') {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value.flatMap(c => {
+    const id = String(c?.id || '').replace(/\s/g, '').toUpperCase();
+    if (!BILL_KEY.test(id) || id === selfId || seen.has(id)) return [];
+    seen.add(id);
+    return [{id, number: billNumber(id), author: typeof c.author === 'string' ? c.author.slice(0, 80) : '',
+      relation: typeof c.relation === 'string' ? c.relation.slice(0, 40) : ''}];
+  });
+}
+
+// Companion links in both directions: a bill lists its companion, and the companion may not list it back yet.
+// Returns Map(id -> [{id, number, author, relation}]), sorted by id.
+export function companionIndex(bills) {
+  const byId = new Map(bills.map(b => [b.id, b]));
+  const links = new Map();
+  const add = (from, to) => {
+    if (!links.has(from)) links.set(from, new Map());
+    const known = links.get(from).get(to.id);
+    // Prefer what the bill itself lists; fill gaps from the other side.
+    links.get(from).set(to.id, known ? {...to, ...Object.fromEntries(Object.entries(known).filter(([, v]) => v))} : to);
+  };
+  // Own listings first, so a reverse link only fills fields the bill's own listing left empty.
+  for (const b of bills) for (const c of b.companions || []) add(b.id, c);
+  for (const b of bills) for (const c of b.companions || []) {
+    const author = byId.get(b.id)?.authors?.[0] || '';
+    add(c.id, {id: b.id, number: billNumber(b.id), author, relation: c.relation});
+  }
+  return new Map([...links].map(([id, m]) => [id, [...m.values()].sort((a, b) => a.id.localeCompare(b.id, 'en', {numeric: true}))]));
+}
+
+// Mark neighbours in a list that are companions of each other: returns one group per run, [[b], [c, d], ...].
+export function companionRuns(list, index) {
+  const runs = [];
+  for (const b of list) {
+    const last = runs.at(-1);
+    if (last && last.length < 2 && (index.get(last[0].id) || []).some(c => c.id === b.id)) last.push(b);
+    else runs.push([b]);
+  }
+  return runs;
 }
 
 export function officialUrl(bill) {

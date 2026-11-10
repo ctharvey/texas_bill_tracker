@@ -47,6 +47,17 @@ test('bill records use the tracker pipeline: Luna overlay, roster, hearing and l
   assert.ok(!files.has('bills/XX1.json'));
 });
 
+test('companion bills appear on both bills, and a companion not in the snapshot is labelled', () => {
+  const bills = [{...BILLS[0], companions: [{id: 'SB12', author: 'Hughes', relation: 'Identical'}, {id: 'SB99', author: 'Doe'}]},
+    BILLS[1]];
+  const files = build({snapshot: snapshot(bills)});
+  const hb5 = JSON.parse(files.get('bills/HB5.json')), sb12 = JSON.parse(files.get('bills/SB12.json'));
+  assert.deepEqual(hb5.companions.map(c => [c.id, c.relation, c.in_snapshot]), [['SB12', 'Identical', true], ['SB99', null, false]]);
+  assert.deepEqual(sb12.companions.map(c => [c.id, c.author, c.relation]), [['HB5', 'Cole', 'Identical']]);
+  assert.match(files.get('bills/HB5.md'), /- Companion bills: \[SB 12\]\(https:\/\/agent\.bills\.ctharvey\.me\/bills\/SB12\.md\), identical, by Hughes; SB 99 \(not in this snapshot yet\), by Doe/);
+  assert.match(build().get('bills/HB5.md'), /- Companion bills: none listed in the source data/);
+});
+
 test('markdown pages escape table cells and list every group with tracker links', () => {
   const files = build();
   assert.match(files.get('bills/index.md'), /water \\\| groundwater/);

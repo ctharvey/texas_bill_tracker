@@ -22,6 +22,22 @@ class BillParserTests(unittest.TestCase):
         self.assertEqual(bill['status'],'Filed')
         self.assertEqual(bill['filed_at'],'2026-11-09')
 
+    def test_companions_parsed_and_absent_tag_left_out(self):
+        xml = '''<billhistory bill="90(R) HB 267"><caption>Relating to water.</caption>
+          <companions>SB 132 by Menéndez, Identical </companions></billhistory>'''.encode('utf-8')
+        bill = parse_bill_xml(xml, 'HB00267.xml')
+        self.assertEqual(bill['companions'], [{'id': 'SB132', 'author': 'Menéndez', 'relation': 'Identical'}])
+        bill = parse_bill_xml(b'<billhistory bill="90(R) HB 268"><caption>Relating to water.</caption><companions /></billhistory>', 'HB00268.xml')
+        self.assertEqual(bill['companions'], [])
+        bill = parse_bill_xml(b'<billhistory bill="90(R) HB 269"><caption>Relating to water.</caption></billhistory>', 'HB00269.xml')
+        self.assertNotIn('companions', bill)
+
+    def test_companions_self_reference_dropped(self):
+        xml = b'<billhistory bill="90(R) HB 5"><caption>Relating to x.</caption><companions>HB 5 by Cole; HJR 5 by Cole, Similar</companions></billhistory>'
+        bill = parse_bill_xml(xml, 'HB00005.xml')
+        self.assertEqual([c['id'] for c in bill['companions']], ['HJR5'])
+        self.assertEqual(bill['companions'][0]['relation'], 'Similar')
+
     def test_namespace_and_committee(self):
         xml=b'''<History xmlns="urn:test"><bill_number>SB00036</bill_number><caption_text>Relating to tax incentives for data centers.</caption_text><committee_name>Business &amp; Commerce</committee_name></History>'''
         bill=parse_bill_xml(xml,'SB00036.xml')

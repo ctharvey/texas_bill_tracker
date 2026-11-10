@@ -406,6 +406,11 @@ Empty official lists mean none listed in the snapshot; missing fields in local i
 shown as not reported. Authors/coauthors belong to the originating chamber and sponsors/
 cosponsors to the other chamber. The `author` display string remains for compatibility.
 
+`companions` is a list of `{id, author, relation}` parsed from the history's `<companions>` field
+("SB 132 by Menendez, Identical"); it is absent when the source has no such field. The tracker links
+companions in both directions, since the other chamber's bill may not list it back yet, shows them on
+cards and in the drawer, and frames two companions together when they are next to each other in a list.
+
 ### Input data schema
 
 `data/bills.json` contains:
