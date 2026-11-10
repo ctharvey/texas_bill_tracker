@@ -1,0 +1,27 @@
+[
+  {
+    "code": "Water Code",
+    "chapter": 16,
+    "source_url": "https://tcss.legis.texas.gov/resources/WA/htm/WA.16.htm",
+    "verified_on": "2026-11-09",
+    "scope_quote": "In this chapter:",
+    "definitions": [
+      {
+        "id": "D_WA16_BOARD",
+        "section": "16.001(1)",
+        "term": "Board",
+        "registry_id": "twdb",
+        "name": "Texas Water Development Board",
+        "quote": "(1) \"Board\" means the Texas Water Development Board."
+      },
+      {
+        "id": "D_WA16_COMMISSION",
+        "section": "16.001(2)",
+        "term": "Commission",
+        "registry_id": "tceq",
+        "name": "Texas Commission on Environmental Quality",
+        "quote": "(2) \"Commission\" means the Texas Commission on Environmental Quality."
+      }
+    ]
+  }
+]

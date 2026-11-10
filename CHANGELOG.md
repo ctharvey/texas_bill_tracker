@@ -2,6 +2,10 @@
 
 ## 2026-11-09
 
+- Add scoped, citable statutory definitions to focused classification, starting with Water Code Chapter 16
+  identities for TWDB and TCEQ. Keep bill-impact and definition evidence separate, prefer in-bill definitions,
+  and include substantive context changes in cache identity without billing another pilot call.
+
 - Resolve classification excerpts against complete source text, derive page offsets and span links, and
   flag ambiguous or missing quotes without fuzzy acceptance. Fix all six HB529 citation placements offline
   while preserving the original model response and semantic review requirements.

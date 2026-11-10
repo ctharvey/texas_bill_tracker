@@ -25,6 +25,44 @@ def result():
 
 
 class RequestTests(unittest.TestCase):
+    def test_statutory_context_requires_an_explicit_matching_amendment(self):
+        for source, expected in (
+            ("Subchapter K, Chapter 16, Water Code, is amended by adding sections.", 2),
+            ("Section 16.411(a), Water Code, is amended to read as follows.", 2),
+            ("See Chapter 16, Water Code, for definitions.", 0),
+            ("Chapter 17, Water Code, is amended.", 0),
+            ("Chapter 16, Education Code, is amended.", 0),
+            ("Chapter 16, Water Code, is repealed.", 0),
+        ):
+            with self.subTest(source=source):
+                doc = detailed.document_from_pages("HB1", "90R", "introduced", [source])
+                self.assertEqual(len(classification.load_statutory_context(doc)), expected)
+
+    def test_bill_definition_takes_precedence(self):
+        doc = detailed.document_from_pages("HB1", "90R", "introduced", [
+            'Chapter 16, Water Code, is amended. "Board" means a newly created local board.'])
+        context = classification.load_statutory_context(doc)
+        self.assertEqual([entry["term"] for entry in context], ["Commission"])
+
+    def test_definitions_are_citable_bill_context_and_affect_response_cache(self):
+        registry = detailed.load_registry()
+        doc = detailed.document_from_pages("HB1", "90R", "introduced", [
+            "Chapter 16, Water Code, is amended. The board shall publish maps."])
+        context = classification.load_statutory_context(doc)
+        first = classification.build_request(doc, registry)
+        self.assertIn("D_WA16_BOARD", first["input"][1]["content"][0]["text"])
+        self.assertIn("Texas Water Development Board", first["input"][1]["content"][0]["text"])
+        changed = copy.deepcopy(context); changed[0]["quote"] += " Changed definition."
+        with patch.object(classification, "load_statutory_context", return_value=changed):
+            other = classification.build_request(doc, registry)
+        self.assertNotEqual(ResponseCache.key(first), ResponseCache.key(other))
+        changed = copy.deepcopy(context); changed[0]["verified_on"] = "2026-11-10"
+        with patch.object(classification, "load_statutory_context", return_value=changed):
+            refreshed = classification.build_request(doc, registry)
+        self.assertEqual(ResponseCache.key(first), ResponseCache.key(refreshed))
+        no_scope = detailed.document_from_pages("HB2", "90R", "introduced", ["No code amendment."])
+        self.assertEqual(first["input"][0], classification.build_request(no_scope, registry)["input"][0])
+
     def test_exact_quote_relocates_without_changing_text(self):
         doc = detailed.document_from_pages("HB1", "90R", "introduced", ["First page.", "The board shall act."])
         citation = classification.resolve_quote("board shall act", "P001S001", doc)
@@ -101,6 +139,42 @@ class ClassificationTests(unittest.TestCase):
 
     def validate(self, value):
         return classification.validate_result(value, self.doc, self.registry, self.schema, "f" * 64)
+
+    def test_statutory_identity_has_separate_provenance_and_requires_bill_impact(self):
+        self.doc = detailed.document_from_pages("HB1", "90R", "introduced", [
+            "Chapter 16, Water Code, is amended. The board shall publish maps."])
+        value = result()
+        definition = classification.load_statutory_context(self.doc)[0]
+        agency = {"registry_id": "twdb", "name": "Texas Water Development Board", "impact": "direct",
+                  "explanation": "The defined board must publish maps.", "evidence": [
+                      {"span_id": "P001S001", "quote": "The board shall publish maps."},
+                      {"span_id": definition["id"], "quote": definition["quote"]}]}
+        value["agencies"] = [agency]
+        before = copy.deepcopy(value)
+        checked = self.validate(value)
+        self.assertEqual(checked["errors"], [])
+        self.assertEqual(value, before)
+        citation = [c for c in checked["verified_citations"] if c["source_type"] == "statutory_definition"][0]
+        self.assertEqual(citation["source_url"], definition["source_url"])
+        self.assertEqual(citation["section"], "16.001(1)")
+        self.assertEqual(checked["evidence_reverse_index"][definition["id"]], ["agencies:0"])
+        agency["evidence"].pop(0)
+        self.assertTrue(any("requires bill evidence" in error for error in self.validate(value)["errors"]))
+        agency["evidence"] = [{"span_id": "P001S001", "quote": "The board shall publish maps."}]
+        self.assertTrue(any("requires statutory definition" in error for error in self.validate(value)["errors"]))
+
+    def test_unknown_inapplicable_and_invented_statutory_citations_are_rejected(self):
+        value = result()
+        evidence = value["summary"]["evidence"][0]
+        evidence.update(span_id="D_WA16_BOARD", quote='"Board" means the Texas Water Development Board.')
+        self.assertTrue(self.validate(value)["errors"])  # No matching code amendment in this document.
+        self.doc = detailed.document_from_pages("HB1", "90R", "introduced", [
+            "Chapter 16, Water Code, is amended. The commission shall publish maps."])
+        self.assertEqual(self.validate(value)["errors"], [])
+        evidence["quote"] = "Invented agency definition"
+        self.assertTrue(self.validate(value)["errors"])
+        evidence.update(span_id="D_UNKNOWN", quote="publish maps")
+        self.assertTrue(self.validate(value)["errors"])  # Cannot fall back to matching bill text.
 
     def test_excerpts_and_canonical_tags_are_verified(self):
         import jsonschema

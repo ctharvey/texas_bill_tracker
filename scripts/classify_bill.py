@@ -32,6 +32,29 @@ def load_policy_tags(path: Path = ROOT / "src/taxonomy.js") -> list[str]:
     return tags
 
 
+def load_statutory_context(document: dict, path: Path = ROOT / "scripts/statutory_definitions.json") -> list[dict]:
+    """Select reviewed chapter definitions from explicit amendment clauses, never topic similarity."""
+    source = " ".join(document["pages"])
+    context = []
+    for chapter in json.loads(path.read_text("utf-8")):
+        number = str(chapter["chapter"])
+        code = r"\s+".join(re.escape(word) for word in chapter["code"].split())
+        pattern = (r"\b(?:Chapter\s+" + number + r"|Section\s+" + number
+                   + r"\.\d+(?:\([a-z0-9]+\))*)\s*,\s*" + code
+                   + r"\s*,?\s+is\s+(?:amended|added)\b")
+        amendment = re.search(pattern, source, re.I)
+        if amendment is None:
+            continue
+        for definition in chapter["definitions"]:
+            # A narrower/revised in-bill definition can override the chapter definition.
+            override = r'["\u201c]' + re.escape(definition["term"]) + r'["\u201d]\s+(?:means|has the meaning)\b'
+            if re.search(override, source, re.I):
+                continue
+            context.append({**{k: v for k, v in chapter.items() if k != "definitions"},
+                            **definition, "amendment_quote": amendment[0]})
+    return context
+
+
 def build_request(document: dict, registry: list[dict]) -> dict:
     schema = json.loads((ROOT / "scripts/classification_schema.json").read_text("utf-8"))
     tags = load_policy_tags()
@@ -41,6 +64,11 @@ def build_request(document: dict, registry: list[dict]) -> dict:
     request = detailed.build_request(document, registry, schema=schema, instructions=instructions)
     request.update(model=MODEL, max_output_tokens=12000)
     request["text"]["format"]["name"] = "texas_bill_classification_v1"
+    # Bill-dependent definitions stay after the shared prompt-cache breakpoint.
+    request["input"][1]["content"][0]["text"] += (
+        "\nREVIEWED STATUTORY DEFINITIONS (PARTIAL COVERAGE):\n"
+        + json.dumps([{k: v for k, v in definition.items() if k != "verified_on"}
+                      for definition in load_statutory_context(document)], sort_keys=True, ensure_ascii=False))
     return request
 
 
@@ -90,14 +118,22 @@ def validate_result(result: dict, document: dict, registry: list[dict], schema: 
     import jsonschema
     jsonschema.Draft202012Validator(schema).validate(result)
     errors, reasons, reverse, citations = [], [], {}, []
+    definitions = {definition["id"]: definition for definition in load_statutory_context(document)}
     if result["bill_id"] != document["bill_id"]:
         errors.append("Output bill ID differs from source")
     names = {a["id"]: a["name"] for a in registry if a["id"] != "all-state-agencies"}
     for agency in result["agencies"]:
+        if not any(not e["span_id"].startswith("D_") for e in agency["evidence"]):
+            errors.append("Agency impact requires bill evidence: " + agency["name"])
         if agency["registry_id"] is None:
             reasons.append("Unresolved agency identity: " + agency["name"])
         elif names.get(agency["registry_id"]) != agency["name"]:
             errors.append("Noncanonical agency identity: " + agency["name"])
+        for definition in definitions.values():
+            if (agency["registry_id"] == definition["registry_id"]
+                    and agency["name"].casefold() not in " ".join(document["pages"]).casefold()
+                    and not any(e["span_id"] == definition["id"] for e in agency["evidence"])):
+                errors.append("Agency identity requires statutory definition citation: " + agency["name"])
         if agency["impact"] == "inferred":
             reasons.append("Inferred agency impact: " + agency["name"])
     scope = result["all_state_agencies_scope"]
@@ -120,22 +156,34 @@ def validate_result(result: dict, document: dict, registry: list[dict], schema: 
     for label, claim in claims:
         for index, evidence in enumerate(claim["evidence"]):
             span_id, quote = evidence["span_id"], evidence["quote"]
-            citation = {"claim": label, "evidence_index": index, "requested_span_id": span_id,
-                        **resolve_quote(quote, span_id, document)}
+            definition = definitions.get(span_id)
+            if definition is not None:
+                resolved = {"status": "resolved" if quote.strip() and quote in definition["quote"] else "not_found",
+                            "source_type": "statutory_definition", "source_url": definition["source_url"],
+                            "section": definition["section"], "verified_on": definition["verified_on"],
+                            "quote": definition["quote"], "parts": []}
+            elif span_id.startswith("D_"):
+                resolved = {"status": "not_found", "source_type": "statutory_definition"}
+            else:
+                resolved = {"source_type": "bill", **resolve_quote(quote, span_id, document)}
+            citation = {"claim": label, "evidence_index": index, "requested_span_id": span_id, **resolved}
             citations.append(citation)
             if citation["status"] != "resolved":
                 errors.append("Unresolved excerpt (" + citation["status"] + "): " + label + ":" + span_id)
             else:
+                if definition is not None:
+                    reverse.setdefault(span_id, set()).add(label)
                 for part in citation["parts"]:
                     for resolved_span in part["span_ids"]:
                         reverse.setdefault(resolved_span, set()).add(label)
     if result["uncertainties"]:
         reasons.append("Model reports uncertainty")
-    return {"validator_revision": 2, "errors": sorted(set(errors)), "review_reasons": sorted(set(reasons)),
+    return {"validator_revision": 3, "errors": sorted(set(errors)), "review_reasons": sorted(set(reasons)),
             "status": "needs_review" if errors or reasons else "pending_review", "publishable": False,
             "audit_recommended": bool(errors or reasons),
             "evidence_reverse_index": {k: sorted(v) for k, v in sorted(reverse.items())},
             "verified_citations": citations,
+            "statutory_context": list(definitions.values()),
             "citation_counts": {"resolved": sum(c["status"] == "resolved" for c in citations),
                                 "relocated": sum(c.get("location_changed", False) for c in citations),
                                 "ambiguous": sum(c["status"] == "ambiguous" for c in citations),

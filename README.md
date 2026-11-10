@@ -46,6 +46,20 @@ substantive locations, affected groups, major effects and short supporting excer
 every obligation, deadline or exception. Author/party/member counts and legislative events remain official
 metadata. The policy and agency vocabularies come from `src/taxonomy.js`; the agency list is still incomplete.
 
+Reviewed statutory definitions live in `scripts/statutory_definitions.json`, initially Water Code
+16.001(1)-(2): Board/TWDB and Commission/TCEQ. An explicit matching chapter or section amendment selects
+the chapter context; a topical mention or another code does not. In-bill definitions take precedence.
+Each entry retains its official source URL, section, chapter scope and verification date. This is a small
+reviewed registry, not an automatic or exhaustive statute lookup; unsupported amendment forms and missing
+chapters provide no external definitions. Expand it with verified sources before broader deployment.
+
+Definitions follow the full bill in the variable request suffix, preserving the shared prompt cache.
+Their text/scope/provenance affect response-cache identity; verification-date-only changes do not. A `D_`
+evidence ID cites a statutory definition and is validated separately from bill-page evidence. Agency impact
+still requires a bill citation, and identity derived from a supplied definition requires that citation too.
+External identity context does not itself establish substantive impact. Definition quotes cannot match an
+unrelated chapter or silently fall back to bill text.
+
 ```sh
 python scripts/classify_bill.py --pdf /path/to/HB00529I.pdf --bill-id HB529 --session 90R --version introduced --source-url ftp://ftp.legis.state.tx.us/bills/90R/billtext/PDF/house_bills/HB00500_HB00599/HB00529I.pdf
 ```
@@ -72,8 +86,9 @@ The first focused HB529 pilot used all 21 pages and returned 5 policy tags, 2 ag
 scopes, 3 affected groups and 7 major effects. It cost an estimated $0.002208825 in 95 seconds. Six excerpt
 locations initially failed validation (four neighboring-span references and two excerpts crossing span
 boundaries). Deterministic source matching resolved all six offline: all 43 citations now have verified
-locations, with no missing or ambiguous matches. The response remains unapproved because the unnamed board
-identity is unresolved. Revalidation made no provider call and preserved the original response. This is one pilot, not a claim
+locations, with no missing or ambiguous matches. Subsequent statutory review identified the unnamed board
+as TWDB under Water Code 16.001(1). The revised HB529 request includes those definitions; it was prepared
+offline without another paid pass. The original response remains unchanged and unapproved. This is one pilot, not a claim
 of corpus-wide accuracy or demonstrated provider prompt-cache hits across bills.
 
 The detailed version is preserved at
