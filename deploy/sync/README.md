@@ -9,7 +9,7 @@ Layout on the VPS (root-owned except the database directory):
 - `/srv/sites/texas-bill-atlas/sync/compose.yaml` - this file's copy.
 - `/srv/sites/texas-bill-atlas/sync/sync.env` - `PYTHON_IMAGE` (pinned digest), `SYNC_USER` (uid:gid of
   texas-bill-atlas), `SYNC_APP` (the extracted release below). No secrets.
-- `/srv/sites/texas-bill-atlas/sync/app/<commit>/` - `sync_service.py` and `build_feeds.py` from that main commit
+- `/srv/sites/texas-bill-atlas/sync/app/<commit>/` - `sync_service.py`, `build_feeds.py` and `search_bills.py` from that main commit
   (`git --git-dir=/var/lib/texas-bill-atlas/repository.git show <commit>:scripts/<file>`).
 - `/var/lib/texas-bill-atlas/sync/` - SQLite database, mode 0700, owned by texas-bill-atlas. It holds key hashes and
   watchlists only. No backup: people keep export files, and a lost list only unlinks devices.

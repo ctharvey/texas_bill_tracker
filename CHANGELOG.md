@@ -1,6 +1,11 @@
 # Changelog
 
 ## 2026-11-10
+- Agent search at agent.bills.ctharvey.me/search (sync service, read-only): word forms, phrases, synonyms, bill
+  numbers and members across every agent field, with filters, paging and JSON. Agent pages now say when data is
+  missing or pending (queued, retrying, failed), review counts agree everywhere (published reviews), a 404 page lists
+  the bill numbers that exist, and `llms.txt` opens with a quick reference. Bill and watchlist RSS feeds include a
+  dated item when a full-text review is published or redone.
 - Agent edition at agent.bills.ctharvey.me: hourly Markdown/JSON for every bill and filter view, built from the
   tracker's own pipeline in a network-less container; the main page links to it. Back now closes an open bill.
 - Agent edition, after an LLM usability probe: keyword pages for caption words, filing-date, authorship-party and

@@ -58,9 +58,9 @@ test('markdown pages escape table cells and list every group with tracker links'
   assert.ok(files.has('authors/house-cole.md') && files.has('authors/house-smith.md'));
   assert.match(files.get('authors/house-smith.md'), /\| coauthor \|/);
   assert.equal(files.get('llms.txt'), files.get('index.md'));
-  // Every agent link on the overview resolves to a generated file.
+  // Every agent link on the overview resolves to a generated file (search is served by the sync service).
   for (const [, path] of files.get('index.md').matchAll(new RegExp(`\\]\\(${AGENT.replace(/\./g, '\\.')}([^)]+)\\)`, 'g')))
-    assert.ok(files.has(path), path);
+    assert.ok(path === 'search' || files.has(path), path);
   const all = JSON.parse(files.get('data/bills.json'));
   assert.deepEqual(all.bills.map(b => b.id), ['HB5', 'SB12']);
   assert.equal(all.tags_as_of, '2026-11-10T13:00:00Z');
@@ -122,7 +122,7 @@ test('bill pages link the official text and explain empty roles with coverage', 
   const hb5 = files.get('bills/HB5.md'), sb12 = files.get('bills/SB12.md');
   assert.match(hb5, /Official bill text .*Text\.aspx\?LegSess=90R&Bill=HB5/);
   assert.equal(JSON.parse(files.get('bills/HB5.json')).links.text, 'https://capitol.texas.gov/BillLookup/Text.aspx?LegSess=90R&Bill=HB5');
-  assert.match(sb12, /Not reviewed yet \(1 of 2 bills reviewed so far/);
+  assert.match(sb12, /Pending: review status not available\. 1 of 2 bills have a published review so far/);
   // HB5 lists a coauthor, so SB12's empty coauthors are not a dataset-wide gap; no bill lists cosponsors.
   assert.match(sb12, /### Coauthors\n\n_None listed in the source snapshot\._/);
   assert.match(hb5, /### Cosponsors\n\n_None listed\. No bill in this snapshot lists any cosponsors yet/);
@@ -132,6 +132,26 @@ test('bill pages link the official text and explain empty roles with coverage', 
   assert.deepEqual(JSON.parse(files.get('data/bills.json')).coverage.with_coauthors, 1);
   assert.match(files.get('topics/water.md'), /\| Water \| Texas Water Development Board \| full text \|/);
   assert.ok(files.has('authorship/index.md') && files.has('full-text-review/full-text-reviewed.md'));
+});
+
+test('pending and missing data are labelled, and review counts agree with published tags', () => {
+  // HB5 has published tags but is being reviewed again; SB12 failed; nothing else is known.
+  const status = {format: 'texas-bill-luna-status-v1', updated_at: '2026-11-10T19:00:00Z', running: false, current: null,
+    upcoming: [], reviewed: ['HB5'], retry: ['HB5'], failed: {SB12: 'download'}};
+  const files = buildPages({snapshot: snapshot(BILLS), tags: TAGS, roster: ROSTER, status, minBills: 1});
+  const hb5 = files.get('bills/HB5.md'), sb12 = files.get('bills/SB12.md');
+  assert.match(hb5, /A newer review is pending \(re-review queued\)/);
+  assert.match(sb12, /_Pending: review failed at download; it will be retried\./);
+  assert.match(sb12, /_No types of impact tagged yet: the full-text review is pending \(review failed at download; it will be retried\)/);
+  assert.doesNotMatch(sb12, /None recorded/);
+  const progress = files.get('review-progress.md');
+  assert.match(progress, /Reviewed, with published tags: 1 of 2/);
+  assert.match(progress, /Queued for a re-review: 1;/);
+  assert.match(progress, /failed, will be retried: 1;/);
+  const notFound = files.get('404.md');
+  assert.match(notFound, /not in the data yet/);
+  assert.match(notFound, /- HB: 1 bills between HB5 and HB5/);
+  assert.match(files.get('index.md'), /## Quick reference\n\n- Search: https:\/\/agent\.bills\.ctharvey\.me\/search\?q=<words>/);
 });
 
 test('writePages rewrites only changed files, removes stale pages and keeps unrelated files', () => {

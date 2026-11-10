@@ -145,7 +145,9 @@ There are no logins. People keep and move their choices in five ways:
   containing bill numbers, and merges.
 - **Feeds:** `scripts/build_feeds.py` writes `live/feeds/<ID>.xml` (RSS, one per bill) after each hourly sync,
   from the dated actions `sync_ftp.py` now records in `action_dates`. Item ids are stable as the 12-action
-  window slides. There is no iCal: the data has no hearing dates or times.
+  window slides. A published Luna full-text review (`live/luna/tags.json`, read by default from beside the
+  snapshot) is also an item, dated by its review, and a re-review is a new item; watchlist feeds pick reviews up as
+  soon as the tags file changes. There is no iCal: the data has no hearing dates or times.
 - **Private sync links** (`scripts/sync_service.py`, `src/sync.js`): a random edit key and a derived view key;
   only SHA-256 hashes are stored (SQLite), no email, name or IP. The edit key travels in the URL fragment and
   the `X-Sync-Key` header only and is removed from the address bar once read. Saves are versioned; on a conflict
@@ -166,7 +168,16 @@ action, hearing status, chamber, members) plus filing date, authorship party and
 `saving.md` and `data/bills.json`. Group tables carry each bill's topics, agencies and review status and are split
 into pages of 150 (`<group>--page-N.md`) so page-reading tools see every row. Bill pages link the official text, and
 the overview states coverage (reviews, coauthors, sponsors, hearings) so a zero reads as "none yet", not missing data.
-Output is deterministic; files change only when their data does and stale pages are removed.
+Empty fields say whether the full-text review found nothing or is still pending (queued, queued for a retry, failed
+and to be retried), and "reviewed" always means a published review. `404.md` (served by the gateway for missing
+paths) says which bill numbers exist. Output is deterministic; files change only when their data does and stale
+pages are removed.
+
+Search: `https://agent.bills.ctharvey.me/search?q=<words>` (Markdown, or `format=json`) is served by the sync
+service (`scripts/search_bills.py`) from `live/agent/data/bills.json`, reloaded when it changes. It matches word
+forms, quoted phrases, a few synonyms and bill numbers across titles, captions, topics, agencies, full-text
+summaries, members, affected groups, locations and actions, with filters for chamber, topic, agency, party, review
+and filing dates; it says when nothing matches, why that may be, and which named bills are not in the data yet.
 
 `scripts/texas-bill-agent.service`/`.timer` (root, hourly at :50) runs it in a pinned, network-less node container
 as `texas-bill-atlas`, writing only `live/agent`. The gateway serves that folder for the subdomain (cth.hosting

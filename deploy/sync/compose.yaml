@@ -18,6 +18,7 @@ services:
       PYTHONDONTWRITEBYTECODE: '1'
     working_dir: /app
     command: [python3, /app/sync_service.py, --db, /data/sync.sqlite3, --snapshot, /live/bills.json,
+              --search-data, /live/agent/data/bills.json, --tags, /live/luna/tags.json,
               --host, 0.0.0.0, --port, '8787', --trust-proxy]
     volumes:
       - type: bind

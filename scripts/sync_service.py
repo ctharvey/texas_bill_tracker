@@ -21,7 +21,9 @@ import threading
 import time
 
 import build_feeds
+import search_bills
 
+SEARCH_PATHS = {"/search", "/search.md", "/search.json", "/api/search"}
 KEY_RE = re.compile(r"[A-Za-z0-9_-]{22}")
 FEED_RE = re.compile(r"/api/sync/feed/([A-Za-z0-9_-]{22})\.xml")
 MAX_BODY = 16 * 1024
@@ -31,7 +33,7 @@ RETENTION_SECONDS = 365 * 86400
 FEED_ITEMS = 300
 TEXT_FILTERS = {"view", "query", "topic", "agency", "chamber", "stage", "action", "outlook", "sort"}
 BOOL_FILTERS = {"onlyWatch"}
-LIMITS = {"create": (10, 3600), "write": (300, 3600), "read": (1200, 3600)}
+LIMITS = {"create": (10, 3600), "write": (300, 3600), "read": (1200, 3600), "search": (1200, 3600)}
 
 
 class Rejected(Exception):
@@ -174,8 +176,29 @@ class Snapshot:
             return self.bills
 
 
-def watchlist_feed(bill_ids: list[str], bills: dict, site: str) -> str:
-    items = [item for bill_id in bill_ids if bill_id in bills for item in build_feeds.bill_items(bills[bill_id])]
+class Reviews:
+    """Published Luna tags (live/luna/tags.json), reloaded when the file changes."""
+
+    def __init__(self, path: Path | None):
+        self.path, self.mtime, self.entries, self.lock = path, None, {}, threading.Lock()
+
+    def get(self) -> dict:
+        if self.path is None:
+            return {}
+        with self.lock:
+            try:
+                mtime = self.path.stat().st_mtime
+            except OSError:
+                return self.entries
+            if mtime != self.mtime:
+                self.entries, self.mtime = build_feeds.load_reviews(self.path), mtime
+            return self.entries
+
+
+def watchlist_feed(bill_ids: list[str], bills: dict, site: str, reviews: dict | None = None) -> str:
+    reviews = reviews or {}
+    items = [item for bill_id in bill_ids if bill_id in bills
+             for item in build_feeds.all_items(bills[bill_id], reviews.get(bill_id))]
     items.sort(key=lambda i: i["date"] or "", reverse=True)
     return build_feeds.render_rss("Watchlist · Texas Bill Atlas", site + "#watchlist",
                                   f"Latest actions on {len(bill_ids)} watched bills. Unofficial; confirm on "
@@ -184,9 +207,11 @@ def watchlist_feed(bill_ids: list[str], bills: dict, site: str) -> str:
 
 class App:
     def __init__(self, store: Store, snapshot: Snapshot, *, trust_proxy=False,
-                 allowed_origins=("https://bills.ctharvey.me",), site=build_feeds.SITE, clock=time.time):
+                 allowed_origins=("https://bills.ctharvey.me",), site=build_feeds.SITE, clock=time.time,
+                 search: search_bills.Index | None = None, reviews: Reviews | None = None):
         self.store, self.snapshot, self.trust_proxy = store, snapshot, trust_proxy
         self.allowed_origins, self.site, self.clock = set(allowed_origins), site, clock
+        self.search_index, self.reviews = search, reviews or Reviews(None)
         self.limiter = RateLimiter()
 
     def handle(self, method: str, path: str, headers, body: bytes | None, peer: str) -> tuple[int, dict, bytes]:
@@ -194,16 +219,21 @@ class App:
         client = peer
         if self.trust_proxy and headers.get("X-Forwarded-For"):
             client = headers["X-Forwarded-For"].split(",")[-1].strip()  # The hop our proxy appended.
-        path = path.split("?", 1)[0]
+        path, _, query = path.partition("?")
         if path == "/api/sync/health" and method == "GET":
             return self.json(200, {"ok": True})
+        if path in SEARCH_PATHS:
+            if method != "GET":
+                raise Rejected(405, "method not allowed")
+            self.limiter.check(client, "search", now)
+            return self.search(path, query, headers)
         feed = FEED_RE.fullmatch(path)
         if feed and method == "GET":
             self.limiter.check(client, "read", now)
             found = self.store.lookup(feed[1], now)
             if found is None or found[0] != "view":
                 raise Rejected(404, "unknown feed")  # Edit keys never work in URLs.
-            text = watchlist_feed(found[1]["watch"], self.snapshot.get(), self.site)
+            text = watchlist_feed(found[1]["watch"], self.snapshot.get(), self.site, self.reviews.get())
             return 200, {"Content-Type": "application/rss+xml; charset=utf-8"}, text.encode("utf-8")
         if path != "/api/sync":
             raise Rejected(404, "not found")
@@ -241,6 +271,28 @@ class App:
             self.store.delete(key)
             return 204, {}, b""
         raise Rejected(405, "method not allowed")
+
+    def search(self, path: str, query: str, headers) -> tuple[int, dict, bytes]:
+        index = self.search_index.get() if self.search_index else None
+        if index is None or not index.docs:
+            raise Rejected(503, "search data is not available yet; it is rebuilt hourly")
+        try:
+            params = search_bills.parse_params(query)
+        except search_bills.BadQuery as error:
+            raise Rejected(400, str(error)) from None
+        accept = (headers.get("Accept") or "").lower()
+        wants_json = path.endswith(".json") or params["format"] == "json" or (
+            "application/json" in accept and "markdown" not in accept and "html" not in accept)
+        if not params["q"] and not params["filters"]:
+            if wants_json:
+                return self.json(200, {"format": "texas-bill-atlas-search-v1", "usage": f"{search_bills.AGENT}search",
+                                       "error": None, "results": []})
+            return 200, {"Content-Type": "text/markdown; charset=utf-8"}, search_bills.usage(index.meta).encode("utf-8")
+        found = search_bills.search(index, params)
+        if wants_json:
+            return 200, {"Content-Type": "application/json"}, json.dumps(search_bills.as_json(found, params)).encode("utf-8")
+        text = search_bills.as_markdown(found, params, search_bills.DISCLAIMER)
+        return 200, {"Content-Type": "text/markdown; charset=utf-8"}, text.encode("utf-8")
 
     @staticmethod
     def read_json(headers, body: bytes | None) -> dict:
@@ -311,9 +363,12 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=8787)
     parser.add_argument("--trust-proxy", action="store_true", help="Use the proxy's X-Forwarded-For hop for rate limits")
     parser.add_argument("--allowed-origin", action="append", default=None)
+    parser.add_argument("--search-data", type=Path, default=None, help="live/agent/data/bills.json, for /search")
+    parser.add_argument("--tags", type=Path, default=None, help="live/luna/tags.json, for review items in feeds")
     args = parser.parse_args()
     app = App(Store(args.db), Snapshot(args.snapshot), trust_proxy=args.trust_proxy,
-              allowed_origins=args.allowed_origin or ("https://bills.ctharvey.me",))
+              allowed_origins=args.allowed_origin or ("https://bills.ctharvey.me",),
+              search=search_bills.Index(args.search_data) if args.search_data else None, reviews=Reviews(args.tags))
     server = ThreadingHTTPServer((args.host, args.port), make_handler(app))
     server.daemon_threads = True
     print(f"Sync service listening on {args.host}:{args.port}", flush=True)

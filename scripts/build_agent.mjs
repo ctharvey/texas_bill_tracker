@@ -82,9 +82,12 @@ export function billRecord(b) {
   };
 }
 
-function billMarkdown(b, coverage) {
-  const r = billRecord(b), last = r.last_action;
-  const list = items => items.length ? items.map(t => `- ${cell(t)}`).join('\n') : '- None recorded';
+function billMarkdown(b, coverage, reviewState = '') {
+  const r = billRecord(b), last = r.last_action, pending = !r.full_text_review;
+  // Say whether an empty field is a finding or data we do not have yet.
+  const empty = noun => pending ? `_No ${noun} tagged yet: the full-text review is pending (${reviewState || 'not started'}), and caption rules found none._`
+    : `_The full-text review identified no ${noun}._`;
+  const list = (items, noun) => items.length ? items.map(t => `- ${cell(t)}`).join('\n') : empty(noun);
   const people = key => {
     const rows = r.people[key];
     if (rows === null) return '_Not reported in this dataset._';
@@ -96,14 +99,15 @@ function billMarkdown(b, coverage) {
   };
   const dated = r.action_dates && r.action_dates.length === r.actions.length;
   const actions = r.actions.length ? r.actions.map((a, i) => `${i + 1}. ${dated ? `${r.action_dates[i]}: ` : ''}${cell(a)}`).join('\n') : '_No actions recorded._';
-  const agencies = r.agencies.length ? r.agencies.map(a => `- **${cell(a.name)}** (${a.relationship}, ${a.source}): ${cell(a.reason) || 'Relationship not yet annotated'}`).join('\n')
-    : '_No agency has been tagged yet. This does not establish that none are affected._';
+  const agencies = r.agencies.length ? r.agencies.map(a => `- **${cell(a.name)}** (${a.relationship}, ${a.source}): ${cell(a.reason) || (a.source === 'caption-rules' ? 'Inferred from the caption; no explanation until the full-text review' : 'No explanation recorded')}`).join('\n')
+    : pending ? `_No agency tagged yet: the full-text review is pending (${reviewState || 'not started'}). This does not establish that none are affected._`
+      : '_The full-text review tagged no state agency. This does not establish that none are affected._';
   const review = r.full_text_review;
   return `# ${r.number}: ${cell(r.title)}
 
 90th Legislature (90R) · ${r.chamber} · Status: ${cell(r.status)}
 
-- Filed: ${r.filed_at || 'unknown'}
+- Filed: ${r.filed_at || 'not in the source data'}
 - Most recent action: ${cell(last.category)}${last.chamber ? ` · ${last.chamber}` : ''} · ${last.date || 'date unknown'}: ${cell(last.text)}
 - Hearing status: ${r.hearing.status}. ${cell(r.hearing.detail)}
 - Authorship: ${cell(r.authorship_party.label)}. ${cell(r.authorship_party.detail)}
@@ -117,11 +121,11 @@ ${cell(r.caption) || '_No caption available._'}
 
 ${review ? `Reviewed ${review.reviewed_at || 'date unknown'}${review.text_version ? ` · ${cell(review.text_version)} text` : ''}. Fields from the full text: ${review.fields_from_full_text.join(', ') || 'none'}; other fields use caption inference.
 
-${cell(review.summary) || '_No summary._'}` : `_Not reviewed yet${coverage ? ` (${coverage.full_text_reviewed} of ${coverage.bills} bills reviewed so far; see ${AGENT}review-progress.md)` : ''}. Tags below come from rules applied to the caption. The full text is linked below._`}
+${cell(review.summary) || '_The review published no summary._'}${reviewState && reviewState !== 'reviewed' ? `\n\nA newer review is pending (${reviewState}); this one stays until it publishes.` : ''}` : `_Pending: ${reviewState || 'not started'}${coverage ? `. ${coverage.full_text_reviewed} of ${coverage.bills} bills have a published review so far; see ${AGENT}review-progress.md` : ''}. Until then, tags below come from rules applied to the caption. The full text is linked below._`}
 
 ## Topics
 
-${list(r.topics)}
+${list(r.topics, 'topics')}
 
 ## Potentially affected agencies
 
@@ -131,11 +135,11 @@ ${agencies}
 
 ## Types of impact
 
-${list(r.impacts)}
+${list(r.impacts, 'types of impact')}
 
 ## People and institutions affected
 
-${list(r.affected_groups)}
+${list(r.affected_groups, 'affected people or institutions')}
 ${r.locations.length ? `\n## Locations\n\n${r.locations.map(l => `- ${cell(l.name)}${l.kind ? ` (${cell(l.kind)})` : ''}${l.explanation ? `: ${cell(l.explanation)}` : ''}`).join('\n')}\n` : ''}
 ## Authors and sponsors
 
@@ -168,6 +172,7 @@ ${actions}
 - Open in the tracker: ${r.links.tracker}
 - RSS feed of actions: ${r.links.rss}
 - This page as JSON: ${r.links.json}
+- Search all bills: ${AGENT}search?q=<words>
 
 ---
 ${DISCLAIMER}
@@ -182,7 +187,7 @@ function authorKey(p, role, b) {
 function table(bills) {
   if (!bills.length) return '_No bills._\n';
   return '| Bill | Title | Topics | Agencies | Review | Last action | Date |\n|---|---|---|---|---|---|---|\n' + [...bills].sort(byRecent).map(b =>
-    `| [${b.number}](${AGENT}bills/${b.id}.md) | ${cell(b.title)} | ${cell(b.topics.join('; '))} | ${cell(b.agencies.map(a => b.agencyNames[a.id]).join('; '))} | ${b.luna ? 'full text' : 'caption'} | ${cell(b.lastAction.label)} | ${b.lastAction.date || ''} |`).join('\n') + '\n';
+    `| [${b.number}](${AGENT}bills/${b.id}.md) | ${cell(b.title)} | ${cell(b.topics.join('; ')) || (b.luna ? 'none found' : 'none yet')} | ${cell(b.agencies.map(a => b.agencyNames[a.id]).join('; ')) || (b.luna ? 'none found' : 'none yet')} | ${b.luna ? 'full text' : 'caption'} | ${cell(b.lastAction.label)} | ${b.lastAction.date || ''} |`).join('\n') + '\n';
 }
 
 function groupPage(title, intro, bills, humanLink, total = bills.length) {
@@ -217,8 +222,18 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
     with_coauthors: listed('coauthors'), with_sponsors: listed('sponsors'), with_cosponsors: listed('cosponsors'),
     with_hearing: bills.filter(b => HEARD.has(b.hearing.label)).length, as_of: dataDate};
 
+  // One review state per bill. "Reviewed" always means a published full-text review (b.luna), the same count
+  // the tables, coverage and search use; the worker's own queue only explains what is pending.
+  const progress = reviewProgress(bills.map(b => b.id), status, Object.keys(tags?.bills || {}));
+  const published = new Set(bills.filter(b => b.luna).map(b => b.id));
+  const reviewState = new Map();
+  if (progress.current) reviewState.set(progress.current, published.has(progress.current) ? 're-review under way now' : 'under review now');
+  for (const f of progress.failed) reviewState.set(f.id, `${published.has(f.id) ? 'last re-review' : 'review'} failed${f.stage ? ` at ${f.stage}` : ''}; it will be retried`);
+  for (const id of progress.inProgress) reviewState.set(id, published.has(id) ? 're-review queued' : 'queued for a retry');
+  for (const id of progress.reviewed) reviewState.set(id, published.has(id) ? 'reviewed' : 'reviewed, but nothing could be verified against the text to publish');
+  for (const id of progress.notStarted) reviewState.set(id, status ? 'queued, not started yet' : 'review status not available');
   for (const b of bills) {
-    put(`bills/${b.id}.md`, billMarkdown(b, coverage));
+    put(`bills/${b.id}.md`, billMarkdown(b, coverage, reviewState.get(b.id)));
     put(`bills/${b.id}.json`, JSON.stringify(records.get(b.id), null, 1) + '\n');
   }
 
@@ -309,17 +324,39 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   put('recent.md', groupPage('Most recent actions', `The 100 bills with the most recent recorded actions. ${asOf}`,
     [...bills].sort(byRecent).slice(0, 100), tracker({sort: 'latest'})));
 
-  const progress = reviewProgress(bills.map(b => b.id), status, Object.keys(tags?.bills || {}));
   const ids = list => list.length ? list.map(id => `[${id}](${AGENT}bills/${id}.md)`).join(', ') : '_None._';
-  put('review-progress.md', `# Full-text review progress\n\nLuna reads each bill's full text and publishes citation-verified tags. ${status?.updated_at ? `Status as of ${status.updated_at}.` : ''}\n\n`
-    + `- Reviewed: ${progress.reviewed.length}\n- In progress or retrying: ${progress.inProgress.length + (progress.current ? 1 : 0)}\n- Failed: ${progress.failed.length}\n- Not started: ${progress.notStarted.length}\n\n`
-    + `## Under review now\n\n${progress.current ? ids([progress.current]) : '_Nothing right now._'}\n\n## Up next\n\n${ids(progress.upcoming)}\n\n## Reviewed\n\n${ids(progress.reviewed)}\n\n## Failed\n\n${ids(progress.failed.map(f => f.id))}\n\n---\n${DISCLAIMER}\n`);
+  const inState = test => bills.filter(b => test(reviewState.get(b.id) || '', published.has(b.id))).map(b => b.id);
+  const again = inState((s, p) => p && s !== 'reviewed');
+  const unpublished = inState((s, p) => !p);
+  const pendingBy = test => unpublished.filter(id => test(reviewState.get(id) || ''));
+  const running = pendingBy(s => s.startsWith('under review') || s.startsWith('queued for a retry'));
+  const failedNew = pendingBy(s => s.includes('failed'));
+  const unverified = pendingBy(s => s.startsWith('reviewed'));
+  const queued = pendingBy(s => s.startsWith('queued') || s.includes('not available'));
+  put('review-progress.md', `# Full-text review progress\n\nLuna reads each bill's full text and publishes citation-verified tags. ${status?.updated_at ? `Worker status as of ${status.updated_at}.` : 'Worker status is not available right now; counts below come from published tags only.'} Published tags as of ${tags?.generated_at || 'not available yet'}.\n\n`
+    + `- Reviewed, with published tags: ${published.size} of ${bills.length} (the count used everywhere on this site)\n`
+    + `  - Queued for a re-review: ${again.filter(id => !reviewState.get(id).includes('failed')).length}; last re-review failed (earlier tags still shown): ${again.filter(id => reviewState.get(id).includes('failed')).length}\n`
+    + `- Not yet published: ${unpublished.length}\n`
+    + `  - Under review now or queued for a retry: ${running.length}; failed, will be retried: ${failedNew.length}; reviewed with nothing verifiable to publish: ${unverified.length}; queued, not started: ${queued.length}\n\n`
+    + `## Under review now\n\n${progress.current ? ids([progress.current]) : '_Nothing right now._'}\n\n## Up next\n\n${ids(progress.upcoming)}\n\n`
+    + `## Reviewed, with published tags\n\n${ids([...published])}\n\n## Queued for a retry (not yet published)\n\n${ids(running)}\n\n`
+    + `## Failed, will be retried\n\n${ids(progress.failed.map(f => f.id))}\n\n---\n${DISCLAIMER}\n`);
 
   put('saving.md', SAVING);
   put('data/bills.json', JSON.stringify({format: 'texas-bill-atlas-agent-v1', session: '90R', disclaimer: DISCLAIMER,
     bill_data_as_of: snapshot.generated_at, tags_as_of: tags?.generated_at || null, roster_as_of: roster?.generated_at || null,
     coverage_note: snapshot.coverage_note || null, sources: snapshot.sources || null, count: bills.length, coverage,
     bills: [...bills].sort((a, b) => a.id.localeCompare(b.id, 'en', {numeric: true})).map(b => records.get(b.id))}) + '\n');
+
+  // Served by the gateway for any missing path: say what exists instead of a bare 404.
+  const ranges = [...groupBy(bills, b => [b.id.replace(/\d+$/, '')])].sort((a, b) => b[1].length - a[1].length).map(([prefix, list]) => {
+    const nums = list.map(b => Number(b.id.slice(prefix.length))).sort((x, y) => x - y);
+    return `- ${prefix}: ${list.length} bills between ${prefix}${nums[0]} and ${prefix}${nums.at(-1)}${nums.at(-1) - nums[0] + 1 > list.length ? ` (${nums.at(-1) - nums[0] + 1 - list.length} numbers in that range have no page yet)` : ''}`;
+  });
+  put('404.md', `# Not found\n\nThere is no page at this address.\n\n`
+    + `- **Looking for a bill?** It is not in the data yet: a bill appears here within about an hour of the Texas Legislative Council publishing it in its bulk files. ${asOf} Bill pages are \`${AGENT}bills/<ID>.md\` with no spaces (HB5, SB12).\n`
+    + `- **Looking for a word?** Use search: \`${AGENT}search?q=<words>\` matches word forms, phrases and members; \`words/<word>.md\` pages exist only for exact caption words.\n`
+    + `- Start at ${AGENT}llms.txt for everything available.\n\nBill numbers in the data now:\n\n${ranges.join('\n')}\n\n---\n${DISCLAIMER}\n`);
 
   const example = [...bills].sort(byRecent)[0];
   const sampleWord = ['water', 'school', 'property', 'election'].find(w => pages.has(w)) || words[0]?.[0];
@@ -335,13 +372,21 @@ function overviewPage(count, asOf, indexes, example, coverage, sampleWord) {
 
 > Plain-text and JSON access to everything the Texas Bill Atlas tracker (${SITE}) shows for the 90th Texas Legislature: ${count} bills with captions, authors and sponsors (party, district, tenure), recorded actions, hearing status, most recent action, topics, potentially affected agencies, impacts, affected groups and Luna full-text reviews. No JavaScript, login or API key needed.
 
-${asOf} Pages regenerate hourly; files change only when their data does.
+Updated hourly from the Texas Legislative Council bulk FTP. ${asOf}
+
+## Quick reference
+
+- Search: ${AGENT}search?q=<words> (Markdown; add &format=json). Filters: chamber, topic, agency, party, reviewed, filed_from, filed_to. Usage: ${AGENT}search
+- One bill: ${AGENT}bills/<ID>.md or .json (IDs like HB5, SB12; no spaces)
+- Lists: ${AGENT}topics/index.md · ${AGENT}agencies/index.md · ${AGENT}authors/index.md (members) · ${AGENT}filed/index.md · ${AGENT}recent.md
+- Coverage: ${coverage.full_text_reviewed} of ${coverage.bills} bills have a full-text review; ${coverage.with_hearing} have a hearing recorded; ${coverage.with_coauthors} list coauthors. Missing or pending data is labelled as such on each page.
 
 ${DISCLAIMER}
 
 ## Start here
 
-- Keyword search: \`${AGENT}words/<word>.md\` lists the bills whose title or caption uses a word (lowercase, e.g. [${sampleWord}](${AGENT}words/${sampleWord}.md)); [all words](${AGENT}words/index.md)
+- [Search](${AGENT}search): words, phrases, bill numbers and member names across titles, captions, topics, agencies, full-text summaries, affected groups, locations and actions, with filters
+- Keyword pages: \`${AGENT}words/<word>.md\` lists the bills whose title or caption uses a word (lowercase, e.g. [${sampleWord}](${AGENT}words/${sampleWord}.md)); [all words](${AGENT}words/index.md)
 - [All bills](${AGENT}bills/index.md): one row per bill with topics, agencies and review status, most recent action first, ${PAGE} per page
 - [Most recent actions](${AGENT}recent.md)
 - One bill: \`${AGENT}bills/<ID>.md\` or \`.json\`, for example [${example.number}](${AGENT}bills/${example.id}.md). IDs have no spaces (HB5, SB12, HJR5, SCR3); a bill that has not been filed has no page. Each links its official history and full text.
@@ -370,7 +415,7 @@ The tracker keeps its state after \`#\` in the address. Equivalents here:
 
 - \`${SITE}#all?bill=${example.id}\` -> \`${AGENT}bills/${example.id}.md\`
 - \`#all?topic=<topic>\` -> \`${AGENT}topics/index.md\`; \`#all?agency=<id>\` -> \`${AGENT}agencies/index.md\`; \`#all?action=<category>\` -> \`${AGENT}last-action/index.md\`; \`#all?outlook=<status>\` -> \`${AGENT}hearing/index.md\`; \`#all?chamber=<chamber>\` -> \`${AGENT}chamber/index.md\`
-- Text search (\`query=<word>\`) -> \`${AGENT}words/<word>.md\` (caption words); for phrases or member names, filter \`data/bills.json\`.
+- Text search (\`query=<words>\`) -> \`${AGENT}search?q=<words>\`.
 - A shared list (\`#all?list=HB1,SB2\`): fetch each \`bills/<ID>.md\`.
 
 ## Feeds and saved lists
