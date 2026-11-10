@@ -81,9 +81,10 @@ def infer_status(actions: list[str], committees: list[str]) -> str:
         return "Passed"
     if "passed" in text or "engrossed" in text or "reported favorably" in text:
         return "Advanced"
-    if "hearing held" in text or "public hearing" in text:
+    if any(p in text for p in ("public hearing held", "hearing held", "testimony taken",
+                               "heard in committee", "considered in public hearing")):
         return "Heard"
-    if "scheduled for hearing" in text or "hearing scheduled" in text:
+    if any(p in text for p in ("scheduled for public hearing", "scheduled for hearing", "hearing scheduled")):
         return "Scheduled"
     if committees or "referred to" in text:
         return "Referred"
@@ -206,6 +207,28 @@ def enumerate_xml(conn: ftplib.FTP) -> list[str]:
     return sorted(set(p for p in paths if not p.lower().endswith('/history.xml')))
 
 
+HEARTBEAT = dt.timedelta(hours=6)
+
+
+def choose_generated_at(previous: dict | None, new_payload: dict, now: dt.datetime) -> str:
+    """Keep the previous timestamp when nothing else changed and it is under 6 hours old."""
+    fresh = now.astimezone(dt.timezone.utc).isoformat().replace('+00:00', 'Z')
+    if not previous or not previous.get('generated_at'):
+        return fresh
+    strip = lambda p: {k: v for k, v in p.items() if k != 'generated_at'}
+    if strip(previous) != strip(new_payload):
+        return fresh
+    try:
+        stamp = dt.datetime.fromisoformat(str(previous['generated_at']).replace('Z', '+00:00'))
+    except ValueError:
+        return fresh
+    if stamp.tzinfo is None:
+        return fresh
+    if dt.timedelta(0) <= now - stamp < HEARTBEAT:
+        return previous['generated_at']
+    return fresh
+
+
 def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000) -> tuple[dict, dict]:
     paths = enumerate_xml(conn)
     if not paths:
@@ -219,7 +242,7 @@ def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000) -> tuple[
             bill = parse_bill_xml(ftp_bytes(conn, path), path)
             if bill:
                 parsed[bill['id']] = bill
-        except (ftplib.error_perm, EOFError, OSError) as exc:
+        except (ftplib.error_perm, ftplib.error_temp, EOFError, OSError) as exc:
             errors.append(f"{path}: {exc}")
         if i % 250 == 0:
             print(f"Inspected {i}/{len(paths)} XML files; {len(parsed)} parseable", flush=True)
@@ -235,13 +258,14 @@ def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000) -> tuple[
         merged[key] = {**old,**bill,**preserved}
     snapshot = {
         'session': '90R',
-        'generated_at': dt.datetime.now(dt.timezone.utc).isoformat().replace('+00:00','Z'),
+        'generated_at': '',
         'data_mode': 'official-ftp',
         'coverage_note': f"{len(parsed)} bill histories read from the official bulk FTP; {len(merged)} combined records. Agency inferences are based on available captions and curated overrides.",
         'sources': ['ftp://ftp.legis.state.tx.us/bills/90r/billhistory/', 'https://capitol.texas.gov/billlookup/filedownloads.aspx'],
         'author_profiles': prior.get('author_profiles',{}),
         'bills': sorted(merged.values(), key=lambda b:(b.get('filed_at') or '',b['id']),reverse=True),
     }
+    snapshot['generated_at'] = choose_generated_at(prior, snapshot, dt.datetime.now(dt.timezone.utc))
     return snapshot, {'listed':len(paths),'parsed':len(parsed),'combined':len(merged),'transfer_errors':len(errors)}
 
 

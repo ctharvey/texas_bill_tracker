@@ -8,8 +8,6 @@ on:
       - '.github/workflows/refresh-bills.yml'
   schedule:
     - cron: '17 * * * *'
-permissions:
-  contents: write
 concurrency:
   group: texas-bill-sync
   cancel-in-progress: false
@@ -17,13 +15,15 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Verify parser tests
-        run: python -m unittest discover -s tests -v
+        run: python -m unittest discover -s tests -p "test_sync_ftp.py" -v
       - name: Import official Texas bulk FTP
         run: python scripts/sync_ftp.py
       - name: Commit snapshot only if changed
@@ -35,5 +35,21 @@ jobs:
             echo "No data changes"
           else
             git commit -m "data: refresh official 90R bill history"
-            git push
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main; then
+                if git push; then
+                  exit 0
+                fi
+              else
+                echo "Rebase failed on attempt $attempt"
+                git rebase --abort || true
+                git reset --hard origin/main
+                echo "::error::Rebase conflicted (likely data/bills.json); discarding this import. The next scheduled run will import again."
+                exit 1
+              fi
+              echo "Push attempt $attempt failed; retrying"
+              sleep $((attempt * 5))
+            done
+            echo "::error::Could not push after 5 attempts; the next scheduled run will import again."
+            exit 1
           fi

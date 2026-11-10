@@ -1,9 +1,11 @@
+import datetime as dt
+import ftplib
 import sys
 from pathlib import Path
 import unittest
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from sync_ftp import parse_bill_xml, parse_bill_number, infer_status, normalize_date, synchronize
+from sync_ftp import parse_bill_xml, parse_bill_number, infer_status, normalize_date, synchronize, choose_generated_at
 
 
 class BillParserTests(unittest.TestCase):
@@ -83,6 +85,34 @@ class BillParserTests(unittest.TestCase):
     def test_status(self):
         self.assertEqual(infer_status(['Scheduled for hearing'],[]),'Scheduled')
         self.assertEqual(infer_status(['Reported favorably'],[]),'Advanced')
+
+    def test_hearing_status_order(self):
+        self.assertEqual(infer_status(['Filed','Scheduled for public hearing on 3/2'],['State Affairs']),'Scheduled')
+        self.assertEqual(infer_status(['Considered in public hearing'],[]),'Heard')
+        self.assertEqual(infer_status(['Public hearing held'],[]),'Heard')
+        self.assertEqual(infer_status(['Scheduled for public hearing','Public hearing held'],['State Affairs']),'Heard')
+        self.assertEqual(infer_status(['Public hearing'],['State Affairs']),'Referred')
+
+    def test_generated_at_heartbeat(self):
+        now=dt.datetime(2026,11,9,12,0,tzinfo=dt.timezone.utc)
+        def stamp(hours):
+            return (now-dt.timedelta(hours=hours)).isoformat().replace('+00:00','Z')
+        payload={'generated_at':'','bills':[{'id':'HB1'}]}
+        prev=lambda hours,bills=None:{'generated_at':stamp(hours),'bills':bills or [{'id':'HB1'}]}
+        self.assertEqual(choose_generated_at(prev(2),payload,now),stamp(2))
+        self.assertEqual(choose_generated_at(prev(7),payload,now),'2026-11-09T12:00:00Z')
+        self.assertEqual(choose_generated_at(prev(2,[{'id':'HB2'}]),payload,now),'2026-11-09T12:00:00Z')
+        self.assertEqual(choose_generated_at(None,payload,now),'2026-11-09T12:00:00Z')
+        self.assertEqual(choose_generated_at({'bills':[]},payload,now),'2026-11-09T12:00:00Z')
+
+    def test_temp_error_counts_as_transfer_error(self):
+        class FakeFTP:
+            def nlst(self,path):
+                return ['/x/HB00001.xml'] if path.endswith('house_bills') else []
+            def retrbinary(self,*a,**k):raise ftplib.error_temp('421 try later')
+        with self.assertRaises(RuntimeError) as ctx:
+            synchronize(FakeFTP(),{'bills':[]})
+        self.assertIn('421',str(ctx.exception))
 
     def test_refuse_empty_snapshot(self):
         class FakeFTP:
