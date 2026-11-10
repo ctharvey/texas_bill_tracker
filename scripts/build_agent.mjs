@@ -19,6 +19,8 @@ const OWNED = /\.(md|json|txt)$/;
 const HEARING_ORDER = ['Heard', 'Scheduled', 'Referred', 'Not rated'];
 const HEARD = new Set(['Heard', 'Scheduled']);
 const PAGE = 150;
+const FILED_NOTE = '"Filed" is the filing date in the Legislative Council data. Bills filed before the session opens in '
+  + 'January 2027 are prefiled; prefiling opened on 2026-11-09, so early dates cluster there.';
 const textUrl = id => `https://capitol.texas.gov/BillLookup/Text.aspx?LegSess=90R&Bill=${id}`;
 
 export const slug = text => String(text).toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-')
@@ -78,7 +80,7 @@ export function billRecord(b) {
   };
 }
 
-function billMarkdown(b, coverage, reviewState = '') {
+function billMarkdown(b, coverage, reviewState = '', queueNote = '') {
   const r = billRecord(b), last = r.last_action, pending = !r.full_text_review;
   // Say whether an empty field is a finding or data we do not have yet.
   const empty = noun => pending ? `_No ${noun} tagged yet: the full-text review is pending (${reviewState || 'not started'}), and caption rules found none._`
@@ -117,7 +119,7 @@ ${cell(r.caption) || '_No caption available._'}
 
 ${review ? `Reviewed ${review.reviewed_at || 'date unknown'}${review.text_version ? ` · ${cell(review.text_version)} text` : ''}. Fields from the full text: ${review.fields_from_full_text.join(', ') || 'none'}; other fields use caption inference.
 
-${cell(review.summary) || '_The review published no summary._'}${reviewState && reviewState !== 'reviewed' ? `\n\nA newer review is pending (${reviewState}); this one stays until it publishes.` : ''}` : `_Pending: ${reviewState || 'not started'}${coverage ? `. ${coverage.full_text_reviewed} of ${coverage.bills} bills have a published review so far; see ${AGENT}review-progress.md` : ''}. Until then, tags below come from rules applied to the caption. The full text is linked below._`}
+${cell(review.summary) || '_The review published no summary._'}${reviewState && reviewState !== 'reviewed' ? `\n\nA newer review is pending (${reviewState}); this one stays until it publishes.` : ''}` : `_Pending: ${reviewState || 'not started'}${queueNote ? `; ${queueNote}` : ''}${coverage ? `. ${coverage.full_text_reviewed} of ${coverage.bills} bills have a published review so far; see ${AGENT}review-progress.md` : ''}. Until then, tags below come from rules applied to the caption. The full text is linked below._`}
 
 ## Topics
 
@@ -228,8 +230,25 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   for (const id of progress.inProgress) reviewState.set(id, published.has(id) ? 're-review queued' : 'queued for a retry');
   for (const id of progress.reviewed) reviewState.set(id, published.has(id) ? 'reviewed' : 'reviewed, but nothing could be verified against the text to publish');
   for (const id of progress.notStarted) reviewState.set(id, status ? 'queued, not started yet' : 'review status not available');
+
+  // Queue position for bills never reviewed. The worker takes up to three retries, then never-reviewed bills in
+  // snapshot order, forward or reversed (a deploy setting); the worker's own "upcoming" list shows which. With no
+  // clear direction, no position is claimed.
+  const neverReviewed = progress.notStarted.filter(id => !published.has(id));
+  const at = new Map(neverReviewed.map((id, i) => [id, i]));
+  const next = progress.upcoming.filter(id => at.has(id)).map(id => at.get(id));
+  const rising = next.length > 1 && next.every((v, i) => !i || v > next[i - 1]);
+  const falling = next.length > 1 && next.every((v, i) => !i || v < next[i - 1]);
+  const queueOrder = rising ? neverReviewed : falling ? [...neverReviewed].reverse() : null;
+  const ahead = Math.min(3, progress.inProgress.length) + (progress.current ? 1 : 0);
+  const tagsAt = Date.parse(tags?.generated_at || '');
+  const lastDay = Number.isNaN(tagsAt) ? 0 : bills.filter(b => Date.parse(b.luna?.reviewed_at || '') >= tagsAt - 86400000).length;
+  const queueNote = new Map((queueOrder || []).map((id, i) => {
+    const position = ahead + i + 1;
+    return [id, `about number ${position} in the review queue${lastDay ? `, roughly ${Math.max(1, Math.ceil(position / lastDay))} ${Math.ceil(position / lastDay) > 1 ? 'days' : 'day'} away at the recent pace (an estimate)` : ''}`];
+  }));
   for (const b of bills) {
-    put(`bills/${b.id}.md`, billMarkdown(b, coverage, reviewState.get(b.id)));
+    put(`bills/${b.id}.md`, billMarkdown(b, coverage, reviewState.get(b.id), queueNote.get(b.id)));
     put(`bills/${b.id}.json`, JSON.stringify(records.get(b.id), null, 1) + '\n');
   }
 
@@ -273,7 +292,7 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
         : `No bill has a committee hearing recorded or scheduled as of ${dataDate}.`});
   addGroups('chamber', 'Bills by chamber', 'The chamber where the bill was filed.', groupBy(bills, b => [b.chamber]), k => k,
     k => tracker({chamber: k}));
-  addGroups('filed', 'Bills by filing date', 'The date each bill was filed, newest first.', groupBy(bills, b => [b.filed_at || 'unknown']),
+  addGroups('filed', 'Bills by filing date', `The date each bill was filed, newest first. ${FILED_NOTE}`, groupBy(bills, b => [b.filed_at || 'unknown']),
     k => k, null, {order: (a, b) => b.localeCompare(a)});
   addGroups('authorship', 'Bills by authorship party', 'Party of the bill\'s authors and coauthors, from the member roster. Not a vote or caucus position.',
     groupBy(bills, b => [records.get(b.id).authorship_party.label]), k => k, null);
@@ -320,12 +339,11 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   // Exclusive buckets: "queued for a retry" is counted in running only, so the four add up to unpublished.
   const queued = pendingBy(s => s.startsWith('queued, not started') || s.includes('not available') || !s);
   // Throughput from published review dates; an estimate only.
-  const day = Date.parse(tags?.generated_at || '') - 86400000;
-  const lastDay = bills.filter(b => Date.parse(b.luna?.reviewed_at || '') >= day).length;
-  const pace = Number.isNaN(day) ? '' : lastDay
+  const pace = Number.isNaN(tagsAt) ? '' : lastDay
     ? `In the 24 hours before the tags were published, ${lastDay} ${lastDay === 1 ? 'review was' : 'reviews were'} published; at that pace the ${unpublished.length} unpublished ${unpublished.length === 1 ? 'bill' : 'bills'} would take about ${Math.ceil(unpublished.length / lastDay)} ${Math.ceil(unpublished.length / lastDay) === 1 ? 'day' : 'days'}. An estimate, not a schedule.`
     : 'No review was published in the 24 hours before the tags were published, so there is no pace to estimate from.';
-  const order = 'Order: the worker takes up to three retries first, then bills never reviewed, then failed bills, then re-reviews of the rest. Only the next five are listed under Up next; a bill not listed there is still queued.';
+  const order = 'Order: the worker takes up to three retries first, then bills never reviewed, then failed bills, then re-reviews of the rest. Only the next five are listed under Up next; a bill not listed there is still queued.'
+    + (queueOrder ? ' Each unreviewed bill\'s page gives its approximate place in the queue.' : ' The worker\'s order is not clear from its status right now, so bill pages give no queue position.');
   put('review-progress.md', `# Full-text review progress\n\nLuna reads each bill's full text and publishes citation-verified tags. ${status?.updated_at ? `Worker status as of ${status.updated_at}.` : 'Worker status is not available right now; counts below come from published tags only.'} Published tags as of ${tags?.generated_at || 'not available yet'}.\n\n`
     + `- Reviewed, with published tags: ${published.size} of ${bills.length} (the count used everywhere on this site)\n`
     + `  - Queued for a re-review: ${again.filter(id => !reviewState.get(id).includes('failed')).length}; last re-review failed (earlier tags still shown): ${again.filter(id => reviewState.get(id).includes('failed')).length}\n`
@@ -366,11 +384,11 @@ function overviewPage(count, asOf, indexes, example, coverage) {
 
 > Plain-text and JSON access to everything the Texas Bill Atlas tracker (${SITE}) shows for the 90th Texas Legislature: ${count} bills with captions, authors and sponsors (party, district, tenure), recorded actions, hearing status, most recent action, topics, potentially affected agencies, impacts, affected groups and Luna full-text reviews. No JavaScript, login or API key needed.
 
-Updated hourly from the Texas Legislative Council bulk FTP. ${asOf}
+Updated hourly from the Texas Legislative Council bulk FTP. ${asOf} ${FILED_NOTE}
 
 ## Quick reference
 
-- Search: ${AGENT}search?q=<words> (Markdown; add &format=json). Filters: chamber, topic, agency, location, party, reviewed, filed_from, filed_to. Usage: ${AGENT}search
+- Search: ${AGENT}search?q=<words> (Markdown; add &format=json). Every word must match; join alternatives with OR (q=hemp OR marijuana). Filters: chamber, topic, agency, location, party, reviewed, filed_from, filed_to. Usage: ${AGENT}search
 - Recently filed: ${AGENT}search?filed_from=YYYY-MM-DD lists every bill filed since a date
 - One bill: ${AGENT}bills/<ID>.md or .json (IDs like HB5, SB12; no spaces)
 - Lists: ${AGENT}topics/index.md · ${AGENT}agencies/index.md · ${AGENT}authors/index.md (members) · ${AGENT}filed/index.md · ${AGENT}recent.md

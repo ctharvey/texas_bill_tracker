@@ -67,6 +67,36 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(find('q=%22school+choice%22'), ['HB12', 'HB21'])
         self.assertEqual(find('q=%22education+savings+account%22'), ['HB12', 'HB21'])
 
+    def test_or_cannabis_group_and_top_tier_fallback(self):
+        data = {**AGENT_DATA, 'bills': AGENT_DATA['bills'] + [
+            record('HB40', 'Relating to the regulation of hemp products.'),
+            record('HB41', 'Relating to THC limits.'),
+            record('HB42', 'Relating to property tax relief for homesteads.', chamber='Senate'),
+            record('HB43', 'Relating to property tax appraisal.', chamber='Senate')]}
+        find = lambda q: search_bills.search(index(data), search_bills.parse_params(q))
+        self.assertEqual(sorted(r['id'] for *_, r, _ in find('q=thc+hemp+marijuana')['results']), ['HB40', 'HB41'])
+        self.assertEqual(sorted(r['id'] for *_, r, _ in find('q=groundwater+OR+firearm')['results']), ['HB10', 'HB11'])
+        self.assertEqual(find('q=groundwater+OR+firearm')['terms'], ['groundwater or firearm'])
+        found = find('q=property+tax+homestead+zebra&chamber=senate')
+        self.assertEqual((found['mode'], [r['id'] for *_, r, _ in found['results']]), ('any', ['HB42']))  # Top tier only.
+        self.assertEqual([t['total'] for t in found['per_term']], [2, 2, 1, 0])
+        text = search_bills.as_markdown(found, search_bills.parse_params('q=property+tax+homestead+zebra&chamber=senate'))
+        self.assertIn('Each word on its own', text)
+        self.assertIn('searched by caption', text)
+
+    def test_member_did_you_mean_and_exact_agency_ids(self):
+        data = {**AGENT_DATA, 'bills': AGENT_DATA['bills'] + [
+            record('HB50', 'Relating to schools.', agencies=[{'id': 'tea', 'name': 'Texas Education Agency'}],
+                   people={'authors': [{'name': 'Johnson', 'full_name': 'Ann Johnson', 'chamber': 'house', 'district': 134}]}),
+            record('HB51', 'Relating to pensions.', agencies=[{'id': 'trs', 'name': 'Teacher Retirement System of Texas'}])]}
+        found = search_bills.search(index(data), search_bills.parse_params('q=jonson'))
+        self.assertEqual(found['members'], ['Ann Johnson (house district 134)'])
+        self.assertIn('Did you mean a member?', search_bills.as_markdown(found, search_bills.parse_params('q=jonson')))
+        found = search_bills.search(index(data), search_bills.parse_params('agency=tea'))
+        self.assertEqual([r['id'] for *_, r, _ in found['results']], ['HB50'])
+        found = search_bills.search(index(data), search_bills.parse_params('agency=teacher+retirement'))
+        self.assertEqual([r['id'] for *_, r, _ in found['results']], ['HB51'])
+
     def test_location_filter(self):
         self.assertEqual(ids('location=harris')[0], ['HB12'])
         self.assertEqual(ids('q=school&location=dallas')[0], [])

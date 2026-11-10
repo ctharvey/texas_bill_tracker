@@ -177,8 +177,10 @@ Search: `https://agent.bills.ctharvey.me/search?q=<words>` (Markdown, or `format
 service (`scripts/search_bills.py`) from `live/agent/data/bills.json`, reloaded when it changes. It matches word
 forms, quoted phrases, two-way synonym groups (gun/firearm/rifle, voucher/"school choice"/"education savings
 account") and bill numbers across titles, captions, topics, agencies, full-text summaries, members, affected groups,
-locations and actions, with filters for chamber, topic, agency, location, party, review and filing dates (it
-replaced the old `words/<word>.md` keyword pages); it says when nothing matches, why that may be, and which named bills are not in the data yet.
+locations and actions, with `OR` between alternatives and filters for chamber, topic, agency, location, party,
+review and filing dates (a known topic name or agency id matches exactly, as in the tracker). It replaced the old
+`words/<word>.md` keyword pages. A partial match shows only the bills matching the most words, with a count per word,
+misspelled member names get a "did you mean", and results say how many bills are searchable by caption only; it says when nothing matches, why that may be, and which named bills are not in the data yet.
 
 `scripts/texas-bill-agent.service`/`.timer` (root, hourly at :50) runs it in a pinned, network-less node container
 as `texas-bill-atlas`, writing only `live/agent`. The gateway serves that folder for the subdomain (cth.hosting

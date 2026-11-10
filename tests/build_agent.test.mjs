@@ -107,6 +107,24 @@ test('review buckets add up when a new bill is queued for a retry, with pace and
   assert.match(progress, /Only the next five are listed under Up next/);
 });
 
+test('unreviewed bills get a queue position only when the worker order is clear', () => {
+  const many = Array.from({length: 6}, (_, i) => ({id: `HB${i + 1}`, caption: `Relating to item ${i + 1}.`, author: 'Cole',
+    authors: ['Cole'], status: 'Filed', actions: ['Filed'], filed_at: '2026-11-09'}));
+  const tags = {...TAGS, bills: {}};
+  const status = upcoming => ({format: 'texas-bill-luna-status-v1', updated_at: '2026-11-10T19:00:00Z', running: true,
+    current: null, upcoming, reviewed: [], retry: [], failed: {}});
+  const page = (upcoming, id) => buildPages({snapshot: snapshot(many), tags, status: status(upcoming), minBills: 1}).get(`bills/${id}.md`);
+  assert.match(page(['HB1', 'HB2'], 'HB4'), /about number 4 in the review queue/);
+  assert.match(page(['HB6', 'HB5'], 'HB4'), /about number 3 in the review queue/);  // Reverse order.
+  assert.doesNotMatch(page(['HB3'], 'HB4'), /review queue/);                          // Direction unknown.
+});
+
+test('the overview and filing-date index define "Filed"', () => {
+  const files = build();
+  assert.match(files.get('index.md'), /prefiling opened on 2026-11-09/);
+  assert.match(files.get('filed/index.md'), /"Filed" is the filing date/);
+});
+
 test('recent actions page points to date search for complete periods', () => {
   assert.match(build().get('recent.md'), /search\?filed_from=YYYY-MM-DD/);
 });

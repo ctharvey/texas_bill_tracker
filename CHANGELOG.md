@@ -1,6 +1,11 @@
 # Changelog
 
 ## 2026-11-10
+- Agent search, after a fourth LLM probe: `OR` between words; THC and hemp join the cannabis synonyms; a partial
+  match shows only the bills matching the most words plus a count per word; "did you mean" for misspelled member
+  names; results note that unreviewed bills are searched by caption only; known topic names and agency ids match
+  exactly (`agency=tea` no longer matches the Teacher Retirement System). Unreviewed bill pages give an approximate
+  queue position and wait; the overview and filing-date index define "Filed" (prefiling opened 2026-11-09).
 - Agent edition, after a third LLM probe: search replaces the `words/` keyword pages; synonyms work in both directions
   (firearm finds what gun finds; voucher, "school choice" and "education savings account" find each other); a
   `location` filter matches review locations and captions; review progress buckets add up (retries were counted
