@@ -44,10 +44,52 @@ def build_request(document: dict, registry: list[dict]) -> dict:
     return request
 
 
+def resolve_quote(quote: str, hint: str, document: dict) -> dict:
+    """Locate an exact excerpt; offsets are into normalized page text, end exclusive."""
+    pages = document["pages"]
+    source = " ".join(pages)
+    page_starts, cursor = [], 0
+    for page in pages:
+        page_starts.append(cursor)
+        cursor += len(page) + 1
+    matches, cursor = [], 0
+    while quote.strip() and (start := source.find(quote, cursor)) >= 0:
+        matches.append((start, start + len(quote)))
+        cursor = start + 1
+    count = len(matches)
+    method = "unique_quote"
+    if count > 1:
+        # Only a source-verified overlap with the hinted span can disambiguate repeats.
+        span = document["spans"].get(hint)
+        contextual = []
+        if span is not None:
+            offset = page_starts[span["page"] - 1]
+            contextual = [(start, end) for start, end in matches
+                          if start < offset + span["end"] and end > offset + span["start"]]
+        matches = contextual if len(contextual) == 1 else []
+        method = "hinted_source_context"
+    if not matches:
+        return {"status": "ambiguous" if count else "not_found", "candidate_count": count}
+    start, end = matches[0]
+    parts = []
+    for number, (page, offset) in enumerate(zip(pages, page_starts), 1):
+        local_start, local_end = max(start - offset, 0), min(end - offset, len(page))
+        if local_start >= local_end:
+            continue
+        spans = [sid for sid, span in document["spans"].items()
+                 if span["page"] == number and span["start"] < local_end and span["end"] > local_start]
+        parts.append({"page": number, "start": local_start, "end": local_end, "span_ids": spans,
+                      "quote": page[local_start:local_end]})
+    span_ids = [sid for part in parts for sid in part["span_ids"]]
+    return {"status": "resolved", "method": method, "candidate_count": count,
+            "quote": source[start:end], "parts": parts,
+            "location_changed": span_ids != [hint]}
+
+
 def validate_result(result: dict, document: dict, registry: list[dict], schema: dict, key: str) -> dict:
     import jsonschema
     jsonschema.Draft202012Validator(schema).validate(result)
-    errors, reasons, reverse = [], [], {}
+    errors, reasons, reverse, citations = [], [], {}, []
     if result["bill_id"] != document["bill_id"]:
         errors.append("Output bill ID differs from source")
     names = {a["id"]: a["name"] for a in registry if a["id"] != "all-state-agencies"}
@@ -76,19 +118,28 @@ def validate_result(result: dict, document: dict, registry: list[dict], schema: 
             seen.add(claim[identity])
             claims.append((f"{field}:{i}", claim))
     for label, claim in claims:
-        for evidence in claim["evidence"]:
+        for index, evidence in enumerate(claim["evidence"]):
             span_id, quote = evidence["span_id"], evidence["quote"]
-            span = document["spans"].get(span_id)
-            if span is None or quote not in span["text"]:
-                errors.append("Unsupported excerpt: " + label + ":" + span_id)
+            citation = {"claim": label, "evidence_index": index, "requested_span_id": span_id,
+                        **resolve_quote(quote, span_id, document)}
+            citations.append(citation)
+            if citation["status"] != "resolved":
+                errors.append("Unresolved excerpt (" + citation["status"] + "): " + label + ":" + span_id)
             else:
-                reverse.setdefault(span_id, set()).add(label)
+                for part in citation["parts"]:
+                    for resolved_span in part["span_ids"]:
+                        reverse.setdefault(resolved_span, set()).add(label)
     if result["uncertainties"]:
         reasons.append("Model reports uncertainty")
-    return {"validator_revision": 1, "errors": sorted(set(errors)), "review_reasons": sorted(set(reasons)),
+    return {"validator_revision": 2, "errors": sorted(set(errors)), "review_reasons": sorted(set(reasons)),
             "status": "needs_review" if errors or reasons else "pending_review", "publishable": False,
             "audit_recommended": bool(errors or reasons),
             "evidence_reverse_index": {k: sorted(v) for k, v in sorted(reverse.items())},
+            "verified_citations": citations,
+            "citation_counts": {"resolved": sum(c["status"] == "resolved" for c in citations),
+                                "relocated": sum(c.get("location_changed", False) for c in citations),
+                                "ambiguous": sum(c["status"] == "ambiguous" for c in citations),
+                                "not_found": sum(c["status"] == "not_found" for c in citations)},
             "counts": {k: len(result[k]) for k in
                        ("policy_tags", "agencies", "locations", "affected_groups", "major_effects")}}
 
@@ -123,7 +174,8 @@ def main() -> int:
     document = detailed.read_pdf(args.pdf, args.bill_id, args.session, args.version)
     document["source_url"] = args.source_url
     report = classify(document, detailed.load_registry(), args.cache_dir, execute=args.execute)
-    print(json.dumps({k: v for k, v in report.items() if k not in ("result", "evidence_reverse_index")}, indent=2))
+    print(json.dumps({k: v for k, v in report.items()
+                      if k not in ("result", "evidence_reverse_index", "verified_citations")}, indent=2))
     return 2 if report.get("errors") or (args.execute and report.get("action") == "not_submitted") else 0
 
 

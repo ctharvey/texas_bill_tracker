@@ -56,8 +56,13 @@ response cache, prompt-cache breakpoints, bounded capacity backoff and uncertain
 schema and prompt produce a distinct cache key. A response hit makes no provider call. Shared instructions
 and vocabulary target a 12-hour prompt cache; the complete changing bill remains the variable suffix.
 
-The tool verifies canonical IDs/tags and literal supporting excerpts, flags unresolved/inferred agency
-impacts, and keeps every output private and pending review. It does not require every operative span to be
+The tool verifies canonical IDs/tags and finds literal supporting excerpts in the complete source text.
+It derives page offsets and all overlapping span IDs, including excerpts crossing span or page boundaries.
+A model-provided span is only a hint: repeated quotes require one uniquely matching source context or stay
+flagged as ambiguous. Missing or fuzzy quotes are rejected. `verified_citations` stores source-derived text
+and zero-based, end-exclusive offsets into normalized page text, separately from the unchanged model output.
+The tool flags unresolved/inferred agency impacts and keeps every output private and pending review.
+It does not require every operative span to be
 cited. Valid excerpts do not prove semantic accuracy. Nothing is written to `data/bills.json` or published;
 classification is not part of the hourly metadata job. Luna Flex short-context cost estimates use the
 [official pricing](https://developers.openai.com/api/docs/pricing) verified November 9, 2026, including
@@ -65,8 +70,10 @@ cache writes. Review pricing before rollout or use with long-context requests.
 
 The first focused HB529 pilot used all 21 pages and returned 5 policy tags, 2 agency entries, 3 location
 scopes, 3 affected groups and 7 major effects. It cost an estimated $0.002208825 in 95 seconds. Six excerpt
-locations failed validation (four neighboring-span references and two excerpts crossing span boundaries);
-the response remains unapproved. An offline replay made no provider call. This is one pilot, not a claim
+locations initially failed validation (four neighboring-span references and two excerpts crossing span
+boundaries). Deterministic source matching resolved all six offline: all 43 citations now have verified
+locations, with no missing or ambiguous matches. The response remains unapproved because the unnamed board
+identity is unresolved. Revalidation made no provider call and preserved the original response. This is one pilot, not a claim
 of corpus-wide accuracy or demonstrated provider prompt-cache hits across bills.
 
 The detailed version is preserved at

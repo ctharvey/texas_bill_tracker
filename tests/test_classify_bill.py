@@ -1,3 +1,4 @@
+import copy
 import importlib.util
 import json
 from pathlib import Path
@@ -24,6 +25,51 @@ def result():
 
 
 class RequestTests(unittest.TestCase):
+    def test_exact_quote_relocates_without_changing_text(self):
+        doc = detailed.document_from_pages("HB1", "90R", "introduced", ["First page.", "The board shall act."])
+        citation = classification.resolve_quote("board shall act", "P001S001", doc)
+        self.assertEqual(citation["status"], "resolved")
+        self.assertTrue(citation["location_changed"])
+        part = citation["parts"][0]
+        self.assertEqual(part["page"], 2)
+        self.assertEqual(part["span_ids"], ["P002S001"])
+        self.assertEqual(doc["pages"][1][part["start"]:part["end"]], citation["quote"])
+
+    def test_quote_crosses_artificial_span_boundary(self):
+        doc = detailed.document_from_pages("HB1", "90R", "introduced", [
+            "Intro " * 95 + "The operator shall publish maps and report water use to the commission annually."])
+        first, second = list(doc["spans"].values())[:2]
+        quote = doc["pages"][0][first["end"] - 20:second["start"] + 20]
+        citation = classification.resolve_quote(quote, "P001S002", doc)
+        self.assertEqual(citation["status"], "resolved")
+        self.assertEqual(citation["parts"][0]["span_ids"], ["P001S001", "P001S002"])
+        self.assertEqual(citation["quote"], quote)
+
+    def test_quote_crosses_pages_with_individual_offsets(self):
+        doc = detailed.document_from_pages("HB1", "90R", "introduced", ["The board shall", "publish maps."])
+        citation = classification.resolve_quote("shall publish maps", "P001S001", doc)
+        self.assertEqual(citation["status"], "resolved")
+        self.assertEqual(len(citation["parts"]), 2)
+        self.assertEqual([p["quote"] for p in citation["parts"]], ["shall", "publish maps"])
+        for part in citation["parts"]:
+            self.assertEqual(doc["pages"][part["page"] - 1][part["start"]:part["end"]], part["quote"])
+
+    def test_repeated_quote_needs_unique_source_context(self):
+        doc = detailed.document_from_pages("HB1", "90R", "introduced", ["shall act; shall act", "shall act"])
+        ambiguous = classification.resolve_quote("shall act", "P001S001", doc)
+        self.assertEqual(ambiguous["status"], "ambiguous")
+        self.assertEqual(ambiguous["candidate_count"], 3)
+        resolved = classification.resolve_quote("shall act", "P002S001", doc)
+        self.assertEqual(resolved["method"], "hinted_source_context")
+        self.assertEqual(resolved["parts"][0]["page"], 2)
+        self.assertEqual(classification.resolve_quote("shall act", "P999S999", doc)["status"], "ambiguous")
+
+    def test_fuzzy_and_missing_quotes_are_not_accepted(self):
+        doc = detailed.document_from_pages("HB1", "90R", "introduced", ["The board shall publish maps."])
+        for quote in ("The board must publish maps.", "board shall  publish maps", "not in source", "", " "):
+            with self.subTest(quote=quote):
+                self.assertEqual(classification.resolve_quote(quote, "P001S001", doc)["status"], "not_found")
+
     def test_luna_uses_full_source_shared_prefix_and_distinct_cache_key(self):
         registry = detailed.load_registry()
         a = detailed.document_from_pages("HB1", "90R", "introduced", ["First page", "Final page"])
@@ -63,6 +109,17 @@ class ClassificationTests(unittest.TestCase):
         self.assertTrue(self.validate(value)["errors"])
         value = result(); value["policy_tags"][0]["tag"] = "Invented policy"
         with self.assertRaises(jsonschema.ValidationError): self.validate(value)
+
+    def test_verified_locations_do_not_mutate_model_output(self):
+        value = result()
+        value["summary"]["evidence"][0]["span_id"] = "P999S999"
+        before = copy.deepcopy(value)
+        checked = self.validate(value)
+        self.assertEqual(value, before)
+        self.assertEqual(checked["errors"], [])
+        self.assertEqual(checked["verified_citations"][0]["parts"][0]["span_ids"], ["P001S001"])
+        self.assertEqual(checked["evidence_reverse_index"]["P001S001"], ["policy_tags:0", "summary"])
+        self.assertEqual(checked["citation_counts"]["relocated"], 2)
 
     def test_scope_is_separate_and_inferences_stay_visible(self):
         value = result()

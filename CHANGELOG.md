@@ -2,6 +2,10 @@
 
 ## 2026-11-09
 
+- Resolve classification excerpts against complete source text, derive page offsets and span links, and
+  flag ambiguous or missing quotes without fuzzy acceptance. Fix all six HB529 citation placements offline
+  while preserving the original model response and semantic review requirements.
+
 - Preserve the detailed extraction version and add focused Luna Flex full-text classification for summaries,
   policy tags, agency impacts, locations, affected groups, major effects and verifiable excerpts. Reuse the
   private response/prompt caches and leave all classifications unpublished pending evaluation.
