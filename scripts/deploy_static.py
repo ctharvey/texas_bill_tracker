@@ -15,6 +15,7 @@ ROOT = Path('/var/www/html/texas-bill-atlas')
 STATE = Path('/var/lib/texas-bill-atlas')
 REPOSITORY = STATE / 'repository.git'
 FILES = ('index.html', 'src/app.js', 'src/taxonomy.js', 'src/styles.css', 'src/review.js', 'data/bills.json')
+KEEP_RELEASES = 10
 
 
 def git(*args: str) -> bytes:
@@ -67,6 +68,21 @@ def main() -> None:
             if staging.exists():
                 shutil.rmtree(staging)
         print('Published:', commit, 'records:', len(bills), 'snapshot:', snapshot['generated_at'])
+        prune(release.parent, current.resolve())
+
+
+def prune(releases: Path, live: Path, keep: int = KEEP_RELEASES) -> None:
+    # Called with the deploy lock held, so every .staging-* left is from a crashed run.
+    try:
+        for leftover in releases.glob('.staging-*'):
+            shutil.rmtree(leftover, ignore_errors=True)
+        built = sorted((p for p in releases.iterdir() if p.is_dir() and re.fullmatch(r'[0-9a-f]{40}', p.name)),
+                       key=lambda p: p.stat().st_mtime, reverse=True)
+        for old in built[keep:]:
+            if old.resolve() != live:
+                shutil.rmtree(old)
+    except OSError as error:
+        print('Release pruning skipped:', type(error).__name__)  # Never fail a successful publish.
 
 
 if __name__ == '__main__':

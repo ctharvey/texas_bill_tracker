@@ -1,4 +1,5 @@
-dist/
+.worktrees/
+*.tmp
 *.pyc
 __pycache__/
 .DS_Store

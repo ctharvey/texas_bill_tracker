@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-11-10
+
+- Review worker: failed downloads/reads go to a `failed` queue instead of being marked seen; five consecutive
+  new download failures stop the run; oversized or already-billed requests flag only that bill; budget and
+  capacity stops during review questions end the run and keep the bill in retry; dry runs never mark bills
+  seen; a deferred bill no longer overwrites its earlier review; the ledger day is computed in Chicago time per
+  call; add a between-bills `--max-minutes` limit (default 50). Add worker loop counterexample tests.
+- Data refresh: rebase-and-retry pushes; keep `generated_at` when nothing changed (six-hour heartbeat) so idle
+  runs no longer commit; a scheduled public hearing is no longer recorded as heard; tolerate 4xx FTP replies.
+- Deployer: prune to the ten newest releases plus the live one and remove crashed staging directories.
+- Tracker: warn on bundled fallback, local imports and snapshots older than eight hours; fall back to the bundle
+  when the remote snapshot is malformed or incomplete; match author profiles by surname; stop counting the
+  all-agencies scope marker as an agency; fix hashchange crash, spaced bill-number search, the scheduled-hearings
+  stat, CSV round-trip and import rollback, topic word boundaries and unsafe profile links.
+- Remove the unused GitHub Pages workflow and orphaned `.openai/hosting.json`.
+
 ## 2026-11-09
 
 - Remove the review worker's per-run bill cap. Runs proceed serially until the $0.10 run or $1/day guard

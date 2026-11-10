@@ -1,6 +1,6 @@
 # Texas Bill Atlas
 
-An independent, open-source bill tracker for the Texas Legislature's **90th Regular Session (2027)**. Built for fast exploration by policy, state agency, author prominence and the verifiable legislative path to a hearing. Its verified November 9, 2026 official FTP snapshot contains 1,059 legislative measures; the interface displays the dataset's source and timestamp.
+An independent, open-source bill tracker for the Texas Legislature's **90th Regular Session (2027)**. Built for fast exploration by policy, state agency, author prominence and the verifiable legislative path to a hearing. It loads the official FTP snapshot (1,262 legislative measures as of November 10, 2026); the interface displays the dataset's source and timestamp and warns when it is showing the bundled fallback, a local import, or a snapshot more than eight hours old.
 
 ## What it does now
 
@@ -10,7 +10,7 @@ An independent, open-source bill tracker for the Texas Legislature's **90th Regu
 - Show author institutional influence **only when a verified role or tenure fact has been entered**. No party-only influence assumptions.
 - Show referral, scheduled hearing and hearing held as separate procedural signals. A prefiled bill without committee evidence is *not rated*, never assigned an invented probability.
 - Maintain a device-local watchlist, view bill details and source links, export filtered CSV, and import CSV/JSON datasets locally.
-- Include a conservative bulk updater for the [Texas Legislative Council's official FTP service](https://capitol.texas.gov/billlookup/filedownloads.aspx) and GitHub Actions workflows for sync and Pages deployment.
+- Include a conservative bulk updater for the [Texas Legislative Council's official FTP service](https://capitol.texas.gov/billlookup/filedownloads.aspx) and a GitHub Actions workflow for the hourly sync.
 - On the hosted app, read the repository's current `data/bills.json` snapshot, falling back to the locally bundled snapshot if GitHub cannot be reached. The UI reports which source was loaded.
 
 ## Running locally
@@ -36,7 +36,7 @@ python3 scripts/sync_ftp.py
 
 `scripts/sync_ftp.py` enumerates `/bills/90r/billhistory`, parses each XML document, validates the bill number and caption, then atomically replaces `data/bills.json` **only if enough records parse successfully**. The previous file stays unchanged on a connectivity or schema failure. Manually reviewed impact tags survive metadata refreshes. The parser intentionally does not claim unobserved hearings or manufacture agency facts.
 
-The first verified official import read 1,059 bill histories on November 9, 2026. GitHub Actions is scheduled hourly, at minute 17 UTC (GitHub may delay scheduled jobs). Each snapshot records its actual generation time and coverage; it is a dated bulk snapshot rather than a real-time feed.
+The first verified official import read 1,059 bill histories on November 9, 2026. GitHub Actions is scheduled hourly, at minute 17 UTC (GitHub may delay scheduled jobs). Each snapshot records its actual generation time and coverage; it is a dated bulk snapshot rather than a real-time feed. When nothing changed, the importer keeps the previous `generated_at` (so no commit is made) until it is six hours old, then writes a heartbeat; a snapshot more than eight hours old therefore means the refresh has stopped. Concurrent pushes to `main` are rebased and retried up to five times.
 
 ### Automated private review and highlighted evidence
 
@@ -57,14 +57,20 @@ the affected claim's schema. Unsupported, invalid or unanswered corrections stay
 python scripts/review_pipeline.py --cache-dir /private/texas-bill-review --bill-id HB273 --execute
 ```
 
-Omit `--execute` to prepare/replay without spending. Without bill IDs, each run works serially through
-retries, unseen bills and then rotating known bills from the official snapshot until a spending guard stops it;
-`--max-bills` optionally caps the count. Introduced PDFs use FTP
+Omit `--execute` to prepare/replay without spending; a dry run never marks bills as seen. Without bill IDs,
+each run works serially through up to three retries, unseen bills, previously failed bills, and then rotating
+known bills from the official snapshot, until a spending guard or the `--max-minutes` limit (default 50,
+checked between bills) stops it; `--max-bills` optionally caps the count. A bill whose PDF cannot be downloaded
+or read (for example, not yet posted) is recorded under `failed` in the queue and is never marked seen; five
+consecutive new download failures stop the run as a likely FTP outage. Requests too large to price, or already
+billed without a cached response, mark only that bill for review; budget and unresolved-billing stops end the
+run. Introduced PDFs use FTP
 modification times to avoid unchanged downloads. The complete normalized text/configuration controls model
 reuse, so metadata-only changes do not cause another classification. Discovery of later text-version suffixes
 is not yet implemented; the worker explicitly processes introduced text and labels it accordingly.
 
-The authorized hard ceiling is **$1 per calendar day**, with the service pinned to `America/Chicago` and a
+The authorized hard ceiling is **$1 per `America/Chicago` calendar day** (the ledger day is computed in that
+zone on every call, so a run spanning midnight books spend to the correct day), with a
 default **$0.10 per run**. A private durable ledger reserves a conservative upper bound before each provider
 call, accounts for cache writes and output, and records actual estimates afterward. Unknown outcomes retain
 their reservation and block new calls until reconciled. A worker lock prevents concurrent spending races.
@@ -93,8 +99,7 @@ Set `OPENAI_API_KEY` only in root-owned mode-0600 `/etc/texas-bill-review.env`, 
 Enable `texas-bill-review.timer` after the pilot; it runs hourly at minute 35, with up to two minutes jitter,
 processing bills serially until the $0.10 per-invocation or $1 daily guard stops it. Inspect `journalctl -u texas-bill-review.service` and the private
 ledger/review queue. To pause spending, stop/disable this timer; the public tracker and metadata refresh remain
-independent. Reinstall dependencies when their requirements change. The six-asset public deployer must be
-updated for `src/review.js`; otherwise preserve the prior release until the module can be served.
+independent. Reinstall dependencies when their requirements change.
 
 Operators can retrieve a review with the existing authenticated SSH path and `sudo cat` its JSON, then open
 it in that bill's detail drawer. Private source/cache directories must never be added to the static web root
@@ -250,8 +255,9 @@ from the data-refresh workflow. No deployment credential is needed. `scripts/dep
 reads all six application files at one commit, requires an official-FTP 90R snapshot
 of at least 1,000 unique valid measures, writes an immutable release, and atomically
 switches `current`. Fetch or validation failure leaves the previous release online.
-The bundled fallback updates with each release. The frontend still prefers live GitHub
-JSON and retains all existing source and freshness indicators.
+The bundled fallback updates with each release. The frontend prefers live GitHub JSON
+(accepted only as an official-FTP snapshot of at least 1,000 bills) and shows a warning
+banner for the bundled fallback, local imports and stale snapshots.
 
 One-time VPS installation as root, from a reviewed Git archive of this repository:
 
@@ -269,19 +275,19 @@ systemctl enable --now texas-bill-atlas.timer
 Requires existing Python 3, Git and systemd. The unprivileged service writes only its
 state directory and this site's directory. Check `systemctl status texas-bill-atlas.timer`
 and `journalctl -u texas-bill-atlas.service`. Deployer or unit changes require reinstalling
-the reviewed files; application and data changes deploy automatically. Old releases are retained.
+the reviewed files; application and data changes deploy automatically. The ten newest releases
+(plus the live one) are retained; older releases and crashed staging directories are pruned after
+each publish.
 
 Rollback: stop the timer, make a temporary relative symlink to a retained `releases/<commit>`,
 then atomically rename it over `current` using `mv -Tf`. Fix or revert main before restarting
-the timer. This affects only the bills site. The legacy Pages workflow below is manual-only.
+the timer. This affects only the bills site.
 
-Deferred improvements: incremental FTP imports; retry/rebase concurrent dataset pushes;
-an authoritative agency registry; full-text agency classification; and alerts for importer
-failures, stale snapshots and frontend fallback use.
+Deferred improvements: incremental FTP imports; an authoritative agency registry; full-text
+agency classification; and out-of-band alerts for importer failures (the site itself now warns
+on stale snapshots and fallback use).
 
-### Optional GitHub Pages publishing
-
-The `Publish tracker to GitHub Pages` workflow assembles the static files from the repository. Enable GitHub Pages with **Source: GitHub Actions** under the repository's Pages settings if the workflow indicates that Pages isn't configured. The expected project URL after successful deployment is `https://ctharvey.github.io/texas_bill_tracker/` (unverified until GitHub confirms).
+### Data model
 
 Member roles from official FTP are stored separately in `authors`, `coauthors`, `sponsors` and
 `cosponsors` arrays. Counts are derived from those lists. Bill cards show author/coauthor/cosponsor
