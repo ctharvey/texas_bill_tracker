@@ -91,7 +91,7 @@ and `/var/lib/texas-bill-review/{repository,venv,cache}`. The repository stays o
 `--ff-only`. Install optional dependencies into the dedicated venv; install the units under `/etc/systemd/system`.
 Set `OPENAI_API_KEY` only in root-owned mode-0600 `/etc/texas-bill-review.env`, outside the web root and git.
 Enable `texas-bill-review.timer` after the pilot; it runs hourly at minute 35, with up to two minutes jitter,
-at most ten bills and $0.10 per invocation. Inspect `journalctl -u texas-bill-review.service` and the private
+processing bills serially until the $0.10 per-invocation or $1 daily guard stops it. Inspect `journalctl -u texas-bill-review.service` and the private
 ledger/review queue. To pause spending, stop/disable this timer; the public tracker and metadata refresh remain
 independent. Reinstall dependencies when their requirements change. The six-asset public deployer must be
 updated for `src/review.js`; otherwise preserve the prior release until the module can be served.
