@@ -395,27 +395,36 @@ function renderResults(){
   // Companions that are both in the results are pulled together and drawn as one joined block.
   // Paging counts whole groups, so a group is never split across "Load more".
   companionsOf('');  // Refreshes the index when the bill list changed.
+  // Watchlist: a watched bill's unwatched companions join its block, marked as not watched, so a group always shows
+  // whole. They are context only: not counted in the total or the paging.
+  const extras=new Map();
+  if(state.view==='watchlist'){
+    const inList=new Set(list.map(b=>b.id)),byId=new Map(state.bills.map(b=>[b.id,b]));
+    for(const b of list)for(const c of companionsOf(b.id))if(!inList.has(c.id)&&byId.has(c.id))extras.set(c.id,byId.get(c.id));
+    if(extras.size)$('#result-note').textContent+=` · plus ${extras.size} unwatched ${extras.size===1?'companion':'companions'} shown with ${extras.size===1?'its':'their'} group`;
+  }
   const shown=[];let shownCount=0;
-  for(const g of companionGroups(list,companionCache.index)){if(shownCount>=state.visibleCount)break;shown.push(g);shownCount+=g.length}
+  for(const g of companionGroups([...list,...extras.values()],companionCache.index)){if(shownCount>=state.visibleCount)break;shown.push(g);shownCount+=g.filter(b=>!extras.has(b.id)).length}
+  const card=b=>billCard(b,extras.has(b.id));
   const groupMarkup=g=>{
     const ids=new Set(g.map(b=>b.id));
     const relations=[...new Set(g.flatMap(b=>companionsOf(b.id).filter(c=>ids.has(c.id)).map(relationText)))];
     const names=g.map(b=>b.number).join(' + ');
-    return `<div class="companion-group" role="group" aria-label="${esc(`${names}: companion bills`)}"><div class="companion-group-head"><span><span aria-hidden="true">⇄</span> Companion bills · ${esc(names)}${relations.length?` · ${esc(relations.join(', '))}`:''}</span>${groupWatchButton(g.map(b=>b.id))}</div>${g.map(billCard).join('')}</div>`};
-  $('#bill-list').innerHTML=list.length?shown.map(g=>g.length>1?groupMarkup(g):billCard(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p></div>`;
+    return `<div class="companion-group" role="group" aria-label="${esc(`${names}: companion bills`)}"><div class="companion-group-head"><span><span aria-hidden="true">⇄</span> Companion bills · ${esc(names)}${relations.length?` · ${esc(relations.join(', '))}`:''}</span>${groupWatchButton(g.map(b=>b.id))}</div>${g.map(card).join('')}</div>`};
+  $('#bill-list').innerHTML=list.length?shown.map(g=>g.length>1?groupMarkup(g):card(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p></div>`;
   $('#results-bottom').innerHTML=`${list.length>shownCount?`<button class="outline-button" id="load-more">Load 30 more · showing ${shownCount} of ${list.length}</button><div style="height:12px"></div>`:''}${esc(state.meta?.coverage_note||'Check the official record for authoritative status.')}`;
   persistState();
 }
 
-function billCard(b){
+function billCard(b,unwatchedCompanion=false){
   const h=assessHearing(b);const watched=state.watch.has(b.id);const influence=authorInfluence(b);
   const real=realAgencies(b);
   const scopeTag=b.agencies.length>real.length?'<span class="tag" title="Cross-cutting scope marker, not an agency">Statewide scope</span>':'';
   const agencyTags=scopeTag+real.slice(0,2).map(a=>`<span class="tag agency" title="${esc(a.reason||'')}">${esc(agencyName(a.id).replace(/^Texas /,'').replace(/ Department of /,' · '))}</span>`).join('');
   const party=authorshipParty(b),last=lastActionInfo(b);
-  const companionTags=companionsOf(b.id).map(c=>`<button class="tag companion-tag" data-open="${esc(c.id)}" title="${esc(`Companion bill in the other chamber (${relationText(c)})${c.author?`, by ${c.author}`:''}. Opens its details.`)}">⇄ Companion ${esc(c.number)}</button>`).join('');
+  const companionTags=companionsOf(b.id).map(c=>`<button class="tag companion-tag" data-open="${esc(c.id)}" title="${esc(`Companion bill (${relationText(c)})${c.author?`, by ${c.author}`:''}. Opens its details.`)}">⇄ Companion ${esc(c.number)}</button>`).join('');
   const actionTag=`<span class="tag action-tag action-${esc(last.key)}" title="${esc(`Last action${last.chamber?` (${last.chamber})`:''}: ${last.text}`)}">${esc(last.label)}${last.chamber&&last.key!=='filed'?` · ${esc(last.chamber)}`:''}${last.date?` · ${esc(shortDate(last.date))}`:''}</span>`;
-  return `<article class="bill-card party-${party.tint}"><div class="bill-left"><div class="bill-head"><span class="bill-number">${esc(b.number)}</span><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><span class="party-pill party-${party.tint}" title="${esc(party.detail)}">${esc(party.label)}</span>${influence.level?`<span class="influence-pill">◆ ${esc(influence.label)}</span>`:''}${b.luna?`<span class="luna-pill" title="Tags from the bill's full text, reviewed ${esc(dateText(b.luna.reviewed_at))}">Luna · full text</span>`:''}</div><h3 class="bill-title">${esc(b.title)}</h3><p class="bill-description">${esc(b.caption)}</p><div class="bill-tags">${actionTag}${companionTags}${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${agencyTags}${real.length>2?`<span class="tag agency">+${real.length-2} agencies</span>`:''}</div><div class="bill-meta"><span>By <b>${esc(b.authors[0]||b.author)}</b></span><span>${b.authors.length?`${b.authors.length} ${b.authors.length===1?'author':'authors'}`:'Authors not reported'}</span><span>${b.coauthors===null?'Coauthors not reported':`${b.coauthors.length} ${b.coauthors.length===1?'coauthor':'coauthors'}`}</span><span>${b.cosponsors===null?'Cosponsors not reported':`${b.cosponsors.length} ${b.cosponsors.length===1?'cosponsor':'cosponsors'}`}</span><span>Filed ${dateText(b.filed_at)}</span><span>${real.length} agency ${real.length===1?'link':'links'}</span></div></div><div class="bill-right"><button class="watch-button" data-watch="${b.id}" aria-label="${watched?'Remove from':'Add to'} watchlist" aria-pressed="${watched}">${watched?'★':'☆'}</button><div><div class="outlook-label">Hearing progress</div><div class="outlook-value">${esc(h.label)}</div><button class="bill-open" data-open="${b.id}">Bill details →</button></div></div></article>`;
+  return `<article class="bill-card party-${party.tint}${unwatchedCompanion?' unwatched-companion':''}"><div class="bill-left"><div class="bill-head">${unwatchedCompanion?'<span class="unwatched-pill">Companion · not watched</span>':''}<span class="bill-number">${esc(b.number)}</span><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><span class="party-pill party-${party.tint}" title="${esc(party.detail)}">${esc(party.label)}</span>${influence.level?`<span class="influence-pill">◆ ${esc(influence.label)}</span>`:''}${b.luna?`<span class="luna-pill" title="Tags from the bill's full text, reviewed ${esc(dateText(b.luna.reviewed_at))}">Luna · full text</span>`:''}</div><h3 class="bill-title">${esc(b.title)}</h3><p class="bill-description">${esc(b.caption)}</p><div class="bill-tags">${actionTag}${companionTags}${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${agencyTags}${real.length>2?`<span class="tag agency">+${real.length-2} agencies</span>`:''}</div><div class="bill-meta"><span>By <b>${esc(b.authors[0]||b.author)}</b></span><span>${b.authors.length?`${b.authors.length} ${b.authors.length===1?'author':'authors'}`:'Authors not reported'}</span><span>${b.coauthors===null?'Coauthors not reported':`${b.coauthors.length} ${b.coauthors.length===1?'coauthor':'coauthors'}`}</span><span>${b.cosponsors===null?'Cosponsors not reported':`${b.cosponsors.length} ${b.cosponsors.length===1?'cosponsor':'cosponsors'}`}</span><span>Filed ${dateText(b.filed_at)}</span><span>${real.length} agency ${real.length===1?'link':'links'}</span></div></div><div class="bill-right"><button class="watch-button" data-watch="${b.id}" aria-label="${watched?'Remove from':'Add to'} watchlist" aria-pressed="${watched}">${watched?'★':'☆'}</button><div><div class="outlook-label">Hearing progress</div><div class="outlook-value">${esc(h.label)}</div><button class="bill-open" data-open="${b.id}">Bill details →</button></div></div></article>`;
 }
 
 function agenciesMarkup(){

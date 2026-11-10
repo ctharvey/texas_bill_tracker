@@ -92,4 +92,7 @@ button[disabled]{opacity:.5;cursor:not-allowed}
 .companion-group>.bill-card{border-radius:0;border-top:0;border-right:0;border-bottom:0;box-shadow:none}
 .companion-group>.bill-card+.bill-card{border-top:1px dashed #c9bde8}
 .companion-group>.bill-card:hover{transform:none}
+.bill-card.unwatched-companion{background:#fafafc;border-left-style:dashed}.bill-card.unwatched-companion .bill-left{opacity:.62}
+.bill-card.unwatched-companion:hover .bill-left{opacity:1}
+.unwatched-pill{display:inline-block;border:1px dashed #9d8bd0;color:#5b4a8a;background:#fff;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:800;margin-right:6px}
 .companion-section .companion-row{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;border-bottom:1px solid #edf0f3;padding:12px 0}.companion-row:last-child{border-bottom:0}.companion-row p{font-size:11px;margin:5px 0 0}.companion-row small{font-size:10px;color:#7d8c99}.companion-open{border:0;background:none;padding:0;font:inherit;font-weight:800;cursor:pointer}
