@@ -2,6 +2,11 @@
 
 ## 2026-11-09
 
+- Add optional Terra Flex full-text extraction with explicit actor certainty, atomic obligation instructions,
+  event-relative calendar types and unknown interval boundaries. Keep outputs private and pending review.
+- Reuse responses persistently by complete text/configuration; protect concurrent calls and uncertain failures.
+  Cache shared prompts and derive evidence links, counts and review signals without additional model calls.
+
 - Schedule the official FTP refresh hourly, at minute 17, instead of every twelve hours.
 - Import separate author, coauthor, sponsor and cosponsor lists. Show counts on cards and full member lists in details; include them in search and CSV export.
 

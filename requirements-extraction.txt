@@ -1,0 +1,4 @@
+# Optional offline extraction tooling; not needed by the static app or FTP history importer.
+openai>=2.20.0,<3
+jsonschema>=4.26.0,<5
+pypdf>=6.9.2,<7
