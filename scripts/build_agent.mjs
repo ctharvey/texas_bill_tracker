@@ -261,13 +261,14 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
     coverage_note: snapshot.coverage_note || null, sources: snapshot.sources || null, count: bills.length,
     bills: [...bills].sort((a, b) => a.id.localeCompare(b.id, 'en', {numeric: true})).map(billRecord)}) + '\n');
 
-  const overview = overviewPage(bills.length, asOf, indexes);
+  const example = [...bills].sort(byRecent)[0];
+  const overview = overviewPage(bills.length, asOf, indexes, example);
   put('index.md', overview);
   put('llms.txt', overview);
   return files;
 }
 
-function overviewPage(count, asOf, indexes) {
+function overviewPage(count, asOf, indexes, example) {
   return `# Texas Bill Atlas (agent edition)
 
 > Plain-text and JSON access to everything the Texas Bill Atlas tracker (${SITE}) shows for the 90th Texas Legislature: ${count} bills with captions, authors and sponsors (party, district, tenure), recorded actions, hearing status, most recent action, topics, potentially affected agencies, impacts, affected groups and Luna full-text reviews. No JavaScript, login or API key needed.
@@ -280,7 +281,7 @@ ${DISCLAIMER}
 
 - [All bills](${AGENT}bills/index.md): one row per bill, most recent action first
 - [Most recent actions](${AGENT}recent.md)
-- One bill: \`${AGENT}bills/<ID>.md\` or \`.json\`, for example [HB 1](${AGENT}bills/HB1.md). IDs have no spaces: HB1, SB12, HJR5, SCR3.
+- One bill: \`${AGENT}bills/<ID>.md\` or \`.json\`, for example [${example.number}](${AGENT}bills/${example.id}.md). IDs have no spaces (HB5, SB12, HJR5, SCR3); a bill that has not been filed has no page.
 - [Everything as one JSON file](${AGENT}data/bills.json): the same records as the per-bill JSON, for your own filtering or search
 
 ## Browse like the tracker's filters
@@ -292,7 +293,7 @@ ${indexes.map(([title, href, n]) => `- [${title}](${AGENT}${href}) (${n} groups)
 
 The tracker keeps its state after \`#\` in the address. Equivalents here:
 
-- \`${SITE}#all?bill=HB1\` -> \`${AGENT}bills/HB1.md\`
+- \`${SITE}#all?bill=${example.id}\` -> \`${AGENT}bills/${example.id}.md\`
 - \`#all?topic=<topic>\` -> \`${AGENT}topics/index.md\`; \`#all?agency=<id>\` -> \`${AGENT}agencies/index.md\`; \`#all?action=<category>\` -> \`${AGENT}last-action/index.md\`; \`#all?outlook=<status>\` -> \`${AGENT}hearing/index.md\`; \`#all?chamber=<chamber>\` -> \`${AGENT}chamber/index.md\`
 - Text search (\`query=\`): filter \`data/bills.json\` on id, number, title, caption, member names, last action, topics, impacts and agency names.
 - A shared list (\`#all?list=HB1,SB2\`): fetch each \`bills/<ID>.md\`.

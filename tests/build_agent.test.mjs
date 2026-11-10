@@ -58,7 +58,9 @@ test('markdown pages escape table cells and list every group with tracker links'
   assert.ok(files.has('authors/house-cole.md') && files.has('authors/house-smith.md'));
   assert.match(files.get('authors/house-smith.md'), /\| coauthor \|/);
   assert.equal(files.get('llms.txt'), files.get('index.md'));
-  assert.match(files.get('index.md'), new RegExp(`${AGENT}bills/HB1\\.md`));
+  // Every agent link on the overview resolves to a generated file.
+  for (const [, path] of files.get('index.md').matchAll(new RegExp(`\\]\\(${AGENT.replace(/\./g, '\\.')}([^)]+)\\)`, 'g')))
+    assert.ok(files.has(path), path);
   const all = JSON.parse(files.get('data/bills.json'));
   assert.deepEqual(all.bills.map(b => b.id), ['HB5', 'SB12']);
   assert.equal(all.tags_as_of, '2026-11-10T13:00:00Z');
