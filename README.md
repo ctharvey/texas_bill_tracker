@@ -133,6 +133,27 @@ received in other chamber, sent to governor, signed or effective, vetoed, withdr
 The explorer can filter by that category and sort by latest action, oldest last action (stalled bills first)
 or last-action stage. This is separate from the "stage" filter, which is the furthest stage ever reached.
 
+### Saving and sharing without accounts
+
+There are no logins. People keep and move their choices in five ways:
+
+- **Links:** the address always reflects the view, filters, sort and open bill (`#all?chamber=Senate&bill=HB5`),
+  so any view can be bookmarked or sent. A share link (`#all?list=HB5,SB12`) opens a read-only shared list that
+  never changes the recipient's own watchlist until they choose "Add all".
+- **This browser:** the watchlist and the last filters are kept in localStorage (`src/prefs.js`).
+- **Files:** the watchlist exports to `texas-bill-atlas-watchlist-v1` JSON; import also accepts plain text or CSV
+  containing bill numbers, and merges.
+- **Feeds:** `scripts/build_feeds.py` writes `live/feeds/<ID>.xml` (RSS, one per bill) after each hourly sync,
+  from the dated actions `sync_ftp.py` now records in `action_dates`. Item ids are stable as the 12-action
+  window slides. There is no iCal: the data has no hearing dates or times.
+- **Private sync links** (`scripts/sync_service.py`, `src/sync.js`): a random edit key and a derived view key;
+  only SHA-256 hashes are stored (SQLite), no email, name or IP. The edit key travels in the URL fragment and
+  the `X-Sync-Key` header only and is removed from the address bar once read. Saves are versioned; on a conflict
+  the client replays its unsaved adds/removes onto the newer list. Limits: 16 KB body, 500 bills, per-client
+  rate limits, 100,000 lists, deletion after a year unused. A view key also serves a combined watchlist RSS at
+  `/api/sync/feed/<view key>.xml`. The tracker hides sync when `/api/sync/health` is unavailable.
+  **Not yet deployed:** it needs a `/api/sync` route on the shared gateway.
+
 ### Live bill snapshot
 
 `scripts/texas-bill-data.service` and `.timer` run `sync_ftp.py` hourly at :17 on the VPS as `texas-bill-atlas`,

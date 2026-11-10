@@ -14,6 +14,18 @@
 .party-pill.party-dem{color:#1f4f93;background:#e3ecf9}.party-pill.party-rep{color:#9a2b23;background:#f9e3e1}.party-pill.party-bipartisan{color:#5b3590;background:#ece3f8}
 .party-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;background:#c3cbd3;vertical-align:middle}
 .party-dot.party-dem{background:#3d6fb8}.party-dot.party-rep{background:#c0463c}
+.watch-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:0 0 16px}
+.watch-tools section{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.watch-tools h3{margin:0 0 6px;font-size:15px}
+.tools-row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.tools-row .outline-button,.tools-row .primary-button{text-decoration:none}
+.tools-note{font-size:13px;color:var(--muted);margin:6px 0;line-height:1.5}
+.text-button{font:inherit;font-size:13px;background:none;border:0;padding:4px 0;color:var(--muted);text-decoration:underline;cursor:pointer}
+.text-button.danger{color:#9a2b23}
+.shared-banner{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px}
+.shared-banner .tools-row{margin:0}
+button[disabled]{opacity:.5;cursor:not-allowed}
+@media (max-width:760px){.watch-tools{grid-template-columns:1fr}}
 .disclaimer{max-width:560px;width:calc(100% - 32px);border:1px solid var(--line);border-radius:14px;padding:26px 28px 22px;color:var(--ink);background:var(--white);box-shadow:0 24px 60px rgba(13,27,42,.28)}
 .disclaimer::backdrop{background:rgba(13,27,42,.55)}
 .disclaimer-overline{font-size:11px;font-weight:700;letter-spacing:.12em;color:#9a6b12;margin-bottom:6px}

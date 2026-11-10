@@ -11,7 +11,10 @@ RuntimeDirectory=texas-bill-data
 UMask=0022
 # sync_ftp.py comes from the same main commit the deployer publishes; it uses the standard library only.
 ExecStartPre=/bin/sh -c '/usr/bin/git --git-dir=/var/lib/texas-bill-atlas/repository.git show main:scripts/sync_ftp.py > "$RUNTIME_DIRECTORY/sync_ftp.py"'
+ExecStartPre=/bin/sh -c '/usr/bin/git --git-dir=/var/lib/texas-bill-atlas/repository.git show main:scripts/build_feeds.py > "$RUNTIME_DIRECTORY/build_feeds.py"'
 ExecStart=/bin/sh -c 'exec /usr/bin/python3 "$RUNTIME_DIRECTORY/sync_ftp.py" --out /var/www/html/texas-bill-atlas/live/bills.json'
+# Per-bill RSS feeds; files are rewritten only when a bill's actions change.
+ExecStart=/bin/sh -c 'exec /usr/bin/python3 "$RUNTIME_DIRECTORY/build_feeds.py" --snapshot /var/www/html/texas-bill-atlas/live/bills.json --out /var/www/html/texas-bill-atlas/live/feeds'
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

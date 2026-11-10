@@ -151,6 +151,9 @@ def parse_bill_xml(raw: bytes, path: str) -> dict | None:
         "source_record": "Texas Legislative Council bulk FTP bill history",
         "source_path": path,
     }
+    dated = [day for description, day in history if description]
+    if len(dated) == len(actions):  # Only when every action came from a dated <action> element.
+        record["action_dates"] = dated[-12:]
     if committees:
         record["committee"] = committees[-1][:200]
     return record

@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-10
+- Saving without accounts: views, filters and open bills live in the URL (copy link); share links open a
+  read-only shared list; last filters are remembered; watchlist export/import; per-bill RSS feeds built hourly
+  from newly recorded action dates; private sync links (service and client, pending a gateway route).
 - First-visit disclaimer: independent open-source project, no accuracy warranty, automated/AI tags can be
   wrong, not advice, check the official record. Remembered per device; reopen from the footer.
 - Review worker: Flex capacity rejections no longer end the run. The rejected bill waits out its retry-after
