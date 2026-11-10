@@ -152,7 +152,8 @@ There are no logins. People keep and move their choices in five ways:
   the client replays its unsaved adds/removes onto the newer list. Limits: 16 KB body, 500 bills, per-client
   rate limits, 100,000 lists, deletion after a year unused. A view key also serves a combined watchlist RSS at
   `/api/sync/feed/<view key>.xml`. The tracker hides sync when `/api/sync/health` is unavailable.
-  **Not yet deployed:** it needs a `/api/sync` route on the shared gateway.
+  Live since 2026-11-10: the shared gateway (cth.hosting) proxies `/api/sync*` to the `texas-bill-sync`
+  container on `edge-bills`; deployment and updates are in `deploy/sync/README.md`.
 
 ### Live bill snapshot
 
