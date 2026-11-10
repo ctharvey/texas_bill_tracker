@@ -429,6 +429,15 @@ def download_document(bill_id: str, root: Path, ftp_factory=ftplib.FTP) -> dict:
         return document
 
 
+def queue_candidates(ids: list[str], queue: dict, limit: int) -> list[str]:
+    unseen = [x for x in ids if x not in queue['seen']]
+    known = [x for x in ids if x in queue['seen']]
+    offset = queue['cursor'] % max(1, len(known))
+    # Bound retry priority so unavailable work cannot starve newly filed bills.
+    retries = [x for x in queue.get('retry', []) if x in ids][:min(3, limit)]
+    return list(dict.fromkeys(retries + unseen + known[offset:] + known[:offset]))[:limit]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cache-dir", type=Path, required=True, help="Private persistent directory outside web root")
@@ -447,15 +456,19 @@ def main():
         ids = args.bill_id or [b["id"] for b in snapshot["bills"]]
         queue_path = args.cache_dir / "queue.json"
         queue = json.loads(queue_path.read_text("utf-8")) if queue_path.exists() else {"seen": [], "cursor": 0}
-        unseen = [x for x in ids if x not in queue["seen"]]
-        known = [x for x in ids if x in queue["seen"]]
-        offset = queue["cursor"] % max(1, len(known))
-        candidates = (ids if args.bill_id else unseen + known[offset:] + known[:offset])[:args.max_bills]
+        candidates = args.bill_id[:args.max_bills] if args.bill_id else queue_candidates(ids, queue, args.max_bills)
+        queue.setdefault('retry', [])
         for bill_id in candidates:
             try:
                 document = download_document(bill_id, args.cache_dir)
                 bundle = run_document(document, detailed.load_registry(), args.cache_dir, budget, args.execute)
                 atomic_json(args.cache_dir / "reviews" / (bill_id + ".json"), bundle)
+                retryable = any(q.get('reason', '').startswith(('CapacityUnavailable', 'CacheCoolingDown',
+                    'NotSubmitted', 'Deferred')) for q in bundle.get('pending_questions', []))
+                if retryable and bill_id not in queue['retry']:
+                    queue['retry'].append(bill_id)
+                if not retryable and bill_id in queue['retry']:
+                    queue['retry'].remove(bill_id)
                 print(bill_id, bundle["status"], flush=True)
                 if bundle["status"] == "deferred":
                     break

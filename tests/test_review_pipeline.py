@@ -63,6 +63,10 @@ class BudgetTests(unittest.TestCase):
 
 
 class QuestionTests(unittest.TestCase):
+    def test_capacity_retries_progress_without_starving_new_bills(self):
+        queue = {'seen': ['HB1','HB2','HB3','HB4'], 'cursor': 0, 'retry': ['HB1','HB2','HB3','HB4']}
+        candidates = pipeline.queue_candidates(['HB1','HB2','HB3','HB4','HB5','HB6'], queue, 5)
+        self.assertEqual(candidates, ['HB1','HB2','HB3','HB5','HB6'])
     def test_hb273_condition_is_found_without_model_question(self):
         doc = detailed.document_from_pages('HB273', '90R', 'introduced', [
             'The rules must require an automated messaging system when sending a message to patients.'])
