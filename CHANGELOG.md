@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-10
+- Review worker: Flex capacity rejections no longer end the run; it backs off (2/4/8/15 min, honoring
+  retry-after) and redoes the same bill within the run deadline. The progress view shows the wait.
 - Review progress: new tracker view showing reviewed, in-progress (current and retry), failed and not-started
   bills, with the bill under review and the next ones up; the worker publishes `live/luna/status.json`.
 - Review worker: `--no-spending-cap` disables the $1/day and $0.10/run ceilings while keeping reservations,

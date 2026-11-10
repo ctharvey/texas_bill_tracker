@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import review_pipeline as pipeline
 import classify_bill as classification
-from extraction_cache import NotSubmitted
+from extraction_cache import CapacityUnavailable, NotSubmitted
 
 
 def bundle(bill_id, status='ready_for_review', pending=(), stop_run=None):
@@ -137,7 +137,8 @@ class PublicStatusTests(WorkerLoopTests):
         self.assertEqual((final['running'], final['current'], final['upcoming']), (False, None, []))
         self.assertEqual(final['reviewed'], queue['seen'])
         self.assertEqual(final['failed'], {'HB3': 'download'})  # Stage only; no error reasons.
-        self.assertEqual(set(final), {'format', 'updated_at', 'running', 'current', 'upcoming', 'reviewed', 'retry', 'failed'})
+        self.assertEqual(set(final), {'format', 'updated_at', 'running', 'current', 'upcoming', 'waiting_until',
+                                      'reviewed', 'retry', 'failed'})
 
     def test_crash_still_publishes_stopped_status(self):
         def run_document(doc, *a, **k): raise RuntimeError('unexpected')
@@ -160,6 +161,68 @@ class PublicStatusTests(WorkerLoopTests):
             processed.append(bill_id); return {'bill_id': bill_id}
         self.run_main(download, lambda doc, *a, **k: bundle(doc['bill_id']), '--order', 'reverse')
         self.assertEqual(processed, self.ids[::-1])
+
+
+class CapacityBackoffTests(WorkerLoopTests):
+    def setUp(self):
+        super().setUp()
+        self.sleeps = []
+        p = patch.object(pipeline.time, 'sleep', side_effect=self.sleeps.append); p.start(); self.addCleanup(p.stop)
+
+    def test_first_pass_capacity_waits_and_redoes_the_same_bill(self):
+        processed, failures = [], {'HB2': 1}
+        def run_document(doc, *a, **k):
+            processed.append(doc['bill_id'])
+            if failures.get(doc['bill_id']):
+                failures[doc['bill_id']] -= 1; raise CapacityUnavailable(30)
+            return bundle(doc['bill_id'])
+        queue = self.run_main(lambda b, r: {'bill_id': b}, run_document)
+        self.assertEqual(processed, ['HB1', 'HB2', 'HB2', 'HB3', 'HB4', 'HB5', 'HB6', 'HB7', 'HB8'])
+        self.assertEqual(self.sleeps, [121])
+        self.assertEqual(queue['seen'], self.ids)
+
+    def test_question_capacity_redoes_bill_and_clears_retry(self):
+        processed = []
+        def run_document(doc, *a, **k):
+            processed.append(doc['bill_id'])
+            if doc['bill_id'] == 'HB2' and processed.count('HB2') == 1:
+                return {**bundle('HB2', 'needs_review', [{'id': 'q', 'reason': 'CapacityUnavailable'}],
+                                 'CapacityUnavailable'), 'retry_after': 600}
+            return bundle(doc['bill_id'])
+        queue = self.run_main(lambda b, r: {'bill_id': b}, run_document)
+        self.assertEqual(processed[:4], ['HB1', 'HB2', 'HB2', 'HB3'])
+        self.assertEqual(self.sleeps, [601])  # Provider retry-after outlasts the first backoff step.
+        self.assertEqual(queue['retry'], [])
+        self.assertEqual(queue['seen'], self.ids)
+        self.assertEqual(queue['cursor'], 0)
+
+    def test_backoff_grows_while_capacity_persists_and_resets_after_success(self):
+        failures = {'HB2': 3, 'HB5': 1}
+        def run_document(doc, *a, **k):
+            if failures.get(doc['bill_id']):
+                failures[doc['bill_id']] -= 1; raise CapacityUnavailable(0)
+            return bundle(doc['bill_id'])
+        self.run_main(lambda b, r: {'bill_id': b}, run_document)
+        self.assertEqual(self.sleeps, [121, 241, 481, 121])
+
+    def test_backoff_never_passes_the_run_deadline(self):
+        def run_document(doc, *a, **k): raise CapacityUnavailable(0)
+        queue = self.run_main(lambda b, r: {'bill_id': b}, run_document, '--max-minutes', '1')
+        self.assertEqual(self.sleeps, [])
+        self.assertEqual(queue.get('seen', []), [])
+
+    def test_budget_stop_is_not_retried(self):
+        processed = []
+        def run_document(doc, *a, **k):
+            processed.append(doc['bill_id']); raise pipeline.BudgetExceeded('cap')
+        self.run_main(lambda b, r: {'bill_id': b}, run_document)
+        self.assertEqual((processed, self.sleeps), (['HB1'], []))
+
+    def test_unknown_outcome_during_questions_still_stops_the_worker(self):
+        def run_document(doc, *a, **k): raise RuntimeError('Unknown request outcome; worker stopped')
+        with self.assertRaises(SystemExit):
+            self.run_main(lambda b, r: {'bill_id': b}, run_document)
+        self.assertEqual(self.sleeps, [])
 
 
 class FirstPassStatusTests(unittest.TestCase):

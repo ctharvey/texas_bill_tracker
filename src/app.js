@@ -248,14 +248,16 @@ function reviewMarkup(){
   const total=ids.length||1,pct=n=>Math.round(n/total*1000)/10;
   const minutes=status?.updated_at?(Date.now()-Date.parse(status.updated_at))/60000:null;
   const stale=Boolean(status?.running)&&minutes>90;
+  const waiting=Boolean(status?.running)&&!stale&&Date.parse(status.waiting_until)>Date.now();
   const line=!status?'Live worker status is unavailable, so bills with published Luna tags are counted as reviewed.'
     :stale?`The worker last reported ${esc(stampText(status.updated_at))} and may have stopped.`
+    :waiting?`Waiting for Luna capacity · retrying ${esc(status.current||'')} at ${esc(stampText(status.waiting_until))}`
     :status.running?`Reviewing now · updated ${esc(stampText(status.updated_at))}`
     :`Idle between hourly runs · last update ${esc(stampText(status.updated_at))}`;
   const chip=(id,note='')=>`<button class="review-chip${tagged[id]?' tagged':''}" data-open="${esc(id)}" title="${tagged[id]?'Luna tags published':'Reviewed; no verified tags published'}${note?' · '+esc(note):''}">${esc(id)}</button>`;
   const group=(title,list,empty,open=true)=>`<details class="review-group"${open?' open':''}><summary><strong>${title}</strong> <span>${list.length.toLocaleString()}</span></summary>${list.length?`<div class="review-chips">${list.join('')}</div>`:`<p class="review-empty">${empty}</p>`}</details>`;
   const counts=[['Reviewed',p.reviewed.length,'done'],['In progress',p.inProgress.length+(p.current?1:0),'progress'],['Failed',p.failed.length,'failed'],['Not started',p.notStarted.length,'waiting']];
-  const now=p.current&&!stale?`<div class="review-now"><span class="review-pulse" aria-hidden="true"></span><div><small>Reviewing now</small>${chip(p.current)}</div>${p.upcoming.length?`<div><small>Up next</small>${p.upcoming.map(id=>chip(id)).join('')}</div>`:''}</div>`:'';
+  const now=p.current&&!stale?`<div class="review-now"><span class="review-pulse" aria-hidden="true"></span><div><small>${waiting?'Waiting to retry':'Reviewing now'}</small>${chip(p.current)}</div>${p.upcoming.length?`<div><small>Up next</small>${p.upcoming.map(id=>chip(id)).join('')}</div>`:''}</div>`:'';
   return `<div class="section-head"><div><div class="section-overline">LUNA FULL-TEXT REVIEW</div><h2>Review progress</h2></div><span class="subtitle">${line}</span></div>
   <div class="review-bar" role="img" aria-label="${p.reviewed.length} reviewed, ${p.inProgress.length} in progress, ${p.failed.length} failed, ${p.notStarted.length} not started of ${ids.length}">${counts.map(([,n,cls])=>`<span class="seg ${cls}" style="width:${pct(n)}%"></span>`).join('')}</div>
   <div class="review-counts">${counts.map(([label,n,cls])=>`<div class="review-count ${cls}"><span class="dot"></span><strong>${n.toLocaleString()}</strong><span>${label} · ${pct(n)}%</span></div>`).join('')}</div>

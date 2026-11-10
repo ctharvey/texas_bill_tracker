@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 import re
 import time
-from collections import Counter
+from collections import Counter, deque
 from urllib.request import Request, urlopen
 
 import classify_bill as classification
@@ -397,7 +397,7 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
     original = first["result"]
     questions = questions_for(original, document, first)
     derived, resolutions, pending, sources = copy.deepcopy(original), [], [], []
-    new_calls, stop_run = 0, None
+    new_calls, stop_run, retry_after = 0, None, 0
     for index, question in enumerate(questions):
         before_spending = budget.run_spent
         try:
@@ -422,7 +422,8 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
             pending.append({**question, "reason": reason})
             if isinstance(error, (BudgetExceeded, CapacityUnavailable)):
                 pending.extend({**q, "reason": "Deferred with preceding request"} for q in questions[index+1:])
-                stop_run = reason  # The whole run stops; this bill keeps its pending questions in retry.
+                stop_run = reason  # Budget stops the run; capacity makes the worker wait and redo this bill.
+                retry_after = getattr(error, "retry_after", 0)
                 break
     resolved_ids = {r["question"]["id"] for r in resolutions if r["result"]["status"] == "resolved"}
     derived["uncertainties"] = [q for q in derived["uncertainties"] if canonical_hash(q)[:16] not in resolved_ids]
@@ -432,7 +433,7 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
             "result": derived, "validation": validation, "questions": questions, "resolutions": resolutions,
             "pending_questions": pending, "first_pass_request_key": first["request_key"],
             "status": "needs_review" if pending or validation["errors"] else "ready_for_review", "publishable": False,
-            "stop_run": stop_run}
+            "stop_run": stop_run, "retry_after": retry_after}
 
 
 def download_document(bill_id: str, root: Path, ftp_factory=ftplib.FTP) -> dict:
@@ -523,11 +524,16 @@ def publish_tags(cache_dir: Path, out: Path, registry: list[dict]) -> int:
     return len(bills)
 
 
-def publish_status(out: Path, queue: dict, *, current: str | None, upcoming: list[str], running: bool) -> None:
+def utc_stamp(seconds_from_now: float = 0) -> str:
+    moment = dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=seconds_from_now)
+    return moment.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def publish_status(out: Path, queue: dict, *, current: str | None, upcoming: list[str], running: bool,
+                   waiting_until: str | None = None) -> None:
     # Public progress view: bill ids and states only, never costs, reasons or review content.
-    atomic_json(out, {"format": "texas-bill-luna-status-v1",
-                      "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
-                      "running": running, "current": current, "upcoming": upcoming,
+    atomic_json(out, {"format": "texas-bill-luna-status-v1", "updated_at": utc_stamp(),
+                      "running": running, "current": current, "upcoming": upcoming, "waiting_until": waiting_until,
                       "reviewed": list(queue.get("seen", [])), "retry": list(queue.get("retry", [])),
                       "failed": {k: v.get("stage") for k, v in queue.get("failed", {}).items()}})
     os.chmod(out, 0o644)
@@ -544,6 +550,14 @@ def try_publish_status(out: Path | None, queue: dict, **kwargs) -> None:
 
 
 DOWNLOAD_ERRORS = (ftplib.Error, OSError, EOFError, ValueError)
+# Waits after consecutive Flex capacity rejections; the last value repeats. Capacity is a provider-wide
+# condition, so the worker waits and redoes the same bill rather than skipping ahead.
+CAPACITY_BACKOFF = (120, 240, 480, 900)
+
+
+def capacity_delay(consecutive: int, retry_after: float = 0) -> float:
+    # Never shorter than the provider's retry-after, which also ends the response cache's cooldown.
+    return max(CAPACITY_BACKOFF[min(consecutive, len(CAPACITY_BACKOFF) - 1)], retry_after or 0) + 1
 OUTAGE_LIMIT = 5  # Consecutive new failures treated as an outage (FTP down, disk full) rather than bad bills.
 
 
@@ -605,11 +619,29 @@ def main():
         new_failures = 0
         status_path = args.publish_tags.parent / "status.json" if args.publish_tags and args.execute else None
         try:
-            for index, bill_id in enumerate(candidates):
+            pending, capacity_waits, redo = deque(candidates), 0, set()
+
+            def wait_for_capacity(bill_id: str, retry_after: float) -> bool:
+                # Only provably unbilled rejections reach here: Budget released the reservation and the
+                # response cache recorded capacity_wait, so redoing the bill cannot double-bill.
+                nonlocal capacity_waits
+                delay = capacity_delay(capacity_waits, retry_after)
+                if time.monotonic() + delay > deadline:
+                    print("Stopped: capacity backoff would pass the run time limit; remaining work stays queued", flush=True)
+                    return False
+                capacity_waits += 1
+                try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5], running=True,
+                                   waiting_until=utc_stamp(delay))
+                print(bill_id, "capacity unavailable; retrying in %d seconds" % delay, flush=True)
+                time.sleep(delay)
+                pending.appendleft(bill_id); redo.add(bill_id)
+                return True
+
+            while pending:
+                bill_id = pending.popleft()
                 if time.monotonic() > deadline:
                     print("Stopped: run time limit; remaining work stays queued", flush=True); break
-                try_publish_status(status_path, queue, current=bill_id,
-                                   upcoming=candidates[index + 1:index + 6], running=True)
+                try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5], running=True)
                 try:
                     document = download_document(bill_id, args.cache_dir)
                 except DOWNLOAD_ERRORS as error:
@@ -637,6 +669,8 @@ def main():
                     if bill_id in queue['seen'] and bill_id not in queue['retry']:
                         queue['retry'].append(bill_id)
                     atomic_json(queue_path, queue)
+                    if isinstance(error, CapacityUnavailable) and wait_for_capacity(bill_id, error.retry_after):
+                        continue
                     print(bill_id, "deferred", type(error).__name__, flush=True)
                     print("Deferred: budget/capacity guard", flush=True); break
                 except (OSError, ValueError) as error:
@@ -670,12 +704,20 @@ def main():
                 queue['failed'].pop(bill_id, None)
                 if bill_id not in queue["seen"]:
                     queue["seen"].append(bill_id)
+                elif bill_id in redo:
+                    redo.discard(bill_id)  # A capacity redo is the same visit; do not advance the cursor.
                 else:
                     queue["cursor"] += 1
                 atomic_json(queue_path, queue)
                 print(bill_id, status, flush=True)
-                if bundle.get("stop_run"):
+                stop_run = bundle.get("stop_run")
+                if stop_run and stop_run.startswith("CapacityUnavailable"):
+                    if wait_for_capacity(bill_id, bundle.get("retry_after") or 0):
+                        continue
+                    break
+                if stop_run:
                     print("Deferred: budget/capacity guard during review questions", flush=True); break
+                capacity_waits = 0
         finally:
             try_publish_status(status_path, queue, current=None, upcoming=[], running=False)
         print("New model spending this run: $%.6f" % budget.run_spent)
