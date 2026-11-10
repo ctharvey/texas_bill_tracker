@@ -158,6 +158,28 @@ class SyncAppTests(unittest.TestCase):
         self.now[0] += 3600
         self.assertEqual(self.call('POST', body={'data': {}})[0], 201)
 
+    def test_ipv6_rate_limit_is_per_64(self):
+        for i in range(10):
+            self.assertEqual(self.call('POST', body={'data': {}}, peer=f'2001:db8:1:2::{i + 1:x}')[0], 201)
+        self.assertEqual(self.call('POST', body={'data': {}}, peer='2001:db8:1:2:ffff:ffff:ffff:fffe')[0], 429)
+        self.assertEqual(self.call('POST', body={'data': {}}, peer='2001:db8:1:3::1')[0], 201)
+
+    def test_ipv4_mapped_address_shares_the_ipv4_bucket(self):
+        for _ in range(10):
+            self.create()  # peer 203.0.113.5
+        self.assertEqual(self.call('POST', body={'data': {}}, peer='::ffff:203.0.113.5')[0], 429)
+        self.assertEqual(self.call('POST', body={'data': {}}, peer='203.0.113.6')[0], 201)
+
+    def test_forwarded_ipv6_visitor_is_limited_per_64(self):
+        self.app.trust_proxy = True
+        for i in range(10):
+            self.assertEqual(self.call('POST', body={'data': {}}, peer='10.0.0.2',
+                                       **{'X-Forwarded-For': f'2001:db8:9:9::{i + 1:x}'})[0], 201)
+        self.assertEqual(self.call('POST', body={'data': {}}, peer='10.0.0.2',
+                                   **{'X-Forwarded-For': '2001:db8:9:9:abcd::1'})[0], 429)
+        self.assertEqual(self.call('POST', body={'data': {}}, peer='10.0.0.2',
+                                   **{'X-Forwarded-For': '2001:db8:9:a::1'})[0], 201)
+
     def test_foreign_origin_is_refused(self):
         self.assertEqual(self.call('POST', body={'data': {}}, Origin='https://evil.example')[0], 403)
         self.assertEqual(self.call('POST', body={'data': {}}, Origin='https://bills.ctharvey.me')[0], 201)
@@ -212,6 +234,13 @@ class SyncHttpTests(unittest.TestCase):
     def test_oversized_body_is_refused_before_reading(self):
         status, _, _ = self.request('POST', raw=b'{"data": {"watch": []}, "pad": "' + b'x' * svc.MAX_BODY + b'"}')
         self.assertEqual(status, 413)
+
+    def test_oversized_length_is_answered_before_any_body_is_sent(self):
+        port = self.server.server_address[1]
+        with socket.create_connection(('127.0.0.1', port), timeout=3) as client:
+            client.sendall(b'POST /api/sync HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\n'
+                           b'Content-Length: %d\r\n\r\n' % (svc.MAX_BODY * 8))
+            self.assertRegex(client.recv(64), rb'^HTTP/1\.[01] 413 ')
 
 
 class ListenBacklogTests(unittest.TestCase):

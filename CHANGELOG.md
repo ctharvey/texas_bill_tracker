@@ -1,6 +1,10 @@
 # Changelog
 
 ## 2026-11-10
+- Sync service rate limits count an IPv6 visitor per /64 instead of per address, so rotating addresses inside one
+  /64 no longer earns fresh limits; IPv4-mapped addresses share their IPv4 limit. A body over 16 KB still gets 413
+  without being read, and the service now drops up to 1 MB of it (2 s at most) before closing, so the client
+  receives the 413 instead of a connection reset (the cause of the flaky oversized-body test on Windows).
 - "Newest" puts the latest filings first within a day: filing dates have no time, so same-day bills now sort by
   type and then highest number first (numbers are assigned in filing order) instead of lowest first.
 - Bill text on the site: the hourly data run converts each version's official HTML to Markdown

@@ -12,10 +12,12 @@ import base64
 from collections import deque
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import ipaddress
 import json
 from pathlib import Path
 import re
 import secrets
+import socket
 import sqlite3
 import threading
 import time
@@ -27,6 +29,7 @@ SEARCH_PATHS = {"/search", "/search.md", "/search.json", "/api/search"}
 KEY_RE = re.compile(r"[A-Za-z0-9_-]{22}")
 FEED_RE = re.compile(r"/api/sync/feed/([A-Za-z0-9_-]{22})\.xml")
 MAX_BODY = 16 * 1024
+DISCARD_LIMIT, DISCARD_SECONDS = 1024 * 1024, 2  # Bounds on draining a refused body (make_handler).
 MAX_BILLS = 500
 MAX_LISTS = 100_000
 RETENTION_SECONDS = 365 * 86400
@@ -139,6 +142,20 @@ class Store:
         return self.db.execute("SELECT 1 FROM lists WHERE view_hash = ?", (key_hash(key),)).fetchone() is not None
 
 
+def rate_key(client: str) -> str:
+    """One rate-limit bucket per IPv4 address or per IPv6 /64: one IPv6 visitor usually holds a whole /64 and could
+    otherwise rotate addresses within it for fresh limits. Anything unparseable is used as given."""
+    try:
+        address = ipaddress.ip_address(client)
+    except ValueError:
+        return client
+    if address.version == 6:
+        if address.ipv4_mapped:
+            return str(address.ipv4_mapped)
+        return str(ipaddress.IPv6Network((int(address) >> 64 << 64, 64)))
+    return str(address)
+
+
 class RateLimiter:
     def __init__(self, limits: dict = LIMITS):
         self.limits, self.hits, self.lock = limits, {}, threading.Lock()
@@ -219,6 +236,7 @@ class App:
         client = peer
         if self.trust_proxy and headers.get("X-Forwarded-For"):
             client = headers["X-Forwarded-For"].split(",")[-1].strip()  # The hop our proxy appended.
+        client = rate_key(client)
         path, _, query = path.partition("?")
         if path == "/api/sync/health" and method == "GET":
             return self.json(200, {"ok": True})
@@ -319,6 +337,7 @@ def make_handler(app: App):
             pass  # Never log paths, keys or client addresses.
 
         def dispatch(self, method: str):
+            unread = 0  # Body bytes refused without reading.
             try:
                 body = None
                 if method in ("POST", "PUT"):
@@ -329,6 +348,7 @@ def make_handler(app: App):
                     if length < 0:
                         raise Rejected(411, "length required")
                     if length > MAX_BODY:
+                        unread = length
                         raise Rejected(413, "body too large")
                     body = self.rfile.read(length)
                 status, headers, payload = app.handle(method, self.path, self.headers, body, self.client_address[0])
@@ -345,8 +365,33 @@ def make_handler(app: App):
                                 "Referrer-Policy": "no-referrer"}.items():
                 self.send_header(name, value)
             self.send_header("Content-Length", str(len(payload)))
+            if unread:
+                self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(payload)
+            if unread:
+                self.discard_body(unread)
+
+        def discard_body(self, length: int):
+            # Closing with the body still unread makes TCP send a reset, which can reach the client before it reads
+            # the 413 (seen as WinError 10053). Answer first, then read and drop a bounded amount before closing.
+            self.close_connection = True
+            deadline = time.monotonic() + DISCARD_SECONDS
+            try:
+                self.wfile.flush()
+                self.connection.shutdown(socket.SHUT_WR)
+                left = min(length, DISCARD_LIMIT)
+                while left > 0:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    self.connection.settimeout(remaining)
+                    chunk = self.rfile.read1(min(left, 65536))
+                    if not chunk:
+                        break
+                    left -= len(chunk)
+            except OSError:
+                pass
 
         def do_GET(self): self.dispatch("GET")
         def do_POST(self): self.dispatch("POST")

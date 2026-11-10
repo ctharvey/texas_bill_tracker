@@ -152,7 +152,7 @@ There are no logins. People keep and move their choices in five ways:
   only SHA-256 hashes are stored (SQLite), no email, name or IP. The edit key travels in the URL fragment and
   the `X-Sync-Key` header only and is removed from the address bar once read. Saves are versioned; on a conflict
   the client replays its unsaved adds/removes onto the newer list. Limits: 16 KB body, 500 bills, per-client
-  rate limits, 100,000 lists, deletion after a year unused. A view key also serves a combined watchlist RSS at
+  rate limits (one IPv4 address or one IPv6 /64), 100,000 lists, deletion after a year unused. A view key also serves a combined watchlist RSS at
   `/api/sync/feed/<view key>.xml`. The tracker hides sync when `/api/sync/health` is unavailable.
   Live since 2026-11-10: the shared gateway (cth.hosting) proxies `/api/sync*` to the `texas-bill-sync`
   container on `edge-bills`; deployment and updates are in `deploy/sync/README.md`.
