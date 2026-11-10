@@ -1,0 +1,46 @@
+# Private sync links service. The shared gateway proxies bills.ctharvey.me/api/sync* to bills-sync:8787 over
+# edge-bills (cth.hosting). Values come from sync.env next to the deployed copy; none of them are secrets.
+name: texas-bill-sync
+
+services:
+  sync:
+    image: ${PYTHON_IMAGE:?Set the pinned python image digest}
+    container_name: texas-bill-sync
+    user: ${SYNC_USER:?Set uid:gid of texas-bill-atlas}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    restart: unless-stopped
+    environment:
+      PYTHONDONTWRITEBYTECODE: '1'
+    working_dir: /app
+    command: [python3, /app/sync_service.py, --db, /data/sync.sqlite3, --snapshot, /live/bills.json,
+              --host, 0.0.0.0, --port, '8787', --trust-proxy]
+    volumes:
+      - type: bind
+        source: ${SYNC_APP:?Set the extracted application directory}
+        target: /app
+        read_only: true
+      - type: bind
+        source: /var/lib/texas-bill-atlas/sync
+        target: /data
+      - type: bind
+        source: /var/www/html/texas-bill-atlas/live
+        target: /live
+        read_only: true
+    networks:
+      edge:
+        aliases: [bills-sync]
+    healthcheck:
+      test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/api/sync/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  edge:
+    external: true
+    name: edge-bills
