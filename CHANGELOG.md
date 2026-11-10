@@ -1,6 +1,11 @@
 # Changelog
 
 ## 2026-11-10
+- Review worker: every unseen bill gets its first pass before any follow-up questions (a new bill's questions are
+  asked on its next visit, so a capacity refusal on a question no longer holds up new bills); runs last up to 55
+  minutes, and a timer start during a still-running review exits cleanly. The data run saves analyses and fiscal
+  notes as Markdown and, after a hearing, the committee witness list (who testified, for/against/on, organization)
+  next to each bill's history.
 - Sync service rate limits count an IPv6 visitor per /64 instead of per address, so rotating addresses inside one
   /64 no longer earns fresh limits; IPv4-mapped addresses share their IPv4 limit. A body over 16 KB still gets 413
   without being read, and the service now drops up to 1 MB of it (2 s at most) before closing, so the client

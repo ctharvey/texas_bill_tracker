@@ -38,6 +38,11 @@ python3 scripts/sync_ftp.py
 The full coded action history (`actionNumber`, date, text; last 400) and the links to bill analyses and fiscal
 notes go to `live/history/<BILL>/history.json` (`texas-bill-history-v1`, `--history-dir`), written only on
 change and never into `bills.json`; a history-write failure never fails the snapshot.
+The same folder gets each listed analysis and fiscal note as Markdown (`<type>-<code>.md` plus `documents.json`,
+`texas-bill-documents-v1`) and, once a bill has a hearing or testimony action (H215/H216/H240, S260/S270/S290),
+its committee witness list as `witnesses-<H|S>.json` (`texas-bill-witnesses-v1`: committee, hearings, and each
+witness's name, organization, for/against/on and whether they testified). Downloads skip unchanged files by FTP
+modification time and stop at `--max-docs` (200) per run; a missing witness list is normal, not a failure.
 
 The first verified official import read 1,059 bill histories on November 9, 2026. GitHub Actions is scheduled hourly, at minute 17 UTC (GitHub may delay scheduled jobs). Each snapshot records its actual generation time and coverage; it is a dated bulk snapshot rather than a real-time feed. When nothing changed, the importer keeps the previous `generated_at` (so no commit is made) until it is six hours old, then writes a heartbeat; a snapshot more than eight hours old therefore means the refresh has stopped. Concurrent pushes to `main` are rebased and retried up to five times.
 
@@ -62,7 +67,7 @@ python scripts/review_pipeline.py --cache-dir /private/texas-bill-review --bill-
 
 Omit `--execute` to prepare/replay without spending; a dry run never marks bills as seen. Without bill IDs,
 each run works serially through up to three retries, unseen bills, previously failed bills, and then rotating
-known bills from the official snapshot, until a spending guard or the `--max-minutes` limit (default 50,
+known bills from the official snapshot, until a spending guard or the `--max-minutes` limit (default 55,
 checked between bills) stops it; `--max-bills` optionally caps the count. A bill whose PDF cannot be downloaded
 or read (for example, not yet posted) is recorded under `failed` in the queue and is never marked seen; five
 consecutive new download failures stop the run as a likely FTP outage. Requests too large to price, or already
@@ -86,6 +91,11 @@ stays queued. Budget, quota/auth and unknown outcomes still stop the worker.
 `--no-spending-cap` skips the daily and per-run ceilings only (reservations, the ledger and the
 double-billing checks still apply); `--order reverse` works through the snapshot from the bottom up.
 `--question-effort` (default `medium`) sets reasoning for follow-up questions; the first pass stays `high`.
+By default every unseen bill's first pass comes before any follow-up questions: a bill's first visit records its
+questions as deferred (it joins the retry list), and they are asked on its next visit, after the unseen bills.
+A bill with an earlier review always asks them at once, as do `--bill-id` runs and `--questions-inline`.
+`--max-minutes` defaults to 55; a timer start that finds the previous run still holding the worker lock logs it
+and exits successfully.
 `--input markdown` (default `pdf`) reads the data run's official Markdown (`live/text/<BILL>/I.md`, checked
 against `index.json`) instead of the PDF: one span per paragraph (`P###S###`, page = paragraph), with `<ins>`
 and `<del>` shown to Luna plus `scripts/markdown_input_note.txt`, and quotes matched with the tags removed.
@@ -212,7 +222,7 @@ and `/var/lib/texas-bill-review/{repository,venv,cache}`. The repository stays o
 `--ff-only`. Install optional dependencies into the dedicated venv; install the units under `/etc/systemd/system`.
 Set `OPENAI_API_KEY` only in root-owned mode-0600 `/etc/texas-bill-review.env`, outside the web root and git.
 Enable `texas-bill-review.timer` after the pilot; it runs hourly at minute 35, with up to two minutes jitter,
-processing bills serially for up to 50 minutes. The production unit currently runs with `--no-spending-cap
+processing bills serially for up to 55 minutes. The production unit currently runs with `--no-spending-cap
 --order reverse` so the backlog completes; restore `--daily-budget 1 --run-budget 0.10` to re-enable the guard. Inspect `journalctl -u texas-bill-review.service` and the private
 ledger/review queue. To pause spending, stop/disable this timer; the public tracker and metadata refresh remain
 independent. Reinstall dependencies when their requirements change.

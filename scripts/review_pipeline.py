@@ -18,8 +18,9 @@ from urllib.request import Request, urlopen
 
 import classify_bill as classification
 import extract_bill as detailed
+import contextlib
 from extraction_cache import (
-    CacheCoolingDown, CapacityUnavailable, NotSubmitted, ResponseCache, atomic_json, canonical_hash,
+    CacheBusy, CacheCoolingDown, CapacityUnavailable, NotSubmitted, ResponseCache, atomic_json, canonical_hash,
 )
 
 ROOT = detailed.ROOT
@@ -383,7 +384,11 @@ def resolve(question, result, document, registry, cache_root, budget, execute, s
             "question": question, "result": value, "sources": sources}, derived
 
 
-def run_document(document, registry, cache_root, budget, execute=False, max_questions=3, question_effort="high"):
+QUESTIONS_LATER = "Deferred: questions follow other bills' first passes"
+
+
+def run_document(document, registry, cache_root, budget, execute=False, max_questions=3, question_effort="high",
+                 ask_questions=True):
     first = classification.classify(document, registry, cache_root, execute=execute, sender=budget.send)
     if "result" not in first:
         if first.get("action") != "not_submitted":
@@ -399,7 +404,13 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
     questions = questions_for(original, document, first)
     derived, resolutions, pending, sources = copy.deepcopy(original), [], [], []
     new_calls, stop_run, retry_after = 0, None, 0
-    for index, question in enumerate(questions):
+    if not ask_questions:
+        # No calls: every question stays pending with a retryable reason, so the bill joins the retry list.
+        pending.extend({**q, "reason": QUESTIONS_LATER} for q in questions)
+        questions_to_ask = []
+    else:
+        questions_to_ask = questions
+    for index, question in enumerate(questions_to_ask):
         before_spending = budget.run_spent
         try:
             resolution, corrected = resolve(question, derived, document, registry, cache_root, budget,
@@ -720,8 +731,16 @@ def record_failure(queue: dict, bill_id: str, stage: str, error: Exception) -> N
     queue['failed'][bill_id] = {'count': count, 'stage': stage, 'reason': type(error).__name__}
 
 
-def queue_candidates(ids: list[str], queue: dict, limit: int | None = None) -> list[str]:
+def queue_candidates(ids: list[str], queue: dict, limit: int | None = None, first_pass_first: bool = False) -> list[str]:
     failed = queue.get('failed', {})
+    if first_pass_first:
+        # Every unseen bill's first pass comes before any follow-up questions (the retry list).
+        unseen = [x for x in ids if x not in queue['seen'] and x not in failed]
+        known = [x for x in ids if x in queue['seen'] and x not in failed]
+        offset = queue['cursor'] % max(1, len(known))
+        retries = [x for x in queue.get('retry', []) if x in ids]
+        failing = [x for x in ids if x in failed]
+        return list(dict.fromkeys(unseen + retries + failing + known[offset:] + known[:offset]))[:limit]
     unseen = [x for x in ids if x not in queue['seen'] and x not in failed]
     known = [x for x in ids if x in queue['seen'] and x not in failed]
     # Failed bills (e.g. PDF not posted yet) follow new work so they cannot block it.
@@ -744,7 +763,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Ignore the daily and run budgets; calls are still reserved and recorded in the ledger")
     parser.add_argument("--order", choices=("forward", "reverse"), default="forward",
                         help="Work through the snapshot from the top (forward) or the bottom (reverse)")
-    parser.add_argument("--max-minutes", type=float, default=50,
+    parser.add_argument("--max-minutes", type=float, default=55,
                         help="Wall-clock limit checked between bills, never mid-request")
     parser.add_argument("--snapshot", type=Path, default=ROOT / "data/bills.json",
                         help="Bill list to work through (the live server snapshot in production)")
@@ -757,6 +776,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Markdown text directory for --input markdown (default: <snapshot dir>/text)")
     parser.add_argument("--question-effort", choices=("low", "medium", "high"), default="medium",
                         help="Reasoning effort for targeted follow-up questions (first pass stays high)")
+    parser.add_argument("--questions-inline", action="store_true",
+                        help="Ask a new bill's follow-up questions right after its first pass (default: first passes "
+                             "for every unseen bill come first; questions run on the bill's next visit)")
     return parser
 
 
@@ -768,7 +790,14 @@ def main():
         parser.error("--max-bills must be at least 1")
     if args.max_minutes <= 0:
         parser.error("--max-minutes must be positive")
-    with ResponseCache(args.cache_dir / "worker-lock")._lock("worker"):
+    worker = contextlib.ExitStack()
+    try:
+        worker.enter_context(ResponseCache(args.cache_dir / "worker-lock")._lock("worker"))
+    except CacheBusy:
+        # A run longer than the timer interval still holds the lock; this start is a no-op, not a failure.
+        print("Previous review run is still active; exiting", flush=True)
+        return 0
+    with worker:
         limits = (None, None) if args.no_spending_cap else (args.daily_budget, args.run_budget)
         budget = Budget(args.cache_dir / "budget.json", *limits)
         snapshot = json.loads(args.snapshot.read_text("utf-8"))
@@ -777,7 +806,9 @@ def main():
             ids = ids[::-1]
         queue_path = args.cache_dir / "queue.json"
         queue = json.loads(queue_path.read_text("utf-8")) if queue_path.exists() else {"seen": [], "cursor": 0}
-        candidates = args.bill_id[:args.max_bills] if args.bill_id else queue_candidates(ids, queue, args.max_bills)
+        first_pass_first = not args.questions_inline and not args.bill_id
+        candidates = args.bill_id[:args.max_bills] if args.bill_id else queue_candidates(
+            ids, queue, args.max_bills, first_pass_first=first_pass_first)
         queue.setdefault('retry', []); queue.setdefault('failed', {})
         deadline = time.monotonic() + args.max_minutes * 60
         new_failures = 0
@@ -842,8 +873,12 @@ def main():
                     print(bill_id, "stopped", type(error).__name__, flush=True)
                     raise SystemExit(2)
                 try:
+                    # Only a first visit defers questions; a bill with an earlier review keeps asking them, so its
+                    # resolved review is never replaced by an unresolved first pass.
+                    ask = (not first_pass_first or bill_id in queue["seen"]
+                           or (args.cache_dir / "reviews" / (bill_id + ".json")).exists())
                     bundle = run_document(document, detailed.load_registry(), args.cache_dir, budget, args.execute,
-                                          question_effort=args.question_effort)
+                                          question_effort=args.question_effort, ask_questions=ask)
                 except CacheCoolingDown:
                     # Per-request cooldown: skip this bill now and retry it early in a later run.
                     if bill_id in queue['seen'] and bill_id not in queue['retry']:

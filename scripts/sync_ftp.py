@@ -696,6 +696,390 @@ def sync_history(histories: dict[str, dict], history_dir: Path) -> dict:
     return counts
 
 
+class _ProseParser(HTMLParser):
+    """Collect (kind, text) blocks from prose HTML; kind is 'p', 'h', 'li' or 'tr' (cells joined by ' | ')."""
+
+    SKIP = ("script", "style", "head", "title")
+    BREAKS = ("p", "div", "br", "ul", "ol", "table", "center", "blockquote", "pre", "hr")
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.blocks: list[tuple[str, str]] = []
+        self.buf: list[str] = []
+        self.kind = "p"
+        self.row: list[str] | None = None
+        self.cell: list[str] | None = None
+        self.nest = 0
+        self.skip = 0
+
+    @staticmethod
+    def _clean(parts: list[str]) -> str:
+        return " ".join("".join(parts).replace("\xa0", " ").replace("�", " ").replace("​", "").split())
+
+    def _flush(self) -> None:
+        text = self._clean(self.buf)
+        if text:
+            self.blocks.append((self.kind, text))
+        self.buf = []
+        self.kind = "p"
+
+    def _end_cell(self) -> None:
+        if self.cell is not None and self.row is not None:
+            self.row.append(self._clean(self.cell))
+        self.cell = None
+
+    def _end_row(self) -> None:
+        self._end_cell()
+        cells = [c for c in (self.row or []) if c]
+        if len(cells) == 1:
+            self.blocks.append(("p", cells[0]))
+        elif cells:
+            self.blocks.append(("tr", " | ".join(cells)))
+        self.row = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.SKIP:
+            self.skip += 1
+            return
+        if self.skip:
+            return
+        if self.cell is not None:
+            if tag == "table":
+                self.nest += 1
+            if tag in self.BREAKS or tag in ("tr", "td", "th", "li") or re.fullmatch(r"h[1-6]", tag):
+                self.cell.append(" ")
+            return
+        if tag == "tr":
+            self._flush()
+            self._end_row()
+            self.row = []
+        elif tag in ("td", "th"):
+            if self.row is None:
+                self._flush()
+                self.row = []
+            self._end_cell()
+            self.cell = []
+        elif tag == "li" or re.fullmatch(r"h[1-6]", tag):
+            self._flush()
+            self.kind = "li" if tag == "li" else "h"
+        elif tag in self.BREAKS:
+            self._flush()
+
+    def handle_startendtag(self, tag, attrs):
+        if tag in ("br", "hr", "p", "div"):
+            self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag):
+        if tag in self.SKIP:
+            self.skip = max(0, self.skip - 1)
+            return
+        if self.skip:
+            return
+        if self.cell is not None:
+            if tag == "table" and self.nest:
+                self.nest -= 1
+            elif tag in ("td", "th") and not self.nest:
+                self._end_cell()
+            elif tag == "tr" and not self.nest:
+                self._end_row()
+            elif tag in self.BREAKS or tag == "li":
+                self.cell.append(" ")
+            return
+        if tag == "tr":
+            self._end_row()
+        elif tag == "table":
+            self._end_row()
+        elif tag == "li" or re.fullmatch(r"h[1-6]", tag) or tag in self.BREAKS:
+            self._flush()
+
+    def handle_data(self, data):
+        if self.skip:
+            return
+        (self.cell if self.cell is not None else self.buf).append(data)
+
+    def finish(self) -> list[tuple[str, str]]:
+        self._end_row()
+        self._flush()
+        return self.blocks
+
+
+def _prose_blocks(html: str) -> list[tuple[str, str]]:
+    parser = _ProseParser()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception as exc:  # HTMLParser is lenient; never let odd markup escape as a new error type.
+        raise ValueError(f"unparseable HTML: {exc}") from exc
+    return parser.finish()
+
+
+DOCUMENT_LABELS = {"fiscal_note": "Fiscal Note", "analysis": "Bill Analysis"}
+DOCUMENTS_FORMAT = "texas-bill-documents-v1"
+WITNESSES_FORMAT = "texas-bill-witnesses-v1"
+
+
+def document_markdown(html: str, kind: str = "fiscal_note", number: str = "", version_name: str = "") -> str:
+    """Convert a fiscal note or bill analysis HTML page to Markdown, one paragraph per block."""
+    lines, previous = [], None
+    for block, text in _prose_blocks(html):
+        if block == "h":
+            line = "### " + _escape(text)
+        elif block == "li":
+            line = "- " + _escape(text)
+        elif block == "tr":
+            line = " | ".join(_escape(cell, start=True) for cell in text.split(" | "))
+        else:
+            line = _escape(text, start=True)
+        if line == previous:
+            continue
+        lines.append(line)
+        previous = line
+    if not lines:
+        raise ValueError("no text found in document HTML")
+    title = "# " + DOCUMENT_LABELS.get(kind, "Document")
+    if number:
+        title += f" — {_escape(number)}"
+        if version_name:
+            title += f" ({_escape(version_name)})"
+    return "\n\n".join([title, *lines]) + "\n"
+
+
+def _document_url_path(kind: str, url: str) -> str | None:
+    """Path part of a TLC 90R analysis / fiscal-note HTML FTP URL (as parse_documents validates), else None."""
+    prefix = DOCUMENT_PATHS.get(kind)
+    if not prefix:
+        return None
+    try:
+        parts = urlsplit(url)
+        host = (parts.hostname or "").lower()
+    except ValueError:
+        return None
+    if parts.scheme.lower() != "ftp" or host != HOST or not parts.path.lower().startswith(prefix):
+        return None
+    if not TEXT_FILE_RE.match(PurePosixPath(parts.path).name):
+        return None
+    return parts.path
+
+
+def _mdtm(conn, path: str) -> str | None:
+    try:
+        return str(conn.sendcmd(f"MDTM {path}")).split()[-1]
+    except Exception:
+        return None
+
+
+def _load_json(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_if_changed(path: Path, payload: dict) -> bool:
+    """Write canonical JSON atomically; True only when the file was created or its content changed."""
+    data = (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    if path.is_file() and path.read_bytes() == data:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write(path, data)
+    return True
+
+
+def sync_documents(conn, histories: dict, out_dir: Path, max_docs: int) -> dict:
+    """Write out_dir/<BILL>/<type>-<code>.md and documents.json for fiscal notes and analyses."""
+    counts = {"bills": 0, "documents": 0, "downloaded": 0, "unchanged": 0, "deferred": 0, "failed": 0, "written": 0}
+    now = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+    for bill_id, info in histories.items():
+        documents = (info or {}).get("documents") or []
+        if not documents or not BILL_DIR_RE.match(str(bill_id)):
+            continue
+        counts["bills"] += 1
+        bill_dir = out_dir / bill_id
+        index_path = bill_dir / "documents.json"
+        previous = {(d.get("type"), d.get("code")): d for d in _load_json(index_path).get("documents", [])
+                    if isinstance(d, dict)}
+        number = re.sub(r"(?<=\D)(?=\d)", " ", bill_id, count=1)
+        entries = []
+        for document in documents:
+            counts["documents"] += 1
+            try:
+                kind, code = str(document.get("type", "")), str(document.get("code", ""))
+                name = str(document.get("name", code))
+                path = _document_url_path(kind, str(document.get("html", "")))
+                if kind not in DOCUMENT_PATHS or not CODE_RE.match(code) or not path:
+                    counts["failed"] += 1
+                    continue
+                filename = f"{kind}-{code}.md"
+                md_path = bill_dir / filename
+                old = previous.get((kind, code))
+                exists = md_path.is_file()
+                current = _mdtm(conn, path)
+                if exists and old is not None and (not current or old.get("ftp_modified") == current):
+                    counts["unchanged"] += 1
+                    entries.append(old)
+                    continue
+                if counts["downloaded"] >= max_docs:
+                    counts["deferred"] += 1
+                    if exists and old is not None:
+                        entries.append(old)
+                    continue
+                counts["downloaded"] += 1
+                try:
+                    html = _decode_html(ftp_bytes(conn, path))
+                    data = document_markdown(html, kind, number, name).encode("utf-8")
+                    bill_dir.mkdir(parents=True, exist_ok=True)
+                    _atomic_write(md_path, data)
+                except Exception as exc:
+                    counts["failed"] += 1
+                    print(f"document {bill_id}/{filename}: {exc}", file=sys.stderr)
+                    if exists and old is not None:
+                        entries.append(old)
+                    continue
+                entries.append({"type": kind, "code": code, "name": name, "path": filename,
+                                "sha256": hashlib.sha256(data).hexdigest(), "ftp_modified": current or "",
+                                "fetched_at": now})
+            except Exception as exc:
+                counts["failed"] += 1
+                print(f"document {bill_id}: {exc}", file=sys.stderr)
+        if entries:
+            try:
+                if _write_if_changed(index_path, {"format": DOCUMENTS_FORMAT, "bill": bill_id, "documents": entries}):
+                    counts["written"] += 1
+            except OSError as exc:
+                counts["failed"] += 1
+                print(f"document {bill_id}/documents.json: {exc}", file=sys.stderr)
+    return counts
+
+
+WITNESS_ROOT = "/bills/90R/witlistbill/html/"
+WITNESS_HEARING_CODES = {"H": {"H215", "H216", "H240"}, "S": {"S260", "S270", "S290"}}
+
+
+def witness_list_path(bill_id: str, chamber: str) -> str:
+    """FTP path of a bill's witness-list HTML for chamber 'H' or 'S'; mirrors review_pipeline.download_document."""
+    match = re.fullmatch(r"(HB|SB|HJR|SJR|HCR|SCR|HR|SR)([1-9]\d{0,4})", bill_id)
+    if not match or chamber not in ("H", "S"):
+        raise ValueError("Invalid bill ID or chamber")
+    family, number = match[1], int(match[2])
+    stem = {"HJR": "HJ", "SJR": "SJ", "HCR": "HC", "SCR": "SC"}.get(family, family)
+    directory = ("house" if family.startswith("H") else "senate") + "_" + {
+        "HB": "bills", "SB": "bills", "HJR": "joint_resolutions", "SJR": "joint_resolutions",
+        "HCR": "concurrent_resolutions", "SCR": "concurrent_resolutions", "HR": "resolutions", "SR": "resolutions"}[family]
+    start = max(1, number // 100 * 100)
+    end = number // 100 * 100 + 99
+    return f"{WITNESS_ROOT}{directory}/{stem}{start:05d}_{stem}{end:05d}/{stem}{number:05d}{chamber}.htm"
+
+
+_WIT_DATE = re.compile(r"^[A-Z][a-z]+\.? \d{1,2}, \d{4}\b")
+_WIT_BILL = re.compile(r"^[HS](?:B|JR|CR|R) \d+$")
+_WIT_POSITION = re.compile(r"^(For|Against|On)\s*:$", re.I)
+_WIT_ENTRY = re.compile(r"^(.*?)\s*\((.*)\)\s*$", re.S)
+
+
+def parse_witness_list(html: str) -> dict:
+    """Parse a TLC witness-list page into {committee, hearing, hearings, witnesses[]}.
+
+    Lists can hold several hearings (a date line starts each) and repeat their header on page breaks.
+    """
+    committee, current, hearings = "", "", []
+    position, testified, committee_next, pending = None, True, False, ""
+    witnesses = []
+    for _, raw in _prose_blocks(html):
+        line = raw
+        if pending:
+            line, pending = f"{pending} {line}", ""
+        elif re.fullmatch(r"WITNESS LIST", line, re.I) or re.fullmatch(r"\d+", line) or _WIT_BILL.match(line):
+            continue
+        elif re.search(r"\b(?:HOUSE|SENATE) COMMITTEE REPORT\b", line, re.I):
+            committee_next = True
+            continue
+        elif committee_next:
+            committee, committee_next = committee or re.sub(r"\s+Committee$", "", line, flags=re.I), False
+            continue
+        elif _WIT_DATE.match(line):
+            if line != current:
+                current, position, testified = line, None, True
+                if line not in hearings:
+                    hearings.append(line)
+            continue
+        elif line.lower().startswith("registering, but not testifying"):
+            testified, position = False, None
+            continue
+        else:
+            heading = _WIT_POSITION.match(line)
+            if heading:
+                position = heading.group(1).lower()
+                continue
+        if position is None:
+            continue
+        if line.count("(") > line.count(")"):
+            pending = line
+            continue
+        entry = _WIT_ENTRY.match(line)
+        name, organization = (entry.group(1), entry.group(2)) if entry else (line, "")
+        witnesses.append({"name": " ".join(name.split()), "organization": " ".join(organization.split()),
+                          "position": position, "testified": testified, "hearing": current})
+    if pending and position:
+        witnesses.append({"name": " ".join(pending.split()), "organization": "", "position": position,
+                          "testified": testified, "hearing": current})
+    if not witnesses and not committee:
+        raise ValueError("no witness list found in HTML")
+    return {"committee": committee, "hearing": hearings[0] if hearings else "", "hearings": hearings,
+            "witnesses": witnesses}
+
+
+def sync_witnesses(conn, histories: dict, out_dir: Path, max_lists: int) -> dict:
+    """Write out_dir/<BILL>/witnesses-<H|S>.json for bills whose events show committee hearings."""
+    counts = {"bills": 0, "lists": 0, "downloaded": 0, "unchanged": 0, "missing": 0, "deferred": 0,
+              "failed": 0, "written": 0}
+    for bill_id, info in histories.items():
+        if not BILL_DIR_RE.match(str(bill_id)):
+            continue
+        codes = {str(e.get("code", "")) for e in (info or {}).get("events") or [] if isinstance(e, dict)}
+        chambers = [c for c in ("H", "S") if codes & WITNESS_HEARING_CODES[c]]
+        if not chambers:
+            continue
+        counts["bills"] += 1
+        for chamber in chambers:
+            counts["lists"] += 1
+            try:
+                path = witness_list_path(bill_id, chamber)
+                target = out_dir / bill_id / f"witnesses-{chamber}.json"
+                old = _load_json(target)
+                try:
+                    current = str(conn.sendcmd(f"MDTM {path}")).split()[-1]
+                except ftplib.error_perm as exc:
+                    if str(exc).startswith("550"):
+                        counts["missing"] += 1
+                        continue
+                    current = None
+                except Exception:
+                    current = None
+                if old and (not current or old.get("ftp_modified") == current):
+                    counts["unchanged"] += 1
+                    continue
+                if counts["downloaded"] >= max_lists:
+                    counts["deferred"] += 1
+                    continue
+                counts["downloaded"] += 1
+                try:
+                    parsed = parse_witness_list(_decode_html(ftp_bytes(conn, path)))
+                except ftplib.error_perm as exc:
+                    if str(exc).startswith("550"):
+                        counts["missing"] += 1
+                        continue
+                    raise
+                payload = {"format": WITNESSES_FORMAT, "bill": bill_id, "chamber": chamber,
+                           "source": "ftp://" + HOST + path, "ftp_modified": current or "", **parsed}
+                if _write_if_changed(target, payload):
+                    counts["written"] += 1
+            except Exception as exc:
+                counts["failed"] += 1
+                print(f"witnesses {bill_id}/{chamber}: {exc}", file=sys.stderr)
+    return counts
+
+
 HEARTBEAT = dt.timedelta(hours=6)
 
 
@@ -772,6 +1156,8 @@ def main() -> int:
     parser.add_argument('--text-dir',type=Path,default=None)
     parser.add_argument('--max-texts',type=int,default=400)
     parser.add_argument('--history-dir',type=Path,default=None)
+    parser.add_argument('--documents-dir',type=Path,default=None)
+    parser.add_argument('--max-docs',type=int,default=200)
     args=parser.parse_args()
     prior=json.loads(args.out.read_text(encoding='utf-8')) if args.out.exists() else {'bills':[]}
     with ftplib.FTP(HOST,timeout=55) as conn:
@@ -794,6 +1180,16 @@ def main() -> int:
         print(json.dumps({'texts':text_counts},indent=2))
     except Exception as exc:  # Text files are secondary; never fail a written snapshot.
         print(f"TEXT SYNC FAILED, snapshot unaffected: {exc}",file=sys.stderr)
+    try:
+        documents_dir=args.documents_dir or args.out.parent/'history'
+        with ftplib.FTP(HOST,timeout=55) as conn:
+            conn.login('anonymous','legislative-research@example.invalid')
+            document_counts=sync_documents(conn,histories,documents_dir,args.max_docs)
+            print(json.dumps({'documents':document_counts},indent=2))
+            witness_counts=sync_witnesses(conn,histories,documents_dir,args.max_docs)
+            print(json.dumps({'witnesses':witness_counts},indent=2))
+    except Exception as exc:  # Documents and witness lists are secondary; never fail a written snapshot.
+        print(f"DOCUMENT SYNC FAILED, snapshot unaffected: {exc}",file=sys.stderr)
     return 0
 
 
