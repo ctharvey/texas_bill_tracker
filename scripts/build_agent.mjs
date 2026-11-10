@@ -17,6 +17,13 @@ export const DISCLAIMER = 'Unofficial, independent open-source project; not a st
   + 'Legislature Online before relying on anything here.';
 const OWNED = /\.(md|json|txt)$/;
 const HEARING_ORDER = ['Heard', 'Scheduled', 'Referred', 'Not rated'];
+const HEARD = new Set(['Heard', 'Scheduled']);
+const PAGE = 150;
+const STOP = new Set(('relating texas state certain provision provisions including other under with from that this which their there these '
+  + 'those into upon such also each made make making about against between than only same been have will shall').split(' '));
+const captionWords = b => [...new Set(`${b.title || ''} ${b.caption || ''}`.toLowerCase().match(/[a-z]+/g) || [])]
+  .filter(w => w.length >= 4 && !STOP.has(w));
+const textUrl = id => `https://capitol.texas.gov/BillLookup/Text.aspx?LegSess=90R&Bill=${id}`;
 
 export const slug = text => String(text).toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '').slice(0, 80) || 'unnamed';
@@ -70,18 +77,20 @@ export function billRecord(b) {
     locations: (b.locations || []).map(l => ({name: l.name, kind: l.kind || null, explanation: l.explanation || null})),
     full_text_review: b.luna ? {reviewed_at: b.luna.reviewed_at || null, text_version: b.luna.text_version || null,
       summary: b.luna.summary || null, fields_from_full_text: b.luna.fields || []} : null,
-    links: {tracker: tracker({}, {bill: b.id}), official: officialUrl(b), rss: `${SITE}live/feeds/${b.id}.xml`,
+    links: {tracker: tracker({}, {bill: b.id}), official: officialUrl(b), text: textUrl(b.id), rss: `${SITE}live/feeds/${b.id}.xml`,
       markdown: `${AGENT}bills/${b.id}.md`, json: `${AGENT}bills/${b.id}.json`},
   };
 }
 
-function billMarkdown(b) {
+function billMarkdown(b, coverage) {
   const r = billRecord(b), last = r.last_action;
   const list = items => items.length ? items.map(t => `- ${cell(t)}`).join('\n') : '- None recorded';
   const people = key => {
     const rows = r.people[key];
     if (rows === null) return '_Not reported in this dataset._';
-    if (!rows.length) return '_None listed in the source snapshot._';
+    if (!rows.length) return coverage?.[`with_${key}`] === 0
+      ? `_None listed. No bill in this snapshot lists any ${key} yet, so this reflects the stage of the source data, not this bill._`
+      : '_None listed in the source snapshot._';
     return rows.map(p => `- ${cell(p.full_name || p.name)}${p.matched ? ` (${cell(p.summary)})` : ' (not matched to the 90th Legislature roster)'}`
       + ` · [bills](${AGENT}authors/${authorKey(p, key, b)}.md)`).join('\n');
   };
@@ -108,7 +117,7 @@ ${cell(r.caption) || '_No caption available._'}
 
 ${review ? `Reviewed ${review.reviewed_at || 'date unknown'}${review.text_version ? ` · ${cell(review.text_version)} text` : ''}. Fields from the full text: ${review.fields_from_full_text.join(', ') || 'none'}; other fields use caption inference.
 
-${cell(review.summary) || '_No summary._'}` : '_Not reviewed yet. Tags below come from rules applied to the caption._'}
+${cell(review.summary) || '_No summary._'}` : `_Not reviewed yet${coverage ? ` (${coverage.full_text_reviewed} of ${coverage.bills} bills reviewed so far; see ${AGENT}review-progress.md)` : ''}. Tags below come from rules applied to the caption. The full text is linked below._`}
 
 ## Topics
 
@@ -155,6 +164,7 @@ ${actions}
 ## Links
 
 - Official bill history: ${r.links.official}
+- Official bill text (every version, HTML/PDF/Word): ${r.links.text}
 - Open in the tracker: ${r.links.tracker}
 - RSS feed of actions: ${r.links.rss}
 - This page as JSON: ${r.links.json}
@@ -171,12 +181,12 @@ function authorKey(p, role, b) {
 
 function table(bills) {
   if (!bills.length) return '_No bills._\n';
-  return '| Bill | Title | Last action | Date |\n|---|---|---|---|\n' + [...bills].sort(byRecent).map(b =>
-    `| [${b.number}](${AGENT}bills/${b.id}.md) | ${cell(b.title)} | ${cell(b.lastAction.label)} | ${b.lastAction.date || ''} |`).join('\n') + '\n';
+  return '| Bill | Title | Topics | Agencies | Review | Last action | Date |\n|---|---|---|---|---|---|---|\n' + [...bills].sort(byRecent).map(b =>
+    `| [${b.number}](${AGENT}bills/${b.id}.md) | ${cell(b.title)} | ${cell(b.topics.join('; '))} | ${cell(b.agencies.map(a => b.agencyNames[a.id]).join('; '))} | ${b.luna ? 'full text' : 'caption'} | ${cell(b.lastAction.label)} | ${b.lastAction.date || ''} |`).join('\n') + '\n';
 }
 
-function groupPage(title, intro, bills, humanLink) {
-  return `# ${cell(title)}\n\n${intro}\n\n${bills.length} ${bills.length === 1 ? 'bill' : 'bills'}, most recent action first.`
+function groupPage(title, intro, bills, humanLink, total = bills.length) {
+  return `# ${cell(title)}\n\n${intro}\n\n${total} ${total === 1 ? 'bill' : 'bills'}, most recent action first. Review: "full text" means Luna read the bill; "caption" means tags come from caption rules.`
     + `${humanLink ? ` Same view in the tracker: ${humanLink}` : ''}\n\n${table(bills)}\n---\n${DISCLAIMER}\n`;
 }
 
@@ -199,22 +209,44 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   const bills = loadBills({snapshot, tags, roster, minBills});
   const files = new Map();
   const put = (path, text) => files.set(path, text);
-  const asOf = `Bill data as of ${snapshot.generated_at}${tags?.generated_at ? `; full-text tags as of ${tags.generated_at}` : ''}${roster?.generated_at ? `; member roster as of ${roster.generated_at}` : ''}.`;
+  const dataDate = snapshot.generated_at;
+  const asOf = `Bill data as of ${dataDate}${tags?.generated_at ? `; full-text tags as of ${tags.generated_at}` : ''}${roster?.generated_at ? `; member roster as of ${roster.generated_at}` : ''}.`;
+  const records = new Map(bills.map(b => [b.id, billRecord(b)]));
+  const listed = role => bills.filter(b => records.get(b.id).people[role]?.length).length;
+  const coverage = {bills: bills.length, full_text_reviewed: bills.filter(b => b.luna).length,
+    with_coauthors: listed('coauthors'), with_sponsors: listed('sponsors'), with_cosponsors: listed('cosponsors'),
+    with_hearing: bills.filter(b => HEARD.has(b.hearing.label)).length, as_of: dataDate};
 
   for (const b of bills) {
-    put(`bills/${b.id}.md`, billMarkdown(b));
-    put(`bills/${b.id}.json`, JSON.stringify(billRecord(b), null, 1) + '\n');
+    put(`bills/${b.id}.md`, billMarkdown(b, coverage));
+    put(`bills/${b.id}.json`, JSON.stringify(records.get(b.id), null, 1) + '\n');
   }
-  put('bills/index.md', groupPage('All bills', asOf, bills, SITE + '#all'));
+
+  // Group pages are split into pages of PAGE bills so each stays small enough for page-reading tools.
+  const pagedGroup = (base, title, intro, list, humanLink) => {
+    const sorted = [...list].sort(byRecent), pages = Math.max(1, Math.ceil(sorted.length / PAGE));
+    const href = i => `${base}${i ? `--page-${i + 1}` : ''}.md`;
+    for (let i = 0; i < pages; i++) {
+      const chunk = sorted.slice(i * PAGE, (i + 1) * PAGE);
+      const nav = pages > 1 ? `\n\nPage ${i + 1} of ${pages} (bills ${i * PAGE + 1}-${i * PAGE + chunk.length} of ${sorted.length}). Pages: `
+        + Array.from({length: pages}, (_, j) => j === i ? `${j + 1}` : `[${j + 1}](${AGENT}${href(j)})`).join(' · ') : '';
+      put(href(i), groupPage(title, intro + nav, chunk, humanLink, sorted.length));
+    }
+  };
+  pagedGroup('bills/index', 'All bills', `${asOf} Also by [filing date](${AGENT}filed/index.md) and [keyword](${AGENT}words/index.md).`,
+    bills, SITE + '#all');
 
   const indexes = [];
-  const addGroups = (dir, title, intro, groups, label, human) => {
-    const rows = [...groups].sort((a, b) => b[1].length - a[1].length || String(label(a[0])).localeCompare(String(label(b[0]))))
-      .map(([key, list]) => {
-        put(`${dir}/${slug(key)}.md`, groupPage(label(key), intro, list, human ? human(key) : null));
-        return [label(key), `${dir}/${slug(key)}.md`, list.length];
-      });
-    put(`${dir}/index.md`, indexPage(title, intro, rows));
+  const byCount = label => (a, b) => b[1].length - a[1].length || String(label(a[0])).localeCompare(String(label(b[0])));
+  const addGroups = (dir, title, intro, groups, label, human, {order = null, note = ''} = {}) => {
+    const entries = [...groups].sort(order ? (a, b) => order(a[0], b[0]) : byCount(label));
+    const single = entries.length === 1 && entries[0][1].length === bills.length
+      ? ` ${note ? 'All' : `As of ${dataDate}, all`} ${bills.length} bills are in one group ("${cell(label(entries[0][0]))}"), so this view does not tell bills apart yet.` : '';
+    const rows = entries.map(([key, list]) => {
+      pagedGroup(`${dir}/${slug(key)}`, label(key), intro, list, human ? human(key) : null);
+      return [label(key), `${dir}/${slug(key)}.md`, list.length];
+    });
+    put(`${dir}/index.md`, indexPage(title, `${intro}${note ? ` ${note}` : ''}${single}`, rows));
     indexes.push([title, `${dir}/index.md`, rows.length]);
   };
   addGroups('topics', 'Bills by topic', 'Policy topics, from the Luna full-text review where available and caption rules otherwise.',
@@ -224,26 +256,54 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   addGroups('last-action', 'Bills by most recent action', 'Categories of the most recent recorded action, along the legislative path.',
     groupBy(bills, b => [b.lastAction.label]), k => k, k => tracker({action: k}));
   addGroups('hearing', 'Bills by hearing status', 'Procedural evidence from recorded actions; not a prediction.',
-    new Map([...groupBy(bills, b => [b.hearing.label])].sort((a, b) => HEARING_ORDER.indexOf(a[0]) - HEARING_ORDER.indexOf(b[0]))),
-    k => k, k => tracker({outlook: k}));
+    groupBy(bills, b => [b.hearing.label]), k => k, k => tracker({outlook: k}),
+    {order: (a, b) => HEARING_ORDER.indexOf(a) - HEARING_ORDER.indexOf(b),
+      note: coverage.with_hearing ? `${coverage.with_hearing} of ${bills.length} bills have a committee hearing recorded or scheduled as of ${dataDate}.`
+        : `No bill has a committee hearing recorded or scheduled as of ${dataDate}.`});
   addGroups('chamber', 'Bills by chamber', 'The chamber where the bill was filed.', groupBy(bills, b => [b.chamber]), k => k,
     k => tracker({chamber: k}));
+  addGroups('filed', 'Bills by filing date', 'The date each bill was filed, newest first.', groupBy(bills, b => [b.filed_at || 'unknown']),
+    k => k, null, {order: (a, b) => b.localeCompare(a)});
+  addGroups('authorship', 'Bills by authorship party', 'Party of the bill\'s authors and coauthors, from the member roster. Not a vote or caucus position.',
+    groupBy(bills, b => [records.get(b.id).authorship_party.label]), k => k, null);
+  addGroups('full-text-review', 'Bills by full-text review', `Whether Luna has read the bill's full text (${coverage.full_text_reviewed} of ${bills.length} so far). Unreviewed bills use caption rules.`,
+    groupBy(bills, b => [b.luna ? 'Full text reviewed' : 'Caption rules only']), k => k, null);
+
+  // Keyword pages: every caption word, so an agent can search without downloading data/bills.json.
+  const vocab = new Set(bills.flatMap(captionWords));
+  const canon = w => w.endsWith('ies') && vocab.has(`${w.slice(0, -3)}y`) ? `${w.slice(0, -3)}y`
+    : /[^su]s$/.test(w) && vocab.has(w.slice(0, -1)) ? w.slice(0, -1) : w;
+  const words = [...groupBy(bills, b => [...new Set(captionWords(b).map(canon))])]
+    .filter(([w, list]) => w !== 'index' && (bills.length < 50 || list.length <= bills.length * 0.4)).sort((a, b) => a[0].localeCompare(b[0]));
+  const wordIntro = w => `Bills whose title or caption uses "${w}" (plural forms included). A caption match, not a judgment of what the bill does.`;
+  for (const [w, list] of words) pagedGroup(`words/${w}`, `Keyword: ${w}`, wordIntro(w), list, tracker({query: w}));
+  const pages = new Set(words.map(([w]) => w));
+  const pointer = (from, to) => { if (!pages.has(from) && from !== 'index') { pages.add(from); put(`words/${from}.md`, `# Keyword: ${from}\n\nSee [${to}](${AGENT}words/${to}.md), which includes "${from}".\n`); } };
+  for (const w of [...vocab].sort()) if (canon(w) !== w && pages.has(canon(w))) pointer(w, canon(w));
+  for (const [w] of words) if (/[^su]s$/.test(w)) pointer(w.slice(0, -1), w);
+  const letters = groupBy(words, ([w]) => [w[0]]);
+  for (const [letter, list] of letters) put(`words/letter-${letter}.md`, `# Keywords starting with "${letter}"\n\n`
+    + list.map(([w, l]) => `[${w}](${AGENT}words/${w}.md) (${l.length})`).join(', ') + `\n\n---\n${DISCLAIMER}\n`);
+  put('words/index.md', `# Keyword search\n\nFetch \`${AGENT}words/<word>.md\` for the bills whose title or caption uses a word: lowercase letters only, for example [${words.find(([w]) => w.startsWith('water'))?.[0] || words[0]?.[0] || 'water'}](${AGENT}words/${words.find(([w]) => w.startsWith('water'))?.[0] || words[0]?.[0] || 'water'}.md). Plurals point to the singular. A missing page means no caption uses that word; try a synonym. Words in more than 40% of bills (such as "relating") have no page. ${words.length} words:\n\n`
+    + [...letters].map(([letter, list]) => `- [${letter}](${AGENT}words/letter-${letter}.md) (${list.length} words)`).join('\n') + `\n\n---\n${DISCLAIMER}\n`);
 
   // Authors: every named member and the bills they author, coauthor or sponsor.
   const people = new Map();
-  for (const b of bills) for (const role of ['authors', 'coauthors', 'sponsors', 'cosponsors']) for (const p of billRecord(b).people[role] || []) {
+  const missingRoles = ['coauthors', 'sponsors', 'cosponsors'].filter(role => coverage[`with_${role}`] === 0);
+  const roleNote = missingRoles.length ? ` As of ${dataDate} no bill lists any ${missingRoles.join(' or ')} yet, so only author roles appear.` : '';
+  for (const b of bills) for (const role of ['authors', 'coauthors', 'sponsors', 'cosponsors']) for (const p of records.get(b.id).people[role] || []) {
     const key = authorKey(p, role, b);
     if (!people.has(key)) people.set(key, {name: p.full_name || p.name, summary: p.matched ? p.summary : 'Not matched to the 90th Legislature roster', roles: new Map()});
     people.get(key).roles.set(b, [...(people.get(key).roles.get(b) || []), role.replace(/s$/, '')]);
   }
   const personRows = [...people].sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([key, p]) => {
     const rows = [...p.roles].sort((x, y) => byRecent(x[0], y[0]));
-    put(`authors/${key}.md`, `# ${cell(p.name)}\n\n${cell(p.summary)}\n\n${rows.length} ${rows.length === 1 ? 'bill' : 'bills'}.\n\n| Bill | Role | Title | Last action | Date |\n|---|---|---|---|---|\n`
+    put(`authors/${key}.md`, `# ${cell(p.name)}\n\n${cell(p.summary)}\n\n${rows.length} ${rows.length === 1 ? 'bill' : 'bills'}.${roleNote}\n\n| Bill | Role | Title | Last action | Date |\n|---|---|---|---|---|\n`
       + rows.map(([b, roles]) => `| [${b.number}](${AGENT}bills/${b.id}.md) | ${roles.join(', ')} | ${cell(b.title)} | ${cell(b.lastAction.label)} | ${b.lastAction.date || ''} |`).join('\n')
       + `\n\n---\n${DISCLAIMER}\n`);
     return [`${p.name} (${key.split('-')[0]})`, `authors/${key}.md`, rows.length];
   });
-  put('authors/index.md', indexPage('Bills by member', 'Authors and coauthors serve in the originating chamber; sponsors and cosponsors in the other.', personRows));
+  put('authors/index.md', indexPage('Bills by member', `Authors and coauthors serve in the originating chamber; sponsors and cosponsors in the other.${roleNote}`, personRows));
   indexes.push(['Bills by member', 'authors/index.md', personRows.length]);
 
   put('recent.md', groupPage('Most recent actions', `The 100 bills with the most recent recorded actions. ${asOf}`,
@@ -258,17 +318,19 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   put('saving.md', SAVING);
   put('data/bills.json', JSON.stringify({format: 'texas-bill-atlas-agent-v1', session: '90R', disclaimer: DISCLAIMER,
     bill_data_as_of: snapshot.generated_at, tags_as_of: tags?.generated_at || null, roster_as_of: roster?.generated_at || null,
-    coverage_note: snapshot.coverage_note || null, sources: snapshot.sources || null, count: bills.length,
-    bills: [...bills].sort((a, b) => a.id.localeCompare(b.id, 'en', {numeric: true})).map(billRecord)}) + '\n');
+    coverage_note: snapshot.coverage_note || null, sources: snapshot.sources || null, count: bills.length, coverage,
+    bills: [...bills].sort((a, b) => a.id.localeCompare(b.id, 'en', {numeric: true})).map(b => records.get(b.id))}) + '\n');
 
   const example = [...bills].sort(byRecent)[0];
-  const overview = overviewPage(bills.length, asOf, indexes, example);
+  const sampleWord = ['water', 'school', 'property', 'election'].find(w => pages.has(w)) || words[0]?.[0];
+  const overview = overviewPage(bills.length, asOf, indexes, example, coverage, sampleWord);
   put('index.md', overview);
   put('llms.txt', overview);
   return files;
 }
 
-function overviewPage(count, asOf, indexes, example) {
+function overviewPage(count, asOf, indexes, example, coverage, sampleWord) {
+  const zeroNote = 'A zero means the source has none yet (bills are early in the session), not that data is missing.';
   return `# Texas Bill Atlas (agent edition)
 
 > Plain-text and JSON access to everything the Texas Bill Atlas tracker (${SITE}) shows for the 90th Texas Legislature: ${count} bills with captions, authors and sponsors (party, district, tenure), recorded actions, hearing status, most recent action, topics, potentially affected agencies, impacts, affected groups and Luna full-text reviews. No JavaScript, login or API key needed.
@@ -279,10 +341,23 @@ ${DISCLAIMER}
 
 ## Start here
 
-- [All bills](${AGENT}bills/index.md): one row per bill, most recent action first
+- Keyword search: \`${AGENT}words/<word>.md\` lists the bills whose title or caption uses a word (lowercase, e.g. [${sampleWord}](${AGENT}words/${sampleWord}.md)); [all words](${AGENT}words/index.md)
+- [All bills](${AGENT}bills/index.md): one row per bill with topics, agencies and review status, most recent action first, ${PAGE} per page
 - [Most recent actions](${AGENT}recent.md)
-- One bill: \`${AGENT}bills/<ID>.md\` or \`.json\`, for example [${example.number}](${AGENT}bills/${example.id}.md). IDs have no spaces (HB5, SB12, HJR5, SCR3); a bill that has not been filed has no page.
-- [Everything as one JSON file](${AGENT}data/bills.json): the same records as the per-bill JSON, for your own filtering or search
+- One bill: \`${AGENT}bills/<ID>.md\` or \`.json\`, for example [${example.number}](${AGENT}bills/${example.id}.md). IDs have no spaces (HB5, SB12, HJR5, SCR3); a bill that has not been filed has no page. Each links its official history and full text.
+- [Everything as one JSON file](${AGENT}data/bills.json) (large): the same records as the per-bill JSON, for your own filtering
+
+Group tables show each bill's topics and agencies, so a topic page can be read for a single agency (or the reverse) without opening every bill.
+
+## Coverage
+
+As of ${coverage.as_of}:
+
+- Full-text reviewed: ${coverage.full_text_reviewed} of ${coverage.bills} bills
+- Bills listing coauthors: ${coverage.with_coauthors}; sponsors: ${coverage.with_sponsors}; cosponsors: ${coverage.with_cosponsors}
+- Bills with a committee hearing recorded or scheduled: ${coverage.with_hearing}
+
+${zeroNote}
 
 ## Browse like the tracker's filters
 
@@ -295,7 +370,7 @@ The tracker keeps its state after \`#\` in the address. Equivalents here:
 
 - \`${SITE}#all?bill=${example.id}\` -> \`${AGENT}bills/${example.id}.md\`
 - \`#all?topic=<topic>\` -> \`${AGENT}topics/index.md\`; \`#all?agency=<id>\` -> \`${AGENT}agencies/index.md\`; \`#all?action=<category>\` -> \`${AGENT}last-action/index.md\`; \`#all?outlook=<status>\` -> \`${AGENT}hearing/index.md\`; \`#all?chamber=<chamber>\` -> \`${AGENT}chamber/index.md\`
-- Text search (\`query=\`): filter \`data/bills.json\` on id, number, title, caption, member names, last action, topics, impacts and agency names.
+- Text search (\`query=<word>\`) -> \`${AGENT}words/<word>.md\` (caption words); for phrases or member names, filter \`data/bills.json\`.
 - A shared list (\`#all?list=HB1,SB2\`): fetch each \`bills/<ID>.md\`.
 
 ## Feeds and saved lists

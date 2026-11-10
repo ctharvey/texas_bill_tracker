@@ -161,7 +161,11 @@ The tracker draws everything with JavaScript, so agents get the same information
 `https://agent.bills.ctharvey.me/` (`index.md` = `llms.txt`). `scripts/build_agent.mjs` reuses the tracker's own
 pipeline (`normalizeBill`, Luna overlay, roster, hearing and last-action rules in `src/taxonomy.js`, links from
 `src/prefs.js`) and writes `bills/<ID>.md|.json`, index pages that stand in for each filter (topics, agencies, last
-action, hearing status, chamber, members), `recent.md`, `review-progress.md`, `saving.md` and `data/bills.json`.
+action, hearing status, chamber, members) plus filing date, authorship party and full-text review, keyword pages
+`words/<word>.md` for every caption word (plurals point to the singular), `recent.md`, `review-progress.md`,
+`saving.md` and `data/bills.json`. Group tables carry each bill's topics, agencies and review status and are split
+into pages of 150 (`<group>--page-N.md`) so page-reading tools see every row. Bill pages link the official text, and
+the overview states coverage (reviews, coauthors, sponsors, hearings) so a zero reads as "none yet", not missing data.
 Output is deterministic; files change only when their data does and stale pages are removed.
 
 `scripts/texas-bill-agent.service`/`.timer` (root, hourly at :50) runs it in a pinned, network-less node container

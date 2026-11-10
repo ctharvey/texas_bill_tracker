@@ -84,6 +84,56 @@ test('missing or malformed tags and roster fall back to caption rules', () => {
   assert.ok(hb5.agencies.every(a => a.source === 'caption-rules'));
 });
 
+test('keyword pages cover caption words, fold plurals and skip stopwords', () => {
+  const extra = [
+    {id: 'HB7', caption: 'Relating to the sale of firearms at gun shows.', author: 'Cole', authors: ['Cole'], status: 'Filed', actions: ['Filed'], filed_at: '2026-11-09'},
+    {id: 'HB8', caption: 'Relating to firearm storage.', author: 'Cole', authors: ['Cole'], status: 'Filed', actions: ['Filed'], filed_at: '2026-11-09'}];
+  const files = buildPages({snapshot: snapshot([...BILLS, ...extra]), tags: TAGS, roster: ROSTER, minBills: 1});
+  const firearm = files.get('words/firearm.md');
+  assert.match(firearm, /bills\/HB7\.md/);
+  assert.match(firearm, /bills\/HB8\.md/);
+  assert.match(firearm, /#all\?query=firearm/);
+  assert.match(files.get('words/firearms.md'), /words\/firearm\.md/);
+  assert.match(files.get('words/groundwater.md'), /bills\/HB5\.md/);
+  assert.ok(!files.has('words/relating.md') && !files.has('words/the.md'));
+  assert.match(files.get('words/letter-f.md'), /\[firearm\]\(.*\) \(2\)/);
+  assert.match(files.get('words/index.md'), /letter-f\.md/);
+});
+
+test('large groups are split into linked pages that cover every bill once', () => {
+  const many = Array.from({length: 320}, (_, i) => ({id: `HB${i + 1}`, caption: `Relating to item ${i + 1}.`, author: 'Cole',
+    authors: ['Cole'], status: 'Filed', actions: ['Filed'], action_dates: ['2026-11-09'], filed_at: '2026-11-09'}));
+  const files = buildPages({snapshot: snapshot(many), minBills: 1});
+  const pages = ['bills/index.md', 'bills/index--page-2.md', 'bills/index--page-3.md'];
+  assert.ok(pages.every(p => files.has(p)) && !files.has('bills/index--page-4.md'));
+  const seen = pages.flatMap(p => [...files.get(p).matchAll(/^\| \[HB \d+\]\(.*?bills\/(HB\d+)\.md\)/gm)].map(m => m[1]));
+  assert.equal(seen.length, 320);
+  assert.equal(new Set(seen).size, 320);
+  assert.match(files.get('bills/index--page-2.md'), /Page 2 of 3 \(bills 151-300 of 320\)/);
+  assert.match(files.get('bills/index.md'), /320 bills/);
+  assert.ok(files.has('filed/2026-11-09--page-3.md'));
+  // One group holding every bill says so, and the hearing index answers plainly.
+  assert.match(files.get('hearing/index.md'), /No bill has a committee hearing recorded or scheduled/);
+  assert.match(files.get('chamber/index.md'), /all 320 bills are in one group \("House"\)/);
+});
+
+test('bill pages link the official text and explain empty roles with coverage', () => {
+  const files = build();
+  const hb5 = files.get('bills/HB5.md'), sb12 = files.get('bills/SB12.md');
+  assert.match(hb5, /Official bill text .*Text\.aspx\?LegSess=90R&Bill=HB5/);
+  assert.equal(JSON.parse(files.get('bills/HB5.json')).links.text, 'https://capitol.texas.gov/BillLookup/Text.aspx?LegSess=90R&Bill=HB5');
+  assert.match(sb12, /Not reviewed yet \(1 of 2 bills reviewed so far/);
+  // HB5 lists a coauthor, so SB12's empty coauthors are not a dataset-wide gap; no bill lists cosponsors.
+  assert.match(sb12, /### Coauthors\n\n_None listed in the source snapshot\._/);
+  assert.match(hb5, /### Cosponsors\n\n_None listed\. No bill in this snapshot lists any cosponsors yet/);
+  const overview = files.get('index.md');
+  assert.match(overview, /Full-text reviewed: 1 of 2 bills/);
+  assert.match(overview, /coauthors: 1; sponsors: 0; cosponsors: 0/);
+  assert.deepEqual(JSON.parse(files.get('data/bills.json')).coverage.with_coauthors, 1);
+  assert.match(files.get('topics/water.md'), /\| Water \| Texas Water Development Board \| full text \|/);
+  assert.ok(files.has('authorship/index.md') && files.has('full-text-review/full-text-reviewed.md'));
+});
+
 test('writePages rewrites only changed files, removes stale pages and keeps unrelated files', () => {
   const dir = mkdtempSync(join(tmpdir(), 'agent-'));
   try {

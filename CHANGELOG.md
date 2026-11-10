@@ -3,6 +3,10 @@
 ## 2026-11-10
 - Agent edition at agent.bills.ctharvey.me: hourly Markdown/JSON for every bill and filter view, built from the
   tracker's own pipeline in a network-less container; the main page links to it. Back now closes an open bill.
+- Agent edition, after an LLM usability probe: keyword pages for caption words, filing-date, authorship-party and
+  full-text-review indexes, topics/agencies/review columns in every table, 150-bill pages (the all-bills page was
+  285 KB), plain wording when no hearings exist or one group holds every bill, official bill-text links, and coverage
+  counts that explain empty coauthor/sponsor fields.
 - "Saving your info" page (`#saving`, under Reference): how the watchlist, remembered filters, view links, share
   links, export/import, private sync links and RSS feeds work, and what is stored where; linked from the Watchlist.
 - Saving without accounts: views, filters and open bills live in the URL (copy link); share links open a
