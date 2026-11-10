@@ -38,7 +38,64 @@ python3 scripts/sync_ftp.py
 
 The first verified official import read 1,059 bill histories on November 9, 2026. GitHub Actions is scheduled hourly, at minute 17 UTC (GitHub may delay scheduled jobs). Each snapshot records its actual generation time and coverage; it is a dated bulk snapshot rather than a real-time feed.
 
-### Focused full-text classification (pending evaluation)
+### Automated private review and highlighted evidence
+
+Bill details now include **Full text & highlighted evidence**. Open a `texas-bill-review-v1` JSON file from
+the private worker to inspect the complete normalized PDF text, select a highlight, and read its supporting
+classification, agency impact or reviewed correction. Statutory evidence retains separate official links.
+Imported reviews stay in the browser session; they do not replace the official bill snapshot or publish
+classifications. Unresolved questions and validation issues remain visible. Watchlists remain device-local.
+
+The worker is `scripts/review_pipeline.py`. It classifies complete introduced bill PDFs from official TLC FTP,
+checks excerpts and questions, then submits only targeted questions. Both model-raised questions and code
+checks participate: missing/ambiguous citations, unresolved agency identities, and potentially omitted
+conditions in the supporting sentence. These checks are review signals, not proof of semantic correctness.
+The resolver selects evidence from verbatim source-generated options and can change only fields present in
+the affected claim's schema. Unsupported, invalid or unanswered corrections stay queued for review.
+
+```sh
+python scripts/review_pipeline.py --cache-dir /private/texas-bill-review --bill-id HB273 --execute
+```
+
+Omit `--execute` to prepare/replay without spending. Without bill IDs, each run selects up to three unseen
+or rotating known bills from the official snapshot; `--max-bills` permits at most 20. Introduced PDFs use FTP
+modification times to avoid unchanged downloads. The complete normalized text/configuration controls model
+reuse, so metadata-only changes do not cause another classification. Discovery of later text-version suffixes
+is not yet implemented; the worker explicitly processes introduced text and labels it accordingly.
+
+The authorized hard ceiling is **$1 per calendar day**, with the service pinned to `America/Chicago` and a
+default **$0.10 per run**. A private durable ledger reserves a conservative upper bound before each provider
+call, accounts for cache writes and output, and records actual estimates afterward. Unknown outcomes retain
+their reservation and block new calls until reconciled. A worker lock prevents concurrent spending races.
+Cache hits make no provider call. Flex cooldowns defer work; quota/auth/unknown outcomes stop the worker.
+The limit cannot be raised above $1 via CLI. Do not remove the ledger or uncertain response records to retry.
+
+At most three new targeted queries per bill run; cached resolutions do not consume this allowance. Later
+runs progress through remaining questions. Requested official statute chapters are cached privately for
+seven days and reused across bills. Supported code mappings fetch only fixed official URLs, include chapter
+definitions alongside the requested section, and never follow model-supplied URLs or crawl bill pages.
+Source-content changes invalidate targeted reuse; retrieval-date-only changes do not. Other codes and
+oversized/missing sources remain explicit review work. Raw first-pass and resolution responses are preserved.
+
+Worker results are written to `<cache-dir>/reviews/<bill-id>.json`, always with `publishable: false`. A
+`ready_for_review` result still needs human approval. This change does not automatically expose that private
+directory, add classifications to `data/bills.json`, or enable public AI classifications.
+
+Hourly operation uses `scripts/texas-bill-review.service` and `.timer`, a dedicated `texas-bill-review` account,
+and `/var/lib/texas-bill-review/{repository,venv,cache}`. The repository stays on `main` and pulls with
+`--ff-only`. Install optional dependencies into the dedicated venv; install the units under `/etc/systemd/system`.
+Set `OPENAI_API_KEY` only in root-owned mode-0600 `/etc/texas-bill-review.env`, outside the web root and git.
+Enable `texas-bill-review.timer` after the pilot; it runs hourly at minute 35, with up to two minutes jitter,
+at most ten bills and $0.10 per invocation. Inspect `journalctl -u texas-bill-review.service` and the private
+ledger/review queue. To pause spending, stop/disable this timer; the public tracker and metadata refresh remain
+independent. Reinstall dependencies when their requirements change. The six-asset public deployer must be
+updated for `src/review.js`; otherwise preserve the prior release until the module can be served.
+
+Operators can retrieve a review with the existing authenticated SSH path and `sudo cat` its JSON, then open
+it in that bill's detail drawer. Private source/cache directories must never be added to the static web root
+or public GitHub artifacts. Publication approval remains separate from classification and source validation.
+
+### Focused classifier contract
 
 `scripts/classify_bill.py` reads the complete official bill using **Luna Flex/high** and returns a concise
 summary, canonical policy tags, direct/inferred state-agency impacts, separate all-agencies scope,
@@ -185,7 +242,7 @@ Caddy manages HTTPS and the HTTP redirect. No application server or build is req
 
 `texas-bill-atlas.timer` checks public GitHub `main` every two minutes, including commits
 from the data-refresh workflow. No deployment credential is needed. `scripts/deploy_static.py`
-reads all five application files at one commit, requires an official-FTP 90R snapshot
+reads all six application files at one commit, requires an official-FTP 90R snapshot
 of at least 1,000 unique valid measures, writes an immutable release, and atomically
 switches `current`. Fetch or validation failure leaves the previous release online.
 The bundled fallback updates with each release. The frontend still prefers live GitHub

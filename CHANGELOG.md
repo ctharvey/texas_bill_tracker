@@ -2,6 +2,12 @@
 
 ## 2026-11-09
 
+- Integrate complete-text review in bill details with selectable verified highlights, reasons, agency certainty,
+  source links, open questions and reviewed corrections. Review imports remain private to the browser session.
+- Add private queued Luna classification and targeted cleanup with cached official sources, source-generated
+  evidence options, typed corrections, a persistent $1/day spending guard, and bounded hourly systemd operation.
+  Keep publication approval separate and leave the complete official metadata dataset unchanged.
+
 - Add scoped, citable statutory definitions to focused classification, starting with Water Code Chapter 16
   identities for TWDB and TCEQ. Keep bill-impact and definition evidence separate, prefer in-bill definitions,
   and include substantive context changes in cache identity without billing another pilot call.

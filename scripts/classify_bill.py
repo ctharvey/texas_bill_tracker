@@ -114,11 +114,13 @@ def resolve_quote(quote: str, hint: str, document: dict) -> dict:
             "location_changed": span_ids != [hint]}
 
 
-def validate_result(result: dict, document: dict, registry: list[dict], schema: dict, key: str) -> dict:
+def validate_result(result: dict, document: dict, registry: list[dict], schema: dict, key: str,
+                    sources: list[dict] | None = None) -> dict:
     import jsonschema
     jsonschema.Draft202012Validator(schema).validate(result)
     errors, reasons, reverse, citations = [], [], {}, []
     definitions = {definition["id"]: definition for definition in load_statutory_context(document)}
+    external = {s["id"]: s for s in sources or []}
     if result["bill_id"] != document["bill_id"]:
         errors.append("Output bill ID differs from source")
     names = {a["id"]: a["name"] for a in registry if a["id"] != "all-state-agencies"}
@@ -162,7 +164,12 @@ def validate_result(result: dict, document: dict, registry: list[dict], schema: 
                             "source_type": "statutory_definition", "source_url": definition["source_url"],
                             "section": definition["section"], "verified_on": definition["verified_on"],
                             "quote": definition["quote"], "parts": []}
-            elif span_id.startswith("D_"):
+            elif span_id in external:
+                source = external[span_id]
+                resolved = {"status": "resolved" if quote.strip() and quote in source["text"] else "not_found",
+                            "source_type": "statutory_context", "source_url": source["source_url"],
+                            "section": source["section"], "quote": quote, "parts": []}
+            elif span_id.startswith(("D_", "S_")):
                 resolved = {"status": "not_found", "source_type": "statutory_definition"}
             else:
                 resolved = {"source_type": "bill", **resolve_quote(quote, span_id, document)}
@@ -171,13 +178,20 @@ def validate_result(result: dict, document: dict, registry: list[dict], schema: 
             if citation["status"] != "resolved":
                 errors.append("Unresolved excerpt (" + citation["status"] + "): " + label + ":" + span_id)
             else:
-                if definition is not None:
+                if definition is not None or span_id in external:
                     reverse.setdefault(span_id, set()).add(label)
                 for part in citation["parts"]:
                     for resolved_span in part["span_ids"]:
                         reverse.setdefault(resolved_span, set()).add(label)
     if result["uncertainties"]:
         reasons.append("Model reports uncertainty")
+        labels = {label for label, _ in claims}
+        for question in result["uncertainties"]:
+            if isinstance(question, dict):
+                if set(question["affected_claims"]) - labels:
+                    errors.append("Question targets an unknown claim")
+                if set(question["span_ids"]) - document["spans"].keys():
+                    errors.append("Question cites an unknown bill span")
     return {"validator_revision": 3, "errors": sorted(set(errors)), "review_reasons": sorted(set(reasons)),
             "status": "needs_review" if errors or reasons else "pending_review", "publishable": False,
             "audit_recommended": bool(errors or reasons),

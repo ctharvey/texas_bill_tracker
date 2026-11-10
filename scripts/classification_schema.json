@@ -400,9 +400,44 @@
     "uncertainties": {
       "type": "array",
       "items": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 500
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 700
+          },
+          "affected_claims": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 6
+          },
+          "span_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 6
+          },
+          "needed_source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 400
+          }
+        },
+        "required": [
+          "question",
+          "affected_claims",
+          "span_ids",
+          "needed_source"
+        ],
+        "additionalProperties": false
       },
       "maxItems": 8,
       "minItems": 0
