@@ -56,6 +56,29 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(ids('q=%22water+rights%22')[0], ['HB11'])
         self.assertEqual(ids('q=%22rights+water%22')[0], [])     # A phrase keeps its order.
 
+    def test_synonym_groups_work_in_both_directions(self):
+        data = {**AGENT_DATA, 'bills': AGENT_DATA['bills'] + [
+            record('HB20', 'Relating to rifle ranges.'),
+            record('HB21', 'Relating to education savings accounts for students.')]}
+        find = lambda q: sorted(r['id'] for *_, r, _ in search_bills.search(index(data), search_bills.parse_params(q))['results'])
+        self.assertEqual(find('q=firearm'), find('q=gun'))
+        self.assertEqual(find('q=firearm'), ['HB10', 'HB20'])
+        self.assertEqual(find('q=vouchers'), ['HB12', 'HB21'])
+        self.assertEqual(find('q=%22school+choice%22'), ['HB12', 'HB21'])
+        self.assertEqual(find('q=%22education+savings+account%22'), ['HB12', 'HB21'])
+
+    def test_location_filter(self):
+        self.assertEqual(ids('location=harris')[0], ['HB12'])
+        self.assertEqual(ids('q=school&location=dallas')[0], [])
+        data = {**AGENT_DATA, 'bills': AGENT_DATA['bills'] + [record('HB30', 'Relating to flood control in Harris County.')]}
+        found = search_bills.search(index(data), search_bills.parse_params('location=harris+county'))
+        self.assertEqual(sorted(r['id'] for *_, r, _ in found['results']), ['HB12', 'HB30'])  # Review location or caption.
+        found = search_bills.search(index(data), search_bills.parse_params('location=harr'))
+        self.assertEqual(found['total'], 0)  # Whole words only.
+        found = search_bills.search(index(), search_bills.parse_params('location=harris'))
+        self.assertEqual(search_bills.as_json(found, search_bills.parse_params('location=harris'))['results'][0]['locations'],
+                         ['Harris County'])
+
     def test_members_locations_and_bill_numbers(self):
         self.assertEqual(ids('q=hughes')[0], ['SB3'])
         self.assertEqual(ids('q=harris+county')[0], ['HB12'])

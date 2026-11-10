@@ -84,20 +84,31 @@ test('missing or malformed tags and roster fall back to caption rules', () => {
   assert.ok(hb5.agencies.every(a => a.source === 'caption-rules'));
 });
 
-test('keyword pages cover caption words, fold plurals and skip stopwords', () => {
-  const extra = [
-    {id: 'HB7', caption: 'Relating to the sale of firearms at gun shows.', author: 'Cole', authors: ['Cole'], status: 'Filed', actions: ['Filed'], filed_at: '2026-11-09'},
-    {id: 'HB8', caption: 'Relating to firearm storage.', author: 'Cole', authors: ['Cole'], status: 'Filed', actions: ['Filed'], filed_at: '2026-11-09'}];
-  const files = buildPages({snapshot: snapshot([...BILLS, ...extra]), tags: TAGS, roster: ROSTER, minBills: 1});
-  const firearm = files.get('words/firearm.md');
-  assert.match(firearm, /bills\/HB7\.md/);
-  assert.match(firearm, /bills\/HB8\.md/);
-  assert.match(firearm, /#all\?query=firearm/);
-  assert.match(files.get('words/firearms.md'), /words\/firearm\.md/);
-  assert.match(files.get('words/groundwater.md'), /bills\/HB5\.md/);
-  assert.ok(!files.has('words/relating.md') && !files.has('words/the.md'));
-  assert.match(files.get('words/letter-f.md'), /\[firearm\]\(.*\) \(2\)/);
-  assert.match(files.get('words/index.md'), /letter-f\.md/);
+test('keyword pages are retired in favour of search, and the 404 page says so', () => {
+  const files = build();
+  assert.ok(![...files.keys()].some(path => path.startsWith('words/')));
+  assert.doesNotMatch(files.get('index.md'), /words\//);
+  assert.match(files.get('404.md'), /replaced by search/);
+});
+
+test('full-name member addresses point to the listed-name page', () => {
+  const files = build();
+  assert.match(files.get('authors/house-sheryl-cole.md'), /authors\/house-cole\.md/);
+  assert.match(files.get('404.md'), /authors\/house-johnson\.md/);
+  assert.ok(!files.has('authors/house-hughes-hughes.md'));
+});
+
+test('review buckets add up when a new bill is queued for a retry, with pace and order notes', () => {
+  const status = {format: 'texas-bill-luna-status-v1', updated_at: '2026-11-10T19:00:00Z', running: true, current: null,
+    upcoming: ['SB12'], reviewed: ['HB5'], retry: ['SB12'], failed: {}};
+  const progress = buildPages({snapshot: snapshot(BILLS), tags: TAGS, roster: ROSTER, status, minBills: 1}).get('review-progress.md');
+  assert.match(progress, /- Not yet published: 1\n  - Under review now or queued for a retry: 1; failed, will be retried: 0; reviewed with nothing verifiable to publish: 0; queued, not started: 0/);
+  assert.match(progress, /1 review was published; at that pace the 1 unpublished bill would take about 1 day\./);
+  assert.match(progress, /Only the next five are listed under Up next/);
+});
+
+test('recent actions page points to date search for complete periods', () => {
+  assert.match(build().get('recent.md'), /search\?filed_from=YYYY-MM-DD/);
 });
 
 test('large groups are split into linked pages that cover every bill once', () => {

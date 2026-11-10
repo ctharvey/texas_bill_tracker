@@ -163,8 +163,8 @@ The tracker draws everything with JavaScript, so agents get the same information
 `https://agent.bills.ctharvey.me/` (`index.md` = `llms.txt`). `scripts/build_agent.mjs` reuses the tracker's own
 pipeline (`normalizeBill`, Luna overlay, roster, hearing and last-action rules in `src/taxonomy.js`, links from
 `src/prefs.js`) and writes `bills/<ID>.md|.json`, index pages that stand in for each filter (topics, agencies, last
-action, hearing status, chamber, members) plus filing date, authorship party and full-text review, keyword pages
-`words/<word>.md` for every caption word (plurals point to the singular), `recent.md`, `review-progress.md`,
+action, hearing status, chamber, members; full-name member addresses point to the listed-name page) plus filing
+date, authorship party and full-text review, `recent.md`, `review-progress.md` (with pace and queue order),
 `saving.md` and `data/bills.json`. Group tables carry each bill's topics, agencies and review status and are split
 into pages of 150 (`<group>--page-N.md`) so page-reading tools see every row. Bill pages link the official text, and
 the overview states coverage (reviews, coauthors, sponsors, hearings) so a zero reads as "none yet", not missing data.
@@ -175,9 +175,10 @@ pages are removed.
 
 Search: `https://agent.bills.ctharvey.me/search?q=<words>` (Markdown, or `format=json`) is served by the sync
 service (`scripts/search_bills.py`) from `live/agent/data/bills.json`, reloaded when it changes. It matches word
-forms, quoted phrases, a few synonyms and bill numbers across titles, captions, topics, agencies, full-text
-summaries, members, affected groups, locations and actions, with filters for chamber, topic, agency, party, review
-and filing dates; it says when nothing matches, why that may be, and which named bills are not in the data yet.
+forms, quoted phrases, two-way synonym groups (gun/firearm/rifle, voucher/"school choice"/"education savings
+account") and bill numbers across titles, captions, topics, agencies, full-text summaries, members, affected groups,
+locations and actions, with filters for chamber, topic, agency, location, party, review and filing dates (it
+replaced the old `words/<word>.md` keyword pages); it says when nothing matches, why that may be, and which named bills are not in the data yet.
 
 `scripts/texas-bill-agent.service`/`.timer` (root, hourly at :50) runs it in a pinned, network-less node container
 as `texas-bill-atlas`, writing only `live/agent`. The gateway serves that folder for the subdomain (cth.hosting

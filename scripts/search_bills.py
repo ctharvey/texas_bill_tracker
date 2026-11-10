@@ -1,8 +1,8 @@
 """Search the agent edition's bill records (live/agent/data/bills.json) for agents and scripts.
 
 Words match word forms (plural, -ing, -ed), quoted text matches as a phrase, and a few common synonyms widen a
-word (gun -> firearm). Every word must match unless none does, then any word counts and the page says so. Filters:
-chamber, topic, agency, party, reviewed, filed_from, filed_to. Read-only; standard library only.
+word in both directions (gun <-> firearm). Every word must match unless none does, then any word counts and the page
+says so. Filters: chamber, topic, agency, location, party, reviewed, filed_from, filed_to. Read-only; standard library only.
 """
 from __future__ import annotations
 
@@ -25,15 +25,28 @@ DISCLAIMER = ("Unofficial, independent open-source project; not a state website.
               "Texas Legislature Online before relying on anything here.")
 STOP = {"a", "an", "and", "the", "of", "to", "for", "in", "on", "or", "by", "with", "at", "as", "is", "are", "be",
         "bill", "bills", "about", "relating", "that", "this", "which", "any", "all", "certain", "texas", "state"}
-# Widen a word to close equivalents in Texas bill language. Keep this small and obvious.
-SYNONYMS = {
-    "gun": ["firearm", "handgun", "rifle", "weapon"], "firearm": ["gun", "handgun", "weapon"],
-    "aquifer": ["groundwater"], "kid": ["child", "minor"], "child": ["minor"], "car": ["vehicle", "automobile"],
-    "police": ["peace officer", "law enforcement"], "cop": ["peace officer", "police"], "teacher": ["educator"],
-    "marijuana": ["cannabis", "hemp"], "cannabis": ["marijuana", "hemp"], "abortion": ["unborn child", "pregnancy"],
-    "immigrant": ["immigration", "alien"], "tax": ["taxation", "taxes"], "ai": ["artificial intelligence"],
-    "power": ["electric", "electricity"], "electricity": ["electric", "power"], "vote": ["voter", "election", "ballot"],
-}
+# Groups of close equivalents in Texas bill language: any member finds every other member, so "firearm" and "gun"
+# return the same bills. Keep groups small and obvious; one-way widenings are listed in BROADER.
+SYNONYM_GROUPS = (
+    ("gun", "firearm", "handgun", "rifle", "shotgun", "weapon"),
+    ("voucher", "education savings account", "school choice", "esa"),
+    ("aquifer", "groundwater"), ("kid", "child", "minor"), ("car", "vehicle", "automobile"),
+    ("police", "cop", "peace officer", "law enforcement"), ("teacher", "educator"),
+    ("marijuana", "cannabis"), ("immigrant", "immigration", "alien"), ("tax", "taxation"),
+    ("ai", "artificial intelligence"), ("power", "electric", "electricity"), ("vote", "voter", "ballot"),
+)
+BROADER = {"marijuana": ["hemp"], "cannabis": ["hemp"], "abortion": ["unborn child", "pregnancy"], "vote": ["election"]}
+
+
+def _synonyms() -> dict[str, list[str]]:
+    table: dict[str, list[str]] = {}
+    for group in SYNONYM_GROUPS:
+        for member in group:
+            key = " ".join(stem(w) for w in words(member))
+            table.setdefault(key, []).extend(m for m in group if m != member)
+    for word, wider in BROADER.items():
+        table.setdefault(stem(word), []).extend(wider)
+    return {k: list(dict.fromkeys(v)) for k, v in table.items()}
 FIELDS = (("title", 3), ("topics", 4), ("agencies", 4), ("people", 3), ("summary", 2), ("groups", 2),
           ("locations", 2), ("impacts", 1), ("actions", 1))
 LABELS = {"title": "title/caption", "topics": "topics", "agencies": "agencies", "people": "members",
@@ -59,6 +72,9 @@ def stem(word: str) -> str:
 
 def words(text: str) -> list[str]:
     return WORD.findall(str(text or "").lower())
+
+
+SYNONYMS = _synonyms()
 
 
 def record_fields(r: dict) -> dict[str, str]:
@@ -118,13 +134,18 @@ def parse_query(q: str) -> tuple[list[str], list[list[str]], list[str]]:
     lowered = q.lower()
     ids = [f"{m[1].upper()}{m[2]}" for m in BILL_REF.finditer(lowered)]
     rest = BILL_REF.sub(" ", lowered)
-    phrases = [" ".join(words(p)) for p in re.findall(r'"([^"]+)"', rest) if words(p)]
+    phrases, terms = [], []
+    for p in re.findall(r'"([^"]+)"', rest):
+        key = " ".join(stem(w) for w in words(p))
+        if key in SYNONYMS:  # A quoted synonym phrase ("school choice") widens like a word.
+            terms.append(list(dict.fromkeys([" ".join(words(p))] + SYNONYMS[key])))
+        elif words(p):
+            phrases.append(" ".join(words(p)))
     rest = re.sub(r'"[^"]*"', " ", rest)
-    terms = []
     for w in words(rest):
         if w in STOP or len(w) < 2:
             continue
-        alternatives = [w] + SYNONYMS.get(w, []) + SYNONYMS.get(stem(w), [])
+        alternatives = [w] + SYNONYMS.get(stem(w), [])
         terms.append(list(dict.fromkeys(alternatives)))
     return phrases, terms, ids
 
@@ -149,6 +170,11 @@ def matches_filters(r: dict, f: dict) -> bool:
     if f.get("agency") and not any(f["agency"].lower() in f"{a.get('id') or ''} {a.get('name') or ''}".lower()
                                    for a in r.get("agencies") or []):
         return False
+    if f.get("location"):
+        place = " ".join(words(f["location"]))
+        named = [l.get("name") or "" for l in r.get("locations") or []] + [f"{r.get('title') or ''} {r.get('caption') or ''}"]
+        if not place or not any(re.search(rf"\b{re.escape(place)}\b", " ".join(words(text))) for text in named):
+            return False
     if f.get("party") and f["party"].lower() not in ((r.get("authorship_party") or {}).get("label") or "").lower():
         return False
     if f.get("reviewed") in ("yes", "true", "1") and not r.get("full_text_review"):
@@ -163,7 +189,7 @@ def matches_filters(r: dict, f: dict) -> bool:
     return True
 
 
-FILTERS = ("chamber", "topic", "agency", "party", "reviewed", "filed_from", "filed_to")
+FILTERS = ("chamber", "topic", "agency", "location", "party", "reviewed", "filed_from", "filed_to")
 
 
 class BadQuery(ValueError):
@@ -266,6 +292,7 @@ def as_json(found: dict, params: dict) -> dict:
             "results": [{"id": r["id"], "number": r.get("number"), "title": r.get("title"), "status": r.get("status"),
                          "filed_at": r.get("filed_at"), "chamber": r.get("chamber"), "topics": r.get("topics") or [],
                          "agencies": [a.get("name") for a in r.get("agencies") or []],
+                         "locations": [l.get("name") for l in r.get("locations") or []],
                          "full_text_reviewed": bool(r.get("full_text_review")),
                          "last_action": r.get("last_action"), "matched_in": sorted(LABELS.get(w, w) for w in where),
                          "markdown": f"{AGENT}bills/{r['id']}.md", "json": f"{AGENT}bills/{r['id']}.json"}
@@ -278,11 +305,15 @@ def usage(meta: dict) -> str:
 `GET {AGENT}search?q=<words>` returns matching bills as Markdown; add `&format=json` for JSON.
 
 - Words match their forms (firearm, firearms; school, schools). Quote a phrase: `q="water rights"`.
-- A few common synonyms widen a word: gun also finds firearm, handgun and weapon; aquifer finds groundwater.
+- Common synonyms find each other: gun, firearm, handgun, rifle and weapon return the same bills; voucher, "school
+  choice" and "education savings account" do too; aquifer and groundwater; marijuana and cannabis.
 - Every word must match. If no bill matches every word, bills matching any word are shown, and the page says so.
 - Bill numbers work: `q=HB 5` or `q=sb12`.
 - Filters (with or without q): `chamber=House|Senate`, `topic=<part of a topic name>`, `agency=<id or part of a name>`,
-  `party=democratic|republican|bipartisan`, `reviewed=yes|no`, `filed_from=YYYY-MM-DD`, `filed_to=YYYY-MM-DD`.
+  `location=<part of a place name, e.g. Harris>`, `party=democratic|republican|bipartisan`, `reviewed=yes|no`,
+  `filed_from=YYYY-MM-DD`, `filed_to=YYYY-MM-DD`. A location matches a place the full-text review names, or the place
+  named in the title or caption; unreviewed bills that affect a place without naming it are not found.
+- Bills filed in the last few days: `filed_from=<date>` with no q (all of them, most recent action first).
 - Paging: `limit` (default {DEFAULT_LIMIT}, at most {MAX_LIMIT}) and `offset`.
 
 Searched: titles and captions, topics, agencies, Luna full-text summaries, member names, affected groups, locations,

@@ -1,6 +1,11 @@
 # Changelog
 
 ## 2026-11-10
+- Agent edition, after a third LLM probe: search replaces the `words/` keyword pages; synonyms work in both directions
+  (firearm finds what gun finds; voucher, "school choice" and "education savings account" find each other); a
+  `location` filter matches review locations and captions; review progress buckets add up (retries were counted
+  twice) and give a pace estimate and queue order; full-name member addresses (`authors/house-ann-johnson.md`) point
+  to the listed-name page; `recent.md` points to date search; the sync docs state the rate limits.
 - Agent search at agent.bills.ctharvey.me/search (sync service, read-only): word forms, phrases, synonyms, bill
   numbers and members across every agent field, with filters, paging and JSON. Agent pages now say when data is
   missing or pending (queued, retrying, failed), review counts agree everywhere (published reviews), a 404 page lists

@@ -19,10 +19,6 @@ const OWNED = /\.(md|json|txt)$/;
 const HEARING_ORDER = ['Heard', 'Scheduled', 'Referred', 'Not rated'];
 const HEARD = new Set(['Heard', 'Scheduled']);
 const PAGE = 150;
-const STOP = new Set(('relating texas state certain provision provisions including other under with from that this which their there these '
-  + 'those into upon such also each made make making about against between than only same been have will shall').split(' '));
-const captionWords = b => [...new Set(`${b.title || ''} ${b.caption || ''}`.toLowerCase().match(/[a-z]+/g) || [])]
-  .filter(w => w.length >= 4 && !STOP.has(w));
 const textUrl = id => `https://capitol.texas.gov/BillLookup/Text.aspx?LegSess=90R&Bill=${id}`;
 
 export const slug = text => String(text).toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-')
@@ -248,7 +244,7 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
       put(href(i), groupPage(title, intro + nav, chunk, humanLink, sorted.length));
     }
   };
-  pagedGroup('bills/index', 'All bills', `${asOf} Also by [filing date](${AGENT}filed/index.md) and [keyword](${AGENT}words/index.md).`,
+  pagedGroup('bills/index', 'All bills', `${asOf} Also by [filing date](${AGENT}filed/index.md), or [search](${AGENT}search).`,
     bills, SITE + '#all');
 
   const indexes = [];
@@ -284,24 +280,6 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   addGroups('full-text-review', 'Bills by full-text review', `Whether Luna has read the bill's full text (${coverage.full_text_reviewed} of ${bills.length} so far). Unreviewed bills use caption rules.`,
     groupBy(bills, b => [b.luna ? 'Full text reviewed' : 'Caption rules only']), k => k, null);
 
-  // Keyword pages: every caption word, so an agent can search without downloading data/bills.json.
-  const vocab = new Set(bills.flatMap(captionWords));
-  const canon = w => w.endsWith('ies') && vocab.has(`${w.slice(0, -3)}y`) ? `${w.slice(0, -3)}y`
-    : /[^su]s$/.test(w) && vocab.has(w.slice(0, -1)) ? w.slice(0, -1) : w;
-  const words = [...groupBy(bills, b => [...new Set(captionWords(b).map(canon))])]
-    .filter(([w, list]) => w !== 'index' && (bills.length < 50 || list.length <= bills.length * 0.4)).sort((a, b) => a[0].localeCompare(b[0]));
-  const wordIntro = w => `Bills whose title or caption uses "${w}" (plural forms included). A caption match, not a judgment of what the bill does.`;
-  for (const [w, list] of words) pagedGroup(`words/${w}`, `Keyword: ${w}`, wordIntro(w), list, tracker({query: w}));
-  const pages = new Set(words.map(([w]) => w));
-  const pointer = (from, to) => { if (!pages.has(from) && from !== 'index') { pages.add(from); put(`words/${from}.md`, `# Keyword: ${from}\n\nSee [${to}](${AGENT}words/${to}.md), which includes "${from}".\n`); } };
-  for (const w of [...vocab].sort()) if (canon(w) !== w && pages.has(canon(w))) pointer(w, canon(w));
-  for (const [w] of words) if (/[^su]s$/.test(w)) pointer(w.slice(0, -1), w);
-  const letters = groupBy(words, ([w]) => [w[0]]);
-  for (const [letter, list] of letters) put(`words/letter-${letter}.md`, `# Keywords starting with "${letter}"\n\n`
-    + list.map(([w, l]) => `[${w}](${AGENT}words/${w}.md) (${l.length})`).join(', ') + `\n\n---\n${DISCLAIMER}\n`);
-  put('words/index.md', `# Keyword search\n\nFetch \`${AGENT}words/<word>.md\` for the bills whose title or caption uses a word: lowercase letters only, for example [${words.find(([w]) => w.startsWith('water'))?.[0] || words[0]?.[0] || 'water'}](${AGENT}words/${words.find(([w]) => w.startsWith('water'))?.[0] || words[0]?.[0] || 'water'}.md). Plurals point to the singular. A missing page means no caption uses that word; try a synonym. Words in more than 40% of bills (such as "relating") have no page. ${words.length} words:\n\n`
-    + [...letters].map(([letter, list]) => `- [${letter}](${AGENT}words/letter-${letter}.md) (${list.length} words)`).join('\n') + `\n\n---\n${DISCLAIMER}\n`);
-
   // Authors: every named member and the bills they author, coauthor or sponsor.
   const people = new Map();
   const missingRoles = ['coauthors', 'sponsors', 'cosponsors'].filter(role => coverage[`with_${role}`] === 0);
@@ -318,10 +296,17 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
       + `\n\n---\n${DISCLAIMER}\n`);
     return [`${p.name} (${key.split('-')[0]})`, `authors/${key}.md`, rows.length];
   });
+  // Member pages are keyed by the name the bill lists (usually a last name). A full-name address such as
+  // authors/house-ann-johnson.md points to the real page instead of 404ing.
+  for (const [key, p] of people) {
+    const alias = `${key.split('-')[0]}-${slug(p.name)}`;
+    if (alias !== key && !people.has(alias) && !files.has(`authors/${alias}.md`))
+      put(`authors/${alias}.md`, `# ${cell(p.name)}\n\nThis member's bills are listed at [authors/${key}.md](${AGENT}authors/${key}.md).\n`);
+  }
   put('authors/index.md', indexPage('Bills by member', `Authors and coauthors serve in the originating chamber; sponsors and cosponsors in the other.${roleNote}`, personRows));
   indexes.push(['Bills by member', 'authors/index.md', personRows.length]);
 
-  put('recent.md', groupPage('Most recent actions', `The 100 bills with the most recent recorded actions. ${asOf}`,
+  put('recent.md', groupPage('Most recent actions', `The 100 bills with the most recent recorded actions, so not every bill acted on in a period. For everything filed since a date use ${AGENT}search?filed_from=YYYY-MM-DD or [bills by filing date](${AGENT}filed/index.md); for one action type see [bills by most recent action](${AGENT}last-action/index.md). ${asOf}`,
     [...bills].sort(byRecent).slice(0, 100), tracker({sort: 'latest'})));
 
   const ids = list => list.length ? list.map(id => `[${id}](${AGENT}bills/${id}.md)`).join(', ') : '_None._';
@@ -332,12 +317,21 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   const running = pendingBy(s => s.startsWith('under review') || s.startsWith('queued for a retry'));
   const failedNew = pendingBy(s => s.includes('failed'));
   const unverified = pendingBy(s => s.startsWith('reviewed'));
-  const queued = pendingBy(s => s.startsWith('queued') || s.includes('not available'));
+  // Exclusive buckets: "queued for a retry" is counted in running only, so the four add up to unpublished.
+  const queued = pendingBy(s => s.startsWith('queued, not started') || s.includes('not available') || !s);
+  // Throughput from published review dates; an estimate only.
+  const day = Date.parse(tags?.generated_at || '') - 86400000;
+  const lastDay = bills.filter(b => Date.parse(b.luna?.reviewed_at || '') >= day).length;
+  const pace = Number.isNaN(day) ? '' : lastDay
+    ? `In the 24 hours before the tags were published, ${lastDay} ${lastDay === 1 ? 'review was' : 'reviews were'} published; at that pace the ${unpublished.length} unpublished ${unpublished.length === 1 ? 'bill' : 'bills'} would take about ${Math.ceil(unpublished.length / lastDay)} ${Math.ceil(unpublished.length / lastDay) === 1 ? 'day' : 'days'}. An estimate, not a schedule.`
+    : 'No review was published in the 24 hours before the tags were published, so there is no pace to estimate from.';
+  const order = 'Order: the worker takes up to three retries first, then bills never reviewed, then failed bills, then re-reviews of the rest. Only the next five are listed under Up next; a bill not listed there is still queued.';
   put('review-progress.md', `# Full-text review progress\n\nLuna reads each bill's full text and publishes citation-verified tags. ${status?.updated_at ? `Worker status as of ${status.updated_at}.` : 'Worker status is not available right now; counts below come from published tags only.'} Published tags as of ${tags?.generated_at || 'not available yet'}.\n\n`
     + `- Reviewed, with published tags: ${published.size} of ${bills.length} (the count used everywhere on this site)\n`
     + `  - Queued for a re-review: ${again.filter(id => !reviewState.get(id).includes('failed')).length}; last re-review failed (earlier tags still shown): ${again.filter(id => reviewState.get(id).includes('failed')).length}\n`
     + `- Not yet published: ${unpublished.length}\n`
     + `  - Under review now or queued for a retry: ${running.length}; failed, will be retried: ${failedNew.length}; reviewed with nothing verifiable to publish: ${unverified.length}; queued, not started: ${queued.length}\n\n`
+    + `${pace ? `${pace}\n\n` : ''}${order}\n\n`
     + `## Under review now\n\n${progress.current ? ids([progress.current]) : '_Nothing right now._'}\n\n## Up next\n\n${ids(progress.upcoming)}\n\n`
     + `## Reviewed, with published tags\n\n${ids([...published])}\n\n## Queued for a retry (not yet published)\n\n${ids(running)}\n\n`
     + `## Failed, will be retried\n\n${ids(progress.failed.map(f => f.id))}\n\n---\n${DISCLAIMER}\n`);
@@ -355,18 +349,18 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   });
   put('404.md', `# Not found\n\nThere is no page at this address.\n\n`
     + `- **Looking for a bill?** It is not in the data yet: a bill appears here within about an hour of the Texas Legislative Council publishing it in its bulk files. ${asOf} Bill pages are \`${AGENT}bills/<ID>.md\` with no spaces (HB5, SB12).\n`
-    + `- **Looking for a word?** Use search: \`${AGENT}search?q=<words>\` matches word forms, phrases and members; \`words/<word>.md\` pages exist only for exact caption words.\n`
+    + `- **Looking for a word or topic?** Use search: \`${AGENT}search?q=<words>\` matches word forms, synonyms, phrases and members. (The old \`words/<word>.md\` keyword pages were replaced by search.)\n`
+    + `- **Looking for a member?** Pages are \`authors/<chamber>-<name>.md\` as the bill lists the name, usually the last name (\`authors/house-johnson.md\`); full names also work. All members: ${AGENT}authors/index.md, or search by name: \`${AGENT}search?q=<name>\`.\n`
     + `- Start at ${AGENT}llms.txt for everything available.\n\nBill numbers in the data now:\n\n${ranges.join('\n')}\n\n---\n${DISCLAIMER}\n`);
 
   const example = [...bills].sort(byRecent)[0];
-  const sampleWord = ['water', 'school', 'property', 'election'].find(w => pages.has(w)) || words[0]?.[0];
-  const overview = overviewPage(bills.length, asOf, indexes, example, coverage, sampleWord);
+  const overview = overviewPage(bills.length, asOf, indexes, example, coverage);
   put('index.md', overview);
   put('llms.txt', overview);
   return files;
 }
 
-function overviewPage(count, asOf, indexes, example, coverage, sampleWord) {
+function overviewPage(count, asOf, indexes, example, coverage) {
   const zeroNote = 'A zero means the source has none yet (bills are early in the session), not that data is missing.';
   return `# Texas Bill Atlas (agent edition)
 
@@ -376,7 +370,8 @@ Updated hourly from the Texas Legislative Council bulk FTP. ${asOf}
 
 ## Quick reference
 
-- Search: ${AGENT}search?q=<words> (Markdown; add &format=json). Filters: chamber, topic, agency, party, reviewed, filed_from, filed_to. Usage: ${AGENT}search
+- Search: ${AGENT}search?q=<words> (Markdown; add &format=json). Filters: chamber, topic, agency, location, party, reviewed, filed_from, filed_to. Usage: ${AGENT}search
+- Recently filed: ${AGENT}search?filed_from=YYYY-MM-DD lists every bill filed since a date
 - One bill: ${AGENT}bills/<ID>.md or .json (IDs like HB5, SB12; no spaces)
 - Lists: ${AGENT}topics/index.md · ${AGENT}agencies/index.md · ${AGENT}authors/index.md (members) · ${AGENT}filed/index.md · ${AGENT}recent.md
 - Coverage: ${coverage.full_text_reviewed} of ${coverage.bills} bills have a full-text review; ${coverage.with_hearing} have a hearing recorded; ${coverage.with_coauthors} list coauthors. Missing or pending data is labelled as such on each page.
@@ -386,7 +381,6 @@ ${DISCLAIMER}
 ## Start here
 
 - [Search](${AGENT}search): words, phrases, bill numbers and member names across titles, captions, topics, agencies, full-text summaries, affected groups, locations and actions, with filters
-- Keyword pages: \`${AGENT}words/<word>.md\` lists the bills whose title or caption uses a word (lowercase, e.g. [${sampleWord}](${AGENT}words/${sampleWord}.md)); [all words](${AGENT}words/index.md)
 - [All bills](${AGENT}bills/index.md): one row per bill with topics, agencies and review status, most recent action first, ${PAGE} per page
 - [Most recent actions](${AGENT}recent.md)
 - One bill: \`${AGENT}bills/<ID>.md\` or \`.json\`, for example [${example.number}](${AGENT}bills/${example.id}.md). IDs have no spaces (HB5, SB12, HJR5, SCR3); a bill that has not been filed has no page. Each links its official history and full text.
@@ -448,7 +442,7 @@ A sync list has an edit key and a view key (22 characters each). Never ask a per
 - \`GET ${SITE}api/sync\` with header \`X-Sync-Key: <view key>\` returns \`{"mode": "view", "version": n, "data": {"watch": ["HB1", ...], "filters": {}}}\`
 - \`GET ${SITE}api/sync/feed/<view key>.xml\` is an RSS feed of the latest actions on every bill in the list
 
-Requests are rate limited per client address. The service stores only the bill numbers, a version and dates; keys are stored as one-way hashes. No names, emails or accounts.
+Requests are rate limited per client address, per rolling hour: 1200 reads (including feeds), 300 writes and 10 new lists; agent search allows 1200 searches. Over the limit the service returns 429 with a \`Retry-After\` header in seconds. The service stores only the bill numbers, a version and dates; keys are stored as one-way hashes. No names, emails or accounts.
 
 ---
 ${DISCLAIMER}
