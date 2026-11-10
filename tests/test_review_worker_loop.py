@@ -166,50 +166,86 @@ class PublicStatusTests(WorkerLoopTests):
 class CapacityBackoffTests(WorkerLoopTests):
     def setUp(self):
         super().setUp()
-        self.sleeps = []
-        p = patch.object(pipeline.time, 'sleep', side_effect=self.sleeps.append); p.start(); self.addCleanup(p.stop)
+        self.sleeps, self.clock = [], [0.0]
+        def sleep(seconds):
+            self.sleeps.append(seconds); self.clock[0] += seconds
+        for name, fake in (('sleep', sleep), ('monotonic', lambda: self.clock[0])):
+            p = patch.object(pipeline.time, name, side_effect=fake); p.start(); self.addCleanup(p.stop)
 
-    def test_first_pass_capacity_waits_and_redoes_the_same_bill(self):
+    def test_first_pass_capacity_sets_bill_aside_and_continues_without_waiting(self):
         processed, failures = [], {'HB2': 1}
         def run_document(doc, *a, **k):
             processed.append(doc['bill_id'])
             if failures.get(doc['bill_id']):
-                failures[doc['bill_id']] -= 1; raise CapacityUnavailable(30)
+                failures[doc['bill_id']] -= 1; raise CapacityUnavailable(300)
             return bundle(doc['bill_id'])
         queue = self.run_main(lambda b, r: {'bill_id': b}, run_document)
-        self.assertEqual(processed, ['HB1', 'HB2', 'HB2', 'HB3', 'HB4', 'HB5', 'HB6', 'HB7', 'HB8'])
-        self.assertEqual(self.sleeps, [121])
-        self.assertEqual(queue['seen'], self.ids)
+        # Every other bill runs immediately; the only wait is for HB2's cooldown once nothing else is left.
+        self.assertEqual(processed, ['HB1', 'HB2', 'HB3', 'HB4', 'HB5', 'HB6', 'HB7', 'HB8', 'HB2'])
+        self.assertEqual(self.sleeps, [301])
+        self.assertEqual(queue['seen'], ['HB1', 'HB3', 'HB4', 'HB5', 'HB6', 'HB7', 'HB8', 'HB2'])
 
-    def test_question_capacity_redoes_bill_and_clears_retry(self):
+    def test_cooled_bill_is_revisited_as_soon_as_ready(self):
+        processed = []
+        def run_document(doc, *a, **k):
+            processed.append(doc['bill_id'])
+            self.clock[0] += 100  # Each review takes real time, so HB1's cooldown passes mid-run.
+            if doc['bill_id'] == 'HB1' and processed.count('HB1') == 1:
+                raise CapacityUnavailable(150)  # Ready at t=251; HB3 finishes at t=300.
+            return bundle(doc['bill_id'])
+        self.run_main(lambda b, r: {'bill_id': b}, run_document)
+        self.assertEqual(processed, ['HB1', 'HB2', 'HB3', 'HB1', 'HB4', 'HB5', 'HB6', 'HB7', 'HB8'])
+        self.assertEqual(self.sleeps, [])
+
+    def test_question_capacity_revisits_bill_and_clears_retry(self):
         processed = []
         def run_document(doc, *a, **k):
             processed.append(doc['bill_id'])
             if doc['bill_id'] == 'HB2' and processed.count('HB2') == 1:
                 return {**bundle('HB2', 'needs_review', [{'id': 'q', 'reason': 'CapacityUnavailable'}],
-                                 'CapacityUnavailable'), 'retry_after': 600}
+                                 'CapacityUnavailable'), 'retry_after': 300}
             return bundle(doc['bill_id'])
         queue = self.run_main(lambda b, r: {'bill_id': b}, run_document)
-        self.assertEqual(processed[:4], ['HB1', 'HB2', 'HB2', 'HB3'])
-        self.assertEqual(self.sleeps, [601])  # Provider retry-after outlasts the first backoff step.
+        self.assertEqual(processed[:3], ['HB1', 'HB2', 'HB3'])
+        self.assertEqual(processed[-1], 'HB2')
+        self.assertEqual(self.sleeps, [301])
         self.assertEqual(queue['retry'], [])
         self.assertEqual(queue['seen'], self.ids)
         self.assertEqual(queue['cursor'], 0)
 
-    def test_backoff_grows_while_capacity_persists_and_resets_after_success(self):
-        failures = {'HB2': 3, 'HB5': 1}
+    def test_sustained_outage_pauses_at_most_a_minute_and_runs_to_the_deadline(self):
+        calls = []
+        def run_document(doc, *a, **k):
+            calls.append(doc['bill_id']); raise CapacityUnavailable(0)
+        queue = self.run_main(lambda b, r: {'bill_id': b}, run_document, '--max-minutes', '10')
+        self.assertEqual(self.sleeps[:2], [30, 60])
+        self.assertLessEqual(max(self.sleeps), 60)
+        self.assertGreater(len(calls), len(self.ids))  # Kept trying instead of stopping at the first rejection.
+        self.assertLessEqual(self.clock[0], 600)
+        self.assertEqual(queue.get('seen', []), [])
+
+    def test_success_resets_the_pause(self):
+        failures = {'HB2': 1, 'HB3': 1, 'HB6': 1}
         def run_document(doc, *a, **k):
             if failures.get(doc['bill_id']):
-                failures[doc['bill_id']] -= 1; raise CapacityUnavailable(0)
+                failures[doc['bill_id']] -= 1; raise CapacityUnavailable(1000)
             return bundle(doc['bill_id'])
         self.run_main(lambda b, r: {'bill_id': b}, run_document)
-        self.assertEqual(self.sleeps, [121, 241, 481, 121])
+        # HB2 then HB3 back to back: no pause, then 30 s. HB6 after successes: no pause again.
+        self.assertEqual(self.sleeps[0], 30)
+        self.assertNotIn(60, self.sleeps)
 
-    def test_backoff_never_passes_the_run_deadline(self):
-        def run_document(doc, *a, **k): raise CapacityUnavailable(0)
-        queue = self.run_main(lambda b, r: {'bill_id': b}, run_document, '--max-minutes', '1')
+    def test_cooldown_past_the_deadline_leaves_bill_queued(self):
+        processed = []
+        def run_document(doc, *a, **k):
+            processed.append(doc['bill_id'])
+            if doc['bill_id'] == 'HB2':
+                raise CapacityUnavailable(600)
+            return bundle(doc['bill_id'])
+        queue = self.run_main(lambda b, r: {'bill_id': b}, run_document, '--max-minutes', '5')
+        self.assertEqual(processed, self.ids)
         self.assertEqual(self.sleeps, [])
-        self.assertEqual(queue.get('seen', []), [])
+        self.assertNotIn('HB2', queue['seen'])
 
     def test_budget_stop_is_not_retried(self):
         processed = []

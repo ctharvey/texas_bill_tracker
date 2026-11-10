@@ -251,7 +251,7 @@ function reviewMarkup(){
   const waiting=Boolean(status?.running)&&!stale&&Date.parse(status.waiting_until)>Date.now();
   const line=!status?'Live worker status is unavailable, so bills with published Luna tags are counted as reviewed.'
     :stale?`The worker last reported ${esc(stampText(status.updated_at))} and may have stopped.`
-    :waiting?`Waiting for Luna capacity · retrying ${esc(status.current||'')} at ${esc(stampText(status.waiting_until))}`
+    :waiting?`Waiting for Luna capacity · ${status.current?`retrying ${esc(status.current)}`:'resuming'} at ${esc(stampText(status.waiting_until))}`
     :status.running?`Reviewing now · updated ${esc(stampText(status.updated_at))}`
     :`Idle between hourly runs · last update ${esc(stampText(status.updated_at))}`;
   const chip=(id,note='')=>`<button class="review-chip${tagged[id]?' tagged':''}" data-open="${esc(id)}" title="${tagged[id]?'Luna tags published':'Reviewed; no verified tags published'}${note?' · '+esc(note):''}">${esc(id)}</button>`;

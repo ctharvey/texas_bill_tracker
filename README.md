@@ -74,10 +74,12 @@ zone on every call, so a run spanning midnight books spend to the correct day), 
 default **$0.10 per run**. A private durable ledger reserves a conservative upper bound before each provider
 call, accounts for cache writes and output, and records actual estimates afterward. Unknown outcomes retain
 their reservation and block new calls until reconciled. A worker lock prevents concurrent spending races.
-Cache hits make no provider call. When Flex capacity is unavailable (first pass or a review question), the run
-waits 2, 4, 8, then 15 minutes (never less than the provider's retry-after) and redoes the same bill; the
-rejected call was never billed and every resubmission passes the same reservation and cache checks. A wait that
-would pass `--max-minutes` ends the run instead. Budget, quota/auth and unknown outcomes still stop the worker.
+Cache hits make no provider call. When Flex capacity is unavailable (first pass or a review question), the bill
+is set aside until the provider's retry-after (about 300 s in practice) and the run continues immediately with
+other bills, revisiting it once ready. Back-to-back rejections pause the run 30 s, then 60 s at most; the only
+longer wait is for a cooling bill when nothing else is left. The rejected call was never billed and every
+resubmission passes the same reservation and cache checks; a bill whose cooldown would pass `--max-minutes`
+stays queued. Budget, quota/auth and unknown outcomes still stop the worker.
 `--no-spending-cap` skips the daily and per-run ceilings only (reservations, the ledger and the
 double-billing checks still apply); `--order reverse` works through the snapshot from the bottom up.
 With `--publish-tags` and `--execute`, the worker also writes `live/luna/status.json`

@@ -550,14 +550,9 @@ def try_publish_status(out: Path | None, queue: dict, **kwargs) -> None:
 
 
 DOWNLOAD_ERRORS = (ftplib.Error, OSError, EOFError, ValueError)
-# Waits after consecutive Flex capacity rejections; the last value repeats. Capacity is a provider-wide
-# condition, so the worker waits and redoes the same bill rather than skipping ahead.
-CAPACITY_BACKOFF = (120, 240, 480, 900)
-
-
-def capacity_delay(consecutive: int, retry_after: float = 0) -> float:
-    # Never shorter than the provider's retry-after, which also ends the response cache's cooldown.
-    return max(CAPACITY_BACKOFF[min(consecutive, len(CAPACITY_BACKOFF) - 1)], retry_after or 0) + 1
+# A capacity-rejected bill is set aside until its retry-after (about 300 s in practice) while other bills
+# continue. Only back-to-back rejections pause the run, briefly; the last value repeats.
+CAPACITY_PAUSE = (0, 30, 60)
 OUTAGE_LIMIT = 5  # Consecutive new failures treated as an outage (FTP down, disk full) rather than bad bills.
 
 
@@ -619,28 +614,46 @@ def main():
         new_failures = 0
         status_path = args.publish_tags.parent / "status.json" if args.publish_tags and args.execute else None
         try:
-            pending, capacity_waits, redo = deque(candidates), 0, set()
+            pending, cooling, capacity_waits, redo = deque(candidates), [], 0, set()
 
-            def wait_for_capacity(bill_id: str, retry_after: float) -> bool:
+            def pause(seconds: float, current: str | None) -> None:
+                try_publish_status(status_path, queue, current=current, upcoming=list(pending)[:5], running=True,
+                                   waiting_until=utc_stamp(seconds))
+                time.sleep(seconds)
+
+            def defer_for_capacity(bill_id: str, retry_after: float) -> None:
                 # Only provably unbilled rejections reach here: Budget released the reservation and the
-                # response cache recorded capacity_wait, so redoing the bill cannot double-bill.
+                # response cache recorded capacity_wait until retry-after, so revisiting cannot double-bill.
                 nonlocal capacity_waits
-                delay = capacity_delay(capacity_waits, retry_after)
-                if time.monotonic() + delay > deadline:
-                    print("Stopped: capacity backoff would pass the run time limit; remaining work stays queued", flush=True)
-                    return False
+                ready = time.monotonic() + max(0, retry_after or 0) + 1
+                if ready < deadline:
+                    cooling.append((ready, bill_id)); redo.add(bill_id)
+                    print(bill_id, "capacity unavailable; revisiting in %d seconds, continuing with other bills"
+                          % (ready - time.monotonic()), flush=True)
+                else:
+                    print(bill_id, "capacity unavailable; stays queued for the next run", flush=True)
+                wait = CAPACITY_PAUSE[min(capacity_waits, len(CAPACITY_PAUSE) - 1)]
                 capacity_waits += 1
-                try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5], running=True,
-                                   waiting_until=utc_stamp(delay))
-                print(bill_id, "capacity unavailable; retrying in %d seconds" % delay, flush=True)
-                time.sleep(delay)
-                pending.appendleft(bill_id); redo.add(bill_id)
-                return True
+                if wait and time.monotonic() + wait < deadline:
+                    pause(wait, None)
 
-            while pending:
-                bill_id = pending.popleft()
+            def next_bill() -> str | None:
+                cooling.sort()
+                if cooling and cooling[0][0] <= time.monotonic():
+                    return cooling.pop(0)[1]
+                if pending:
+                    return pending.popleft()
+                if cooling and cooling[0][0] < deadline:
+                    pause(max(0, cooling[0][0] - time.monotonic()), cooling[0][1])
+                    return cooling.pop(0)[1]
+                return None
+
+            while True:
                 if time.monotonic() > deadline:
                     print("Stopped: run time limit; remaining work stays queued", flush=True); break
+                bill_id = next_bill()
+                if bill_id is None:
+                    break
                 try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5], running=True)
                 try:
                     document = download_document(bill_id, args.cache_dir)
@@ -669,7 +682,8 @@ def main():
                     if bill_id in queue['seen'] and bill_id not in queue['retry']:
                         queue['retry'].append(bill_id)
                     atomic_json(queue_path, queue)
-                    if isinstance(error, CapacityUnavailable) and wait_for_capacity(bill_id, error.retry_after):
+                    if isinstance(error, CapacityUnavailable):
+                        defer_for_capacity(bill_id, error.retry_after)
                         continue
                     print(bill_id, "deferred", type(error).__name__, flush=True)
                     print("Deferred: budget/capacity guard", flush=True); break
@@ -712,9 +726,8 @@ def main():
                 print(bill_id, status, flush=True)
                 stop_run = bundle.get("stop_run")
                 if stop_run and stop_run.startswith("CapacityUnavailable"):
-                    if wait_for_capacity(bill_id, bundle.get("retry_after") or 0):
-                        continue
-                    break
+                    defer_for_capacity(bill_id, bundle.get("retry_after") or 0)
+                    continue
                 if stop_run:
                     print("Deferred: budget/capacity guard during review questions", flush=True); break
                 capacity_waits = 0
