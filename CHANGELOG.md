@@ -3,6 +3,9 @@
 ## 2026-11-10
 - Sync service listens with a backlog of 512 instead of socketserver's 5, so a burst of connections waits instead
   of being dropped into a 1 s client retry (seen from 100 requests a second in a load test).
+- Watch companion bills as a group: a "Watch all" button on each companion block and in the bill drawer's
+  companion section adds every bill in the group (or removes them when all are watched); the watchlist shows them
+  together. The watchlist is still a list of bill ids, so sync, share links and export are unchanged.
 - Companion bills in results: when a bill and its companion both match, the companion moves up next to it and the
   two cards are drawn flush in one framed block headed "Companion bills · HB 445 + SB 329 · identical"; "Load more"
   never splits a block. Agent search lists them together, adds a Companions column ("also in these results") and

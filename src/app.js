@@ -346,6 +346,13 @@ function companionsOf(id){
   return companionCache.index.get(id)||[];
 }
 const relationText=c=>c.relation?c.relation.toLowerCase():'companion';
+// One control for a bill and its companions: watches every one, or unwatches all when all are already watched.
+// The watchlist stays a plain list of ids, so sync, share links and export are unchanged.
+function groupWatchButton(ids){
+  const n=ids.filter(id=>state.watch.has(id)).length,all=n===ids.length;
+  const label=all?`★ Watching all ${ids.length}`:n?`☆ Watch all ${ids.length} (${n} watched)`:`☆ Watch all ${ids.length}`;
+  return `<button class="companion-watch${all?' on':''}" data-watch-group="${esc(ids.join(','))}" aria-pressed="${all}" title="${all?'Remove these companion bills from your watchlist':'Add every bill in this companion group to your watchlist'}">${label}</button>`;
+}
 
 function companionBlock(b){
   const list=companionsOf(b.id);
@@ -353,7 +360,8 @@ function companionBlock(b){
   const byId=new Map(state.bills.map(x=>[x.id,x]));
   const rows=list.map(c=>{const other=byId.get(c.id);const last=other?lastActionInfo(other):null;
     return `<div class="companion-row"><div><strong>${other?`<button class="text-link companion-open" data-open="${esc(c.id)}">${esc(c.number)}</button>`:esc(c.number)}</strong> <span class="chamber-pill">${esc(c.id.startsWith('H')?'House':'Senate')}</span> <small>${esc(relationText(c))}${c.author?` · by ${esc(c.author)}`:''}</small><p>${other?esc(other.title):'Not in this snapshot yet; it appears here within about an hour of the Legislative Council publishing it.'}</p></div>${last?`<span class="tag action-tag action-${esc(last.key)}">${esc(last.label)}${last.date?` · ${esc(shortDate(last.date))}`:''}</span>`:''}</div>`}).join('');
-  return `<section class="drawer-section companion-section"><h3>Companion ${list.length===1?'bill':'bills'} (${list.length})</h3><p>A companion is a matching bill, usually filed in the other chamber so the same proposal can move in both at once. “Identical”, “similar” and “duplicate” are the Legislative Council's description.</p>${rows}</section>`;
+  const groupIds=[b.id,...list.filter(c=>byId.has(c.id)).map(c=>c.id)];
+  return `<section class="drawer-section companion-section"><div class="companion-section-head"><h3>Companion ${list.length===1?'bill':'bills'} (${list.length})</h3>${groupIds.length>1?groupWatchButton(groupIds):''}</div><p>A companion is a matching bill, usually filed in the other chamber so the same proposal can move in both at once. “Identical”, “similar” and “duplicate” are the Legislative Council's description.</p>${rows}</section>`;
 }
 
 function filteredBills(){
@@ -393,7 +401,7 @@ function renderResults(){
     const ids=new Set(g.map(b=>b.id));
     const relations=[...new Set(g.flatMap(b=>companionsOf(b.id).filter(c=>ids.has(c.id)).map(relationText)))];
     const names=g.map(b=>b.number).join(' + ');
-    return `<div class="companion-group" role="group" aria-label="${esc(`${names}: companion bills`)}"><div class="companion-group-head"><span aria-hidden="true">⇄</span> Companion bills · ${esc(names)}${relations.length?` · ${esc(relations.join(', '))}`:''}</div>${g.map(billCard).join('')}</div>`};
+    return `<div class="companion-group" role="group" aria-label="${esc(`${names}: companion bills`)}"><div class="companion-group-head"><span><span aria-hidden="true">⇄</span> Companion bills · ${esc(names)}${relations.length?` · ${esc(relations.join(', '))}`:''}</span>${groupWatchButton(g.map(b=>b.id))}</div>${g.map(billCard).join('')}</div>`};
   $('#bill-list').innerHTML=list.length?shown.map(g=>g.length>1?groupMarkup(g):billCard(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p></div>`;
   $('#results-bottom').innerHTML=`${list.length>shownCount?`<button class="outline-button" id="load-more">Load 30 more · showing ${shownCount} of ${list.length}</button><div style="height:12px"></div>`:''}${esc(state.meta?.coverage_note||'Check the official record for authoritative status.')}`;
   persistState();
@@ -592,6 +600,13 @@ function handleClick(e){
   const nav=e.target.closest('[data-view]');if(nav){e.preventDefault();location.hash=nav.dataset.view;setView(nav.dataset.view);return}
   const open=e.target.closest('[data-open]');if(open){showDrawer(open.dataset.open,true);return}
   if(e.target.closest('#copy-view-link,#share-watch,#export-watch,#import-watch,#shared-add,#shared-close,[id^="sync-"]')){handleSaveClick(e.target);return}
+  const group=e.target.closest('[data-watch-group]');if(group){
+    const known=new Set(state.bills.map(b=>b.id));const ids=group.dataset.watchGroup.split(',').filter(id=>known.has(id));
+    if(!ids.length)return;
+    const op=ids.every(id=>state.watch.has(id))?'remove':'add';changeWatch(op,ids);
+    renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(!$('#detail-drawer').hidden&&state.openBill)showDrawer(state.openBill);
+    const names=ids.map(id=>state.bills.find(b=>b.id===id)?.number||id).join(', ');
+    toast(op==='add'?`Watching ${names}`:`Removed ${names} from your watchlist`);return}
   const star=e.target.closest('[data-watch]');if(star){const id=star.dataset.watch;changeWatch(state.watch.has(id)?'remove':'add',[id]);renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(!$('#detail-drawer').hidden)showDrawer(id);toast(state.watch.has(id)?`${id} added to your watchlist`:`${id} removed from your watchlist`);return}
   const topic=e.target.closest('[data-topic]');if(topic){state.topic=topic.dataset.topic;state.visibleCount=30;renderContent();return}
   const pick=e.target.closest('[data-agency-pick]');if(pick){state.agency=pick.dataset.agencyPick;state.visibleCount=30;state.view='all';location.hash='all';setView('all');return}

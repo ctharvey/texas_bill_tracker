@@ -84,8 +84,11 @@ button[disabled]{opacity:.5;cursor:not-allowed}
 .agent-hint{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .bill-tags .companion-tag{cursor:pointer;color:#5b4a8a;background:#f4f1fb;border-color:#ddd5ef;font-weight:700}.bill-tags .companion-tag:hover{border-color:#a99bd3}
 .companion-group{border:2px solid #9d8bd0;border-radius:13px;overflow:hidden;background:#fff}
-.companion-group-head{background:#ece7f8;color:#4a3a7a;font-size:11px;font-weight:800;letter-spacing:.02em;padding:6px 14px;border-bottom:1px solid #d9d1ee}
-.companion-group-head span{font-size:13px;margin-right:2px}
+.companion-group-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:#ece7f8;color:#4a3a7a;font-size:11px;font-weight:800;letter-spacing:.02em;padding:6px 8px 6px 14px;border-bottom:1px solid #d9d1ee}
+.companion-group-head span[aria-hidden]{font-size:13px;margin-right:2px}
+.companion-watch{border:1px solid #b7a9df;background:#fff;color:#4a3a7a;border-radius:20px;padding:4px 11px;font:inherit;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
+.companion-watch:hover{border-color:#7a4fb0}.companion-watch.on{background:#5b4a8a;border-color:#5b4a8a;color:#fff}
+.companion-section-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.companion-section-head h3{margin:0}
 .companion-group>.bill-card{border-radius:0;border-top:0;border-right:0;border-bottom:0;box-shadow:none}
 .companion-group>.bill-card+.bill-card{border-top:1px dashed #c9bde8}
 .companion-group>.bill-card:hover{transform:none}
