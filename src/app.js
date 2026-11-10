@@ -102,6 +102,7 @@ async function init(){
   const knownView=hash=>['all','watchlist','agencies','review','method','data'].includes(hash)?hash:'all';
   window.addEventListener('hashchange',()=>setView(knownView(location.hash.slice(1))));
   setView(knownView(location.hash.slice(1)));
+  setupDisclaimer();
   // Keep the progress view current while it is open; other views never refetch.
   setInterval(async()=>{
     if(state.view!=='review'||document.visibilityState!=='visible')return;
@@ -112,6 +113,17 @@ async function init(){
       document.querySelectorAll('.review-group').forEach((d,i)=>{if(i<open.length)d.open=open[i]});
     }
   },60000);
+}
+
+const disclaimerKey='tx-bill-atlas-disclaimer-v1';
+function setupDisclaimer(){
+  const dialog=$('#disclaimer');
+  if(!dialog||typeof dialog.showModal!=='function')return;
+  // Closing by button or Escape both count as seen; without storage it simply shows on each visit.
+  dialog.addEventListener('close',()=>{try{localStorage.setItem(disclaimerKey,new Date().toISOString())}catch{}});
+  $('#disclaimer-open')?.addEventListener('click',()=>{if(!dialog.open)dialog.showModal()});
+  let seen=false;try{seen=Boolean(localStorage.getItem(disclaimerKey))}catch{}
+  if(!seen)dialog.showModal();
 }
 
 async function loadReviewStatus(){

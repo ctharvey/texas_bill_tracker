@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-10
+- First-visit disclaimer: independent open-source project, no accuracy warranty, automated/AI tags can be
+  wrong, not advice, check the official record. Remembered per device; reopen from the footer.
 - Review worker: Flex capacity rejections no longer end the run. The rejected bill waits out its retry-after
   while other bills continue, and is revisited in the same run; back-to-back rejections pause at most 60 s.
 - Review progress: new tracker view showing reviewed, in-progress (current and retry), failed and not-started

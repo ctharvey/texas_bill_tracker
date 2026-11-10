@@ -14,6 +14,17 @@
 .party-pill.party-dem{color:#1f4f93;background:#e3ecf9}.party-pill.party-rep{color:#9a2b23;background:#f9e3e1}.party-pill.party-bipartisan{color:#5b3590;background:#ece3f8}
 .party-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;background:#c3cbd3;vertical-align:middle}
 .party-dot.party-dem{background:#3d6fb8}.party-dot.party-rep{background:#c0463c}
+.disclaimer{max-width:560px;width:calc(100% - 32px);border:1px solid var(--line);border-radius:14px;padding:26px 28px 22px;color:var(--ink);background:var(--white);box-shadow:0 24px 60px rgba(13,27,42,.28)}
+.disclaimer::backdrop{background:rgba(13,27,42,.55)}
+.disclaimer-overline{font-size:11px;font-weight:700;letter-spacing:.12em;color:#9a6b12;margin-bottom:6px}
+.disclaimer h2{margin:0 0 12px;font-size:22px;line-height:1.25}
+.disclaimer p{font-size:14px;line-height:1.55;margin:0 0 10px;color:var(--ink)}
+.disclaimer a{color:inherit;text-decoration:underline}
+.disclaimer form{display:flex;justify-content:flex-end;margin-top:14px}
+.disclaimer-ok{font:inherit;font-weight:700;font-size:14px;border:0;border-radius:8px;padding:10px 18px;background:var(--navy);color:#fff;cursor:pointer}
+.disclaimer-ok:focus-visible,.footer-link:focus-visible{outline:2px solid #d29a2a;outline-offset:2px}
+.footer-link{font:inherit;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer}
+@media (max-width:640px){.disclaimer{padding:20px 18px 16px;max-height:calc(100dvh - 32px);overflow-y:auto}.disclaimer h2{font-size:19px}}
 .review-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;background:#e8ecf0;margin:6px 0 14px}
 .review-bar .seg{display:block;height:100%}
 .seg.done,.review-count.done .dot{background:#2f8a5f}.seg.progress,.review-count.progress .dot{background:#d29a2a}

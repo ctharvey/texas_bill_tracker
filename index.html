@@ -46,11 +46,22 @@
         <section id="overview" class="overview-grid" aria-label="At a glance"></section>
         <section id="dynamic-content" class="dynamic-content"></section>
       </main>
-      <footer class="site-footer">Built for public scrutiny. <span>Official filings remain the authoritative record.</span><span class="footer-right" id="footer-timestamp"></span></footer>
+      <footer class="site-footer">Built for public scrutiny. <span>Official filings remain the authoritative record.</span> <button type="button" class="footer-link" id="disclaimer-open">Disclaimer</button><span class="footer-right" id="footer-timestamp"></span></footer>
     </div>
   </div>
   <div class="drawer-scrim" id="drawer-scrim" hidden></div>
   <aside class="detail-drawer" id="detail-drawer" aria-label="Bill details" aria-modal="true" role="dialog" hidden></aside>
   <div id="toast" role="status" aria-live="polite"></div>
+  <dialog class="disclaimer" id="disclaimer" aria-labelledby="disclaimer-title" aria-describedby="disclaimer-body">
+    <div class="disclaimer-overline">PLEASE READ</div>
+    <h2 id="disclaimer-title">Before you use Texas Bill Atlas</h2>
+    <div id="disclaimer-body">
+      <p><strong>An independent, open-source project.</strong> This site is not affiliated with, endorsed by, or operated by the Texas Legislature, the Texas Legislative Council, the Secretary of State, or any state agency.</p>
+      <p><strong>Data may be incomplete, delayed, or wrong.</strong> Bill records are copied automatically from the legislature’s public files. Topic, agency, party, influence and last-action tags, and the full-text summaries written by Luna (an AI model), are automated interpretations and can be mistaken.</p>
+      <p><strong>Not advice.</strong> Nothing here is legal, political, or professional advice. The project and its contributors make no warranty of accuracy or completeness and accept no liability for errors, omissions, or decisions made using this site.</p>
+      <p><strong>Check the official record.</strong> Confirm anything that matters on <a href="https://capitol.texas.gov/" target="_blank" rel="noopener noreferrer">Texas Legislature Online</a>. Spotted a mistake? <a href="https://github.com/ctharvey/texas_bill_tracker/issues" target="_blank" rel="noopener noreferrer">Report it on GitHub</a>.</p>
+    </div>
+    <form method="dialog"><button class="disclaimer-ok" id="disclaimer-ok" value="ok" autofocus>I understand</button></form>
+  </dialog>
 </body>
 </html>
