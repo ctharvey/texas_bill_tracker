@@ -946,10 +946,62 @@ def build_parser() -> argparse.ArgumentParser:
                              "review when a new version appears, and check fiscal notes and analyses")
     parser.add_argument("--history-dir", type=Path, default=None,
                         help="Bill history directory for --stages (default: <snapshot dir>/history)")
+    parser.add_argument("--suggest-topics", action="store_true",
+                        help="Second pass, only once this run's review queue is empty: one low-effort Luna call per "
+                             "settled review suggesting topics the tracker lacks (private; see topic_suggestions.py)")
     parser.add_argument("--questions-inline", action="store_true",
                         help="Ask a new bill's follow-up questions right after its first pass (default: first passes "
                              "for every unseen bill come first; questions run on the bill's next visit)")
     return parser
+
+
+def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
+    """Lowest-priority second pass (main thread, after the review queue emptied): topic suggestions per settled
+    review. Capacity ends the pass for this run; an unknown outcome stops the worker like any other call."""
+    import topic_suggestions
+    topics, registry = classification.load_policy_tags(), detailed.load_registry()
+    cache = getattr(budget, "response_cache", None)
+    key_fn = cache.key if cache is not None else ResponseCache.key
+    retry, out, done = set(queue.get("retry", [])), args.cache_dir / "suggestions", 0
+
+    def read(path: Path):
+        try:
+            return json.loads(path.read_text("utf-8"))
+        except (OSError, ValueError):
+            return None
+
+    for path in sorted((args.cache_dir / "reviews").glob("*.json"), reverse=args.order == "reverse"):
+        bill_id = path.stem
+        if not topic_suggestions.BILL_RE.fullmatch(bill_id):
+            continue
+        bundle = read(path)
+        if not topic_suggestions.due(bundle, read(out / (bill_id + ".json")), topics, retry, key_fn):
+            continue
+        if time.monotonic() > deadline:
+            print("Topic suggestions: run time limit; the rest wait for a later run", flush=True)
+            break
+        try:
+            report = topic_suggestions.suggest(bundle, topics, registry, args.cache_dir, execute=args.execute,
+                                               sender=budget.send, cache=cache)
+        except CapacityUnavailable:
+            print("Topic suggestions: capacity unavailable; the rest wait for a later run", flush=True)
+            break
+        except (CacheCoolingDown, CacheBusy, OSError, ValueError) as error:
+            print(bill_id, "topic suggestions skipped:", type(error).__name__, flush=True)
+            continue
+        except Exception as error:
+            print(bill_id, "stopped", type(error).__name__, "(topic suggestions)", flush=True)
+            raise SystemExit(2)
+        if report.get("action") == "not_submitted":
+            if report.get("reason_type") in PER_BILL_NOT_SUBMITTED:
+                continue
+            if args.execute:
+                print("Topic suggestions stopped:", report.get("reason_type"), flush=True)
+            break  # budget, an unresolved outcome, or a dry run: nothing more is sent this run
+        atomic_json(out / (bill_id + ".json"), topic_suggestions.record_for(bundle, report))
+        done += 1
+    print("Topic suggestions checked for", done, "bills", flush=True)
+    return done
 
 
 def main():
@@ -1035,6 +1087,7 @@ def main():
         deadline = time.monotonic() + args.max_minutes * 60
         new_failures = 0
         status_path = args.publish_tags.parent / "status.json" if args.publish_tags and args.execute else None
+        stopped = False  # the main loop ended on a stop outcome or the time limit, not on an empty queue
         try:
             pending, cooling, capacity_waits, redo = deque(candidates), [], 0, set()
             stopping = False  # several workers: no new bills; in-flight ones finish and are recorded
@@ -1263,13 +1316,14 @@ def main():
             if args.workers == 1:
                 while True:
                     if time.monotonic() > deadline:
-                        print("Stopped: run time limit; remaining work stays queued", flush=True); break
+                        print("Stopped: run time limit; remaining work stays queued", flush=True)
+                        stopped = True; break
                     bill_id = next_bill()
                     if bill_id is None:
                         break
                     try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5], running=True)
                     if handle(bill_id, *work(bill_id, asks_questions(bill_id), visit_plan(bill_id))):
-                        break
+                        stopped = True; break
             else:
                 # Workers run only `work`; every queue, status and review write stays on this thread. A capacity
                 # refusal pauses dispatch here, so no worker starts a new bill during the pause. The ledger and
@@ -1280,7 +1334,7 @@ def main():
                         while not stopping and not halt.is_set() and len(running) < args.workers:
                             if time.monotonic() > deadline:
                                 print("Stopped: run time limit; remaining work stays queued", flush=True)
-                                stopping = True
+                                stopping = stopped = True
                                 break
                             bill_id = next_bill(block=not running)
                             if bill_id is None:
@@ -1299,9 +1353,11 @@ def main():
                         for future in done:
                             bill_id = running.pop(future)
                             if handle(bill_id, *future.result()):
-                                stopping = True
+                                stopping = stopped = True
         finally:
             try_publish_status(status_path, queue, current=None, upcoming=[], running=False)
+        if args.suggest_topics and not stopped and not halt.is_set():
+            suggest_topics(args, queue, budget, deadline)
         print("New model spending this run: $%.6f" % budget.run_spent)
         if args.publish_tags:
             try:

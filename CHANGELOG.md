@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-11
+- Topic suggestions (`--suggest-topics`): a cheap, cacheable second pass after the review queue empties; private,
+  with a tally report for promoting new topics.
 - Staged review (`--stages`, off in production): version updates with a "What changed" list, a fiscal-note
   check, and the bill drawer's What changed, Hearing (official witness lists) and Fiscal note check sections.
 

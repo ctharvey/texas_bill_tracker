@@ -127,7 +127,14 @@ the model; queue, status and review files are written by the main thread. A capa
 every worker; an unknown outcome, quota/auth error or budget stop lets in-flight bills finish and starts no new
 one. The ledger and response cache stop two workers from sending the same request. The production unit runs 3.
 
-`--stages` (needs `--input markdown`; off in the production unit) runs the staged review
+`--suggest-topics` adds a lowest-priority second pass (`scripts/topic_suggestions.py`). It runs only after a run's
+review queue is empty. For each settled review (no follow-up questions queued) it sends one low-effort call built from the
+review and the current topic list, not the bill text, asking for topics the tracker lacks. Repeats are cache hits and
+identical companion reviews share one call. A bill is asked again only when its review or the topic list changes.
+Results stay private in `cache/suggestions/`; `python scripts/topic_suggestions.py --cache-dir <cache>` tallies them so
+recurring topics can be added to `POLICY_AREAS` by hand.
+
+`--stages` (needs `--input markdown`) runs the staged review
 (`scripts/review_stages.py`). Each visit is planned from durable files: the review, `live/text/<BILL>/index.json`,
 `live/history/<BILL>/documents.json` and `cache/fiscal/<BILL>.json`.
 - A new bill is reviewed on its newest text version.
