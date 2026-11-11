@@ -304,6 +304,15 @@ export function reviewProgress(ids, status, taggedIds = []) {
   return out;
 }
 
+// What the progress page shows. A bill on the retry list already has a published first-pass review and only
+// waits for follow-up questions, so it counts as reviewed. A download failure means no text is posted yet.
+export function reviewSummary(p) {
+  const noText = p.failed.filter(f => f.stage === 'download').map(f => f.id);
+  return {current: p.current, upcoming: p.upcoming, reviewed: [...p.reviewed, ...p.inProgress],
+    questionsQueued: [...p.inProgress], noText, failed: p.failed.filter(f => f.stage !== 'download'),
+    notStarted: [...p.notStarted]};
+}
+
 export function lastActionInfo(bill) {
   const raw = String(bill.last_action || '').trim();
   const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+([HSE])\s+(.*)$/);

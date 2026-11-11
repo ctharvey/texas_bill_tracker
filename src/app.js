@@ -1,7 +1,7 @@
 import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal} from './review.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, watchlistFile, parseWatchlistFile} from './prefs.js';
 import {createSyncClient} from './sync.js';
-import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, searchTerms, newestFirst} from './taxonomy.js';
+import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, searchTerms, newestFirst} from './taxonomy.js';
 
 const $ = (selector, root=document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -461,29 +461,36 @@ function agenciesMarkup(){
 
 function reviewMarkup(){
   const ids=state.bills.map(b=>b.id),status=state.reviewStatus,tagged=state.luna?.bills||{};
-  const p=reviewProgress(ids,status,Object.keys(tagged));
+  const s=reviewSummary(reviewProgress(ids,status,Object.keys(tagged)));
   const total=ids.length||1,pct=n=>Math.round(n/total*1000)/10;
   const minutes=status?.updated_at?(Date.now()-Date.parse(status.updated_at))/60000:null;
   const stale=Boolean(status?.running)&&minutes>90;
+  const quiet=Boolean(status)&&!status.running&&minutes>75;  // runs are hourly; each one rewrites the status
   const waiting=Boolean(status?.running)&&!stale&&Date.parse(status.waiting_until)>Date.now();
   const line=!status?'Live worker status is unavailable, so bills with published Luna tags are counted as reviewed.'
     :stale?`The worker last reported ${esc(stampText(status.updated_at))} and may have stopped.`
+    :quiet?`No hourly run has reported since ${esc(stampText(status.updated_at))}; the worker may be stopped.`
     :waiting?`Waiting for Luna capacity · ${status.current?`retrying ${esc(status.current)}`:'resuming'} at ${esc(stampText(status.waiting_until))}`
     :status.running?`Reviewing now · updated ${esc(stampText(status.updated_at))}`
-    :`Idle between hourly runs · last update ${esc(stampText(status.updated_at))}`;
+    :`Idle until the next hourly run · last update ${esc(stampText(status.updated_at))}`;
   const chip=(id,note='')=>`<button class="review-chip${tagged[id]?' tagged':''}" data-open="${esc(id)}" title="${tagged[id]?'Luna tags published':'Reviewed; no verified tags published'}${note?' · '+esc(note):''}">${esc(id)}</button>`;
   const group=(title,list,empty,open=true)=>`<details class="review-group"${open?' open':''}><summary><strong>${title}</strong> <span>${list.length.toLocaleString()}</span></summary>${list.length?`<div class="review-chips">${list.join('')}</div>`:`<p class="review-empty">${empty}</p>`}</details>`;
-  const counts=[['Reviewed',p.reviewed.length,'done'],['In progress',p.inProgress.length+(p.current?1:0),'progress'],['Failed',p.failed.length,'failed'],['Not started',p.notStarted.length,'waiting']];
-  const now=p.current&&!stale?`<div class="review-now"><span class="review-pulse" aria-hidden="true"></span><div><small>${waiting?'Waiting to retry':'Reviewing now'}</small>${chip(p.current)}</div>${p.upcoming.length?`<div><small>Up next</small>${p.upcoming.map(id=>chip(id)).join('')}</div>`:''}</div>`:'';
+  const counts=[['Reviewed',s.reviewed.length,'done'],...(s.current?[['Reviewing now',1,'progress']]:[]),
+    ['Waiting for bill text',s.noText.length,'notext'],...(s.failed.length?[['Failed',s.failed.length,'failed']]:[]),
+    ['Not started',s.notStarted.length,'waiting']];
+  const now=s.current&&!stale?`<div class="review-now"><span class="review-pulse" aria-hidden="true"></span><div><small>${waiting?'Waiting to retry':'Reviewing now'}</small>${chip(s.current)}</div>${s.upcoming.length?`<div><small>Up next</small>${s.upcoming.map(id=>chip(id)).join('')}</div>`:''}</div>`:'';
+  const headline=`<p class="review-headline"><strong>${s.reviewed.length.toLocaleString()} of ${ids.length.toLocaleString()} bills reviewed</strong> (${pct(s.reviewed.length)}%)${s.questionsQueued.length?` · ${s.questionsQueued.length.toLocaleString()} of them have follow-up questions queued`:''}</p>`;
   return `<div class="section-head"><div><div class="section-overline">LUNA FULL-TEXT REVIEW</div><h2>Review progress</h2></div><span class="subtitle">${line}</span></div>
-  <div class="review-bar" role="img" aria-label="${p.reviewed.length} reviewed, ${p.inProgress.length} in progress, ${p.failed.length} failed, ${p.notStarted.length} not started of ${ids.length}">${counts.map(([,n,cls])=>`<span class="seg ${cls}" style="width:${pct(n)}%"></span>`).join('')}</div>
+  ${headline}
+  <div class="review-bar" role="img" aria-label="${counts.map(([label,n])=>`${n} ${label.toLowerCase()}`).join(', ')} of ${ids.length}">${counts.map(([,n,cls])=>`<span class="seg ${cls}" style="width:${pct(n)}%"></span>`).join('')}</div>
   <div class="review-counts">${counts.map(([label,n,cls])=>`<div class="review-count ${cls}"><span class="dot"></span><strong>${n.toLocaleString()}</strong><span>${label} · ${pct(n)}%</span></div>`).join('')}</div>
   ${now}
-  ${group('In progress',[...(p.current?[chip(p.current,'being reviewed now')]:[]),...p.inProgress.map(id=>chip(id,'queued to finish open review questions'))],'Nothing is being reviewed or waiting on a retry.')}
-  ${group('Failed',p.failed.map(f=>chip(f.id,f.stage?`${f.stage} failed`:'failed')),'No failures.',p.failed.length>0)}
-  ${group('Reviewed',p.reviewed.map(id=>chip(id)),'No bills reviewed yet.')}
-  ${group('Not started',p.notStarted.map(id=>chip(id)),'Every bill has been picked up.',false)}
-  <p class="review-legend"><span class="review-chip tagged">HB1</span> verified Luna tags published · <span class="review-chip">HB1</span> reviewed, no claims verified against the text yet. Failed bills are usually ones whose text the legislature has not posted; they are retried automatically.</p>`;
+  ${group('Reviewed',s.reviewed.map(id=>chip(id,s.questionsQueued.includes(id)?'follow-up questions queued':'')),'No bills reviewed yet.')}
+  ${group('Follow-up questions queued',s.questionsQueued.map(id=>chip(id,'first-pass review published; follow-up questions run on a later visit')),'No follow-up questions waiting.',false)}
+  ${group('Waiting for bill text',s.noText.map(id=>chip(id,'the legislature has not posted text yet')),'Every bill has text.',false)}
+  ${s.failed.length?group('Failed',s.failed.map(f=>chip(f.id,f.stage?`${f.stage} failed`:'failed')),'No failures.'):''}
+  ${group('Not started',s.notStarted.map(id=>chip(id)),'Every bill has been picked up.',false)}
+  <p class="review-legend"><span class="review-chip tagged">HB1</span> verified Luna tags published · <span class="review-chip">HB1</span> reviewed, no claims verified against the text yet. Bills waiting for text are retried automatically once the legislature posts it. Follow-up questions refine a review that is already published.</p>`;
 }
 
 function methodMarkup(){
