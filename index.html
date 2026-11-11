@@ -49,7 +49,7 @@
         <section id="overview" class="overview-grid" aria-label="At a glance"></section>
         <section id="dynamic-content" class="dynamic-content"></section>
       </main>
-      <footer class="site-footer">Built for public scrutiny. <span>Official filings remain the authoritative record.</span> <button type="button" class="footer-link" id="disclaimer-open">Disclaimer</button> <a class="footer-link" href="https://agent.bills.ctharvey.me/">For AI agents</a><noscript><p>This tracker needs JavaScript. The same information is available without it, as Markdown and JSON, at <a href="https://agent.bills.ctharvey.me/">agent.bills.ctharvey.me</a>.</p></noscript><span class="footer-right" id="footer-timestamp"></span></footer>
+      <footer class="site-footer">Built for public scrutiny. <span>Official filings remain the authoritative record.</span> <button type="button" class="footer-link" id="disclaimer-open">Disclaimer</button> <button type="button" class="footer-link" id="privacy-open">Privacy</button><a class="footer-link" href="https://agent.bills.ctharvey.me/">For AI agents</a><noscript><p>This tracker needs JavaScript. The same information is available without it, as Markdown and JSON, at <a href="https://agent.bills.ctharvey.me/">agent.bills.ctharvey.me</a>.</p></noscript><span class="footer-right" id="footer-timestamp"></span></footer>
     </div>
   </div>
   <div class="drawer-scrim" id="drawer-scrim" hidden></div>
@@ -65,6 +65,35 @@
       <p><strong>Check the official record.</strong> Confirm anything that matters on <a href="https://capitol.texas.gov/" target="_blank" rel="noopener noreferrer">Texas Legislature Online</a>. Spotted a mistake? <a href="https://github.com/ctharvey/texas_bill_tracker/issues" target="_blank" rel="noopener noreferrer">Report it on GitHub</a>.</p>
     </div>
     <form method="dialog"><button class="disclaimer-ok" id="disclaimer-ok" value="ok" autofocus>I understand</button></form>
+  </dialog>
+  <dialog class="disclaimer privacy" id="privacy" aria-labelledby="privacy-title">
+    <div class="disclaimer-overline">TEXAS BILL ATLAS</div>
+    <h2 id="privacy-title">Privacy Policy</h2>
+    <p><em>Last updated: November 11, 2026</em></p>
+    <p>Texas Bill Atlas is a free, independent, open-source project. We believe you should be able to research legislation without creating an account or providing personal information.</p>
+    <h3>Information we collect</h3>
+    <p>We do not require registration, names, email addresses, or other personal information to use the service.</p>
+    <p>We do not sell personal information, serve targeted advertising, or intentionally track individual browsing activity.</p>
+    <h3>Analytics and security</h3>
+    <p>We use Cloudflare for website delivery, security, and traffic analytics.</p>
+    <p>Cloudflare may process technical information such as IP addresses, browser details, request information, and website usage statistics. Cloudflare may also use cookies necessary for security and abuse prevention.</p>
+    <p>For more information, see <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer">Cloudflare's Privacy Policy</a>.</p>
+    <h3>Watchlists and saved preferences</h3>
+    <p>Watchlists and preferences are stored locally in your browser by default.</p>
+    <p>If you choose to enable watchlist synchronization, we store the selected bill numbers, filters, and hashed access keys on our server.</p>
+    <p>No account or personal information is required. Anyone possessing a valid private access link may access the associated watchlist according to that link's permissions.</p>
+    <p>You can delete a synced watchlist using its edit access key. Inactive synced watchlists are automatically removed after approximately one year.</p>
+    <h3>Technical data</h3>
+    <p>Our servers may temporarily process IP addresses and request information for security, rate limiting, and reliable operation.</p>
+    <p>We do not use this information to build individual user profiles.</p>
+    <p>The site also loads certain external resources, including Google Fonts. Those providers may receive ordinary technical request information.</p>
+    <h3>Third-party services</h3>
+    <p>Links to government websites, GitHub, and other external services are governed by their respective privacy policies.</p>
+    <h3>Changes</h3>
+    <p>We may update this policy as the project develops. The current version will be available on this website with its updated date.</p>
+    <h3>Questions</h3>
+    <p>For questions about the project or its privacy practices, visit our <a href="https://github.com/ctharvey/texas_bill_tracker" target="_blank" rel="noopener noreferrer">GitHub repository</a>.</p>
+    <form method="dialog"><button class="disclaimer-ok" value="ok">Close</button></form>
   </dialog>
 </body>
 </html>

@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-10
+- Privacy policy: a "Privacy" footer link opens the policy in a dialog (it ships inside `index.html`, the only page the
+  static deploy publishes).
 - Identical companions share one review: a bill whose Identical companion was already reviewed reuses that review
   (no model call) when the bill texts match apart from the author line and bill number, and the copy verifies the
   same claims against this bill's own text. Two separate reviews of the same text had picked different topics.

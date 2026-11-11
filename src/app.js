@@ -108,6 +108,8 @@ function setupDisclaimer(){
   $('#disclaimer-open')?.addEventListener('click',()=>{if(!dialog.open)dialog.showModal()});
   let seen=false;try{seen=Boolean(localStorage.getItem(disclaimerKey))}catch{}
   if(!seen)dialog.showModal();
+  const privacy=$('#privacy');
+  $('#privacy-open')?.addEventListener('click',()=>{if(privacy&&!privacy.open)privacy.showModal()});
 }
 
 // ---- Saving choices without accounts: URL state, remembered filters, files and private sync links ----
