@@ -106,7 +106,12 @@ or call, and `classify_bill.py`/`extract_bill.py` refuse `--execute`. A run that
 site serves (`live/text`, beside `--publish-tags`). Every publisher (tags, highlights, changes, fiscal, extras, audit
 counts, related summaries) includes a bill only when its review was read from Markdown and its `text_sha256` equals
 both the served `index.json` entry and the served file's bytes for that version (any served version, not only the
-newest). Other reviews are withheld and logged, and their highlight files removed.
+newest). Other reviews are withheld and logged, and their highlight files removed; highlights are built from the
+exact bytes the check verified. Before planning, each run re-attaches a review whose served text changed bytes but
+not content: when the rebuilt document's `text_hash` and spans equal the stored ones (exactly what Luna was sent),
+the review takes the new hash and records `text_rebindings` evidence, at no cost. A real content change stays
+withheld until re-reviewed; when many change at once the converter breaker visits only an operator-approved number
+(`--allow-text-rereview N`, default 0).
 `--input markdown` reads the data run's official Markdown (`live/text/<BILL>/I.md`, checked
 against `index.json`): one span per paragraph (`P###S###`, page = paragraph), with `<ins>`
 and `<del>` shown to Luna plus `scripts/markdown_input_note.txt`, and quotes matched with the tags removed.
