@@ -140,13 +140,19 @@ one. The ledger and response cache stop two workers from sending the same reques
 
 `--suggest-topics` adds a lowest-priority second pass (`scripts/topic_suggestions.py`). It runs only after a run's
 review queue is empty. For each settled review (no follow-up questions queued) it sends one low-effort call built from the
-review and the current topic list, not the bill text, asking for topics the tracker lacks. Repeats are cache hits and
-identical companion reviews share one call. A bill is asked again only when its review or the topic list changes.
+review, the bill text and the current topic list, asking for topics the tracker lacks. Repeats are cache hits. A bill is
+asked again only when its review, its text or the topic list changes.
 Results stay private in `cache/suggestions/`; `python scripts/topic_suggestions.py --cache-dir <cache>` tallies them so
 recurring topics can be added to `POLICY_AREAS` by hand. The same call returns a plain-language headline, search terms
 and opposing-side terms (e.g. "gun control" and "gun rights"), built only from the review's verified claims. They are
 published to `live/luna/extras.json` while the record matches the bill's current verified review; the site shows the
 headline as "In brief" and adds the terms to search. No headline is shown when the summary is unverified.
+The same call also decides the **All state agencies** scope marker from the bill text, under a stricter rule than the
+first pass had (federal-waiver riders, savings and applicability clauses, cooperation-with-a-task-force duties and
+mixed state/local classes do not count). It is published in `tags.json` (and as a highlight) only when every quote is
+current, undeleted bill text, and only for the review and text content it was made for. The first pass's own marker is
+no longer published (a 2026-11-11 audit found about half wrong); until a bill's second pass runs, the site falls back to
+the caption inference.
 
 `--audit-sample` runs after the topic pass: an independent medium-effort Luna re-check of about 2% of settled reviews
 (a deterministic sample by bill and review), against the exact text version reviewed. Findings stay private in

@@ -640,8 +640,9 @@ TAG_FIELDS = {"policy_tags": ("tag", "explanation"), "locations": ("name", "kind
               "affected_groups": ("group", "explanation"), "major_effects": ("effect", "label", "explanation")}
 
 
-def public_entry(bundle: dict, reviewed_at: str) -> dict | None:
-    """Verified claims only; a field whose every claim failed verification is omitted (caption fallback)."""
+def public_entry(bundle: dict, reviewed_at: str, scope: dict | None = None) -> dict | None:
+    """Verified claims only; a field whose every claim failed verification is omitted (caption fallback).
+    `scope`: the second pass's verified all-agencies marker for this review, or None (field omitted)."""
     result = bundle.get("result")
     if not isinstance(result, dict):
         return None
@@ -659,11 +660,10 @@ def public_entry(bundle: dict, reviewed_at: str) -> dict | None:
             entry[field] = ([{"id": a["registry_id"], "name": a["name"], "impact": a["impact"],
                               "explanation": a["explanation"]} for a in kept] if field == "agencies"
                             else [{k: item.get(k) for k in keys} for item in kept])
-    scope = result.get("all_state_agencies_scope") or {}
-    if scope.get("applies") is False or (scope.get("applies") and "all_state_agencies_scope" in verified):
-        entry["all_state_agencies"] = {"applies": bool(scope["applies"]), "explanation": scope.get("explanation")}
-    elif scope.get("applies"):
-        omitted += 1
+    # The all-agencies marker comes only from the second pass (topic_suggestions.scope_entry); the first pass's own
+    # marker is not published (audit 2026-11-11: about half were wrong).
+    if scope is not None:
+        entry["all_state_agencies"] = {"applies": scope["applies"], "explanation": scope["explanation"]}
     entry["unverified_omitted"] = omitted
     return entry
 
@@ -720,6 +720,7 @@ def live_reviews(cache_dir: Path, served: Path) -> tuple[dict[str, str], list[st
 
 def publish_tags(cache_dir: Path, out: Path, registry: list[dict], live: set[str] | None = None) -> int:
     """`live`: when given, only these bills are published (see live_reviews)."""
+    import topic_suggestions
     bills = {}
     for path in sorted((cache_dir / "reviews").glob("*.json")):
         if live is not None and path.stem not in live:
@@ -729,7 +730,9 @@ def publish_tags(cache_dir: Path, out: Path, registry: list[dict], live: set[str
         except (OSError, ValueError):
             continue
         stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
-        entry = public_entry(bundle, stamp.replace("+00:00", "Z"))
+        scope = (topic_suggestions.read_scope(cache_dir, path.stem, bundle)
+                 if isinstance(bundle, dict) and bundle.get("bill_id") == path.stem else None)
+        entry = public_entry(bundle, stamp.replace("+00:00", "Z"), scope)
         if entry and bundle.get("bill_id") == path.stem:
             bills[path.stem] = entry
     atomic_json(out, {"format": "texas-bill-luna-tags-v1", "model": classification.MODEL,
@@ -790,7 +793,8 @@ HIGHLIGHT_KINDS = {"agencies": "agency", "major_effects": "effect", "policy_tags
                    "affected_groups": "group", "locations": "location"}
 
 
-def highlight_entry(bundle: dict, reviewed_at: str, markdown: str, version_code: str) -> dict:
+def highlight_entry(bundle: dict, reviewed_at: str, markdown: str, version_code: str,
+                    scope: dict | None = None) -> dict:
     result = bundle.get("result") or {}
     paragraphs = plain_paragraphs(markdown)
     citations: dict[str, list[dict]] = {}
@@ -801,11 +805,10 @@ def highlight_entry(bundle: dict, reviewed_at: str, markdown: str, version_code:
     if result.get("summary"):
         candidates.append(("summary", {"kind": "summary", "label": "Summary", "explanation": result["summary"].get("text"),
                                        "agency_id": None, "impact": None, "effect": None, "key_point": False}))
-    scope = result.get("all_state_agencies_scope") or {}
-    if scope.get("applies"):
-        candidates.append(("all_state_agencies_scope", {"kind": "scope", "label": "All state agencies",
-                           "explanation": scope.get("explanation"), "agency_id": None, "impact": None,
-                           "effect": None, "key_point": True}))
+    scope_claim = None  # the second pass's marker, located by its verified quotes (first-pass marker not used)
+    if scope and scope.get("applies"):
+        scope_claim = {"kind": "scope", "label": "All state agencies", "explanation": scope.get("explanation"),
+                       "agency_id": None, "impact": None, "effect": None, "key_point": True}
     for field in ("policy_tags", "locations", "affected_groups", "major_effects", "agencies"):
         for i, item in enumerate(result.get(field) or []):
             claim = {"kind": HIGHLIGHT_KINDS[field], "explanation": item.get("explanation"), "agency_id": None,
@@ -841,6 +844,18 @@ def highlight_entry(bundle: dict, reviewed_at: str, markdown: str, version_code:
             claims.append({"id": claim_id, **fields, "ranges": sorted(ranges, key=lambda r: (r["p"], r["start"]))})
         else:
             unlocated.append(claim_id)
+    if scope_claim is not None:
+        ranges = []
+        for quote in scope.get("quotes") or []:
+            for r in locate_quote(quote, paragraphs) or []:
+                if r not in ranges:
+                    ranges.append(r)
+        if ranges:  # listed after the summary, where the first pass's marker used to sit
+            at = 1 if claims and claims[0]["id"] == "summary" else 0
+            claims.insert(at, {"id": "all_state_agencies_scope", **scope_claim,
+                               "ranges": sorted(ranges, key=lambda r: (r["p"], r["start"]))})
+        else:
+            unlocated.append("all_state_agencies_scope")
     return {"format": "texas-bill-luna-highlights-v1", "bill_id": bundle.get("bill_id"), "text_version": version_code,
             "text_sha256": hashlib.sha256(markdown.encode("utf-8")).hexdigest(), "reviewed_at": reviewed_at,
             "claims": claims, "unlocated": unlocated}
@@ -849,6 +864,7 @@ def highlight_entry(bundle: dict, reviewed_at: str, markdown: str, version_code:
 def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path, live: dict[str, str] | None = None) -> int:
     """`live` (from live_reviews): when given, only these bills are published, from the Markdown verified there,
     and any other bill's highlight file is removed."""
+    import topic_suggestions
     done = 0
     out_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(out_dir, 0o755)  # Served publicly; the worker's UMask=0077 would otherwise create it 0700.
@@ -878,7 +894,8 @@ def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path, live: dic
                     continue
                 markdown = source.read_text("utf-8")
             stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
-            entry = highlight_entry(bundle, stamp.replace("+00:00", "Z"), markdown, code)
+            entry = highlight_entry(bundle, stamp.replace("+00:00", "Z"), markdown, code,
+                                    topic_suggestions.read_scope(cache_dir, path.stem, bundle))
             payload = (json.dumps(entry, sort_keys=False, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
             target = out_dir / (path.stem + ".json")
             if not (target.is_file() and target.read_bytes() == payload):

@@ -1,9 +1,11 @@
-"""Second pass: one cheap, cacheable Luna call per settled review for topic suggestions (private) and reader
-extras (public via extras.json): a plain-language headline, search terms, and opposing-side terms.
+"""Second pass: one cacheable Luna call per settled review for topic suggestions (private), reader extras (public
+via extras.json: a plain-language headline, search terms, opposing-side terms) and the "all state agencies" scope
+marker (public via tags.json), which is decided here from the bill text, not by the first pass.
 
-The request is built only from the review's verified claims and the current topic list, so a repeat is an exact
-response-cache hit and a bill is re-asked only when its verified review or the topic list changes. Extras are
-published only while the record's input hash matches the bill's current verified review. Usage for the tally:
+The request is built from the review's verified claims, the bill text and the current topic list, so a repeat is an
+exact response-cache hit and a bill is re-asked only when one of them changes. Extras are published only while the
+record's input hash matches the bill's current verified review; the scope marker only while its quotes verified and
+its binding matches the review and the text's content. Usage for the tally:
     python scripts/topic_suggestions.py --cache-dir <cache> [--min-bills 2]
 """
 from __future__ import annotations
@@ -31,10 +33,18 @@ def _canonical(value) -> str:
     return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
+SCOPE_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["applies", "explanation", "quotes"],
+                "properties": {"applies": {"type": "boolean"}, "explanation": {"type": "string", "maxLength": 300},
+                               "quotes": {"type": "array", "maxItems": 3,
+                                          "items": {"type": "string", "minLength": 12, "maxLength": 300}}}}
+MIN_QUOTE_ALNUM = 30  # a bare "state agency" proves nothing; the quote must carry the operative clause
+
+
 def _schema(topics: list[str]) -> dict:
     return {"type": "object", "additionalProperties": False,
-            "required": ["headline", "search_terms", "opposing_terms", "suggestions"],
-            "properties": {"headline": {"type": "string", "maxLength": 160},
+            "required": ["headline", "search_terms", "opposing_terms", "suggestions", "all_state_agencies"],
+            "properties": {"all_state_agencies": SCOPE_SCHEMA,
+                           "headline": {"type": "string", "maxLength": 160},
                            "search_terms": {"type": "array", "maxItems": 8, "items": TERM},
                            "opposing_terms": {"type": "array", "maxItems": 6, "items": TERM},
                            "suggestions": {"type": "array", "maxItems": 3, "items": {
@@ -47,8 +57,7 @@ def _schema(topics: list[str]) -> dict:
 
 
 def review_input(bundle: dict) -> dict:
-    """Verified claims only (as published): unverified text must not reach a public headline or search terms.
-    No bill ID or version, so identical companion reviews send identical requests (one call, one cache hit)."""
+    """Verified claims only (as published): unverified text must not reach a public headline or search terms."""
     result = bundle["result"]
     verified = {c.get("claim") for c in (bundle.get("validation") or {}).get("verified_citations", [])
                 if c.get("status") == "resolved"}
@@ -65,6 +74,35 @@ def input_hash(bundle: dict) -> str:
     return hashlib.sha256(_canonical(review_input(bundle)).encode("utf-8")).hexdigest()
 
 
+def bill_text(bundle: dict) -> str:
+    """The text as the review saw it, <ins>/<del> kept (see review_audit.marked_text)."""
+    import review_audit
+    return review_audit.marked_text(bundle["document"])
+
+
+def scope_hash(bundle: dict) -> str:
+    """What the scope decision is bound to: the verified review and the text's content (text_hash, which an
+    identical re-render keeps)."""
+    return hashlib.sha256(_canonical({"review": review_input(bundle),
+                                      "text_hash": bundle["document"].get("text_hash")}).encode("utf-8")).hexdigest()
+
+
+def _alnum(text: str) -> str:
+    return re.sub(r"[^0-9a-z]", "", text.lower())
+
+
+def check_scope(scope: dict, document: dict) -> dict:
+    """True only when every quote is current (not deleted) bill text long enough to carry a clause."""
+    import review_audit
+    current = re.sub(r"<del>.*?</del>", " ", review_audit.marked_text(document), flags=re.S)
+    current = _alnum(re.sub(r"</?ins>", "", current))
+    quotes = [" ".join(q.split()) for q in scope["quotes"]]
+    found = [len(_alnum(q)) >= MIN_QUOTE_ALNUM and _alnum(q) in current for q in quotes]
+    applies = bool(scope["applies"])
+    return {"applies": applies, "explanation": " ".join(scope["explanation"].split()),
+            "quotes": quotes if applies else [], "verified": not applies or (bool(quotes) and all(found))}
+
+
 def build_request(bundle: dict, topics: list[str]) -> dict:
     topics = sorted(topics)
     instructions = ((ROOT / "scripts/topic_suggestions_prompt.txt").read_text("utf-8")
@@ -78,7 +116,8 @@ def build_request(bundle: dict, topics: list[str]) -> dict:
             # Same developer text for every bill: one 12-hour prompt-cache prefix serves the whole pass.
             {"role": "developer", "content": [{"type": "input_text", "text": instructions,
                 "prompt_cache_breakpoint": {"mode": "explicit", "ttl": "12h"}}]},
-            {"role": "user", "content": [{"type": "input_text", "text": "REVIEW:\n" + _canonical(review_input(bundle))}]},
+            {"role": "user", "content": [{"type": "input_text", "text": "REVIEW:\n" + _canonical(review_input(bundle))
+                                          + "\n\nBILL TEXT:\n" + bill_text(bundle)}]},
         ],
     }
 
@@ -87,14 +126,15 @@ def _norm(name: str) -> str:
     return " ".join(re.sub(r"[^a-z0-9& ]+", " ", name.lower()).split())
 
 
-def validate(result: dict, topics: list[str]) -> dict:
+def validate(result: dict, topics: list[str], document: dict) -> dict:
     import jsonschema
     jsonschema.Draft202012Validator(_schema(sorted(topics))).validate(result)
+    scope = check_scope(result["all_state_agencies"], document)
     existing = {_norm(t) for t in topics}
     kept, dropped = [], []
     for item in result["suggestions"]:
         (dropped if _norm(item["topic"]) in existing else kept).append(item)
-    return {"errors": [], "kept": kept, "dropped": dropped, "status": "checked",
+    return {"errors": [], "kept": kept, "dropped": dropped, "status": "checked", "scope": scope,
             "headline": " ".join(result["headline"].split()) or None,
             "search_terms": _terms(result["search_terms"]), "opposing_terms": _terms(result["opposing_terms"])}
 
@@ -131,7 +171,7 @@ def suggest(bundle: dict, topics: list[str], registry: list[dict], cache_root: P
     request = build_request(bundle, topics)
 
     def validator(result, document, registry, schema, key, sources=None):
-        return validate(result, topics)
+        return validate(result, topics, document)
 
     return detailed.extract(bundle["document"], registry, cache_root, execute=execute, sender=sender,
                             request=request, validator=validator,
@@ -144,7 +184,30 @@ def record_for(bundle: dict, report: dict) -> dict:
             "errors": report.get("errors", []), "suggestions": report.get("kept", []),
             "dropped": report.get("dropped", []), "input_sha256": input_hash(bundle),
             "headline": report.get("headline"), "search_terms": report.get("search_terms", []),
-            "opposing_terms": report.get("opposing_terms", [])}
+            "opposing_terms": report.get("opposing_terms", []),
+            "scope": ({**report["scope"], "input_sha256": scope_hash(bundle)} if report.get("scope") else None)}
+
+
+def scope_entry(bundle: dict, record: dict | None) -> dict | None:
+    """The public all-state-agencies marker, or None while the second pass has not decided it for this exact
+    review and text (the site then keeps its caption inference). Never the first pass's own marker."""
+    scope = record.get("scope") if isinstance(record, dict) and record.get("status") == "checked" else None
+    if (not isinstance(scope, dict) or not scope.get("verified") or "result" not in bundle
+            or scope.get("input_sha256") != scope_hash(bundle)):
+        return None
+    return {"applies": bool(scope["applies"]), "explanation": scope.get("explanation") or "",
+            "quotes": list(scope.get("quotes") or [])}
+
+
+def read_scope(cache_dir: Path, bill_id: str, bundle: dict) -> dict | None:
+    try:
+        record = json.loads((cache_dir / "suggestions" / (bill_id + ".json")).read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    try:
+        return scope_entry(bundle, record)
+    except (KeyError, TypeError, AttributeError):
+        return None
 
 
 def extras_entry(bundle: dict, record: dict | None) -> dict | None:

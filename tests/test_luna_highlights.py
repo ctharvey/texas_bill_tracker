@@ -81,8 +81,8 @@ class LocateTests(unittest.TestCase):
 
 
 class EntryTests(unittest.TestCase):
-    def entry(self, citations, **kwargs):
-        return pipeline.highlight_entry(bundle(citations, **kwargs), '2026-11-10T00:00:00Z', MARKDOWN, 'I')
+    def entry(self, citations, second=None, **kwargs):
+        return pipeline.highlight_entry(bundle(citations, **kwargs), '2026-11-10T00:00:00Z', MARKDOWN, 'I', second)
 
     def test_claims_mapping_and_key_points(self):
         scope = {'applies': True, 'basis': 'direct', 'explanation': 'all agencies'}
@@ -95,7 +95,8 @@ class EntryTests(unittest.TestCase):
             cite('major_effects:0', 'may impose penalties'),
             cite('major_effects:1', 'and the program expires in 2030'),
             cite('affected_groups:0', 'Funds are appropriated'),
-        ], scope=scope)
+        ], scope=scope,  # the first pass's marker is ignored; the second pass's is located by its quote
+            second={'applies': True, 'explanation': 'all agencies', 'quotes': ['may impose penalties']})
         self.assertEqual(entry['format'], 'texas-bill-luna-highlights-v1')
         self.assertEqual(entry['text_sha256'], hashlib.sha256(MARKDOWN.encode('utf-8')).hexdigest())
         self.assertEqual(entry['text_version'], 'I')

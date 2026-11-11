@@ -61,7 +61,8 @@ class ExtrasTests(SuggestionCase):
     def test_terms_are_trimmed_and_deduplicated(self):
         self.overrides[SUGGEST] = lambda bill, text: body({
             'headline': '  Sets   rules. ', 'search_terms': ['Water', 'water ', 'wells'],
-            'opposing_terms': ['gun control', 'gun rights'], 'suggestions': []})
+            'opposing_terms': ['gun control', 'gun rights'], 'suggestions': [],
+            'all_state_agencies': {'applies': False, 'explanation': '', 'quotes': []}})
         self.seed()
         self.run_once()
         entry = self.extras()['bills']['HB1']

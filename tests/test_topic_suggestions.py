@@ -17,7 +17,7 @@ REAL_TAGS = pipeline.classification.load_policy_tags
 
 
 class SDK(FakeSDK):
-    """Suggestion requests carry no bill text; the bill is read from the summary marker when there is one."""
+    """The bill is read from the first marker in the request (the summary's, else the bill text's)."""
     def create(self, **kw):
         text = json.dumps(kw['input'])
         name = kw['text']['format']['name']
@@ -42,7 +42,8 @@ class SuggestionCase(StagesCase):
 
     def second_pass(self):
         return {'headline': 'Sets rules for water wells.', 'search_terms': ['groundwater'],
-                'opposing_terms': [], 'suggestions': self.suggestions}
+                'opposing_terms': [], 'suggestions': self.suggestions,
+                'all_state_agencies': {'applies': False, 'explanation': '', 'quotes': []}}
 
     def classify(self, bill, text):
         result = classification_result(bill, QUOTE_I, self.first_uncertainties)
@@ -78,12 +79,14 @@ class TopicSuggestionTests(SuggestionCase):
         self.run_once()
         self.assertEqual(self.count(SUGGEST, mark), 0)
 
-    def test_identical_companion_reviews_cost_one_call(self):
+    def test_companion_reviews_are_asked_separately_since_the_request_carries_the_bill_text(self):
+        # The all-agencies marker is decided from the bill text, which differs between companions (bill number,
+        # author), so identical companion reviews no longer share one second-pass call.
         self.summary = lambda bill: 'Shared companion summary.'
         self.seed(['HB1', 'SB1'])
         self.run_once()
-        self.assertEqual(self.count(SUGGEST), 1)  # the second bill's identical request is a cache hit
-        self.assertEqual(self.record('HB1')['request_key'], self.record('SB1')['request_key'])
+        self.assertEqual(self.count(SUGGEST), 2)
+        self.assertNotEqual(self.record('HB1')['request_key'], self.record('SB1')['request_key'])
 
     def test_a_bill_with_queued_questions_waits_until_its_review_settles(self):
         self.first_uncertainties = [{'question': 'Does the sunset apply?', 'affected_claims': ['summary'],

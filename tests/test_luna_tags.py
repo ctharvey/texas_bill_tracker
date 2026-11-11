@@ -39,7 +39,7 @@ class PublicEntryTests(unittest.TestCase):
                                               'impact': 'direct', 'explanation': 'e'}])
         self.assertEqual(entry['locations'], [])  # Luna found none: published as empty, not a fallback.
         self.assertEqual(entry['summary'], 'Summary text')
-        self.assertEqual(entry['all_state_agencies'], {'applies': False, 'explanation': 'x'})
+        self.assertNotIn('all_state_agencies', entry)  # the marker comes only from the second pass
         self.assertEqual(entry['unverified_omitted'], 0)
         self.assertNotIn('evidence', json.dumps(entry))
 
@@ -54,11 +54,13 @@ class PublicEntryTests(unittest.TestCase):
         self.assertNotIn('agencies', entry)
         self.assertNotIn('summary', pipeline.public_entry(review(resolved=ALL[1:]), 'now'))
 
-    def test_statewide_scope_needs_its_own_verified_citation(self):
+    def test_the_first_pass_marker_is_never_published_only_the_second_pass_one(self):
         scope = {'applies': True, 'basis': 'direct', 'explanation': 'all agencies'}
-        self.assertNotIn('all_state_agencies', pipeline.public_entry(review(resolved=ALL, scope=scope), 'now'))
         entry = pipeline.public_entry(review(resolved=ALL + ['all_state_agencies_scope'], scope=scope), 'now')
-        self.assertEqual(entry['all_state_agencies'], {'applies': True, 'explanation': 'all agencies'})
+        self.assertNotIn('all_state_agencies', entry)
+        second = {'applies': True, 'explanation': 'Each agency must report.', 'quotes': ['q']}
+        entry = pipeline.public_entry(review(resolved=ALL), 'now', second)
+        self.assertEqual(entry['all_state_agencies'], {'applies': True, 'explanation': 'Each agency must report.'})
 
     def test_bundle_without_result_is_skipped(self):
         self.assertIsNone(pipeline.public_entry({'bill_id': 'HB1', 'status': 'deferred'}, 'now'))

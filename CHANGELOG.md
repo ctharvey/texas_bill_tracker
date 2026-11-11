@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-11
+- "All state agencies" marker moves to the second pass: decided from the bill text under a stricter rule, published
+  only with verified, undeleted quotes; the first pass's marker is no longer published. The second pass now sends the
+  bill text, so every bill is asked once more (about $0.0003 each) and companions no longer share one call.
 - Markdown only: the PDF review path is retired, and every published Luna file includes a bill only while its
   review matches, byte for byte, a Markdown version the site serves. Re-rendered but identical text keeps its
   review (re-attached with evidence, no cost); real changes wait for re-review (`--allow-text-rereview N`).
