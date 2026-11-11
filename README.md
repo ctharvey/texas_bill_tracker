@@ -245,6 +245,41 @@ or last-action stage. This is separate from the "stage" filter, which is the fur
   Legislative Council records) carries that agency, with a dashed "via companion" tag; the agent-edition search and
   the Agency index counts still count direct tags only.
 
+### Near you
+
+**Near you** (`#local`) shows a visitor's Texas House member and Senator, the bills they filed or signed onto
+(author, coauthor, sponsor, cosponsor, matched by roster code and chamber), and bills that name their county or a city
+in it (Luna `named_place` locations, or "X County" in the caption; a bare name is a city, "X County" a county, no
+fuzzy matching). Statewide bills are counted but not listed; bills written for areas by population size are not
+matched yet.
+
+A location comes from one of: the browser's location (after a notice), a county (with a district picker when the
+county is split), district numbers, or an optional address lookup. The address lookup is the only time anything
+leaves the browser: the typed address goes to the US Census geocoder (JSONP, after a notice), which returns
+coordinates only. Everything else runs in the page (`src/geo.js`: point in polygon, with a "close to a line" warning
+within the simplification tolerance plus accuracy). Only district numbers, the county and how they were found are kept,
+in this device's storage (`texas-bill-atlas-near-you-v1`); coordinates and addresses are never stored, sent to this
+site or put in a URL. "Forget on this device" clears it.
+
+Data (`data/geo/`, built on the desktop by `scripts/build_districts.py`, never on the server):
+
+- `house.json`, `senate.json`: Texas Legislative Council plans PLANH2316 and PLANS2168 (2023-2026, used for the 90th
+  Legislature), simplified to 100 m; `counties.json`: Census `cb_2024_us_county_500k` (Texas), simplified to 250 m.
+  GeoJSON, WGS84, 4 decimals.
+- `districts.json`: TLC report 150 (districts by county, with population shares) and report 125 (cities and CDPs by
+  district), checked against the shapes (150 House and 31 Senate districts, 254 counties, consistent names) or the
+  build stops.
+
+To rebuild after a redistricting: download the two plan shapefiles (`planh2316.zip`, `plans2168.zip`) and the
+`h_r150.xls`, `s_r150.xls`, `h_r125.xls`, `s_r125.xls` reports from data.capitol.texas.gov, and
+`cb_2024_us_county_500k.zip` from census.gov, into one folder; then
+`python scripts/build_districts.py --inputs <folder>` (needs `xlrd==2.0.1`; mapshaper 0.7.98 via `npx` by default,
+or `--mapshaper <path>`). Checked on 2026-11-11: 40 random points (half in the five largest counties) matched the
+Census geocoder's 2026 state legislative district layers 40 of 40.
+
+Senate districts with no member who has a known district show "No member listed yet" rather than a guess
+(members-elect cover House races only for now).
+
 ### Saving and sharing without accounts
 
 There are no logins. People keep and move their choices in five ways:
@@ -284,6 +319,11 @@ Empty fields say whether the full-text review found nothing or is still pending 
 and to be retried), and "reviewed" always means a published review. `404.md` (served by the gateway for missing
 paths) says which bill numbers exist. Output is deterministic; files change only when their data does and stale
 pages are removed.
+
+With `--districts data/geo/districts.json` it also writes `districts/house-<n>.md` and `districts/senate-<n>.md`
+(the member, their bills, bills naming the district's counties or cities, same matching as Near you) and
+`districts/index.md`. Without the flag `src/geo.js` is never loaded, so an older unit that copies only
+`taxonomy.js` and `prefs.js` keeps building, just without district pages. The agent edition takes no location.
 
 Search: `https://agent.bills.ctharvey.me/search?q=<words>` (Markdown, or `format=json`) is served by the sync
 service (`scripts/search_bills.py`) from `live/agent/data/bills.json`, reloaded when it changes. It matches word

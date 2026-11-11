@@ -1,6 +1,11 @@
 # Changelog
 
 ## 2026-11-11
+- New "Near you" view (`#local`): your Texas House member and Senator, the bills they filed or signed, and bills
+  naming your county or city. Set it by browser location, county, district numbers or an optional Census address
+  lookup; only district numbers and the county are kept, on this device. District data from TLC plans
+  PLANH2316/PLANS2168 and Census county lines (`scripts/build_districts.py`, `data/geo/`). Agent edition gains
+  `districts/house-<n>.md` and `senate-<n>.md` (agent unit copies `src/geo.js` and `districts.json`, passes `--districts`).
 - "All state agencies" marker is a vote: two second-pass calls, a third only as a tie-breaker; it publishes once two
   agree (one extra call per bill, two on a disagreement; roughly $0.00015 each). Each vote is its own cached, ledgered request
   bound to the review and text it answered.

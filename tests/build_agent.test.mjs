@@ -220,3 +220,27 @@ test('writePages rewrites only changed files, removes stale pages and keeps unre
     assert.equal(readFileSync(join(dir, 'llms.txt'), 'utf8'), fewer.get('llms.txt'));
   } finally { rmSync(dir, {recursive: true, force: true}); }
 });
+
+test('district pages: member, their bills, bills naming the district\'s counties; none without the tables', async () => {
+  const geo = await import('../src/geo.js');
+  const districts = JSON.parse(readFileSync(new URL('../data/geo/districts.json', import.meta.url), 'utf8'));
+  const roster = {...ROSTER, members: Object.fromEntries(Object.entries(ROSTER.members).map(([k, m]) =>
+    [k, {...m, code: k === 'house|Cole' ? 'A1' : 'A2', display_name: k.split('|')[1]}]))};
+  const bills = [...BILLS, {id: 'HB7', caption: 'Relating to a hospital district in Travis County.', author: 'Doe',
+    authors: ['Doe'], coauthors: [], sponsors: [], cosponsors: [], status: 'Filed', last_action: '11/10/2026 H Filed',
+    actions: ['Filed'], filed_at: '2026-11-10'}];
+  const files = build({snapshot: snapshot(bills), roster, districts, geo});
+  const hd46 = files.get('districts/house-46.md');
+  assert.match(hd46, /Counties: Travis \(part\)\./);
+  assert.match(hd46, /- Rep\. Sheryl Cole: .*\[their bills\]\(https:\/\/agent\.bills\.ctharvey\.me\/authors\/house-cole\.md\)/);
+  assert.match(hd46, /## Filed or signed by this district's member \(1\)[\s\S]*\[HB 5\][^\n]*Rep\. Cole: Author/);
+  assert.match(hd46, /## Bills that name this district's counties or cities \(1\)[\s\S]*\[HB 7\][^\n]*Names Travis County/);
+  assert.match(files.get('districts/house-62.md'), /\[HB 5\][^\n]*Rep\. Smith: Coauthor/);
+  assert.doesNotMatch(files.get('districts/house-1.md'), /HB7/);  // Travis bill stays off a district outside Travis
+  assert.match(files.get('districts/senate-3.md'), /No member with a known district is listed/);
+  const index = files.get('districts/index.md');
+  assert.equal(index.split('\n').filter(l => l.startsWith('| [')).length, 181);
+  assert.match(index, /\[House District 46 \(Cole\)\]/);
+  assert.match(files.get('index.md'), /\[Bills by legislative district\]\(https:\/\/agent\.bills\.ctharvey\.me\/districts\/index\.md\) \(181 groups\)/);
+  assert.ok(![...build().keys()].some(k => k.startsWith('districts/')));
+});

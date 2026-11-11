@@ -174,3 +174,23 @@ a.bill-number:hover{text-decoration:underline}
 .today-row-head{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
 .today-row-head .bill-title-link{font-weight:700;flex:1 1 220px}
 .today-action{margin:6px 0;font-size:13px;color:#526578;overflow-wrap:anywhere}
+.near-setup h3{font:800 16px Manrope,sans-serif;margin:0 0 6px}
+.near-notice{font-size:12px;color:var(--muted);line-height:1.55;margin:0 0 14px}
+.near-busy{font-size:13px;color:var(--teal);font-weight:700;margin:0 0 12px}
+.near-error{font-size:13px;color:var(--red);background:var(--red-soft);border-radius:8px;padding:9px 12px;margin:0 0 12px}
+.near-ways{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.near-way{border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;align-items:flex-start;min-width:0}
+.near-way h4{font:800 13px Manrope,sans-serif;margin:0}.near-way p{font-size:12px;color:var(--muted);margin:0}
+.near-way label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;color:#5d6f80;width:100%}
+.near-way select,.near-way input,.near-address input{border:1px solid #dce5eb;border-radius:7px;padding:9px 10px;font-size:13px;background:#fbfcfd;width:100%;min-width:0}
+.near-numbers{display:flex;gap:8px;width:100%}.near-numbers label{flex:1}
+.near-hint{font-size:12px;color:var(--muted);line-height:1.55;margin:6px 0 10px}
+.near-address{margin-top:14px;font-size:13px}.near-address summary{cursor:pointer;font-weight:700;color:#456076}
+.near-address form{display:flex;gap:8px;flex-wrap:wrap}.near-address input{flex:1 1 240px;width:auto}
+.near-summary{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.near-summary span{color:var(--muted)}.near-summary .near-hint{margin:4px 0 0}
+.near-members{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.near-member{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.near-member small{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#8a97a5;font-weight:800}
+.near-member strong{display:block;font:800 16px Manrope,sans-serif;margin:4px 0}.near-member p{font-size:12px;color:var(--muted);margin:0 0 6px;line-height:1.5}
+@media(max-width:760px){.near-ways,.near-members{grid-template-columns:1fr}.near-summary .tools-row{width:100%}}

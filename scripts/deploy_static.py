@@ -16,7 +16,8 @@ ROOT = Path('/var/www/html/texas-bill-atlas')
 STATE = Path('/var/lib/texas-bill-atlas')
 REPOSITORY = STATE / 'repository.git'
 FILES = ('index.html', 'src/app.js', 'src/taxonomy.js', 'src/styles.css', 'src/review.js', 'src/prefs.js', 'src/sync.js',
-         'data/members.json', 'data/bills.json')
+         'src/geo.js', 'data/members.json', 'data/geo/districts.json', 'data/geo/house.json', 'data/geo/senate.json',
+         'data/geo/counties.json', 'data/bills.json')
 KEEP_RELEASES = 10
 ASSETS = 'assets'
 PAGE_REFERENCES = ('./src/styles.css', './src/app.js')

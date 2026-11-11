@@ -216,7 +216,48 @@ function groupBy(bills, keysOf) {
   return groups;
 }
 
-export function buildPages({snapshot, tags = null, roster = null, status = null, minBills = 1000}) {
+// One page per Texas House and Senate district: its member, their bills, and bills naming its counties or cities.
+// Same matching as the tracker's "Near you" view (src/geo.js). `geo` is that module, passed in so the build still
+// runs where geo.js is not deployed.
+function districtPages({bills, roster, tables, geo, put, files, indexes, asOf}) {
+  const gaz = geo.gazetteer(tables);
+  const rows = [];
+  const billRow = (b, why) => `| [${b.number}](${AGENT}bills/${b.id}.md) | ${cell(why)} | ${cell(b.title)} | ${cell(b.lastAction.label)} | ${b.lastAction.date || ''} |`;
+  const head = '| Bill | Why listed | Title | Last action | Date |\n|---|---|---|---|---|\n';
+  for (const [chamber, count, name, title] of [['house', geo.HOUSE_COUNT, 'House', 'Rep.'], ['senate', geo.SENATE_COUNT, 'Senate', 'Sen.']]) {
+    for (let n = 1; n <= count; n++) {
+      const d = String(n), counties = geo.countiesOf(tables, chamber, d);
+      const split = c => Object.keys(tables.counties?.[c]?.[chamber] || {}).length > 1;
+      const members = geo.membersFor(roster, chamber, d);
+      const memberLines = members.length ? members.map(m => {
+        const authorPage = `authors/${chamber}-${slug(m.display_name || '')}.md`;
+        const links = [files.has(authorPage) ? `[their bills](${AGENT}${authorPage})` : null,
+          typeof m.links?.tlo === 'string' && /^https?:/.test(m.links.tlo) ? `[Texas Legislature Online](${m.links.tlo})` : null].filter(Boolean);
+        return `- ${title} ${cell(m.full_name || m.display_name)}: ${cell(memberSummary(m))}${links.length ? ` (${links.join(', ')})` : ''}`;
+      }).join('\n') : '- No member with a known district is listed for this district yet (a new member\'s district may not be recorded, or results are not posted). Check Texas Legislature Online.';
+      const byMember = new Map();
+      for (const m of members) for (const {bill, role} of geo.billsByMember(bills, m)) {
+        const entry = byMember.get(bill.id) || {bill, notes: []};
+        entry.notes.push(`${title} ${m.display_name}: ${role}`);
+        byMember.set(bill.id, entry);
+      }
+      const area = {counties, exact: false};
+      const local = bills.map(b => ({bill: b, notes: (geo.areaReasons(b, area, gaz) || []).map(r => r.text)})).filter(x => x.notes.length);
+      const list = entries => entries.length ? head + [...entries].sort((a, b) => byRecent(a.bill, b.bill)).map(e => billRow(e.bill, e.notes.join('; '))).join('\n') + '\n' : '_None in this snapshot._\n';
+      const path = `districts/${chamber}-${d}.md`;
+      put(path, `# Texas ${name} District ${d}\n\n${asOf} Districts are the ${tables.plans?.[chamber] || ''} plan used for the 90th Legislature.\n\n`
+        + `Counties: ${counties.map(c => `${c}${split(c) ? ' (part)' : ''}`).join(', ') || 'unknown'}.\n\n## Member\n\n${memberLines}\n\n`
+        + `## Filed or signed by this district's member (${byMember.size})\n\n${list([...byMember.values()])}\n`
+        + `## Bills that name this district's counties or cities (${local.length})\n\nListed when the full-text review names a county, city or CDP in these counties, or the caption names the county. A county marked "(part)" is split between districts, so its bills appear on every district it touches. Bills written for areas by population size are not matched yet; statewide bills are not listed.\n\n${list(local)}\n---\n${DISCLAIMER}\n`);
+      rows.push([`${name} District ${d}${members.length ? ` (${members.map(m => m.display_name).join(', ')})` : ''}`, path, byMember.size + local.length]);
+    }
+  }
+  put('districts/index.md', `# Bills by legislative district\n\nOne page per Texas House (150) and Senate (31) district: the member, the bills they filed or signed onto, and bills naming the district's counties or cities. To find a district from an address, use the official lookup: https://wrm.capitol.texas.gov/home (this site takes no location). The Bills column counts both lists, so a bill can count twice.\n\n| District | Bills |\n|---|---|\n`
+    + rows.map(([label, href, n]) => `| [${linkText(label)}](${AGENT}${href}) | ${n} |`).join('\n') + `\n\n---\n${DISCLAIMER}\n`);
+  indexes.push(['Bills by legislative district', 'districts/index.md', rows.length]);
+}
+
+export function buildPages({snapshot, tags = null, roster = null, status = null, minBills = 1000, districts = null, geo = null}) {
   const bills = loadBills({snapshot, tags, roster, minBills});
   const files = new Map();
   const put = (path, text) => files.set(path, text);
@@ -332,6 +373,8 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   }
   put('authors/index.md', indexPage('Bills by member', `Authors and coauthors serve in the originating chamber; sponsors and cosponsors in the other.${roleNote}`, personRows));
   indexes.push(['Bills by member', 'authors/index.md', personRows.length]);
+
+  if (districts && geo) districtPages({bills, roster, tables: districts, geo, put, files, indexes, asOf});
 
   put('recent.md', groupPage('Most recent actions', `The 100 bills with the most recent recorded actions, so not every bill acted on in a period. For everything filed since a date use ${AGENT}search?filed_from=YYYY-MM-DD or [bills by filing date](${AGENT}filed/index.md); for one action type see [bills by most recent action](${AGENT}last-action/index.md). ${asOf}`,
     [...bills].sort(byRecent).slice(0, 100), tracker({sort: 'latest'})));
@@ -506,14 +549,20 @@ function readJson(path, optional = false) {
   catch (error) { if (optional) return null; throw error; }
 }
 
-function main(argv) {
+async function main(argv) {
   const args = Object.fromEntries(argv.reduce((acc, value, i, all) => value.startsWith('--') ? [...acc, [value.slice(2), all[i + 1]]] : acc, []));
-  if (!args.snapshot || !args.out) throw new Error('Usage: build_agent.mjs --snapshot bills.json --out dir [--tags t.json] [--members m.json] [--status s.json]');
+  if (!args.snapshot || !args.out) throw new Error('Usage: build_agent.mjs --snapshot bills.json --out dir [--tags t.json] [--members m.json] [--status s.json] [--districts districts.json]');
+  // District pages only when the district tables are given; geo.js is loaded only then, so older deployments
+  // that copy just taxonomy.js and prefs.js keep building.
+  const districts = args.districts ? readJson(args.districts) : null;
+  if (districts && districts.format !== 'texas-bill-districts-v1') throw new Error('Unknown districts format');
+  const geo = districts ? await import('../src/geo.js') : null;
   const files = buildPages({snapshot: readJson(args.snapshot), tags: args.tags ? readJson(args.tags, true) : null,
-    roster: args.members ? readJson(args.members, true) : null, status: args.status ? readJson(args.status, true) : null});
+    roster: args.members ? readJson(args.members, true) : null, status: args.status ? readJson(args.status, true) : null,
+    districts, geo});
   mkdirSync(args.out, {recursive: true, mode: 0o755});
   const result = writePages(args.out, files);
   console.log(`Agent pages: ${files.size} total, ${result.written} written, ${result.unchanged} unchanged, ${result.removed} removed`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || '').href) main(process.argv.slice(2));
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) await main(process.argv.slice(2));
