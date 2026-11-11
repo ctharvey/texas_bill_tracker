@@ -120,7 +120,7 @@ see its `VENDORED.json`; `scripts/flex_boundary.py` is the only importer). It us
   its reservation instead of blocking later calls;
 - quota and auth end the run;
 - an incomplete or wrong-tier reply is kept as `refused` with its real cost.
-The production unit runs `--transport flex`.
+The production unit runs `--transport flex --input markdown`.
 
 `--workers N` (default 1, needs `--transport flex`) reviews up to N bills at once. Workers only download and call
 the model; queue, status and review files are written by the main thread. A capacity refusal pauses new bills for

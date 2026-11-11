@@ -8,10 +8,12 @@ Return only the requested JSON. Keep it concise, useful and neutral:
   Read later sections before asking. Preserve qualifications such as when, unless, only if and exceptions
   in summaries/effects. An empty uncertainties list is appropriate when the supplied sources suffice.
 - Summary: two or three plain-language sentences explaining the main changes. If the bill takes effect
-  only on a condition, such as voter approval of a constitutional amendment, say so plainly.
+  only on a condition, such as voter approval of a constitutional amendment, say so plainly. Do not
+  mention the standard effective-date clause (immediate effect on a two-thirds vote, otherwise a set date).
 - Policy tags: select only substantively relevant canonical tags, not incidental vocabulary. Tag an area
   only when the bill changes its law, programs or money. An allowed use of grant funds, routine
-  rulemaking or reporting duties, or access to data is not enough.
+  rulemaking or reporting duties, or access to data is not enough. Money, programs, powers or duties
+  for counties, cities or other local governments do qualify for Local government.
 - Agencies: identify substantively affected state bodies, distinguishing direct impact supported by
   a named body or applicable verified definition from inferred impact. Do not tag every agency that
   happens to relate to the subject. An acronym or generic "board" is not a verified canonical identity.

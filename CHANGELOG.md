@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-10
+- Review worker reads the official Markdown text (`--input markdown`) instead of the introduced PDF. The prompt
+  no longer has the summary repeat the standard effective-date clause, and local-government money, programs,
+  powers or duties count for Local government.
 - Review prompt: contiguous quotes only (no "..." joins), named Texas courts map to `tx-courts`, tags need a change
   to that area's law, programs or money, and a conditional effective date is stated in the summary. Bills reviewed
   again after this send a new request (their old cache entries no longer match).
