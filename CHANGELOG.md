@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-10
+- Review: a span ID written with its source label (`[P015S001; paragraph 15]`) is read as the bare ID before
+  validation; Markdown input now labels paragraphs `[P015S001]` and tells the model to cite bare IDs. PDF requests
+  are unchanged.
 - Review worker: `--workers N` (flex transport only, default 1) reviews several bills at once; the main thread keeps
   every queue/status/review write, and a capacity pause, unknown outcome or quota stop applies to all workers.
 - Review worker: `--transport flex` routes Luna calls through a vendored copy of cth.flex 0.1.5 (client, spend ledger

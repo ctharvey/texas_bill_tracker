@@ -212,7 +212,7 @@ def build_request(document: dict, registry: list[dict], *, schema: dict | None =
     vocabulary = json.dumps({"agencies": agencies, "scope_markers": scope}, ensure_ascii=False,
                             sort_keys=True, separators=(",", ":"))
     source = "\n\n".join(
-        f"[{key}; paragraph {span['page']}]\n{span['marked']}" if "marked" in span
+        f"[{key}]\n{span['marked']}" if "marked" in span
         else f"[{key}; PDF page {span['page']}]\n{span['text']}"
         for key, span in document["spans"].items())
     # Only semantic identity enters the model request. URLs, timestamps, PDF metadata, authors and
@@ -406,6 +406,39 @@ def send_request(request: dict) -> dict:
     raise AssertionError("Unreachable retry state")
 
 
+# A span ID copied together with its source label, e.g. "[P015S001; paragraph 15]" or "[P015S001; paragraph".
+_LABELED_SPAN = re.compile(r"\[\s*(P\d{3,}S\d{3,})\s*(?:[;\]].*)?", re.S)
+
+
+def normalize_span_ids(result, document: dict):
+    """Rewrite span IDs written with their source label to the bare ID, in place, everywhere in the result.
+
+    Only a value that is not already a known span and whose bare ID is a known span changes; anything else
+    is left for validation to reject."""
+    spans = document["spans"]
+
+    def clean(value):
+        if not isinstance(value, str) or value in spans:
+            return value
+        match = _LABELED_SPAN.fullmatch(value.strip())
+        return match[1] if match and match[1] in spans else value
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "span_id":
+                    node[key] = clean(value)
+                elif key == "span_ids" and isinstance(value, list):
+                    node[key] = [clean(v) for v in value]
+                else:
+                    walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+    walk(result)
+    return result
+
+
 def extract(document: dict, registry: list[dict], cache_root: Path, *, execute: bool = False,
             sender=None, request: dict | None = None, validator=None, cost_estimator=None, cache=None) -> dict:
     check_cache_location(cache_root)
@@ -441,7 +474,7 @@ def extract(document: dict, registry: list[dict], cache_root: Path, *, execute: 
             raise ValueError("Incomplete response or unexpected model/service tier; not retried")
         output = "".join(part["text"] for item in raw.get("output", []) if item.get("type") == "message"
                          for part in item.get("content", []) if part.get("type") == "output_text")
-        result = json.loads(output)
+        result = normalize_span_ids(json.loads(output), document)
         report.update((validator or validate_result)(
             result, document, registry, request["text"]["format"]["schema"], key))
         report["result"] = result
