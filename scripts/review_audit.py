@@ -68,7 +68,20 @@ def review_hash(bundle: dict) -> str:
 
 
 def bill_text(document: dict) -> str:
+    """Plain text (markup removed): what auditor quotes are checked against."""
     return "\n\n".join(page for page in document["pages"] if page.strip())
+
+
+def marked_text(document: dict) -> str:
+    """The text as the review saw it: <ins>/<del> kept, so deleted language is not read as law. Spans are rejoined
+    into their paragraphs; PDF documents have no markup and fall back to plain text."""
+    spans = document.get("spans") or {}
+    if not spans or not all("marked" in span for span in spans.values()):
+        return bill_text(document)
+    paragraphs: dict[int, list[str]] = {}
+    for span in spans.values():
+        paragraphs.setdefault(span["page"], []).append(span["marked"])
+    return "\n\n".join(" ".join(parts) for _, parts in sorted(paragraphs.items()))
 
 
 def build_request(bundle: dict, document: dict) -> dict:
@@ -82,7 +95,7 @@ def build_request(bundle: dict, document: dict) -> dict:
             {"role": "developer", "content": [{"type": "input_text", "text": instructions,
                 "prompt_cache_breakpoint": {"mode": "explicit", "ttl": "12h"}}]},
             {"role": "user", "content": [{"type": "input_text",
-                "text": "REVIEW:\n" + _canonical(review_for_audit(bundle)) + "\n\nBILL TEXT:\n" + bill_text(document)}]},
+                "text": "REVIEW:\n" + _canonical(review_for_audit(bundle)) + "\n\nBILL TEXT:\n" + marked_text(document)}]},
         ],
     }
 

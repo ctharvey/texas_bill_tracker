@@ -216,6 +216,34 @@ class RelatedTests(SuggestionCase):
         self.assertFalse((self.live / 'luna' / 'related.json').exists())
 
 
+class AuditTextTests(unittest.TestCase):
+    MARKDOWN = ('# HB 7 - Introduced\n\nSECTION 1. Section 2.01 is amended to read:\n\n'
+                'An office may <del>not offer the old program</del> <ins>offer the new program</ins> to students.\n\n'
+                + 'Long paragraph ' + 'word ' * 200 + 'END.\n')
+
+    def document(self):
+        return pipeline.detailed.document_from_markdown('HB7', '90R', 'introduced', self.MARKDOWN)
+
+    def test_the_auditor_sees_insertions_and_deletions(self):
+        document = self.document()
+        bundle = {'bill_id': 'HB7', 'document': document, 'validation': {'verified_citations': []},
+                  'result': {'summary': {'text': 'x'}}}
+        text = review_audit.build_request(bundle, document)['input'][1]['content'][0]['text']
+        self.assertIn('<del>not offer the old program</del> <ins>offer the new program</ins>', text)
+        self.assertIn('<ins>', review_audit.build_request(bundle, document)['input'][0]['content'][0]['text'])
+        marked = review_audit.marked_text(document)
+        self.assertEqual(marked.count('\n\n'), review_audit.bill_text(document).count('\n\n'))  # paragraphs kept
+        self.assertIn('word ' * 199 + 'word END.', ' '.join(marked.split()) + ' ')  # split spans rejoined
+
+    def test_quotes_are_checked_without_the_tags(self):
+        result = {'verdict': 'major_issues', 'issues': [
+            {'claim': 'summary', 'problem': 'p', 'severity': 'major', 'quote': 'offer the new program'},
+            {'claim': 'summary', 'problem': 'p', 'severity': 'major', 'quote': '<ins>offer the new program</ins>'},
+            {'claim': 'summary', 'problem': 'p', 'severity': 'minor', 'quote': 'not in this bill'}]}
+        found = [i['quote_found'] for i in review_audit.validate(result, self.document())['issues']]
+        self.assertEqual(found, [True, True, False])
+
+
 class TopRelatedTests(unittest.TestCase):
     def test_keeps_the_best_five_in_order(self):
         unit = lambda v: [x / sum(y * y for y in v) ** .5 for x in v]
