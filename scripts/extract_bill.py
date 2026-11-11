@@ -496,6 +496,9 @@ def main() -> int:
     parser.add_argument("--cache-dir", type=Path, default=default_cache / "texas-bill-atlas" / "extraction")
     parser.add_argument("--execute", action="store_true", help="Allow a paid call only on a cache miss")
     args = parser.parse_args()
+    if args.execute:
+        parser.error("PDF reviews are retired: paid reviews read only the live Markdown text "
+                     "(scripts/review_pipeline.py --input markdown); without --execute this only prepares a request")
     if not args.source_url.startswith("ftp://ftp.legis.state.tx.us/bills/"):
         parser.error("Use the official TLC bulk FTP source URL")
     try:

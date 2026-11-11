@@ -532,42 +532,13 @@ def reuse_companion_review(bill_id: str, document: dict, companions: list, cache
     return None
 
 
+class MarkdownOnly(RuntimeError):
+    """Reviews read only the official Markdown text the site serves; the introduced-PDF path is retired."""
+
+
 def download_document(bill_id: str, root: Path, ftp_factory=ftplib.FTP) -> dict:
-    match = re.fullmatch(r"(HB|SB|HJR|SJR|HCR|SCR|HR|SR)([1-9]\d{0,4})", bill_id)
-    if not match:
-        raise ValueError("Invalid bill ID")
-    family, number = match[1], int(match[2])
-    stem = {"HJR": "HJ", "SJR": "SJ", "HCR": "HC", "SCR": "SC"}.get(family, family)
-    directory = ("house" if family.startswith("H") else "senate") + "_" + {
-        "HB": "bills", "SB": "bills", "HJR": "joint_resolutions", "SJR": "joint_resolutions",
-        "HCR": "concurrent_resolutions", "SCR": "concurrent_resolutions", "HR": "resolutions", "SR": "resolutions"}[family]
-    start = max(1, number // 100 * 100); end = number // 100 * 100 + 99
-    remote = f"/bills/90R/billtext/PDF/{directory}/{stem}{start:05d}_{stem}{end:05d}/{stem}{number:05d}I.pdf"
-    folder = root / "documents" / bill_id; folder.mkdir(parents=True, exist_ok=True)
-    pdf, record = folder / "introduced.pdf", folder / "document.json"
-    with ftp_factory("ftp.legis.state.tx.us", timeout=45) as ftp:
-        ftp.login()
-        try:
-            modified = ftp.sendcmd("MDTM " + remote)
-        except ftplib.error_perm:
-            modified = None
-        if record.exists() and pdf.exists() and modified:
-            document = json.loads(record.read_text("utf-8"))
-            if document.get("ftp_modified") == modified:
-                return document
-        temporary = pdf.with_suffix(".download")
-        with temporary.open("wb") as stream:
-            ftp.retrbinary("RETR " + remote, stream.write)
-        try:
-            document = detailed.read_pdf(temporary, bill_id, "90R", "introduced")
-        except Exception as error:
-            if type(error).__module__.split(".")[0] == "pypdf":
-                raise ValueError("Unreadable bill PDF") from error  # Per-bill failure, not a worker fault.
-            raise
-        temporary.replace(pdf)
-        document.update(source_url="ftp://ftp.legis.state.tx.us" + remote, ftp_modified=modified)
-        atomic_json(record, document)
-        return document
+    """Retired PDF input. Raises before any connection or call; the worker treats it as a stop, not a bill failure."""
+    raise MarkdownOnly("PDF input is retired: reviews read only the live Markdown text (use --input markdown)")
 
 
 def load_markdown_document(bill_id: str, text_dir: Path, version: str = "I") -> dict:
@@ -623,9 +594,52 @@ def public_entry(bundle: dict, reviewed_at: str) -> dict | None:
     return entry
 
 
-def publish_tags(cache_dir: Path, out: Path, registry: list[dict]) -> int:
+def served_text_dir(publish_tags: Path) -> Path:
+    """The bill text the site serves (live/text, beside live/luna); what published reviews must match."""
+    return publish_tags.parent.parent / "text"
+
+
+def matches_served_markdown(bill_id: str, bundle: dict, served: Path) -> bool:
+    """True only for a review read from Markdown whose exact text is a version the site serves now: the review's
+    hash, the served index entry and the served file's bytes must all agree."""
+    document = bundle.get("document") if isinstance(bundle, dict) else None
+    if not isinstance(document, dict) or document.get("input_format") != "markdown":
+        return False
+    version = document.get("version")
+    code = "I" if version == "introduced" else version
+    if (not isinstance(code, str) or not re.fullmatch(r"[A-Za-z0-9]{1,8}", code)
+            or not re.fullmatch(r"[A-Z]{2,4}\d{1,5}", bill_id) or not document.get("text_sha256")):
+        return False
+    try:
+        index = json.loads((served / bill_id / "index.json").read_text("utf-8"))
+        entry = next(v for v in index["versions"] if isinstance(v, dict) and v.get("code") == code)
+        data = (served / bill_id / (code + ".md")).read_bytes()
+    except (OSError, ValueError, KeyError, TypeError, StopIteration):
+        return False
+    return entry.get("sha256") == document["text_sha256"] == hashlib.sha256(data).hexdigest()
+
+
+def live_reviews(cache_dir: Path, served: Path) -> tuple[set[str], list[str]]:
+    """(bills whose current review matches the served Markdown, reviewed bills withheld because it does not)."""
+    live, withheld = set(), []
+    for path in sorted((cache_dir / "reviews").glob("*.json")):
+        try:
+            bundle = json.loads(path.read_text("utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(bundle, dict) or not isinstance(bundle.get("result"), dict):
+            continue
+        (live.add(path.stem) if bundle.get("bill_id") == path.stem
+         and matches_served_markdown(path.stem, bundle, served) else withheld.append(path.stem))
+    return live, withheld
+
+
+def publish_tags(cache_dir: Path, out: Path, registry: list[dict], live: set[str] | None = None) -> int:
+    """`live`: when given, only these bills are published (see live_reviews)."""
     bills = {}
     for path in sorted((cache_dir / "reviews").glob("*.json")):
+        if live is not None and path.stem not in live:
+            continue
         try:
             bundle = json.loads(path.read_text("utf-8"))
         except (OSError, ValueError):
@@ -748,11 +762,18 @@ def highlight_entry(bundle: dict, reviewed_at: str, markdown: str, version_code:
             "claims": claims, "unlocated": unlocated}
 
 
-def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path) -> int:
+def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path, live: set[str] | None = None) -> int:
+    """`live`: when given, only these bills are published and any other bill's highlight file is removed."""
     done = 0
     out_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(out_dir, 0o755)  # Served publicly; the worker's UMask=0077 would otherwise create it 0700.
+    if live is not None:
+        for stale in out_dir.glob("*.json"):
+            if stale.stem not in live:
+                stale.unlink(missing_ok=True)
     for path in sorted((cache_dir / "reviews").glob("*.json")):
+        if live is not None and path.stem not in live:
+            continue
         try:
             bundle = json.loads(path.read_text("utf-8"))
             if (not isinstance(bundle, dict) or not isinstance(bundle.get("result"), dict)
@@ -803,8 +824,10 @@ def _publish_dir(out_dir: Path, payloads: dict[str, dict]) -> int:
     return len(payloads)
 
 
-def _current_reviews(cache_dir: Path):
+def _current_reviews(cache_dir: Path, live: set[str] | None = None):
     for path in sorted((cache_dir / "reviews").glob("*.json")):
+        if live is not None and path.stem not in live:
+            continue
         try:
             bundle = json.loads(path.read_text("utf-8"))
         except (OSError, ValueError):
@@ -814,10 +837,10 @@ def _current_reviews(cache_dir: Path):
             yield path.stem, bundle, stamp.replace("+00:00", "Z")
 
 
-def publish_changes(cache_dir: Path, out_dir: Path) -> int:
+def publish_changes(cache_dir: Path, out_dir: Path, live: set[str] | None = None) -> int:
     """Stage 2: verified changes of each current version-update review, bound to its version and text."""
     payloads = {}
-    for bill_id, bundle, stamp in _current_reviews(cache_dir):
+    for bill_id, bundle, stamp in _current_reviews(cache_dir, live):
         update, document = bundle.get("version_update"), bundle.get("document") or {}
         if not isinstance(update, dict) or not isinstance(bundle.get("changes"), list):
             continue
@@ -831,11 +854,11 @@ def publish_changes(cache_dir: Path, out_dir: Path) -> int:
     return _publish_dir(out_dir, payloads)
 
 
-def publish_fiscal(cache_dir: Path, out_dir: Path) -> int:
+def publish_fiscal(cache_dir: Path, out_dir: Path, live: set[str] | None = None) -> int:
     """Stage 4: verified fiscal-note comparisons whose binding still matches the bill's current review."""
     import review_stages
     payloads = {}
-    for bill_id, bundle, _ in _current_reviews(cache_dir):
+    for bill_id, bundle, _ in _current_reviews(cache_dir, live):
         path = cache_dir / "fiscal" / (bill_id + ".json")
         try:
             record = json.loads(path.read_text("utf-8"))
@@ -929,7 +952,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="After the run, write verified Luna tags for every reviewed bill to this public file")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--input", choices=("pdf", "markdown"), default="pdf",
-                        help="Bill text source: the TLC PDF (default) or the data run's official Markdown text")
+                        help="Bill text source. Only markdown (the official text the site serves) is supported; the "
+                             "pdf path is retired and stops the run before any call")
     parser.add_argument("--text-dir", type=Path, default=None,
                         help="Markdown text directory for --input markdown (default: <snapshot dir>/text)")
     parser.add_argument("--question-effort", choices=("low", "medium", "high"), default="medium",
@@ -1068,13 +1092,13 @@ def audit_reviews(args, queue: dict, budget, deadline: float) -> int:
     return _second_pass("Review audit", jobs(), args, deadline)
 
 
-def publish_related(args) -> None:
+def publish_related(args, live: set[str] | None = None) -> None:
     """Related bills from embeddings (not Flex: no Luna ledger). Any failure keeps the previous file."""
     import related_bills
     import topic_suggestions
     snapshot = json.loads(args.snapshot.read_text("utf-8"))
     summaries = {bill_id: topic_suggestions.review_input(bundle)["summary"]
-                 for bill_id, bundle, _ in _current_reviews(args.cache_dir)}
+                 for bill_id, bundle, _ in _current_reviews(args.cache_dir, live)}
     count, tokens = related_bills.publish(snapshot["bills"], {k: v for k, v in summaries.items() if v},
                                           args.cache_dir, args.publish_tags.parent / "related.json",
                                           embedder=RELATED_EMBEDDER or related_bills.openai_embedder)
@@ -1099,6 +1123,11 @@ def main():
         parser.error("--workers above 1 needs --transport flex (the legacy budget allows one call in flight)")
     if args.stages and args.input != "markdown":
         parser.error("--stages needs --input markdown")
+    if (args.publish_tags and args.input == "markdown"
+            and (args.text_dir or args.snapshot.parent / "text").resolve()
+            != served_text_dir(args.publish_tags).resolve()):
+        parser.error("--text-dir must be the live text the site serves (beside --publish-tags): published reviews "
+                     "must match it")
     worker = contextlib.ExitStack()
     try:
         worker.enter_context(ResponseCache(args.cache_dir / "worker-lock")._lock("worker"))
@@ -1442,23 +1471,31 @@ def main():
         if args.audit_sample and args.input == "markdown" and not stopped and not halt.is_set():
             audit_reviews(args, queue, budget, deadline)
         print("New model spending this run: $%.6f" % budget.run_spent)
-        if args.publish_tags:
+        if args.publish_tags and not served_text_dir(args.publish_tags).is_dir():
+            print("Live bill text directory missing; no Luna files published (earlier files kept)", flush=True)
+        elif args.publish_tags:
+            # Only reviews of the exact Markdown the site serves are published, by every publisher below.
+            served = served_text_dir(args.publish_tags)
+            live, withheld = live_reviews(args.cache_dir, served)
+            if withheld:
+                print("Withheld %d reviews whose text is not the live Markdown, e.g. %s"
+                      % (len(withheld), ", ".join(withheld[:8])), flush=True)
             try:
                 print("Published Luna tags for", publish_tags(args.cache_dir, args.publish_tags,
-                                                               detailed.load_registry()), "bills", flush=True)
+                                                               detailed.load_registry(), live), "bills", flush=True)
             except OSError as error:
                 print("Tag publish failed:", type(error).__name__, flush=True)
                 raise SystemExit(3)
             if args.snapshot:
                 try:
                     print("Published Luna highlights for",
-                          publish_highlights(args.cache_dir, args.snapshot.parent / "text",
-                                             args.publish_tags.parent / "highlights"), "bills", flush=True)
+                          publish_highlights(args.cache_dir, served, args.publish_tags.parent / "highlights", live),
+                          "bills", flush=True)
                 except Exception as error:
                     print("Highlight publish failed:", type(error).__name__, flush=True)
                 if args.related_bills and args.execute and not halt.is_set():
                     try:
-                        publish_related(args)
+                        publish_related(args, live)
                     except Exception as error:
                         print("Related bills not updated:", type(error).__name__, flush=True)
                 if args.stages:
@@ -1466,7 +1503,8 @@ def main():
                                                   ("fiscal checks", "fiscal", publish_fiscal)):
                         try:
                             print("Published Luna", name, "for",
-                                  publish(args.cache_dir, args.publish_tags.parent / folder), "bills", flush=True)
+                                  publish(args.cache_dir, args.publish_tags.parent / folder, live), "bills",
+                                  flush=True)
                         except Exception as error:
                             print("Publishing", name, "failed:", type(error).__name__, flush=True)
             for flag, name, module, filename in ((args.suggest_topics, "extras", "topic_suggestions", "extras.json"),
@@ -1476,7 +1514,7 @@ def main():
                 try:
                     publisher = __import__(module)
                     publish = publisher.publish_extras if name == "extras" else publisher.publish
-                    reviews = [(bill_id, bundle) for bill_id, bundle, _ in _current_reviews(args.cache_dir)]
+                    reviews = [(bill_id, bundle) for bill_id, bundle, _ in _current_reviews(args.cache_dir, live)]
                     print("Published Luna", name, "for", publish(reviews, args.cache_dir,
                                                                   args.publish_tags.parent / filename),
                           "bills", flush=True)
