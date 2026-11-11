@@ -147,6 +147,8 @@ def build_version_update_request(document: dict, registry: list[dict], previous:
                   "required": ["kind", "label", "explanation", "evidence"], "additionalProperties": False}}
     schema["required"] = [*schema["required"], "changes"]
     request["text"]["format"]["name"] = "texas_bill_version_update_v1"
+    # The full classification plus changes: stage 1's 12000 cut off an 89R HB2 update (9477 reasoning tokens).
+    request["max_output_tokens"] = 32000
     request["input"][1]["content"][0]["text"] += (
         "\nPREVIOUS VERSION REVIEW (" + previous["version"] + "; evidence quotes refer to that text):\n"
         + json.dumps(previous["result"], sort_keys=True, ensure_ascii=False, separators=(",", ":"))
