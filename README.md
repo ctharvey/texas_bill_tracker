@@ -143,7 +143,7 @@ headline as "In brief" and adds the terms to search. No headline is shown when t
 
 `--related-bills` (with `--execute`) publishes `live/luna/related.json`: OpenAI `text-embedding-3-small` vectors (256
 dimensions) of each bill's caption and verified summary, cached by content in `cache/embeddings/`, with each call's
-tokens and cost logged to `cache/embeddings/usage.jsonl`. The top five neighbours above 0.45 cosine are kept, excluding
+tokens and cost logged to `cache/embeddings/usage.jsonl`. The top five neighbours at or above 0.5 cosine are kept, excluding
 listed companions and identical text. Embeddings do not go through the Luna ledger; a failure keeps the previous file.
 
 `--stages` (needs `--input markdown`) runs the staged review

@@ -22,7 +22,7 @@ MODEL = "text-embedding-3-small"
 DIMENSIONS = 256
 PRICE_PER_MILLION = 0.02  # USD per million input tokens, text-embedding-3-small
 TOP = 5
-MIN_SCORE = 0.45
+MIN_SCORE = 0.5
 BATCH = 256
 MAX_TEXT = 4000
 
