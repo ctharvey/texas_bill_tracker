@@ -750,6 +750,8 @@ def highlight_entry(bundle: dict, reviewed_at: str, markdown: str, version_code:
 
 def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path) -> int:
     done = 0
+    out_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(out_dir, 0o755)  # Served publicly; the worker's UMask=0077 would otherwise create it 0700.
     for path in sorted((cache_dir / "reviews").glob("*.json")):
         try:
             bundle = json.loads(path.read_text("utf-8"))
