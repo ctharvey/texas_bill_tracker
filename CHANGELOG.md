@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-10
+- Review prompt: contiguous quotes only (no "..." joins), named Texas courts map to `tx-courts`, tags need a change
+  to that area's law, programs or money, and a conditional effective date is stated in the summary. Bills reviewed
+  again after this send a new request (their old cache entries no longer match).
 - Review: a span ID written with its source label (`[P015S001; paragraph 15]`) is read as the bare ID before
   validation; Markdown input now labels paragraphs `[P015S001]` and tells the model to cite bare IDs. PDF requests
   are unchanged.
