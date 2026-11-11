@@ -1052,10 +1052,13 @@ def utc_stamp(seconds_from_now: float = 0) -> str:
 
 
 def publish_status(out: Path, queue: dict, *, current: str | None, upcoming: list[str], running: bool,
-                   waiting_until: str | None = None) -> None:
+                   waiting_until: str | None = None, in_progress: list[str] | None = None) -> None:
     # Public progress view: bill ids and states only, never costs, reasons or review content.
+    # `in_progress`: every bill a worker holds now (several with --workers); `current` stays for older readers.
+    active = list(dict.fromkeys(in_progress if in_progress is not None else ([current] if current else [])))
     atomic_json(out, {"format": "texas-bill-luna-status-v1", "updated_at": utc_stamp(),
-                      "running": running, "current": current, "upcoming": upcoming, "waiting_until": waiting_until,
+                      "running": running, "current": current,
+                      "in_progress": active, "upcoming": upcoming, "waiting_until": waiting_until,
                       "reviewed": list(queue.get("seen", [])), "retry": list(queue.get("retry", [])),
                       "failed": {k: v.get("stage") for k, v in queue.get("failed", {}).items()}})
     os.chmod(out, 0o644)
@@ -1399,10 +1402,12 @@ def main():
         try:
             pending, cooling, capacity_waits, redo = deque(candidates), [], 0, set()
             stopping = False  # several workers: no new bills; in-flight ones finish and are recorded
+            running: dict = {}  # future -> bill id; workers keep going while the main thread pauses
 
             def pause(seconds: float, current: str | None) -> None:
+                held = list(dict.fromkeys(([current] if current else []) + list(running.values())))
                 try_publish_status(status_path, queue, current=current, upcoming=list(pending)[:5], running=True,
-                                   waiting_until=utc_stamp(seconds))
+                                   waiting_until=utc_stamp(seconds), in_progress=held)
                 time.sleep(seconds)
 
             def defer_for_capacity(bill_id: str, retry_after: float) -> None:
@@ -1644,7 +1649,6 @@ def main():
                 # Workers run only `work`; every queue, status and review write stays on this thread. A capacity
                 # refusal pauses dispatch here, so no worker starts a new bill during the pause. The ledger and
                 # cache, not this loop, keep two calls from sharing a request or an unknown outcome.
-                running: dict = {}
                 with ThreadPoolExecutor(args.workers, thread_name_prefix="review") as pool:
                     while True:
                         while not stopping and not halt.is_set() and len(running) < args.workers:
@@ -1658,7 +1662,7 @@ def main():
                                 break
                             running[pool.submit(work, bill_id, asks_questions(bill_id), visit_plan(bill_id))] = bill_id
                             try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5],
-                                               running=True)
+                                               running=True, in_progress=list(running.values()))
                         if not running:
                             break
                         ready_at = min((when for when, _ in cooling), default=None)
@@ -1670,6 +1674,10 @@ def main():
                             bill_id = running.pop(future)
                             if handle(bill_id, *future.result()):
                                 stopping = stopped = True
+                        if done:  # a finished bill leaves the progress view now, not when the next one starts
+                            active = list(running.values())
+                            try_publish_status(status_path, queue, current=active[-1] if active else None,
+                                               upcoming=list(pending)[:5], running=True, in_progress=active)
         finally:
             try_publish_status(status_path, queue, current=None, upcoming=[], running=False)
         if args.suggest_topics and not stopped and not halt.is_set():

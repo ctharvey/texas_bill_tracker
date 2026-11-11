@@ -332,14 +332,18 @@ const ACTION_CHAMBER = {H:'House', S:'Senate', E:'Governor'};
 export function reviewProgress(ids, status, taggedIds = []) {
   const list = v => Array.isArray(v) ? v.filter(x => typeof x === 'string') : [];
   const failedMap = status?.failed && typeof status.failed === 'object' && !Array.isArray(status.failed) ? status.failed : {};
-  const current = status?.running && typeof status.current === 'string' ? status.current : null;
+  const known = new Set(ids);
+  // `in_progress` lists every bill a worker holds (several run at once); older status files only have `current`.
+  const held = !status?.running ? [] : Array.isArray(status.in_progress) ? list(status.in_progress)
+    : typeof status.current === 'string' ? [status.current] : [];
+  const active = [...new Set(held)].filter(id => known.has(id));
+  const activeSet = new Set(active);
   const retry = new Set(list(status?.retry));
   const seen = new Set([...list(status?.reviewed), ...taggedIds]);
-  const known = new Set(ids);
-  const out = {current: known.has(current) ? current : null, upcoming: list(status?.upcoming).filter(id => known.has(id)),
+  const out = {current: active[0] ?? null, active, upcoming: list(status?.upcoming).filter(id => known.has(id) && !activeSet.has(id)),
     reviewed: [], inProgress: [], failed: [], notStarted: []};
   for (const id of ids) {
-    if (id === out.current) continue;
+    if (activeSet.has(id)) continue;
     if (Object.hasOwn(failedMap, id)) out.failed.push({id, stage: typeof failedMap[id] === 'string' ? failedMap[id] : null});
     else if (retry.has(id)) out.inProgress.push(id);
     else if (seen.has(id)) out.reviewed.push(id);
@@ -352,7 +356,7 @@ export function reviewProgress(ids, status, taggedIds = []) {
 // waits for follow-up questions, so it counts as reviewed. A download failure means no text is posted yet.
 export function reviewSummary(p) {
   const noText = p.failed.filter(f => f.stage === 'download').map(f => f.id);
-  return {current: p.current, upcoming: p.upcoming, reviewed: [...p.reviewed, ...p.inProgress],
+  return {current: p.current, active: [...(p.active ?? (p.current ? [p.current] : []))], upcoming: p.upcoming, reviewed: [...p.reviewed, ...p.inProgress],
     questionsQueued: [...p.inProgress], noText, failed: p.failed.filter(f => f.stage !== 'download'),
     notStarted: [...p.notStarted]};
 }

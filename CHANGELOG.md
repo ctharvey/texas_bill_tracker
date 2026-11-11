@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-11
+- Review progress: shows every bill under review at once (up to three with `--workers 3`), not just the last one
+  started. `status.json` gains `in_progress`, rewritten as each bill starts and finishes; `current` stays.
 - Data sync: TLC's "not currently available, see the PDF" placeholder text is counted as `not_posted` and logged as
   "official text not posted yet" instead of a conversion failure; it is still retried every run.
 - Companions: an agency filter also lists a bill whose companion carries that agency (dashed "via companion" tag),

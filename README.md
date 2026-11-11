@@ -119,8 +119,9 @@ Missing or mismatched text is a download failure, retried after the next data ru
 different cache keys, so switching re-reviews every bill. See
 `.agent/plans/texas-bill-tracker-staged-luna-review-plan-2026-11-10.md` (workspace) for the staged design.
 With `--publish-tags` and `--execute`, the worker also writes `live/luna/status.json`
-(`texas-bill-luna-status-v1`: the bill being reviewed, the next five, and the reviewed, retry and failed bill
-ids, with the failure stage only). It is rewritten before each bill and on every exit. The tracker's
+(`texas-bill-luna-status-v1`: `in_progress`, every bill a worker holds now, up to `--workers`; `current`, one of
+them, kept for older readers; the next five; and the reviewed, retry and failed bill ids, with the failure stage
+only). It is rewritten when each bill starts and finishes, and on every exit. The tracker's
 **Review progress** view reads it, refreshes it every minute while open, and treats a running status older
 than 90 minutes as possibly stopped; without it, bills with published tags count as reviewed.
 The limit cannot be raised above $1 via CLI. Do not remove the ledger or uncertain response records to retry.

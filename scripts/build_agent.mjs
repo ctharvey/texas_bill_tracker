@@ -233,7 +233,7 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   const progress = reviewProgress(bills.map(b => b.id), status, Object.keys(tags?.bills || {}));
   const published = new Set(bills.filter(b => b.luna).map(b => b.id));
   const reviewState = new Map();
-  if (progress.current) reviewState.set(progress.current, published.has(progress.current) ? 're-review under way now' : 'under review now');
+  for (const id of progress.active) reviewState.set(id, published.has(id) ? 're-review under way now' : 'under review now');
   for (const f of progress.failed) reviewState.set(f.id, `${published.has(f.id) ? 'last re-review' : 'review'} failed${f.stage ? ` at ${f.stage}` : ''}; it will be retried`);
   for (const id of progress.inProgress) reviewState.set(id, published.has(id) ? 're-review queued' : 'queued for a retry');
   for (const id of progress.reviewed) reviewState.set(id, published.has(id) ? 'reviewed' : 'reviewed, but nothing could be verified against the text to publish');
@@ -248,7 +248,7 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   const rising = next.length > 1 && next.every((v, i) => !i || v > next[i - 1]);
   const falling = next.length > 1 && next.every((v, i) => !i || v < next[i - 1]);
   const queueOrder = rising ? neverReviewed : falling ? [...neverReviewed].reverse() : null;
-  const ahead = Math.min(3, progress.inProgress.length) + (progress.current ? 1 : 0);
+  const ahead = Math.min(3, progress.inProgress.length) + progress.active.length;
   const tagsAt = Date.parse(tags?.generated_at || '');
   const lastDay = Number.isNaN(tagsAt) ? 0 : bills.filter(b => Date.parse(b.luna?.reviewed_at || '') >= tagsAt - 86400000).length;
   const queueNote = new Map((queueOrder || []).map((id, i) => {
@@ -358,7 +358,7 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
     + `- Not yet published: ${unpublished.length}\n`
     + `  - Under review now or queued for a retry: ${running.length}; failed, will be retried: ${failedNew.length}; reviewed with nothing verifiable to publish: ${unverified.length}; queued, not started: ${queued.length}\n\n`
     + `${pace ? `${pace}\n\n` : ''}${order}\n\n`
-    + `## Under review now\n\n${progress.current ? ids([progress.current]) : '_Nothing right now._'}\n\n## Up next\n\n${ids(progress.upcoming)}\n\n`
+    + `## Under review now\n\n${progress.active.length ? ids(progress.active) : '_Nothing right now._'}\n\n## Up next\n\n${ids(progress.upcoming)}\n\n`
     + `## Reviewed, with published tags\n\n${ids([...published])}\n\n## Queued for a retry (not yet published)\n\n${ids(running)}\n\n`
     + `## Failed, will be retried\n\n${ids(progress.failed.map(f => f.id))}\n\n---\n${DISCLAIMER}\n`);
 

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -137,8 +138,38 @@ class PublicStatusTests(WorkerLoopTests):
         self.assertEqual((final['running'], final['current'], final['upcoming']), (False, None, []))
         self.assertEqual(final['reviewed'], queue['seen'])
         self.assertEqual(final['failed'], {'HB3': 'download'})  # Stage only; no error reasons.
-        self.assertEqual(set(final), {'format', 'updated_at', 'running', 'current', 'upcoming', 'waiting_until',
-                                      'reviewed', 'retry', 'failed'})
+        self.assertEqual(set(final), {'format', 'updated_at', 'running', 'current', 'in_progress', 'upcoming',
+                                      'waiting_until', 'reviewed', 'retry', 'failed'})
+        self.assertEqual((seen['HB2']['in_progress'], final['in_progress']), (['HB2'], []))
+
+    def test_parallel_status_lists_every_bill_in_flight_and_drops_finished_ones(self):
+        # Counterexample for the one-bill view: two workers hold HB1 and HB2 at once; HB2 must not finish
+        # until the published status shows HB1 gone and HB2 still in progress.
+        snapshots, both, hb1_gone = [], threading.Barrier(2, timeout=10), threading.Event()
+        publish = pipeline.try_publish_status
+
+        def record(out, queue, **kwargs):
+            publish(out, queue, **kwargs)
+            held = self.read()['in_progress']
+            snapshots.append(held)
+            if held == ['HB2']:
+                hb1_gone.set()
+
+        def run_document(doc, *a, **k):
+            if doc['bill_id'] in ('HB1', 'HB2'):
+                both.wait()
+            if doc['bill_id'] == 'HB2':
+                self.assertTrue(hb1_gone.wait(10), 'status never dropped finished HB1 while HB2 ran')
+            return bundle(doc['bill_id'])
+
+        with patch.object(pipeline, 'try_publish_status', side_effect=record):
+            queue = self.run_main(lambda b, r: {'bill_id': b}, run_document, '--publish-tags', str(self.tags),
+                                  '--transport', 'flex', '--workers', '2')
+        self.assertEqual(sorted(queue['seen']), sorted(self.ids))
+        self.assertIn(['HB1', 'HB2'], snapshots)
+        self.assertTrue(all(len(h) <= 2 for h in snapshots))
+        final = self.read()
+        self.assertEqual((final['running'], final['in_progress'], final['current']), (False, [], None))
 
     def test_crash_still_publishes_stopped_status(self):
         def run_document(doc, *a, **k): raise RuntimeError('unexpected')
