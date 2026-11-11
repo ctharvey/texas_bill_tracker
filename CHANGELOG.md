@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-10
+- Identical companions share one review: a bill whose Identical companion was already reviewed reuses that review
+  (no model call) when the bill texts match apart from the author line and bill number, and the copy verifies the
+  same claims against this bill's own text. Two separate reviews of the same text had picked different topics.
 - Review worker: every unseen bill gets its first pass before any follow-up questions (a new bill's questions are
   asked on its next visit, so a capacity refusal on a question no longer holds up new bills); runs last up to 55
   minutes, and a timer start during a still-running review exits cleanly. The data run saves analyses and fiscal

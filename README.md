@@ -94,6 +94,11 @@ double-billing checks still apply); `--order reverse` works through the snapshot
 By default every unseen bill's first pass comes before any follow-up questions: a bill's first visit records its
 questions as deferred (it joins the retry list), and they are asked on its next visit, after the unseen bills.
 A bill with an earlier review always asks them at once, as do `--bill-id` runs and `--questions-inline`.
+Before any model call, a bill whose companion is listed as Identical reuses that companion's first-hand review
+when the texts match after the author line and each bill's own number are masked (checked on four real House and
+Senate pairs, which differ only there) and the copy, re-validated against this bill's own text, verifies the same
+claims with no more errors. A bill that already has its own review is never overwritten, and a reused review is
+never copied again; anything else gets a normal review (`--no-companion-reuse` turns reuse off).
 `--max-minutes` defaults to 55; a timer start that finds the previous run still holding the worker lock logs it
 and exits successfully.
 `--input markdown` (default `pdf`) reads the data run's official Markdown (`live/text/<BILL>/I.md`, checked

@@ -448,6 +448,82 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
             "stop_run": stop_run, "retry_after": retry_after}
 
 
+def own_number_pattern(bill_id: str) -> re.Pattern | None:
+    """The bill's own number as printed in its text: 'H.B. No. 111', PDF 'H.B.ANo.A111', 'H.J.R. No. 5'."""
+    match = re.fullmatch(r"([HS])(J|C)?(B|R)(\d{1,5})", bill_id)
+    if not match:
+        return None
+    chamber, kind, last, number = match.groups()
+    letters = [chamber] + ([kind] if kind else []) + [last]
+    dotted = r"\s*".join(re.escape(letter) + r"\s*\." for letter in letters)
+    return re.compile(dotted + r"\s*A?\s*No\s*\.\s*A?\s*0*" + number + r"(?!\d)")
+
+
+def body_hash(document: dict, bill_id: str) -> str | None:
+    """Hash of the text after the bill's first mention of its own number, with that number masked.
+
+    Identical companions differ only in the author line before it and in their own numbers (checked on four
+    cached House/Senate pairs). Other bill numbers in the text stay, so bills citing different acts differ.
+    """
+    pattern = own_number_pattern(bill_id)
+    pages = document.get("pages")
+    if pattern is None or not isinstance(pages, list):
+        return None
+    text = pattern.sub("#OWN#", " ".join(pages))
+    first = text.find("#OWN#")
+    body = " ".join(text[first:].split()) if first >= 0 else ""
+    if len(body) < 200:
+        return None
+    return canonical_hash({"input_format": document.get("input_format", "pdf"), "body": body})
+
+
+def reuse_companion_review(bill_id: str, document: dict, companions: list, cache_dir: Path,
+                           registry: list[dict]) -> dict | None:
+    """A first-hand review of an identical companion, re-validated against this bill's own text; else None.
+
+    Never raises: any doubt (no match, unreadable donor, different verified claims) means a normal review.
+    """
+    mine = body_hash(document, bill_id)
+    if mine is None:
+        return None
+    own = cache_dir / "reviews" / (bill_id + ".json")
+    try:
+        if own.exists() and not json.loads(own.read_text("utf-8")).get("reused_from"):
+            return None  # Keep a review made from this bill's own text.
+    except (OSError, ValueError):
+        return None
+    for companion in companions or []:
+        donor_id = companion.get("id") if isinstance(companion, dict) else None
+        if not donor_id or not str(companion.get("relation", "")).lower().startswith("identical"):
+            continue
+        try:
+            donor = json.loads((cache_dir / "reviews" / (donor_id + ".json")).read_text("utf-8"))
+            if (donor.get("bill_id") != donor_id or donor.get("reused_from") or not isinstance(donor.get("result"), dict)
+                    or body_hash(donor.get("document") or {}, donor_id) != mine):
+                continue
+            sources = [s for r in donor.get("resolutions", []) if r["result"]["status"] == "resolved"
+                       for s in r.get("sources", [])]
+            schema = classification.build_request(document, registry)["text"]["format"]["schema"]
+            result = copy.deepcopy(donor["result"])
+            if result.get("bill_id") != donor_id:
+                continue
+            result["bill_id"] = bill_id  # The only bill-specific output field; the text is the same.
+            validation = classification.validate_result(result, document, registry, schema,
+                                                        donor["first_pass_request_key"], sources=sources)
+        except Exception:
+            continue
+        verified = lambda v: {c["claim"] for c in v.get("verified_citations", []) if c.get("status") == "resolved"}
+        if verified(validation) != verified(donor.get("validation") or {}) \
+                or len(validation["errors"]) > len((donor.get("validation") or {}).get("errors", [])):
+            continue
+        return {"format": "texas-bill-review-v1", "bill_id": bill_id, "document": document, "result": result,
+                "validation": validation, "questions": donor.get("questions", []),
+                "resolutions": donor.get("resolutions", []), "pending_questions": donor.get("pending_questions", []),
+                "first_pass_request_key": donor["first_pass_request_key"], "status": donor.get("status"),
+                "publishable": False, "stop_run": None, "retry_after": 0, "reused_from": donor_id}
+    return None
+
+
 def download_document(bill_id: str, root: Path, ftp_factory=ftplib.FTP) -> dict:
     match = re.fullmatch(r"(HB|SB|HJR|SJR|HCR|SCR|HR|SR)([1-9]\d{0,4})", bill_id)
     if not match:
@@ -776,6 +852,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Markdown text directory for --input markdown (default: <snapshot dir>/text)")
     parser.add_argument("--question-effort", choices=("low", "medium", "high"), default="medium",
                         help="Reasoning effort for targeted follow-up questions (first pass stays high)")
+    parser.add_argument("--no-companion-reuse", action="store_true",
+                        help="Always review a bill itself, even when an identical companion's review matches its text")
     parser.add_argument("--questions-inline", action="store_true",
                         help="Ask a new bill's follow-up questions right after its first pass (default: first passes "
                              "for every unseen bill come first; questions run on the bill's next visit)")
@@ -801,6 +879,7 @@ def main():
         limits = (None, None) if args.no_spending_cap else (args.daily_budget, args.run_budget)
         budget = Budget(args.cache_dir / "budget.json", *limits)
         snapshot = json.loads(args.snapshot.read_text("utf-8"))
+        companions = {b["id"]: b.get("companions") or [] for b in snapshot["bills"] if isinstance(b, dict) and "id" in b}
         ids = args.bill_id or [b["id"] for b in snapshot["bills"]]
         if args.order == "reverse" and not args.bill_id:
             ids = ids[::-1]
@@ -875,10 +954,15 @@ def main():
                 try:
                     # Only a first visit defers questions; a bill with an earlier review keeps asking them, so its
                     # resolved review is never replaced by an unresolved first pass.
-                    ask = (not first_pass_first or bill_id in queue["seen"]
-                           or (args.cache_dir / "reviews" / (bill_id + ".json")).exists())
-                    bundle = run_document(document, detailed.load_registry(), args.cache_dir, budget, args.execute,
-                                          question_effort=args.question_effort, ask_questions=ask)
+                    bundle = None if args.no_companion_reuse else reuse_companion_review(
+                        bill_id, document, companions.get(bill_id), args.cache_dir, detailed.load_registry())
+                    if bundle is not None:
+                        print(bill_id, "reused the review of identical companion", bundle["reused_from"], flush=True)
+                    else:
+                        ask = (not first_pass_first or bill_id in queue["seen"]
+                               or (args.cache_dir / "reviews" / (bill_id + ".json")).exists())
+                        bundle = run_document(document, detailed.load_registry(), args.cache_dir, budget,
+                                              args.execute, question_effort=args.question_effort, ask_questions=ask)
                 except CacheCoolingDown:
                     # Per-request cooldown: skip this bill now and retry it early in a later run.
                     if bill_id in queue['seen'] and bill_id not in queue['retry']:
