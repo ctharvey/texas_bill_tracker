@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-11
+- Second pass also writes a plain-language "In brief" headline plus search and opposing-side terms (extras.json);
+  `--audit-sample` spot-checks ~2% of reviews (counts only published); `--related-bills` adds a Related bills
+  section from cached embeddings. Production unit runs all three.
 - Topic suggestions (`--suggest-topics`): a cheap, cacheable second pass after the review queue empties; private,
   with a tally report for promoting new topics.
 - Staged review (`--stages`, off in production): version updates with a "What changed" list, a fiscal-note

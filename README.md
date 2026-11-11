@@ -132,7 +132,19 @@ review queue is empty. For each settled review (no follow-up questions queued) i
 review and the current topic list, not the bill text, asking for topics the tracker lacks. Repeats are cache hits and
 identical companion reviews share one call. A bill is asked again only when its review or the topic list changes.
 Results stay private in `cache/suggestions/`; `python scripts/topic_suggestions.py --cache-dir <cache>` tallies them so
-recurring topics can be added to `POLICY_AREAS` by hand.
+recurring topics can be added to `POLICY_AREAS` by hand. The same call returns a plain-language headline, search terms
+and opposing-side terms (e.g. "gun control" and "gun rights"), built only from the review's verified claims. They are
+published to `live/luna/extras.json` while the record matches the bill's current verified review; the site shows the
+headline as "In brief" and adds the terms to search. No headline is shown when the summary is unverified.
+
+`--audit-sample` runs after the topic pass: an independent medium-effort Luna re-check of about 2% of settled reviews
+(a deterministic sample by bill and review), against the exact text version reviewed. Findings stay private in
+`cache/audit/`; only counts go to `live/luna/audit.json`, shown on the review progress page.
+
+`--related-bills` (with `--execute`) publishes `live/luna/related.json`: OpenAI `text-embedding-3-small` vectors (256
+dimensions) of each bill's caption and verified summary, cached by content in `cache/embeddings/`, with each call's
+tokens and cost logged to `cache/embeddings/usage.jsonl`. The top five neighbours above 0.45 cosine are kept, excluding
+listed companions and identical text. Embeddings do not go through the Luna ledger; a failure keeps the previous file.
 
 `--stages` (needs `--input markdown`) runs the staged review
 (`scripts/review_stages.py`). Each visit is planned from durable files: the review, `live/text/<BILL>/index.json`,
