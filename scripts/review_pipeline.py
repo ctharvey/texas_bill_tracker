@@ -562,6 +562,44 @@ def load_markdown_document(bill_id: str, text_dir: Path, version: str = "I") -> 
     return document
 
 
+def rebind_equivalent_reviews(cache_dir: Path, text_dir: Path) -> tuple[list[str], list[str]]:
+    """Re-attach reviews whose served text changed bytes but not content (e.g. a converter re-render).
+
+    Equivalent means the rebuilt document's text_hash and spans equal the stored ones: exactly what Luna was sent,
+    so re-reviewing would be an identical request (a free cache hit). The review keeps its content and file time;
+    the new hash and the evidence are recorded. Returns (rebound bills, bills whose content really changed)."""
+    import review_stages
+    rebound, changed = [], []
+    for path in sorted((cache_dir / "reviews").glob("*.json")):
+        bill_id = path.stem
+        try:
+            bundle = json.loads(path.read_text("utf-8"))
+            document = bundle["document"]
+            if (bundle.get("bill_id") != bill_id or not isinstance(bundle.get("result"), dict)
+                    or document.get("input_format") != "markdown"):
+                continue
+            code = review_stages.version_code(document)
+            index = json.loads((text_dir / bill_id / "index.json").read_text("utf-8"))
+            entry = next((v for v in index["versions"] if isinstance(v, dict) and v.get("code") == code), None)
+            if entry is None or entry.get("sha256") == document.get("text_sha256"):
+                continue
+            served = load_markdown_document(bill_id, text_dir, code)  # verifies the file against its index
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            continue  # unreadable now; the publish check withholds it
+        if served["text_hash"] != document.get("text_hash") or served["spans"] != document.get("spans"):
+            changed.append(bill_id)
+            continue
+        stat = path.stat()
+        bundle.setdefault("text_rebindings", []).append({
+            "at": utc_stamp(), "version": code, "from_sha256": document.get("text_sha256"),
+            "to_sha256": served["text_sha256"], "text_hash": served["text_hash"]})
+        document["text_sha256"] = served["text_sha256"]
+        atomic_json(path, bundle)
+        os.utime(path, (stat.st_atime, stat.st_mtime))  # reviewed_at stays the review's own time
+        rebound.append(bill_id)
+    return rebound, changed
+
+
 TAG_FIELDS = {"policy_tags": ("tag", "explanation"), "locations": ("name", "kind", "explanation"),
               "affected_groups": ("group", "explanation"), "major_effects": ("effect", "label", "explanation")}
 
@@ -600,28 +638,35 @@ def served_text_dir(publish_tags: Path) -> Path:
 
 
 def matches_served_markdown(bill_id: str, bundle: dict, served: Path) -> bool:
-    """True only for a review read from Markdown whose exact text is a version the site serves now: the review's
-    hash, the served index entry and the served file's bytes must all agree."""
+    return served_markdown(bill_id, bundle, served) is not None
+
+
+def served_markdown(bill_id: str, bundle: dict, served: Path) -> str | None:
+    """The served Markdown, only for a review read from Markdown whose exact text is a version the site serves
+    now: the review's hash, the served index entry and the served file's bytes must all agree. Else None."""
     document = bundle.get("document") if isinstance(bundle, dict) else None
     if not isinstance(document, dict) or document.get("input_format") != "markdown":
-        return False
+        return None
     version = document.get("version")
     code = "I" if version == "introduced" else version
     if (not isinstance(code, str) or not re.fullmatch(r"[A-Za-z0-9]{1,8}", code)
             or not re.fullmatch(r"[A-Z]{2,4}\d{1,5}", bill_id) or not document.get("text_sha256")):
-        return False
+        return None
     try:
         index = json.loads((served / bill_id / "index.json").read_text("utf-8"))
         entry = next(v for v in index["versions"] if isinstance(v, dict) and v.get("code") == code)
         data = (served / bill_id / (code + ".md")).read_bytes()
+        if not entry.get("sha256") == document["text_sha256"] == hashlib.sha256(data).hexdigest():
+            return None
+        return data.decode("utf-8")
     except (OSError, ValueError, KeyError, TypeError, StopIteration):
-        return False
-    return entry.get("sha256") == document["text_sha256"] == hashlib.sha256(data).hexdigest()
+        return None
 
 
-def live_reviews(cache_dir: Path, served: Path) -> tuple[set[str], list[str]]:
-    """(bills whose current review matches the served Markdown, reviewed bills withheld because it does not)."""
-    live, withheld = set(), []
+def live_reviews(cache_dir: Path, served: Path) -> tuple[dict[str, str], list[str]]:
+    """({bill: the verified served Markdown} for reviews matching it, reviewed bills withheld because they do not).
+    Publishers use these bytes, so a file swapped mid-publish cannot make outputs disagree."""
+    live, withheld = {}, []
     for path in sorted((cache_dir / "reviews").glob("*.json")):
         try:
             bundle = json.loads(path.read_text("utf-8"))
@@ -629,8 +674,11 @@ def live_reviews(cache_dir: Path, served: Path) -> tuple[set[str], list[str]]:
             continue
         if not isinstance(bundle, dict) or not isinstance(bundle.get("result"), dict):
             continue
-        (live.add(path.stem) if bundle.get("bill_id") == path.stem
-         and matches_served_markdown(path.stem, bundle, served) else withheld.append(path.stem))
+        markdown = served_markdown(path.stem, bundle, served) if bundle.get("bill_id") == path.stem else None
+        if markdown is None:
+            withheld.append(path.stem)
+        else:
+            live[path.stem] = markdown
     return live, withheld
 
 
@@ -762,8 +810,9 @@ def highlight_entry(bundle: dict, reviewed_at: str, markdown: str, version_code:
             "claims": claims, "unlocated": unlocated}
 
 
-def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path, live: set[str] | None = None) -> int:
-    """`live`: when given, only these bills are published and any other bill's highlight file is removed."""
+def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path, live: dict[str, str] | None = None) -> int:
+    """`live` (from live_reviews): when given, only these bills are published, from the Markdown verified there,
+    and any other bill's highlight file is removed."""
     done = 0
     out_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(out_dir, 0o755)  # Served publicly; the worker's UMask=0077 would otherwise create it 0700.
@@ -785,10 +834,13 @@ def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path, live: set
                 continue  # PDF reviews exist only for the introduced text
             if not isinstance(code, str) or not re.fullmatch(r"[A-Za-z0-9]{1,8}", code):
                 continue
-            source = text_dir / path.stem / (code + ".md")
-            if not source.is_file():
-                continue
-            markdown = source.read_text("utf-8")
+            if live is not None:
+                markdown = live[path.stem]
+            else:
+                source = text_dir / path.stem / (code + ".md")
+                if not source.is_file():
+                    continue
+                markdown = source.read_text("utf-8")
             stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
             entry = highlight_entry(bundle, stamp.replace("+00:00", "Z"), markdown, code)
             payload = (json.dumps(entry, sort_keys=False, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
@@ -979,6 +1031,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--related-bills", action="store_true",
                         help="With --execute and --publish-tags: publish related.json from embeddings of each bill's "
                              "caption and verified summary (text-embedding-3-small; cached by content)")
+    parser.add_argument("--allow-text-rereview", type=int, default=0, metavar="N",
+                        help="When many reviewed texts changed content under the same version (the converter "
+                             "breaker), re-review up to N of them this run (paid). Default 0")
     parser.add_argument("--questions-inline", action="store_true",
                         help="Ask a new bill's follow-up questions right after its first pass (default: first passes "
                              "for every unseen bill come first; questions run on the bill's next visit)")
@@ -1119,6 +1174,8 @@ def main():
         parser.error("--max-minutes must be positive")
     if args.workers < 1:
         parser.error("--workers must be at least 1")
+    if args.allow_text_rereview < 0:
+        parser.error("--allow-text-rereview must be 0 or more")
     if args.workers > 1 and args.transport != "flex":
         parser.error("--workers above 1 needs --transport flex (the legacy budget allows one call in flight)")
     if args.stages and args.input != "markdown":
@@ -1156,6 +1213,13 @@ def main():
         queue.setdefault('retry', []); queue.setdefault('failed', {})
         text_dir = args.text_dir or args.snapshot.parent / "text"
         history_dir = args.history_dir or args.snapshot.parent / "history"
+        if args.input == "markdown" and args.execute:
+            # Before planning: a re-rendered but identical text must neither trip the converter breaker nor be
+            # withheld from the site.
+            rebound, changed = rebind_equivalent_reviews(args.cache_dir, text_dir)
+            if rebound:
+                print("Re-attached %d reviews to re-rendered but identical text, e.g. %s"
+                      % (len(rebound), ", ".join(rebound[:8])), flush=True)
 
         def read_json(path: Path):
             try:
@@ -1178,14 +1242,17 @@ def main():
             plans = {b: visit_plan(b) for b in queue["seen"] if b in ids}
             revised = [b for b, plan in plans.items() if plan and plan["reason"] == "text_revised"]
             if len(revised) > max(5, len(queue["seen"]) // 50):
-                # Many reviewed texts changed under the same version code at once: likely a converter change,
-                # not new bill text. Re-reviewing them all would re-bill everything, so skip them this run.
-                # Any visit would review the changed file, so these bills are not visited at all this run.
-                blocked = set(revised)
+                # Many reviewed texts changed content under the same version code at once (identical re-renders
+                # were re-attached above): likely a converter change, not new bill text. Re-reviewing them all
+                # would re-bill everything, so only an operator-approved number (--allow-text-rereview) is visited.
+                # Any visit would review the changed file, so the rest are not visited at all this run; the
+                # publish check keeps them off the site until their text is reviewed.
+                blocked = set(revised[args.allow_text_rereview:])
                 candidates = [c for c in candidates if c not in blocked]
                 plans = {b: plan for b, plan in plans.items() if b not in blocked}
-                print("Stage 2: %d reviewed bills changed text under the same version; not visiting them "
-                      "(check the text converter)" % len(revised), flush=True)
+                print("Stage 2: %d reviewed bills changed text under the same version; not visiting %d of them "
+                      "(check the text converter; --allow-text-rereview N approves re-reviews)"
+                      % (len(revised), len(blocked)), flush=True)
             due = {b for b, plan in plans.items() if b not in queue["failed"] and plan is not None
                    and (plan["review"] == "update" or plan["fiscal_due"])}
             if due and not args.bill_id:
@@ -1394,6 +1461,12 @@ def main():
                 review_path = args.cache_dir / "reviews" / (bill_id + ".json")
                 fiscal = bundle.pop("fiscal_record", None)
                 if "result" in bundle or not review_path.exists():
+                    previous = read_json(review_path)
+                    if (isinstance(previous, dict) and previous.get("text_rebindings")
+                            and (previous.get("document") or {}).get("text_hash")
+                            == (bundle.get("document") or {}).get("text_hash")):
+                        # Same content re-reviewed (e.g. a revisit cache hit): keep the re-attachment evidence.
+                        bundle["text_rebindings"] = previous["text_rebindings"]
                     atomic_json(review_path, bundle)
                 if fiscal is not None and "result" in bundle:
                     atomic_json(args.cache_dir / "fiscal" / (bill_id + ".json"), fiscal)
