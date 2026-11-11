@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-11
+- Generic agency names ("the department", "the commission") are published as the registry agency when the amended
+  code chapter's verified definition names it (`scripts/agency_name_definitions.json`, publish time only, no cost).
+  Maps 42 of 109 such labels on the current reviews; the rest stay as written.
 - "All state agencies" marker moves to the second pass: decided from the bill text under a stricter rule, published
   only with verified, undeleted quotes; the first pass's marker is no longer published. The second pass now sends the
   bill text, so every bill is asked once more (about $0.0003 each) and companions no longer share one call.

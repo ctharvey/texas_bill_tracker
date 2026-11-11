@@ -639,10 +639,75 @@ def rebind_equivalent_reviews(cache_dir: Path, text_dir: Path) -> tuple[list[str
 TAG_FIELDS = {"policy_tags": ("tag", "explanation"), "locations": ("name", "kind", "explanation"),
               "affected_groups": ("group", "explanation"), "major_effects": ("effect", "label", "explanation")}
 
+# Publish-time only (not sent to Luna): verified code definitions of generic agency terms, by (code, chapter, term).
+AGENCY_NAME_DEFINITIONS = Path(__file__).with_name("agency_name_definitions.json")
+_GENERIC_AGENCY = re.compile(r"(?:the\s+)?(department|commission|agency|board)", re.I)
+# An amendment header naming the code chapter the following text belongs to, e.g. "Section 201.1, Transportation
+# Code", "Sections 29.001 and 29.002, Education Code", "Subchapter B, Chapter 29, Education Code".
+_CODE_HEADER = re.compile(
+    r"\b(?:Sections?|Chapter|Subchapter [A-Z0-9-]+, Chapter)\s+(\d+[A-Z]?)(?:\.\d+[A-Za-z-]*)?"
+    r"(?:(?:,\s*|\s+)(?:and\s+)?\d+[A-Z]?(?:\.\d+[A-Za-z-]*)?)*"
+    r"[^.\n]{0,120}?,\s*((?:[A-Z][a-z]+ )+(?:and )?(?:[A-Z][a-z]+ )*Code)\b")
+_definitions_cache: dict | None = None
 
-def public_entry(bundle: dict, reviewed_at: str, scope: dict | None = None) -> dict | None:
+
+def agency_name_definitions() -> dict:
+    global _definitions_cache
+    if _definitions_cache is None:
+        table = {}
+        for entry in json.loads(AGENCY_NAME_DEFINITIONS.read_text("utf-8")):
+            for chapter in entry["chapters"]:
+                table[(entry["code"], str(chapter), entry["term"])] = entry["registry_id"]
+        _definitions_cache = table
+    return _definitions_cache
+
+
+def generic_agency_id(agency: dict, document: dict, names: dict[str, str]) -> str | None:
+    """Registry ID for an unmapped generic name ("the department") from the code chapter its evidence amends, by
+    the verified definition table; None when unknown, ambiguous, or the bill defines the term itself."""
+    match = _GENERIC_AGENCY.fullmatch((agency.get("name") or "").strip())
+    spans = document.get("spans") or {}
+    if agency.get("registry_id") is not None or not match or not spans:
+        return None
+    term = match.group(1).lower()
+    ordered = sorted(spans.items(), key=lambda kv: (kv[1].get("page", 0), kv[1].get("start", 0)))
+    text = "\n".join(s.get("text") or "" for _, s in ordered)
+    if re.search(r'["“]' + term + r'["”]\s+means', text, re.I):
+        return None
+    position = {sid: i for i, (sid, _) in enumerate(ordered)}
+    cited = [e for e in agency.get("evidence") or [] if e.get("span_id") in position]
+    if not cited:
+        return None
+    first = min(cited, key=lambda e: position[e["span_id"]])
+    index = position[first["span_id"]]
+    own = ordered[index][1].get("text") or ""
+    at = own.find(first.get("quote") or "")
+    before = "\n".join([s.get("text") or "" for _, s in ordered[:index]] + [own[:at] if at >= 0 else own])
+    headers = list(_CODE_HEADER.finditer(before))
+    if not headers:
+        return None
+    registry_id = agency_name_definitions().get((headers[-1].group(2), headers[-1].group(1), term))
+    return registry_id if registry_id in names else None
+
+
+def public_agencies(kept: list[dict], document: dict, names: dict[str, str] | None) -> list[dict]:
+    """Published agency labels; with `names` (registry id -> name), generic names are mapped by
+    generic_agency_id and a mapped label whose agency is already listed is dropped."""
+    out = []
+    for a in kept:
+        mapped = generic_agency_id(a, document, names) if names else None
+        if mapped and any(x["id"] == mapped for x in out + [{"id": k.get("registry_id")} for k in kept]):
+            continue
+        out.append({"id": mapped or a["registry_id"], "name": names[mapped] if mapped else a["name"],
+                    "impact": a["impact"], "explanation": a["explanation"]})
+    return out
+
+
+def public_entry(bundle: dict, reviewed_at: str, scope: dict | None = None,
+                 names: dict[str, str] | None = None) -> dict | None:
     """Verified claims only; a field whose every claim failed verification is omitted (caption fallback).
-    `scope`: the second pass's verified all-agencies marker for this review, or None (field omitted)."""
+    `scope`: the second pass's verified all-agencies marker for this review, or None (field omitted).
+    `names`: registry id -> name, enabling the generic-name mapping (public_agencies)."""
     result = bundle.get("result")
     if not isinstance(result, dict):
         return None
@@ -657,8 +722,7 @@ def public_entry(bundle: dict, reviewed_at: str, scope: dict | None = None) -> d
         kept = [item for i, item in enumerate(items) if f"{field}:{i}" in verified]
         omitted += len(items) - len(kept)
         if kept or not items:
-            entry[field] = ([{"id": a["registry_id"], "name": a["name"], "impact": a["impact"],
-                              "explanation": a["explanation"]} for a in kept] if field == "agencies"
+            entry[field] = (public_agencies(kept, bundle.get("document") or {}, names) if field == "agencies"
                             else [{k: item.get(k) for k in keys} for item in kept])
     # The all-agencies marker comes only from the second pass (topic_suggestions.scope_entry); the first pass's own
     # marker is not published (audit 2026-11-11: about half were wrong).
@@ -732,7 +796,7 @@ def publish_tags(cache_dir: Path, out: Path, registry: list[dict], live: set[str
         stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
         scope = (topic_suggestions.read_scope(cache_dir, path.stem, bundle)
                  if isinstance(bundle, dict) and bundle.get("bill_id") == path.stem else None)
-        entry = public_entry(bundle, stamp.replace("+00:00", "Z"), scope)
+        entry = public_entry(bundle, stamp.replace("+00:00", "Z"), scope, {a["id"]: a["name"] for a in registry})
         if entry and bundle.get("bill_id") == path.stem:
             bills[path.stem] = entry
     atomic_json(out, {"format": "texas-bill-luna-tags-v1", "model": classification.MODEL,
@@ -794,8 +858,9 @@ HIGHLIGHT_KINDS = {"agencies": "agency", "major_effects": "effect", "policy_tags
 
 
 def highlight_entry(bundle: dict, reviewed_at: str, markdown: str, version_code: str,
-                    scope: dict | None = None) -> dict:
+                    scope: dict | None = None, names: dict[str, str] | None = None) -> dict:
     result = bundle.get("result") or {}
+    document = bundle.get("document") or {}
     paragraphs = plain_paragraphs(markdown)
     citations: dict[str, list[dict]] = {}
     for c in bundle.get("validation", {}).get("verified_citations", []):
@@ -814,7 +879,9 @@ def highlight_entry(bundle: dict, reviewed_at: str, markdown: str, version_code:
             claim = {"kind": HIGHLIGHT_KINDS[field], "explanation": item.get("explanation"), "agency_id": None,
                      "impact": None, "effect": None, "key_point": False}
             if field == "agencies":
-                claim.update(label=item.get("name"), agency_id=item.get("registry_id"), impact=item.get("impact"),
+                mapped = generic_agency_id(item, document, names) if names else None
+                claim.update(label=names[mapped] if mapped else item.get("name"),
+                             agency_id=mapped or item.get("registry_id"), impact=item.get("impact"),
                              key_point=item.get("impact") == "direct")
             elif field == "major_effects":
                 claim.update(label=item.get("label"), effect=item.get("effect"),
@@ -865,7 +932,7 @@ def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path, live: dic
     """`live` (from live_reviews): when given, only these bills are published, from the Markdown verified there,
     and any other bill's highlight file is removed."""
     import topic_suggestions
-    done = 0
+    done, names = 0, {a["id"]: a["name"] for a in detailed.load_registry()}
     out_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(out_dir, 0o755)  # Served publicly; the worker's UMask=0077 would otherwise create it 0700.
     if live is not None:
@@ -895,7 +962,7 @@ def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path, live: dic
                 markdown = source.read_text("utf-8")
             stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
             entry = highlight_entry(bundle, stamp.replace("+00:00", "Z"), markdown, code,
-                                    topic_suggestions.read_scope(cache_dir, path.stem, bundle))
+                                    topic_suggestions.read_scope(cache_dir, path.stem, bundle), names)
             payload = (json.dumps(entry, sort_keys=False, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
             target = out_dir / (path.stem + ".json")
             if not (target.is_file() and target.read_bytes() == payload):

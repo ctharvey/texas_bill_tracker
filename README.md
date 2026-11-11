@@ -313,6 +313,15 @@ Each entry retains its official source URL, section, chapter scope and verificat
 reviewed registry, not an automatic or exhaustive statute lookup; unsupported amendment forms and missing
 chapters provide no external definitions. Expand it with verified sources before broader deployment.
 
+A second, publish-time table, `scripts/agency_name_definitions.json`, is never sent to Luna (so editing it costs
+nothing). When a verified agency label is a bare generic name ("the department", "the commission", "the agency",
+"the board") with no registry ID, the publisher finds the last amendment header ("Section 225.300, Transportation
+Code", "Subchapter B, Chapter 29, Education Code") before the label's first cited span and, if the table has a
+verified definition for that code, chapter and term, publishes the registry agency instead (tags and highlights).
+It stays unmapped when the bill defines the term itself, no header precedes the evidence, or the chapter is not
+listed; a mapped label whose agency is already listed is dropped. Add chapters only from the statute's own
+"In this chapter/title" definition.
+
 Definitions follow the full bill in the variable request suffix, preserving the shared prompt cache.
 Their text/scope/provenance affect response-cache identity; verification-date-only changes do not. A `D_`
 evidence ID cites a statutory definition and is validated separately from bill-page evidence. Agency impact
