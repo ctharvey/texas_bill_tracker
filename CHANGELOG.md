@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-11
+- Staged review (`--stages`, off in production): version updates with a "What changed" list, a fiscal-note
+  check, and the bill drawer's What changed, Hearing (official witness lists) and Fiscal note check sections.
+
 ## 2026-11-10
 - Review worker runs `--workers 3` for the full Markdown re-review (earlier reviews archived on the server).
 - Review worker reads the official Markdown text (`--input markdown`) instead of the introduced PDF. The prompt

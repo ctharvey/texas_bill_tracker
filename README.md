@@ -127,6 +127,19 @@ the model; queue, status and review files are written by the main thread. A capa
 every worker; an unknown outcome, quota/auth error or budget stop lets in-flight bills finish and starts no new
 one. The ledger and response cache stop two workers from sending the same request. The production unit runs 3.
 
+`--stages` (needs `--input markdown`; off in the production unit) runs the staged review
+(`scripts/review_stages.py`). Each visit is planned from durable files: the review, `live/text/<BILL>/index.json`,
+`live/history/<BILL>/documents.json` and `cache/fiscal/<BILL>.json`.
+- A new bill is reviewed on its newest text version.
+- A new version gets a version update. Luna reclassifies the new text with the previous review and a paragraph
+  diff as context, and lists what changed. This is published to `live/luna/changes/<BILL>.json`, and the old
+  version's pending questions are dropped.
+- Text revised under the same version code is reviewed again from scratch. When more than max(5, 2% of
+  reviewed bills) change at once, none are re-reviewed (a converter change, not new text).
+- A fiscal note or bill analysis for the reviewed version gets a fiscal check. Luna compares it with the
+  review, and verified claims go to `live/luna/fiscal/<BILL>.json`, bound to the review and document hashes.
+- Hearing witness lists (`live/history/<BILL>/witnesses-<H|S>.json`) are shown on the site with no model call.
+
 At most three new targeted queries per bill run; cached resolutions do not consume this allowance. Later
 runs progress through remaining questions. Requested official statute chapters are cached privately for
 seven days and reused across bills. Supported code mappings fetch only fixed official URLs, include chapter

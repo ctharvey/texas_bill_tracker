@@ -1,0 +1,12 @@
+VERSION UPDATE
+This request reviews a NEW version of a bill that has already been reviewed.
+Classify the new version completely, using every rule above, exactly as if it had never been reviewed.
+The previous review and the paragraph diff are context only. They are never evidence.
+Cite only the current bill source (the span IDs above) for every classification field.
+After the classification, list in `changes` the substantive differences from the previous version.
+Each change has a kind: added (new in the current text), removed (in the previous version only), or altered (present in both but changed in substance).
+Give a few organizing items, not an inventory of every edit. Return an empty list when nothing substantive changed.
+Quotes for added and altered changes come from the current bill text, with its span ID.
+Quotes for removed changes come from the previous review's quotes or from the removed lines of the paragraph diff.
+Every quote is verbatim and contiguous, with no "..." and no diff markers.
+Ignore renumbering, formatting, header and caption changes.

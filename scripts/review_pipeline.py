@@ -389,9 +389,11 @@ def spend_marker(budget) -> float:
 
 
 def run_document(document, registry, cache_root, budget, execute=False, max_questions=3, question_effort="high",
-                 ask_questions=True):
-    first = classification.classify(document, registry, cache_root, execute=execute, sender=budget.send,
-                                    cache=getattr(budget, "response_cache", None))
+                 ask_questions=True, first_pass=None):
+    # `first_pass`: a stage-2 version update (review_stages.version_update) instead of a fresh classification.
+    first = first_pass() if first_pass is not None else classification.classify(
+        document, registry, cache_root, execute=execute, sender=budget.send,
+        cache=getattr(budget, "response_cache", None))
     if "result" not in first:
         if first.get("action") != "not_submitted":
             status = "needs_review"
@@ -444,11 +446,14 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
     derived["uncertainties"] = [q for q in derived["uncertainties"] if canonical_hash(q)[:16] not in resolved_ids]
     validation = classification.validate_result(derived, document, registry,
         classification.build_request(document, registry)["text"]["format"]["schema"], first["request_key"], sources=sources)
-    return {"format": "texas-bill-review-v1", "bill_id": document["bill_id"], "document": document,
-            "result": derived, "validation": validation, "questions": questions, "resolutions": resolutions,
-            "pending_questions": pending, "first_pass_request_key": first["request_key"],
-            "status": "needs_review" if pending or validation["errors"] else "ready_for_review", "publishable": False,
-            "stop_run": stop_run, "retry_after": retry_after}
+    bundle = {"format": "texas-bill-review-v1", "bill_id": document["bill_id"], "document": document,
+              "result": derived, "validation": validation, "questions": questions, "resolutions": resolutions,
+              "pending_questions": pending, "first_pass_request_key": first["request_key"],
+              "status": "needs_review" if pending or validation["errors"] else "ready_for_review",
+              "publishable": False, "stop_run": stop_run, "retry_after": retry_after}
+    if "changes" in first:
+        bundle["changes"] = first["changes"]
+    return bundle
 
 
 def own_number_pattern(bill_id: str) -> re.Pattern | None:
@@ -749,15 +754,20 @@ def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path) -> int:
         try:
             bundle = json.loads(path.read_text("utf-8"))
             if (not isinstance(bundle, dict) or not isinstance(bundle.get("result"), dict)
-                    or bundle.get("bill_id") != path.stem
-                    or bundle.get("document", {}).get("version") != "introduced"):
+                    or bundle.get("bill_id") != path.stem):
                 continue
-            source = text_dir / path.stem / "I.md"
+            version = (bundle.get("document") or {}).get("version")
+            code = "I" if version == "introduced" else version
+            if bundle.get("document", {}).get("input_format") != "markdown" and code != "I":
+                continue  # PDF reviews exist only for the introduced text
+            if not isinstance(code, str) or not re.fullmatch(r"[A-Za-z0-9]{1,8}", code):
+                continue
+            source = text_dir / path.stem / (code + ".md")
             if not source.is_file():
                 continue
             markdown = source.read_text("utf-8")
             stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
-            entry = highlight_entry(bundle, stamp.replace("+00:00", "Z"), markdown, "I")
+            entry = highlight_entry(bundle, stamp.replace("+00:00", "Z"), markdown, code)
             payload = (json.dumps(entry, sort_keys=False, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
             target = out_dir / (path.stem + ".json")
             if not (target.is_file() and target.read_bytes() == payload):
@@ -770,6 +780,73 @@ def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path) -> int:
         except Exception:
             continue  # One bad bundle or text file never stops the rest.
     return done
+
+
+def _publish_dir(out_dir: Path, payloads: dict[str, dict]) -> int:
+    """Write `<bill>.json` for each payload and remove files for bills no longer present (stale bindings).
+    Public directory and files are made world-readable: the worker's UMask=0077 would otherwise hide them."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(out_dir, 0o755)
+    for bill_id, entry in payloads.items():
+        payload = (json.dumps(entry, sort_keys=False, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
+        target = out_dir / (bill_id + ".json")
+        if not (target.is_file() and target.read_bytes() == payload):
+            temporary = target.with_name(target.name + ".tmp")
+            temporary.write_bytes(payload)
+            os.chmod(temporary, 0o644)
+            os.replace(temporary, target)
+    for stale in out_dir.glob("*.json"):
+        if stale.stem not in payloads:
+            stale.unlink(missing_ok=True)
+    return len(payloads)
+
+
+def _current_reviews(cache_dir: Path):
+    for path in sorted((cache_dir / "reviews").glob("*.json")):
+        try:
+            bundle = json.loads(path.read_text("utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(bundle, dict) and bundle.get("bill_id") == path.stem and isinstance(bundle.get("result"), dict):
+            stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
+            yield path.stem, bundle, stamp.replace("+00:00", "Z")
+
+
+def publish_changes(cache_dir: Path, out_dir: Path) -> int:
+    """Stage 2: verified changes of each current version-update review, bound to its version and text."""
+    payloads = {}
+    for bill_id, bundle, stamp in _current_reviews(cache_dir):
+        update, document = bundle.get("version_update"), bundle.get("document") or {}
+        if not isinstance(update, dict) or not isinstance(bundle.get("changes"), list):
+            continue
+        payloads[bill_id] = {
+            "format": "texas-bill-luna-changes-v1", "bill_id": bill_id, "from_version": update.get("from_code"),
+            "to_version": "I" if document.get("version") == "introduced" else document.get("version"),
+            "text_sha256": document.get("text_sha256"), "reviewed_at": stamp,
+            "changes": [{"kind": c.get("kind"), "label": c.get("label"), "explanation": c.get("explanation"),
+                         "quotes": [e.get("quote") for e in c.get("evidence", []) if e.get("quote")]}
+                        for c in bundle["changes"] if isinstance(c, dict) and c.get("verified")]}
+    return _publish_dir(out_dir, payloads)
+
+
+def publish_fiscal(cache_dir: Path, out_dir: Path) -> int:
+    """Stage 4: verified fiscal-note comparisons whose binding still matches the bill's current review."""
+    import review_stages
+    payloads = {}
+    for bill_id, bundle, _ in _current_reviews(cache_dir):
+        path = cache_dir / "fiscal" / (bill_id + ".json")
+        try:
+            record = json.loads(path.read_text("utf-8"))
+        except (OSError, ValueError):
+            continue
+        binding = record.get("binding") or {}
+        if (binding.get("review_key") != bundle.get("first_pass_request_key")
+                or binding.get("text_sha256") != (bundle.get("document") or {}).get("text_sha256")):
+            continue  # made for an earlier review or text: stale, so not published
+        entry = review_stages.public_fiscal(record)
+        if entry is not None:
+            payloads[bill_id] = entry
+    return _publish_dir(out_dir, payloads)
 
 
 def utc_stamp(seconds_from_now: float = 0) -> str:
@@ -862,6 +939,11 @@ def build_parser() -> argparse.ArgumentParser:
                              "vendored cth.flex client, spend ledger and cache (flex); both use the same files")
     parser.add_argument("--workers", type=int, default=1,
                         help="Bills reviewed at once (default 1). More than one needs --transport flex")
+    parser.add_argument("--stages", action="store_true",
+                        help="Staged review (needs --input markdown): review a bill's newest text version, update a "
+                             "review when a new version appears, and check fiscal notes and analyses")
+    parser.add_argument("--history-dir", type=Path, default=None,
+                        help="Bill history directory for --stages (default: <snapshot dir>/history)")
     parser.add_argument("--questions-inline", action="store_true",
                         help="Ask a new bill's follow-up questions right after its first pass (default: first passes "
                              "for every unseen bill come first; questions run on the bill's next visit)")
@@ -880,6 +962,8 @@ def main():
         parser.error("--workers must be at least 1")
     if args.workers > 1 and args.transport != "flex":
         parser.error("--workers above 1 needs --transport flex (the legacy budget allows one call in flight)")
+    if args.stages and args.input != "markdown":
+        parser.error("--stages needs --input markdown")
     worker = contextlib.ExitStack()
     try:
         worker.enter_context(ResponseCache(args.cache_dir / "worker-lock")._lock("worker"))
@@ -906,6 +990,46 @@ def main():
         candidates = args.bill_id[:args.max_bills] if args.bill_id else queue_candidates(
             ids, queue, args.max_bills, first_pass_first=first_pass_first)
         queue.setdefault('retry', []); queue.setdefault('failed', {})
+        text_dir = args.text_dir or args.snapshot.parent / "text"
+        history_dir = args.history_dir or args.snapshot.parent / "history"
+
+        def read_json(path: Path):
+            try:
+                return json.loads(path.read_text("utf-8"))
+            except (OSError, ValueError):
+                return None
+
+        def visit_plan(bill_id: str) -> dict | None:
+            """--stages: what this visit does, from durable files (main thread, at dispatch)."""
+            if not args.stages or not re.fullmatch(r"[A-Z]{2,4}\d{1,5}", bill_id):
+                return None
+            plan = review_stages.stage_plan(read_json(args.cache_dir / "reviews" / (bill_id + ".json")),
+                                            read_json(text_dir / bill_id / "index.json"),
+                                            read_json(history_dir / bill_id / "documents.json"),
+                                            read_json(args.cache_dir / "fiscal" / (bill_id + ".json")))
+            return plan
+
+        if args.stages:
+            import review_stages
+            plans = {b: visit_plan(b) for b in queue["seen"] if b in ids}
+            revised = [b for b, plan in plans.items() if plan and plan["reason"] == "text_revised"]
+            if len(revised) > max(5, len(queue["seen"]) // 50):
+                # Many reviewed texts changed under the same version code at once: likely a converter change,
+                # not new bill text. Re-reviewing them all would re-bill everything, so skip them this run.
+                # Any visit would review the changed file, so these bills are not visited at all this run.
+                blocked = set(revised)
+                candidates = [c for c in candidates if c not in blocked]
+                plans = {b: plan for b, plan in plans.items() if b not in blocked}
+                print("Stage 2: %d reviewed bills changed text under the same version; not visiting them "
+                      "(check the text converter)" % len(revised), flush=True)
+            due = {b for b, plan in plans.items() if b not in queue["failed"] and plan is not None
+                   and (plan["review"] == "update" or plan["fiscal_due"])}
+            if due and not args.bill_id:
+                # New versions and fiscal checks come after unseen bills' first passes, before follow-up questions.
+                unseen = [c for c in candidates if c not in queue["seen"] and c not in queue["failed"]]
+                candidates = list(dict.fromkeys(unseen + [b for b in ids if b in due] + candidates))
+                candidates = candidates[:args.max_bills]
+                print("Stage tasks due:", len(due), "bills", flush=True)
         deadline = time.monotonic() + args.max_minutes * 60
         new_failures = 0
         status_path = args.publish_tags.parent / "status.json" if args.publish_tags and args.execute else None
@@ -947,11 +1071,11 @@ def main():
 
             halt = threading.Event()  # set by a worker whose outcome will stop the run: no new bill starts
 
-            def work(bill_id: str, ask: bool) -> tuple[str, object]:
+            def work(bill_id: str, ask: bool, plan: dict | None = None) -> tuple[str, object]:
                 """The per-bill network work: no queue or status state is touched here (workers may run it)."""
                 if halt.is_set():
                     return "skipped", None  # another worker's outcome is stopping the run; this bill stays queued
-                kind, value = fetch_and_review(bill_id, ask)
+                kind, value = fetch_and_review(bill_id, ask, plan)
                 if (kind == "download_stopped"
                         or kind == "error" and not isinstance(value, PER_BILL_ERRORS)
                         or kind == "bundle" and (value["status"] == "deferred" or (
@@ -959,10 +1083,24 @@ def main():
                     halt.set()  # mirrors the outcomes `handle` stops the run on
                 return kind, value
 
-            def fetch_and_review(bill_id: str, ask: bool) -> tuple[str, object]:
+            def fetch_and_review(bill_id: str, ask: bool, plan: dict | None = None) -> tuple[str, object]:
+                update, old_document = None, None
                 try:
                     if args.input == "markdown":
-                        document = load_markdown_document(bill_id, args.text_dir or args.snapshot.parent / "text")
+                        document = load_markdown_document(bill_id, text_dir, plan["code"] if plan else "I")
+                        if plan and plan["review"] == "update" and plan["reason"] == "new_version":
+                            stored = json.loads((args.cache_dir / "reviews" / (bill_id + ".json")).read_text("utf-8"))
+                            old_document = load_markdown_document(bill_id, text_dir, plan["from_code"])
+                            update = {"from_code": plan["from_code"],
+                                      "previous": review_stages.previous_for_update(stored),
+                                      "diff": review_stages.page_diff(old_document, document)}
+                        elif plan and plan["review"] == "revisit":
+                            stored = read_json(args.cache_dir / "reviews" / (bill_id + ".json")) or {}
+                            update = stored.get("version_update")  # rebuild the identical update request
+                            if update:
+                                old_document = load_markdown_document(bill_id, text_dir, update["from_code"])
+                        # A text revised under the same version code is reviewed afresh: its earlier text is gone,
+                        # so there is no previous version to compare with.
                     else:
                         document = download_document(bill_id, args.cache_dir)
                 except DOWNLOAD_ERRORS as error:
@@ -970,16 +1108,57 @@ def main():
                 except Exception as error:
                     return "download_stopped", error
                 try:
-                    bundle = None if args.no_companion_reuse else reuse_companion_review(
-                        bill_id, document, companions.get(bill_id), args.cache_dir, detailed.load_registry())
-                    if bundle is not None:
-                        print(bill_id, "reused the review of identical companion", bundle["reused_from"], flush=True)
-                        return "bundle", bundle
-                    return "bundle", run_document(document, detailed.load_registry(), args.cache_dir, budget,
-                                                  args.execute, question_effort=args.question_effort,
-                                                  ask_questions=ask)
+                    registry = detailed.load_registry()
+                    if not plan or plan["review"] == "first":
+                        bundle = None if args.no_companion_reuse else reuse_companion_review(
+                            bill_id, document, companions.get(bill_id), args.cache_dir, registry)
+                        if bundle is not None:
+                            print(bill_id, "reused the review of identical companion", bundle["reused_from"], flush=True)
+                            return "bundle", bundle
+                    first_pass = None
+                    if update:
+                        def first_pass():
+                            return review_stages.version_update(
+                                document, old_document, update["previous"], registry, args.cache_dir,
+                                execute=args.execute, sender=budget.send, cache=getattr(budget, "response_cache", None),
+                                diff=update.get("diff"))
+                    if plan and plan["review"] == "update" and first_pass_first:
+                        ask = False  # a new or revised version's first pass comes first; questions on the next visit
+                    bundle = run_document(document, registry, args.cache_dir, budget, args.execute,
+                                          question_effort=args.question_effort, ask_questions=ask,
+                                          first_pass=first_pass)
+                    if update and "result" in bundle:
+                        bundle["version_update"] = update
+                    if plan and plan["fiscal_due"] and "result" in bundle and not bundle.get("stop_run"):
+                        fiscal_check(bill_id, bundle, registry)
+                    return "bundle", bundle
                 except Exception as error:
                     return "error", error
+
+            def fiscal_check(bill_id: str, bundle: dict, registry: list[dict]) -> None:
+                """Stage 4, after the bill's review: attaches `fiscal_record`, or a stop reason the run acts on."""
+                try:
+                    docs = review_stages.load_fiscal_documents(bill_id, history_dir,
+                                                               review_stages.version_code(bundle["document"]))
+                    if not docs:
+                        return
+                    report = review_stages.fiscal_check(bundle, docs, registry, args.cache_dir, execute=args.execute,
+                                                        sender=budget.send, cache=getattr(budget, "response_cache", None))
+                except CapacityUnavailable as error:
+                    bundle["stop_run"], bundle["retry_after"] = "CapacityUnavailable (fiscal check)", error.retry_after
+                    return
+                except (CacheCoolingDown, CacheBusy, OSError, ValueError) as error:
+                    print(bill_id, "fiscal check skipped:", type(error).__name__, flush=True)
+                    return  # retried on a later visit; never billed
+                except Exception as error:
+                    # Unknown outcome, quota or budget: the run stops after this bill's review is recorded.
+                    bundle["stop_run"] = type(error).__name__ + " (fiscal check)"
+                    return
+                if "result" in report:
+                    bundle["fiscal_record"] = {
+                        "bill_id": bill_id, "binding": report["binding"],
+                        "documents": [{k: d[k] for k in ("id", "type", "code", "sha256")} for d in docs],
+                        "report": report}
 
             def asks_questions(bill_id: str) -> bool:
                 # Only a first visit defers questions; a bill with an earlier review keeps asking them, so its
@@ -1048,8 +1227,12 @@ def main():
                         return True
                     return False
                 review_path = args.cache_dir / "reviews" / (bill_id + ".json")
+                fiscal = bundle.pop("fiscal_record", None)
                 if "result" in bundle or not review_path.exists():
                     atomic_json(review_path, bundle)
+                if fiscal is not None and "result" in bundle:
+                    atomic_json(args.cache_dir / "fiscal" / (bill_id + ".json"), fiscal)
+                    print(bill_id, "fiscal check", fiscal["report"].get("status"), flush=True)
                 retryable = any(q.get('reason', '').startswith(('CapacityUnavailable', 'CacheCoolingDown',
                     'NotSubmitted', 'BudgetExceeded', 'Deferred')) for q in bundle.get('pending_questions', []))
                 if retryable and bill_id not in queue['retry']:
@@ -1083,7 +1266,7 @@ def main():
                     if bill_id is None:
                         break
                     try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5], running=True)
-                    if handle(bill_id, *work(bill_id, asks_questions(bill_id))):
+                    if handle(bill_id, *work(bill_id, asks_questions(bill_id), visit_plan(bill_id))):
                         break
             else:
                 # Workers run only `work`; every queue, status and review write stays on this thread. A capacity
@@ -1101,7 +1284,7 @@ def main():
                             if bill_id is None:
                                 stopping = stopping or not running
                                 break
-                            running[pool.submit(work, bill_id, asks_questions(bill_id))] = bill_id
+                            running[pool.submit(work, bill_id, asks_questions(bill_id), visit_plan(bill_id))] = bill_id
                             try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5],
                                                running=True)
                         if not running:
@@ -1132,6 +1315,14 @@ def main():
                                              args.publish_tags.parent / "highlights"), "bills", flush=True)
                 except Exception as error:
                     print("Highlight publish failed:", type(error).__name__, flush=True)
+                if args.stages:
+                    for name, folder, publish in (("changes", "changes", publish_changes),
+                                                  ("fiscal checks", "fiscal", publish_fiscal)):
+                        try:
+                            print("Published Luna", name, "for",
+                                  publish(args.cache_dir, args.publish_tags.parent / folder), "bills", flush=True)
+                        except Exception as error:
+                            print("Publishing", name, "failed:", type(error).__name__, flush=True)
 
 
 if __name__ == "__main__":

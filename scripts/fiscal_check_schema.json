@@ -1,0 +1,87 @@
+{
+  "type": "object",
+  "properties": {
+    "bill_id": {"type": "string", "minLength": 1, "maxLength": 20},
+    "fiscal_summary": {
+      "type": "object",
+      "properties": {
+        "text": {"type": "string", "minLength": 1, "maxLength": 900},
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "doc_id": {"type": "string", "minLength": 1, "maxLength": 20},
+              "quote": {"type": "string", "minLength": 1, "maxLength": 300}
+            },
+            "required": ["doc_id", "quote"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 3
+        }
+      },
+      "required": ["text", "evidence"],
+      "additionalProperties": false
+    },
+    "agencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "maxLength": 200},
+          "registry_id": {"type": ["string", "null"], "maxLength": 80},
+          "in_review": {"type": "boolean"},
+          "fiscal_effect": {"type": "string", "minLength": 1, "maxLength": 600},
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "doc_id": {"type": "string", "minLength": 1, "maxLength": 20},
+                "quote": {"type": "string", "minLength": 1, "maxLength": 300}
+              },
+              "required": ["doc_id", "quote"],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 3
+          }
+        },
+        "required": ["name", "registry_id", "in_review", "fiscal_effect", "evidence"],
+        "additionalProperties": false
+      },
+      "maxItems": 40
+    },
+    "disagreements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "claim": {"type": "string", "minLength": 1, "maxLength": 100},
+          "note": {"type": "string", "minLength": 1, "maxLength": 600},
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "doc_id": {"type": "string", "minLength": 1, "maxLength": 20},
+                "quote": {"type": "string", "minLength": 1, "maxLength": 300}
+              },
+              "required": ["doc_id", "quote"],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 3
+          }
+        },
+        "required": ["claim", "note", "evidence"],
+        "additionalProperties": false
+      },
+      "maxItems": 12
+    },
+    "no_fiscal_implication": {"type": "boolean"}
+  },
+  "required": ["bill_id", "fiscal_summary", "agencies", "disagreements", "no_fiscal_implication"],
+  "additionalProperties": false
+}

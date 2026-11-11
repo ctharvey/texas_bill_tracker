@@ -129,3 +129,17 @@ button[disabled]{opacity:.5;cursor:not-allowed}
 .bt-body mark.hl-off{background:none;box-shadow:none;font-weight:inherit;cursor:text}
 .bt-body mark.hl-flash{outline:2px solid var(--gold);outline-offset:1px}
 @media(max-width:380px){.bt-body{padding:10px;max-height:60vh}.bt-key{font-size:10px}}
+.stage-section h4{font:800 11px Manrope,sans-serif;margin:12px 0 6px;color:var(--ink)}
+.stage-list{list-style:none;margin:0;padding:0;font-size:12px;line-height:1.6;color:#758698}
+.stage-list li{padding:8px 0;border-bottom:1px solid #edf0f3;overflow-wrap:anywhere}
+.stage-list li:last-child{border-bottom:0}
+.stage-list p,.stage-section .stage-small{font-size:11px;margin:4px 0 0}
+.stage-chamber{margin-top:10px}
+.stage-chamber p+p{margin-top:4px}
+.stage-badge{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-radius:4px;padding:3px 6px;background:#f0f3f6;color:#526578}
+.stage-added{background:var(--teal-soft);color:var(--teal)}
+.stage-removed{background:var(--red-soft);color:var(--red)}
+.stage-altered{background:var(--gold-soft);color:var(--gold)}
+.stage-quotes{margin-top:6px;font-size:11px;color:#758698}
+.stage-quotes summary{cursor:pointer;color:var(--teal);font-weight:700}
+.stage-quotes blockquote{margin:6px 0 0;padding:4px 0 4px 10px;border-left:2px solid var(--line);overflow-wrap:anywhere}
