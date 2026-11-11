@@ -220,6 +220,20 @@ received in other chamber, sent to governor, signed or effective, vetoed, withdr
 The explorer can filter by that category and sort by latest action, oldest last action (stalled bills first)
 or last-action stage. This is separate from the "stage" filter, which is the furthest stage ever reached.
 
+### Today view, opening bills, Copy for AI
+
+- **Today** (`#today`, `#today?bill=HB5`) lists bills with an action dated today in America/Chicago (from
+  `action_dates` when present, else `last_action_date`), grouped by action type, with a topic chip row that filters
+  the list. When nothing is dated today it shows the most recent day with activity and says so. It uses only the
+  published snapshot (no extra fetching); an interim note (`TODAY_INTERIM_NOTE` in `src/app.js`) explains that
+  floor calendars and hearings arrive with the session. The helpers (`chicagoDate`, `activityOn`,
+  `latestActivityDay`, `topicCounts`, `groupByActionType`) live in `src/taxonomy.js`, because the static deployer
+  ships a fixed list of `src` files.
+- A bill's title and number are real links (`#<view>?bill=<ID>`); empty card space opens the drawer too, but not
+  clicks on controls, links or a text selection.
+- The drawer's **Copy for AI** button copies a short prompt (bill, agent-edition Markdown URL, official text URL, one
+  neutral instruction); next to it is a plain link to the AI-readable `.md`. No prefilled links to AI services.
+
 ### Saving and sharing without accounts
 
 There are no logins. People keep and move their choices in five ways:

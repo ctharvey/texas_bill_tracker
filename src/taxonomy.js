@@ -497,3 +497,87 @@ export function officialUrl(bill) {
   const number = (bill.id || bill.number || '').replace(/\s+/g,'').toUpperCase();
   return `https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill=${encodeURIComponent(number)}`;
 }
+
+// ---- Opening a bill from its card, and "Copy for AI" ----
+// (Kept in this file: the static deployer ships a fixed list of src files.)
+export const AGENT_BASE = 'https://agent.bills.ctharvey.me/';
+export const agentUrl = bill => `${AGENT_BASE}bills/${encodeURIComponent(bill.id || String(bill.number || '').replace(/\s+/g, ''))}.md`;
+const httpsUrl = value => { try { const u = new URL(String(value)); return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : ''; } catch { return ''; } };
+
+// Text for pasting into an AI assistant: where to read the bill, and one neutral instruction.
+export function aiPrompt(bill) {
+  const versions = Array.isArray(bill.text_versions) ? bill.text_versions.filter(v => v && httpsUrl(v.html)) : [];
+  const latest = versions[versions.length - 1];
+  const textLine = latest
+    ? `Official bill text${latest.name ? ` (${latest.name})` : ''}: ${httpsUrl(latest.html)}`
+    : `Official bill history and text: ${officialUrl(bill)}`;
+  return [`Texas ${bill.number} (90th Legislature): ${bill.title}`, '',
+    `AI-readable version with history and review: ${agentUrl(bill)}`, textLine, '',
+    'Summarize what this bill does, who it affects, and its current status, citing the bill text.'].join('\n');
+}
+
+// A plain left-click on empty card space opens the drawer; controls, links, selections and modified clicks do not.
+export function cardClickOpens({interactive = false, selection = '', button = 0, metaKey = false, ctrlKey = false, shiftKey = false, altKey = false} = {}) {
+  return !interactive && !String(selection).trim() && button === 0 && !metaKey && !ctrlKey && !shiftKey && !altKey;
+}
+
+const escText = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// A real link that opens the bill drawer on a plain click and keeps native behaviour for middle/ctrl-click.
+export const openLinkHtml = (id, href, className, label) => `<a class="${escText(className)}" href="${escText(href)}" data-open="${escText(id)}">${escText(label)}</a>`;
+
+// ---- Today view: activity by day, in America/Chicago ----
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const CHICAGO_DAY = new Intl.DateTimeFormat('sv-SE', {timeZone: 'America/Chicago'});
+
+// 'YYYY-MM-DD' in America/Chicago for a Date or ISO timestamp; a bare date string is already a day.
+export function chicagoDate(value) {
+  if (typeof value === 'string' && DAY.test(value)) return value;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : CHICAGO_DAY.format(date);
+}
+
+// Dated actions as [{day, text}]. action_dates only counts when it lines up with actions one for one.
+function datedActions(bill) {
+  const actions = toArray(bill.actions).filter(a => a != null).map(a => typeof a === 'string' ? a : a.description || '');
+  const dates = Array.isArray(bill.action_dates) ? bill.action_dates : [];
+  if (actions.length && dates.length === actions.length) {
+    return actions.map((text, i) => ({day: String(dates[i] || '').slice(0, 10), text})).filter(a => DAY.test(a.day));
+  }
+  const day = String(bill.last_action_date || lastActionInfo(bill).date || '').slice(0, 10);
+  return DAY.test(day) ? [{day, text: lastActionInfo(bill).text}] : [];
+}
+
+// Bills with an action dated `day`: [{bill, actions: [text, ...]}], in the order given.
+export function activityOn(bills, day) {
+  const out = [];
+  for (const bill of bills) {
+    const actions = datedActions(bill).filter(a => a.day === day).map(a => a.text);
+    if (actions.length) out.push({bill, actions});
+  }
+  return out;
+}
+
+// The most recent day on or before `today` that has any activity, or null.
+export function latestActivityDay(bills, today) {
+  let best = null;
+  for (const bill of bills) for (const {day} of datedActions(bill)) if (day <= today && (best === null || day > best)) best = day;
+  return best;
+}
+
+export function topicCounts(bills) {
+  const counts = new Map();
+  for (const bill of bills) for (const topic of new Set(bill.topics || [])) counts.set(topic, (counts.get(topic) || 0) + 1);
+  return [...counts].map(([topic, count]) => ({topic, count})).sort((a, b) => b.count - a.count || a.topic.localeCompare(b.topic));
+}
+
+// Groups activity rows by the type of their latest matched action, in the order of LAST_ACTION_TYPES, "Other" last.
+export function groupByActionType(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    const info = lastActionInfo({last_action: row.actions[row.actions.length - 1]});
+    if (!groups.has(info.key)) groups.set(info.key, {key: info.key, label: info.label, rows: []});
+    groups.get(info.key).rows.push(row);
+  }
+  const order = key => { const i = LAST_ACTION_TYPES.findIndex(t => t.key === key); return i < 0 ? LAST_ACTION_TYPES.length : i; };
+  return [...groups.values()].sort((a, b) => order(a.key) - order(b.key));
+}

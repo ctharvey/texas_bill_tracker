@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-11
+- Frontend: bill titles and numbers are real links and empty card space opens the drawer; the drawer has "Copy for
+  AI" and an AI-readable link; new "Today" view (`#today`) shows the day's activity by action type and topic.
 - Generic agency names ("the department", "the commission") are published as the registry agency when the amended
   code chapter's verified definition names it (`scripts/agency_name_definitions.json`, publish time only, no cost).
   Maps 42 of 109 such labels on the current reviews; the rest stay as written.

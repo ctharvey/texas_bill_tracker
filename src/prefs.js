@@ -1,7 +1,7 @@
 // Saving choices without accounts: URL state, remembered filters, watchlist files and sync merging.
 export const FILTER_DEFAULTS = {query: '', topic: '', agency: '', chamber: '', stage: '', action: '', outlook: '', sort: 'newest', onlyWatch: false};
 const FILTER_NAMES = Object.keys(FILTER_DEFAULTS);
-export const VIEWS = ['all', 'watchlist', 'agencies', 'review', 'method', 'saving', 'data'];
+export const VIEWS = ['all', 'watchlist', 'today', 'agencies', 'review', 'method', 'saving', 'data'];
 export const MAX_LIST = 500;
 const BILL_ID = /^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9]\d{0,4}$/;
 const SYNC_KEY = /^[A-Za-z0-9_-]{22}$/;

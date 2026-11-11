@@ -152,3 +152,17 @@ button[disabled]{opacity:.5;cursor:not-allowed}
 .stage-quotes{margin-top:6px;font-size:11px;color:#758698}
 .stage-quotes summary{cursor:pointer;color:var(--teal);font-weight:700}
 .stage-quotes blockquote{margin:6px 0 0;padding:4px 0 4px 10px;border-left:2px solid var(--line);overflow-wrap:anywhere}
+.bill-card,.today-row{cursor:pointer}
+.bill-title-link{color:inherit;text-decoration:none}
+a.bill-number{text-decoration:none}
+a.bill-number:hover{text-decoration:underline}
+.bill-title-link:hover{text-decoration:underline}
+.ai-copy{margin-top:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.ai-fallback{width:100%;font:12px/1.4 monospace;padding:8px;border:1px solid var(--line);border-radius:6px}
+.today-group{margin-top:20px}
+.today-group h3{margin:0 0 8px;font-size:14px}
+.today-group h3 span{color:#758698;font-weight:600;margin-left:4px}
+.today-row{padding:12px 14px;margin-bottom:8px;background:#fff;border:1px solid var(--line);border-radius:8px}
+.today-row-head{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.today-row-head .bill-title-link{font-weight:700;flex:1 1 220px}
+.today-action{margin:6px 0;font-size:13px;color:#526578;overflow-wrap:anywhere}
