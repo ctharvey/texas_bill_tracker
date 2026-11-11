@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-10
+- Review worker: `--transport flex` routes Luna calls through a vendored copy of cth.flex 0.1.5 (client, spend ledger
+  and response cache, on the existing files) behind `scripts/flex_boundary.py`. The default stays `legacy`, so
+  production is unchanged.
 - Privacy policy: a "Privacy" footer link opens the policy in a dialog (it ships inside `index.html`, the only page the
   static deploy publishes).
 - Identical companions share one review: a bill whose Identical companion was already reviewed reuses that review

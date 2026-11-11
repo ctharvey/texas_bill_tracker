@@ -113,6 +113,14 @@ ids, with the failure stage only). It is rewritten before each bill and on every
 **Review progress** view reads it, refreshes it every minute while open, and treats a running status older
 than 90 minutes as possibly stopped; without it, bills with published tags count as reviewed.
 The limit cannot be raised above $1 via CLI. Do not remove the ledger or uncertain response records to retry.
+`--transport flex` (default `legacy`) sends through the vendored cth.flex library (`scripts/vendor/cth_flex`,
+see its `VENDORED.json`; `scripts/flex_boundary.py` is the only importer). It uses the same `budget.json` and
+`responses/` files and the same retry schedule. Differences:
+- an error that provably never reached OpenAI (quota, auth, a rejected request, most 5xx, no connection) releases
+  its reservation instead of blocking later calls;
+- quota and auth end the run;
+- an incomplete or wrong-tier reply is kept as `refused` with its real cost.
+The production unit still runs `legacy`.
 
 At most three new targeted queries per bill run; cached resolutions do not consume this allowance. Later
 runs progress through remaining questions. Requested official statute chapters are cached privately for

@@ -217,10 +217,11 @@ def response_cost(raw: dict) -> list[float] | None:
     return detailed.response_cost(raw, model=MODEL, rates=(.05, .005, .25, .0625, .125))
 
 
-def classify(document: dict, registry: list[dict], cache_root: Path, *, execute=False, sender=None) -> dict:
+def classify(document: dict, registry: list[dict], cache_root: Path, *, execute=False, sender=None,
+             cache=None) -> dict:
     return detailed.extract(document, registry, cache_root, execute=execute, sender=sender,
                             request=build_request(document, registry), validator=validate_result,
-                            cost_estimator=response_cost)
+                            cost_estimator=response_cost, cache=cache)
 
 
 def main() -> int:

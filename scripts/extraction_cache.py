@@ -34,6 +34,34 @@ class CapacityUnavailable(RuntimeError):
         super().__init__("Provider capacity unavailable")
 
 
+class BudgetExceeded(NotSubmitted):
+    pass
+
+
+class OutcomeUnresolved(NotSubmitted):
+    """An earlier billing outcome is unknown; no further calls until reconciled."""
+
+
+class AlreadyBilled(NotSubmitted):
+    """This exact request was billed before; its response cache must be restored."""
+
+
+class LongContext(NotSubmitted):
+    """The request exceeds the reviewed pricing range."""
+
+
+class ApiStopped(RuntimeError):
+    """The provider refused the account (quota, billing or auth); nothing was billed. Ends the run."""
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__("Provider refused the request: " + code)
+
+
+class ApiRejected(ValueError):
+    """The provider rejected this request without processing it (bad request or a proven-unbilled server error)."""
+
+
 @dataclass(frozen=True)
 class CachedResponse:
     response: dict

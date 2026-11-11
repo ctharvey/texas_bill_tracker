@@ -1,0 +1,19 @@
+{
+  "source": "projects/ctharvey/cth.flex (src/cth_flex)",
+  "version": "0.1.5",
+  "commit": "4631c4e96f7d9aaffab578fcf218fa3482b27783",
+  "note": "Vendored copy; do not edit. Re-vendor from cth.flex and update this file.",
+  "sha256_lf": {
+    "__init__.py": "33b396a3d212b1ba4eb742b79cd7e791170435115d3f1f211382aac82aa46197",
+    "adapters.py": "436ff8b2f1ba987c2ba4f81e3e3e308cfc90304e9d089bfc3816820b4979613e",
+    "batch.py": "c743001c6a9d1099f937be7d91e541e4e57db176f1569bffb2084d071bfd0771",
+    "cache.py": "151d7affe531ea77e43f3a3fead8947580e369618861c83a9d3765bc9f3a970f",
+    "client.py": "d735a8220a2837d276449c81c1328882f9a8fc684ee19b80a7db8b890c69c723",
+    "cost.py": "68d4ce648aea5d6646267209e45bf42d08b17954ab8602be76e54e36f4b49533",
+    "errors.py": "8ea12ea21bf1350f8031528cee8e859dca8d15c29da06e741b44909e5a13b6dc",
+    "exceptions.py": "2a4f1200deea92dba4f1fc25da34eb4001e5397ed4be10eb9e770e4d61b6362b",
+    "ledger.py": "c4635c0fe99dabf703b1582bcd70d8b7a40a5e955e8f9e643b41b24ece41067d",
+    "policy.py": "361e909b40a44cc70166d65aceeca59d6eca850b97c5522a7999d5436f19d21f",
+    "retry_after.py": "4595ce5bb45bfc262e7f69a586f7e09a92192dd24f04398fe24350c600153c13"
+  }
+}

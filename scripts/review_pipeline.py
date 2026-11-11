@@ -20,7 +20,8 @@ import classify_bill as classification
 import extract_bill as detailed
 import contextlib
 from extraction_cache import (
-    CacheBusy, CacheCoolingDown, CapacityUnavailable, NotSubmitted, ResponseCache, atomic_json, canonical_hash,
+    AlreadyBilled, ApiStopped, BudgetExceeded, CacheBusy, CacheCoolingDown, CapacityUnavailable, LongContext,
+    NotSubmitted, OutcomeUnresolved, ResponseCache, atomic_json, canonical_hash,
 )
 
 ROOT = detailed.ROOT
@@ -29,22 +30,6 @@ OBLIGATION = re.compile(r"\b(must|shall|require\w*|would|have to)\b", re.I)
 CODE_IDS = {"Water Code": "WA", "Health and Safety Code": "HS", "Occupations Code": "OC",
             "Government Code": "GV", "Education Code": "ED", "Election Code": "EL",
             "Tax Code": "TX", "Transportation Code": "TN", "Insurance Code": "IN"}
-
-
-class BudgetExceeded(NotSubmitted):
-    pass
-
-
-class OutcomeUnresolved(NotSubmitted):
-    """An earlier billing outcome is unknown; no further calls until reconciled."""
-
-
-class AlreadyBilled(NotSubmitted):
-    """This exact request was billed before; its response cache must be restored."""
-
-
-class LongContext(NotSubmitted):
-    """The request exceeds the reviewed pricing range."""
 
 
 # Only these not-submitted reasons are specific to one bill. Every other one (budget, unresolved billing,
@@ -59,14 +44,18 @@ def ledger_day() -> str:
     return dt.datetime.now(ZoneInfo(LEDGER_ZONE)).date().isoformat()
 
 
+def check_limits(daily_limit: float | None, run_limit: float | None) -> None:
+    # None/None disables the spending ceilings only; reservation and double-billing checks still apply.
+    if (daily_limit is None) != (run_limit is None):
+        raise ValueError("Disable both limits or neither")
+    if daily_limit is not None and (not 0 < daily_limit <= 1 or not 0 < run_limit <= daily_limit):
+        raise ValueError("Limits must satisfy 0 < run limit <= daily limit <= $1")
+
+
 class Budget:
     """One worker lock covers this ledger; unknown submission outcomes retain their reservation."""
     def __init__(self, path: Path, daily_limit: float | None, run_limit: float | None):
-        # None/None disables the spending ceilings only; reservation and double-billing checks still apply.
-        if (daily_limit is None) != (run_limit is None):
-            raise ValueError("Disable both limits or neither")
-        if daily_limit is not None and (not 0 < daily_limit <= 1 or not 0 < run_limit <= daily_limit):
-            raise ValueError("Limits must satisfy 0 < run limit <= daily limit <= $1")
+        check_limits(daily_limit, run_limit)
         self.path, self.daily_limit, self.run_limit = path, daily_limit, run_limit
         self.run_spent = 0.0
         self.day = ledger_day()
@@ -332,7 +321,8 @@ def resolution_request(question: dict, result: dict, document: dict, sources: li
 def resolve(question, result, document, registry, cache_root, budget, execute, sources=None, effort="high"):
     sources = sources if sources is not None else statutory_sources(question, document, cache_root)
     request = resolution_request(question, result, document, sources, effort)
-    cache = ResponseCache(cache_root / "responses")
+    # --transport flex: the budget is a FlexBoundary, which is also the response cache.
+    cache = getattr(budget, "response_cache", None) or ResponseCache(cache_root / "responses")
     atomic_json(cache_root / "requests" / (cache.key(request) + ".json"), request)
     def submit():
         if not execute:
@@ -389,7 +379,8 @@ QUESTIONS_LATER = "Deferred: questions follow other bills' first passes"
 
 def run_document(document, registry, cache_root, budget, execute=False, max_questions=3, question_effort="high",
                  ask_questions=True):
-    first = classification.classify(document, registry, cache_root, execute=execute, sender=budget.send)
+    first = classification.classify(document, registry, cache_root, execute=execute, sender=budget.send,
+                                    cache=getattr(budget, "response_cache", None))
     if "result" not in first:
         if first.get("action") != "not_submitted":
             status = "needs_review"
@@ -426,7 +417,8 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
                 new_calls += 1
             if any(row.get("state") == "pending" for day in budget.ledger.values() for row in day.values()):
                 raise RuntimeError("Unknown request outcome; worker stopped") from None
-            if getattr(error, "code", None) in ("insufficient_quota", "invalid_api_key", "billing_hard_limit_reached"):
+            if isinstance(error, ApiStopped) or getattr(error, "code", None) in (
+                    "insufficient_quota", "invalid_api_key", "billing_hard_limit_reached"):
                 raise
             reason = type(error).__name__
             if isinstance(error, ValueError):
@@ -854,6 +846,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Reasoning effort for targeted follow-up questions (first pass stays high)")
     parser.add_argument("--no-companion-reuse", action="store_true",
                         help="Always review a bill itself, even when an identical companion's review matches its text")
+    parser.add_argument("--transport", choices=("legacy", "flex"), default="legacy",
+                        help="Provider call stack: the built-in sender, budget and cache (legacy, default) or the "
+                             "vendored cth.flex client, spend ledger and cache (flex); both use the same files")
     parser.add_argument("--questions-inline", action="store_true",
                         help="Ask a new bill's follow-up questions right after its first pass (default: first passes "
                              "for every unseen bill come first; questions run on the bill's next visit)")
@@ -877,7 +872,12 @@ def main():
         return 0
     with worker:
         limits = (None, None) if args.no_spending_cap else (args.daily_budget, args.run_budget)
-        budget = Budget(args.cache_dir / "budget.json", *limits)
+        if args.transport == "flex":
+            import flex_boundary
+            check_limits(*limits)
+            budget = flex_boundary.FlexBoundary(args.cache_dir, *limits)
+        else:
+            budget = Budget(args.cache_dir / "budget.json", *limits)
         snapshot = json.loads(args.snapshot.read_text("utf-8"))
         companions = {b["id"]: b.get("companions") or [] for b in snapshot["bills"] if isinstance(b, dict) and "id" in b}
         ids = args.bill_id or [b["id"] for b in snapshot["bills"]]

@@ -407,12 +407,13 @@ def send_request(request: dict) -> dict:
 
 
 def extract(document: dict, registry: list[dict], cache_root: Path, *, execute: bool = False,
-            sender=None, request: dict | None = None, validator=None, cost_estimator=None) -> dict:
+            sender=None, request: dict | None = None, validator=None, cost_estimator=None, cache=None) -> dict:
     check_cache_location(cache_root)
     request = request if request is not None else build_request(document, registry)
     import jsonschema
     jsonschema.Draft202012Validator.check_schema(request["text"]["format"]["schema"])
-    cache = ResponseCache(cache_root / "responses")
+    # `cache`: anything with key/execute, e.g. a FlexBoundary (--transport flex); default is the built-in cache.
+    cache = cache if cache is not None else ResponseCache(cache_root / "responses")
     key = cache.key(request)
     atomic_json(cache_root / "requests" / (key + ".json"), request)
 
