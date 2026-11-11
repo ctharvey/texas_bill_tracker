@@ -111,6 +111,23 @@ class TopicSuggestionTests(SuggestionCase):
         self.assertNotIn('pending', self.ledger_states())
         self.assertTrue((self.live / 'luna' / 'tags.json').exists())  # the run still published normally
 
+    def test_one_rejected_bill_does_not_hold_up_the_others(self):
+        self.seed(['HB1', 'HB2', 'HB3'])
+        reply = lambda bill, text: (Err(429, 'flex_unavailable') if bill == 'HB2'
+                                    else body({'suggestions': self.suggestions}))
+        self.overrides[SUGGEST] = reply
+        out = self.run_once()
+        self.assertIn('capacity unavailable for HB2', out)
+        self.assertIsNone(self.record('HB2'))
+        self.assertIsNotNone(self.record('HB1')); self.assertIsNotNone(self.record('HB3'))
+
+    def test_three_rejections_in_a_row_end_the_pass(self):
+        self.seed(['HB1', 'HB2', 'HB3', 'HB4'])
+        self.overrides[SUGGEST] = lambda bill, text: Err(429, 'flex_unavailable')
+        out = self.run_once()
+        self.assertIn('3 times in a row', out)
+        self.assertNotIn('HB4', [b for b, n in self.sdk.requests if n == SUGGEST])  # never tried
+
     def test_off_without_the_flag(self):
         self.seed()
         self.run_once(suggest=False)

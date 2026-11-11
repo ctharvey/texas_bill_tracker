@@ -962,7 +962,7 @@ def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
     topics, registry = classification.load_policy_tags(), detailed.load_registry()
     cache = getattr(budget, "response_cache", None)
     key_fn = cache.key if cache is not None else ResponseCache.key
-    retry, out, done = set(queue.get("retry", [])), args.cache_dir / "suggestions", 0
+    retry, out, done, rejections = set(queue.get("retry", [])), args.cache_dir / "suggestions", 0, 0
 
     def read(path: Path):
         try:
@@ -984,8 +984,14 @@ def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
             report = topic_suggestions.suggest(bundle, topics, registry, args.cache_dir, execute=args.execute,
                                                sender=budget.send, cache=cache)
         except CapacityUnavailable:
-            print("Topic suggestions: capacity unavailable; the rest wait for a later run", flush=True)
-            break
+            # The cooldown is per request, so other bills may still go; three rejections in a row end the pass.
+            rejections += 1
+            print("Topic suggestions: capacity unavailable for", bill_id, flush=True)
+            if rejections >= 3:
+                print("Topic suggestions: capacity unavailable 3 times in a row; the rest wait for a later run",
+                      flush=True)
+                break
+            continue
         except (CacheCoolingDown, CacheBusy, OSError, ValueError) as error:
             print(bill_id, "topic suggestions skipped:", type(error).__name__, flush=True)
             continue
@@ -999,7 +1005,7 @@ def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
                 print("Topic suggestions stopped:", report.get("reason_type"), flush=True)
             break  # budget, an unresolved outcome, or a dry run: nothing more is sent this run
         atomic_json(out / (bill_id + ".json"), topic_suggestions.record_for(bundle, report))
-        done += 1
+        done, rejections = done + 1, 0
     print("Topic suggestions checked for", done, "bills", flush=True)
     return done
 
