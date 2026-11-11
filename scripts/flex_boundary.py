@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import sys
+import threading
 import time
 
 _VENDOR = str(Path(__file__).resolve().parent / "vendor")
@@ -102,6 +103,10 @@ class FlexBoundary:
         self._sleep = sleep
         self._log = log or (lambda text: print(text, file=sys.stderr, flush=True))
         self._client: FlexClient | None = None
+        # Shared by the review workers (--workers): the ledger and cache lock themselves; these guard the rest.
+        self._lock = threading.Lock()
+        self._inflight: set[str] = set()
+        self._local = threading.local()
 
     # ---- the legacy Budget's surface ----
     @property
@@ -113,14 +118,36 @@ class FlexBoundary:
         return self.spend.run_spent
 
     @property
+    def thread_calls(self) -> int:
+        """Billed replies settled on this thread; run_document counts its own calls with it (run_spent is shared)."""
+        return getattr(self._local, "calls", 0)
+
+    @property
     def ledger(self) -> dict:
-        """Pending rows only, in the legacy shape {day: {key: row}}; run_document checks it after a failure."""
-        return {"pending": {key: {"state": "pending"} for key in self.spend.pending()}}
+        """Unresolved rows, in the legacy shape {day: {key: row}}; run_document stops the run on any.
+
+        A row another worker of this run still has in flight is not unresolved, so it is left out. Once its send
+        returns, a row still pending is an unknown outcome and is included."""
+        with self._lock:
+            mine = set(self._inflight)
+        return {"pending": {key: {"state": "pending"} for key in self.spend.pending() if key not in mine}}
 
     def send(self, request: dict) -> dict:
         """Reserve, send and settle. Raises cth.flex errors; call it only inside `execute`."""
         self._flex_client()  # a missing SDK or key fails here, as NotSent, before anything is reserved
-        return self.spend.send(request, self._checked_send, LUNA_RATES)
+        key = self.key(request)
+        with self._lock:
+            self._inflight.add(key)
+        try:
+            response = self.spend.send(request, self._checked_send, LUNA_RATES)
+        except IncompleteResponse:
+            self._local.calls = self.thread_calls + 1  # billed and settled (kept as refused)
+            raise
+        finally:
+            with self._lock:
+                self._inflight.discard(key)
+        self._local.calls = self.thread_calls + 1
+        return response
 
     # ---- the legacy ResponseCache's surface ----
     @staticmethod
@@ -159,6 +186,10 @@ class FlexBoundary:
 
     # ---- inside the stack ----
     def _flex_client(self) -> FlexClient:
+        with self._lock:
+            return self._build_client()
+
+    def _build_client(self) -> FlexClient:
         if self._client is None:
             sdk = self._openai_factory()  # raises NotSent when the SDK or key is missing; nothing reserved yet
 

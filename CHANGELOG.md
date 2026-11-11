@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-10
+- Review worker: `--workers N` (flex transport only, default 1) reviews several bills at once; the main thread keeps
+  every queue/status/review write, and a capacity pause, unknown outcome or quota stop applies to all workers.
 - Review worker: `--transport flex` routes Luna calls through a vendored copy of cth.flex 0.1.5 (client, spend ledger
   and response cache, on the existing files) behind `scripts/flex_boundary.py`. The default stays `legacy`, so
   production is unchanged.

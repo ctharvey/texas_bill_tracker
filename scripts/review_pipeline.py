@@ -12,8 +12,10 @@ import json
 import os
 from pathlib import Path
 import re
+import threading
 import time
 from collections import Counter, deque
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from urllib.request import Request, urlopen
 
 import classify_bill as classification
@@ -35,6 +37,8 @@ CODE_IDS = {"Water Code": "WA", "Health and Safety Code": "HS", "Occupations Cod
 # Only these not-submitted reasons are specific to one bill. Every other one (budget, unresolved billing,
 # missing key or dependencies) is environmental and stops the run, so bills are never marked seen in bulk.
 PER_BILL_NOT_SUBMITTED = ("LongContext", "AlreadyBilled")
+# Review errors the worker loop records against one bill and continues past; any other error stops the run.
+PER_BILL_ERRORS = (CacheCoolingDown, CacheBusy, CapacityUnavailable, OSError, ValueError)
 LEDGER_ZONE = "America/Chicago"
 
 
@@ -377,6 +381,13 @@ def resolve(question, result, document, registry, cache_root, budget, execute, s
 QUESTIONS_LATER = "Deferred: questions follow other bills' first passes"
 
 
+def spend_marker(budget) -> float:
+    """Rises when this bill's own call was billed. Under --workers the run total also moves with other bills'
+    calls, so a FlexBoundary counts per thread; the legacy Budget has one call in flight, so its total is exact."""
+    calls = getattr(budget, "thread_calls", None)
+    return budget.run_spent if calls is None else calls
+
+
 def run_document(document, registry, cache_root, budget, execute=False, max_questions=3, question_effort="high",
                  ask_questions=True):
     first = classification.classify(document, registry, cache_root, execute=execute, sender=budget.send,
@@ -402,7 +413,7 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
     else:
         questions_to_ask = questions
     for index, question in enumerate(questions_to_ask):
-        before_spending = budget.run_spent
+        before_spending = spend_marker(budget)
         try:
             resolution, corrected = resolve(question, derived, document, registry, cache_root, budget,
                                             execute and new_calls < max_questions, effort=question_effort)
@@ -413,7 +424,7 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
             else:
                 pending.append({**question, "reason": "Official evidence insufficient"})
         except Exception as error:
-            if budget.run_spent > before_spending:
+            if spend_marker(budget) > before_spending:
                 new_calls += 1
             if any(row.get("state") == "pending" for day in budget.ledger.values() for row in day.values()):
                 raise RuntimeError("Unknown request outcome; worker stopped") from None
@@ -849,6 +860,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--transport", choices=("legacy", "flex"), default="legacy",
                         help="Provider call stack: the built-in sender, budget and cache (legacy, default) or the "
                              "vendored cth.flex client, spend ledger and cache (flex); both use the same files")
+    parser.add_argument("--workers", type=int, default=1,
+                        help="Bills reviewed at once (default 1). More than one needs --transport flex")
     parser.add_argument("--questions-inline", action="store_true",
                         help="Ask a new bill's follow-up questions right after its first pass (default: first passes "
                              "for every unseen bill come first; questions run on the bill's next visit)")
@@ -863,6 +876,10 @@ def main():
         parser.error("--max-bills must be at least 1")
     if args.max_minutes <= 0:
         parser.error("--max-minutes must be positive")
+    if args.workers < 1:
+        parser.error("--workers must be at least 1")
+    if args.workers > 1 and args.transport != "flex":
+        parser.error("--workers above 1 needs --transport flex (the legacy budget allows one call in flight)")
     worker = contextlib.ExitStack()
     try:
         worker.enter_context(ResponseCache(args.cache_dir / "worker-lock")._lock("worker"))
@@ -894,6 +911,7 @@ def main():
         status_path = args.publish_tags.parent / "status.json" if args.publish_tags and args.execute else None
         try:
             pending, cooling, capacity_waits, redo = deque(candidates), [], 0, set()
+            stopping = False  # several workers: no new bills; in-flight ones finish and are recorded
 
             def pause(seconds: float, current: str | None) -> None:
                 try_publish_status(status_path, queue, current=current, upcoming=list(pending)[:5], running=True,
@@ -913,91 +931,122 @@ def main():
                     print(bill_id, "capacity unavailable; stays queued for the next run", flush=True)
                 wait = CAPACITY_PAUSE[min(capacity_waits, len(CAPACITY_PAUSE) - 1)]
                 capacity_waits += 1
-                if wait and time.monotonic() + wait < deadline:
+                if wait and not stopping and time.monotonic() + wait < deadline:
                     pause(wait, None)
 
-            def next_bill() -> str | None:
+            def next_bill(block: bool = True) -> str | None:
                 cooling.sort()
                 if cooling and cooling[0][0] <= time.monotonic():
                     return cooling.pop(0)[1]
                 if pending:
                     return pending.popleft()
-                if cooling and cooling[0][0] < deadline:
+                if block and cooling and cooling[0][0] < deadline:
                     pause(max(0, cooling[0][0] - time.monotonic()), cooling[0][1])
                     return cooling.pop(0)[1]
                 return None
 
-            while True:
-                if time.monotonic() > deadline:
-                    print("Stopped: run time limit; remaining work stays queued", flush=True); break
-                bill_id = next_bill()
-                if bill_id is None:
-                    break
-                try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5], running=True)
+            halt = threading.Event()  # set by a worker whose outcome will stop the run: no new bill starts
+
+            def work(bill_id: str, ask: bool) -> tuple[str, object]:
+                """The per-bill network work: no queue or status state is touched here (workers may run it)."""
+                if halt.is_set():
+                    return "skipped", None  # another worker's outcome is stopping the run; this bill stays queued
+                kind, value = fetch_and_review(bill_id, ask)
+                if (kind == "download_stopped"
+                        or kind == "error" and not isinstance(value, PER_BILL_ERRORS)
+                        or kind == "bundle" and (value["status"] == "deferred" or (
+                            value.get("stop_run") and not value["stop_run"].startswith("CapacityUnavailable")))):
+                    halt.set()  # mirrors the outcomes `handle` stops the run on
+                return kind, value
+
+            def fetch_and_review(bill_id: str, ask: bool) -> tuple[str, object]:
                 try:
                     if args.input == "markdown":
                         document = load_markdown_document(bill_id, args.text_dir or args.snapshot.parent / "text")
                     else:
                         document = download_document(bill_id, args.cache_dir)
                 except DOWNLOAD_ERRORS as error:
-                    # A failed bill is never marked seen; it keeps a place after new work.
-                    new_failures += bill_id not in queue['failed']
-                    record_failure(queue, bill_id, 'download', error)
-                    atomic_json(queue_path, queue)
-                    print(bill_id, "download_failed", type(error).__name__, flush=True)
-                    if new_failures >= OUTAGE_LIMIT:
-                        print("Stopped: repeated new failures; FTP or storage may be unavailable", flush=True); break
-                    continue
+                    return "download_failed", error
                 except Exception as error:
-                    print(bill_id, "stopped", type(error).__name__, flush=True)
-                    raise SystemExit(2)
+                    return "download_stopped", error
                 try:
-                    # Only a first visit defers questions; a bill with an earlier review keeps asking them, so its
-                    # resolved review is never replaced by an unresolved first pass.
                     bundle = None if args.no_companion_reuse else reuse_companion_review(
                         bill_id, document, companions.get(bill_id), args.cache_dir, detailed.load_registry())
                     if bundle is not None:
                         print(bill_id, "reused the review of identical companion", bundle["reused_from"], flush=True)
-                    else:
-                        ask = (not first_pass_first or bill_id in queue["seen"]
-                               or (args.cache_dir / "reviews" / (bill_id + ".json")).exists())
-                        bundle = run_document(document, detailed.load_registry(), args.cache_dir, budget,
-                                              args.execute, question_effort=args.question_effort, ask_questions=ask)
-                except CacheCoolingDown:
-                    # Per-request cooldown: skip this bill now and retry it early in a later run.
-                    if bill_id in queue['seen'] and bill_id not in queue['retry']:
-                        queue['retry'].append(bill_id)
-                    atomic_json(queue_path, queue)
-                    print(bill_id, "deferred CacheCoolingDown", flush=True)
-                    continue
-                except (BudgetExceeded, CapacityUnavailable) as error:
-                    if bill_id in queue['seen'] and bill_id not in queue['retry']:
-                        queue['retry'].append(bill_id)
-                    atomic_json(queue_path, queue)
-                    if isinstance(error, CapacityUnavailable):
-                        defer_for_capacity(bill_id, error.retry_after)
-                        continue
-                    print(bill_id, "deferred", type(error).__name__, flush=True)
-                    print("Deferred: budget/capacity guard", flush=True); break
-                except (OSError, ValueError) as error:
-                    new_failures += bill_id not in queue['failed']
-                    record_failure(queue, bill_id, 'processing', error)
-                    atomic_json(queue_path, queue)
-                    print(bill_id, "failed", type(error).__name__, flush=True)
-                    if new_failures >= OUTAGE_LIMIT:
-                        print("Stopped: repeated new failures; FTP or storage may be unavailable", flush=True); break
-                    continue
+                        return "bundle", bundle
+                    return "bundle", run_document(document, detailed.load_registry(), args.cache_dir, budget,
+                                                  args.execute, question_effort=args.question_effort,
+                                                  ask_questions=ask)
                 except Exception as error:
+                    return "error", error
+
+            def asks_questions(bill_id: str) -> bool:
+                # Only a first visit defers questions; a bill with an earlier review keeps asking them, so its
+                # resolved review is never replaced by an unresolved first pass.
+                return (not first_pass_first or bill_id in queue["seen"]
+                        or (args.cache_dir / "reviews" / (bill_id + ".json")).exists())
+
+            def handle(bill_id: str, kind: str, value) -> bool:
+                """Record one bill's outcome (main thread only). Returns True when the run must stop."""
+                nonlocal new_failures, capacity_waits
+                if kind == "skipped":
+                    print(bill_id, "not started; the run is stopping", flush=True)
+                    return False
+                if kind == "download_failed":
+                    # A failed bill is never marked seen; it keeps a place after new work.
+                    new_failures += bill_id not in queue['failed']
+                    record_failure(queue, bill_id, 'download', value)
+                    atomic_json(queue_path, queue)
+                    print(bill_id, "download_failed", type(value).__name__, flush=True)
+                    if new_failures >= OUTAGE_LIMIT:
+                        print("Stopped: repeated new failures; FTP or storage may be unavailable", flush=True)
+                        return True
+                    return False
+                if kind == "download_stopped":
+                    print(bill_id, "stopped", type(value).__name__, flush=True)
+                    raise SystemExit(2)
+                if kind == "error":
+                    error = value
+                    if isinstance(error, (CacheCoolingDown, CacheBusy)):
+                        # Per-request cooldown (or, with several workers, the same request already in flight):
+                        # skip this bill now and retry it early in a later run.
+                        if bill_id in queue['seen'] and bill_id not in queue['retry']:
+                            queue['retry'].append(bill_id)
+                        atomic_json(queue_path, queue)
+                        print(bill_id, "deferred", type(error).__name__, flush=True)
+                        return False
+                    if isinstance(error, (BudgetExceeded, CapacityUnavailable)):
+                        if bill_id in queue['seen'] and bill_id not in queue['retry']:
+                            queue['retry'].append(bill_id)
+                        atomic_json(queue_path, queue)
+                        if isinstance(error, CapacityUnavailable):
+                            defer_for_capacity(bill_id, error.retry_after)
+                            return False
+                        print(bill_id, "deferred", type(error).__name__, flush=True)
+                        print("Deferred: budget/capacity guard", flush=True)
+                        return True
+                    if isinstance(error, (OSError, ValueError)):
+                        new_failures += bill_id not in queue['failed']
+                        record_failure(queue, bill_id, 'processing', error)
+                        atomic_json(queue_path, queue)
+                        print(bill_id, "failed", type(error).__name__, flush=True)
+                        if new_failures >= OUTAGE_LIMIT:
+                            print("Stopped: repeated new failures; FTP or storage may be unavailable", flush=True)
+                            return True
+                        return False
                     print(bill_id, "stopped", type(error).__name__, flush=True)
                     raise SystemExit(2)
+                bundle = value
                 new_failures = 0
                 status = bundle["status"]
                 if status in ("deferred", "prepared"):
                     # Nothing was reviewed: leave queue state and any earlier review untouched.
                     print(bill_id, status, bundle["first_pass"].get("reason_type", ""), flush=True)
                     if status == "deferred":
-                        print("Deferred: budget/capacity guard", flush=True); break
-                    continue
+                        print("Deferred: budget/capacity guard", flush=True)
+                        return True
+                    return False
                 review_path = args.cache_dir / "reviews" / (bill_id + ".json")
                 if "result" in bundle or not review_path.exists():
                     atomic_json(review_path, bundle)
@@ -1019,10 +1068,53 @@ def main():
                 stop_run = bundle.get("stop_run")
                 if stop_run and stop_run.startswith("CapacityUnavailable"):
                     defer_for_capacity(bill_id, bundle.get("retry_after") or 0)
-                    continue
+                    return False
                 if stop_run:
-                    print("Deferred: budget/capacity guard during review questions", flush=True); break
+                    print("Deferred: budget/capacity guard during review questions", flush=True)
+                    return True
                 capacity_waits = 0
+                return False
+
+            if args.workers == 1:
+                while True:
+                    if time.monotonic() > deadline:
+                        print("Stopped: run time limit; remaining work stays queued", flush=True); break
+                    bill_id = next_bill()
+                    if bill_id is None:
+                        break
+                    try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5], running=True)
+                    if handle(bill_id, *work(bill_id, asks_questions(bill_id))):
+                        break
+            else:
+                # Workers run only `work`; every queue, status and review write stays on this thread. A capacity
+                # refusal pauses dispatch here, so no worker starts a new bill during the pause. The ledger and
+                # cache, not this loop, keep two calls from sharing a request or an unknown outcome.
+                running: dict = {}
+                with ThreadPoolExecutor(args.workers, thread_name_prefix="review") as pool:
+                    while True:
+                        while not stopping and not halt.is_set() and len(running) < args.workers:
+                            if time.monotonic() > deadline:
+                                print("Stopped: run time limit; remaining work stays queued", flush=True)
+                                stopping = True
+                                break
+                            bill_id = next_bill(block=not running)
+                            if bill_id is None:
+                                stopping = stopping or not running
+                                break
+                            running[pool.submit(work, bill_id, asks_questions(bill_id))] = bill_id
+                            try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5],
+                                               running=True)
+                        if not running:
+                            break
+                        ready_at = min((when for when, _ in cooling), default=None)
+                        # Wake for a cooled bill only when a worker slot is free to take it.
+                        timeout = (None if stopping or ready_at is None or len(running) >= args.workers
+                                   else max(0.0, ready_at - time.monotonic()))
+                        done, _ = wait(running, timeout=timeout, return_when=FIRST_COMPLETED)
+                        for future in done:
+                            bill_id = running.pop(future)
+                            if handle(bill_id, *future.result()):
+                                stopping = True
         finally:
             try_publish_status(status_path, queue, current=None, upcoming=[], running=False)
         print("New model spending this run: $%.6f" % budget.run_spent)
