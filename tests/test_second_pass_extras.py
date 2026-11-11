@@ -122,6 +122,17 @@ class AuditTests(SuggestionCase):
             self.run_audit()
         self.assertEqual(self.count(AUDIT, mark), 0)
 
+    def test_a_record_from_an_older_audit_format_is_not_counted(self):
+        self.seed()
+        with patch.object(review_audit, 'SAMPLE_PER_MILLE', 1000):
+            self.run_audit()
+        path = self.cache / 'audit' / 'HB1.json'
+        path.write_text(json.dumps({**json.loads(path.read_text('utf-8')),
+                                    'format': 'texas-bill-audit-record-v1'}), 'utf-8')
+        with patch.object(review_audit, 'SAMPLE_PER_MILLE', 0):
+            self.run_audit()
+        self.assertEqual(self.counts()['checked'], 0)
+
     def test_capacity_skips_the_bill_without_a_stop(self):
         self.seed()
         self.overrides[AUDIT] = lambda bill, text: Err(429, 'flex_unavailable')

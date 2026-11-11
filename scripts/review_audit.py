@@ -19,7 +19,7 @@ import extract_bill as detailed
 
 ROOT = detailed.ROOT
 FORMAT = "texas-bill-luna-audit-v1"
-RECORD_FORMAT = "texas-bill-audit-record-v1"
+RECORD_FORMAT = "texas-bill-audit-record-v2"  # v2: marked text; earlier verdicts never count
 SAMPLE_PER_MILLE = 20
 VERDICTS = ("agree", "minor_issues", "major_issues")
 SCHEMA = {"type": "object", "additionalProperties": False, "required": ["verdict", "issues"],
@@ -139,7 +139,8 @@ def publish(reviews, cache_dir: Path, out: Path) -> int:
             record = json.loads((cache_dir / "audit" / (bill_id + ".json")).read_text("utf-8"))
         except (OSError, ValueError):
             continue
-        if (isinstance(record, dict) and record.get("status") == "checked" and record.get("verdict") in counts
+        if (isinstance(record, dict) and record.get("format") == RECORD_FORMAT and record.get("status") == "checked"
+                and record.get("verdict") in counts
                 and record.get("review_hash") == review_hash(bundle)
                 and record.get("text_sha256") == (bundle.get("document") or {}).get("text_sha256")):
             counts[record["verdict"]] += 1
