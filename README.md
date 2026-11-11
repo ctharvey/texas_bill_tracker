@@ -101,8 +101,14 @@ claims with no more errors. A bill that already has its own review is never over
 never copied again; anything else gets a normal review (`--no-companion-reuse` turns reuse off).
 `--max-minutes` defaults to 55; a timer start that finds the previous run still holding the worker lock logs it
 and exits successfully.
-`--input markdown` (default `pdf`) reads the data run's official Markdown (`live/text/<BILL>/I.md`, checked
-against `index.json`) instead of the PDF: one span per paragraph (`P###S###`, page = paragraph), with `<ins>`
+Reviews read only the official Markdown. The PDF path is retired: `--input pdf` stops the run before any connection
+or call, and `classify_bill.py`/`extract_bill.py` refuse `--execute`. A run that publishes must read the text the
+site serves (`live/text`, beside `--publish-tags`). Every publisher (tags, highlights, changes, fiscal, extras, audit
+counts, related summaries) includes a bill only when its review was read from Markdown and its `text_sha256` equals
+both the served `index.json` entry and the served file's bytes for that version (any served version, not only the
+newest). Other reviews are withheld and logged, and their highlight files removed.
+`--input markdown` reads the data run's official Markdown (`live/text/<BILL>/I.md`, checked
+against `index.json`): one span per paragraph (`P###S###`, page = paragraph), with `<ins>`
 and `<del>` shown to Luna plus `scripts/markdown_input_note.txt`, and quotes matched with the tags removed.
 Missing or mismatched text is a download failure, retried after the next data run. Markdown requests have
 different cache keys, so switching re-reviews every bill. See
