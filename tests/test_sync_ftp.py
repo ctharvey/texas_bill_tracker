@@ -323,6 +323,26 @@ class SyncTextsTests(unittest.TestCase):
             self.assertEqual(counts['failed'],1)
             self.assertEqual((Path(tmp)/'HB1001'/'I.md').read_bytes(),before)
 
+    # Shape of TLC's placeholder: a Word page with one paragraph, line-wrapped mid-sentence.
+    PLACEHOLDER=('<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta name=ProgId content=Word.Document>'
+                 '<style><!-- p.MsoNormal {margin:0in;} --></style></head><body lang=EN-US><div class=WordSection1>'
+                 '<p class=MsoNormal><span style=\'font-size:12.0pt\'>This version is not currently available, but is coming\n'
+                 'soon. In the meantime, please see the PDF for the content of this bill.</span></p></div></body></html>')
+
+    def test_placeholder_is_not_posted_not_failed(self):
+        with self.assertRaises(sync_ftp.TextNotPosted):
+            bill_text_markdown(self.PLACEHOLDER,'HB 1','X')
+        with tempfile.TemporaryDirectory() as tmp:
+            counts,_=self.run_sync(tmp,self.bills(codes=('I',)),side_effect=lambda conn,path:self.PLACEHOLDER.encode('cp1252'))
+            self.assertEqual((counts['not_posted'],counts['failed']),(1,0))
+            self.assertFalse((Path(tmp)/'HB1001').exists())
+            self.run_sync(tmp,self.bills('v2',codes=('I',)))  # real text posted later is picked up
+            self.assertTrue((Path(tmp)/'HB1001'/'I.md').exists())
+            before=(Path(tmp)/'HB1001'/'I.md').read_bytes()
+            counts,_=self.run_sync(tmp,self.bills('v3',codes=('I',)),side_effect=lambda conn,path:self.PLACEHOLDER.encode('cp1252'))
+            self.assertEqual(counts['not_posted'],1)
+            self.assertEqual((Path(tmp)/'HB1001'/'I.md').read_bytes(),before)  # a later placeholder keeps the text
+
     def test_cp1252_fallback_and_mdtm(self):
         class Conn:
             def sendcmd(self,cmd):

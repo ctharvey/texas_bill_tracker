@@ -490,6 +490,15 @@ def _render(chars: list) -> str:
     return "".join(parts)
 
 
+class TextNotPosted(ValueError):
+    """TLC posted its "not currently available ... see the PDF" placeholder instead of the bill text."""
+
+
+# The placeholder's visible text: "This version is not currently available, but is coming soon. In the meantime,
+# please see the PDF for the content of this bill." (a Word page; real bill text is a table of rows).
+_PLACEHOLDER = re.compile(r"version\s+is\s+not\s+currently\s+available", re.I)
+
+
 def bill_text_markdown(html: str, number: str, version_name: str) -> str:
     """Convert TLC bill-text HTML to the paragraph-per-line Markdown of the bill-text format."""
     parser = _LineParser()
@@ -536,6 +545,8 @@ def bill_text_markdown(html: str, number: str, version_name: str) -> str:
         else:
             lines.append(_render(chars))
     if not lines:
+        if _PLACEHOLDER.search(re.sub(r"<[^>]*>", " ", html)):
+            raise TextNotPosted("official text not posted yet (TLC placeholder page); retried next run")
         raise ValueError("no text lines found in bill text HTML")
     title = f"# {_escape(number)} - {_escape(version_name)}"
     return "\n\n".join([title, *lines]) + "\n"
@@ -595,7 +606,7 @@ def _load_index(path: Path) -> dict[str, dict]:
 
 def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int) -> dict:
     """Write text_dir/<BILL>/<CODE>.md and index.json for each bill's TLC text versions."""
-    counts = {"bills": 0, "versions": 0, "downloaded": 0, "unchanged": 0, "deferred": 0, "failed": 0}
+    counts = {"bills": 0, "versions": 0, "downloaded": 0, "unchanged": 0, "deferred": 0, "failed": 0, "not_posted": 0}
     now = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
     for bill in bills:
         versions = bill.get("text_versions") or []
@@ -640,7 +651,8 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int) -> dict:
                 bill_dir.mkdir(parents=True, exist_ok=True)
                 _atomic_write(md_path, data)
             except (*ftplib.all_errors, ValueError) as exc:
-                counts["failed"] += 1
+                # A placeholder is not a failure: nothing is written, and the next run checks again.
+                counts["not_posted" if isinstance(exc, TextNotPosted) else "failed"] += 1
                 print(f"text {bill_id}/{code}: {exc}", file=sys.stderr)
                 if exists and old is not None:
                     entries.append(old)
