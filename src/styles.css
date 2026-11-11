@@ -159,6 +159,11 @@ a.bill-number:hover{text-decoration:underline}
 .bill-title-link:hover{text-decoration:underline}
 .ai-copy{margin-top:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .ai-fallback{width:100%;font:12px/1.4 monospace;padding:8px;border:1px solid var(--line);border-radius:6px}
+.today-note{margin:0 0 16px}
+.today-note p{margin:0}.today-note p+p{margin-top:4px}
+.today-topics{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 8px}
+.today-topics .topic-chip{padding:7px 12px;cursor:pointer}
+.today-topics .text-button{padding:4px 6px}
 .today-group{margin-top:20px}
 .today-group h3{margin:0 0 8px;font-size:14px}
 .today-group h3 span{color:#758698;font-weight:600;margin-left:4px}

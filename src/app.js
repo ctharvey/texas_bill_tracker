@@ -5,7 +5,7 @@ import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, appl
 
 const $ = (selector, root=document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state = {view:'all',bills:[],watch:new Set(),query:'',topic:'',agency:'',chamber:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30,meta:null,luna:null,related:null,audit:null,roster:null,reviewStatus:null,sharedList:null,sharedMode:null,sharedSyncKey:null,openBill:null,todayTopic:'',todayLimit:100};
+const state = {view:'all',bills:[],watch:new Set(),query:'',topic:'',agency:'',chamber:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30,meta:null,luna:null,related:null,audit:null,roster:null,reviewStatus:null,sharedList:null,sharedMode:null,sharedSyncKey:null,openBill:null,todayTopic:'',todayLimit:100,todayAllTopics:false};
 const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last action',actionstage:'Last action stage',number:'Bill number',agencies:'Most agencies',hearing:'Hearing progress',influence:'Author influence'};
 const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
 const reviews = new Map();
@@ -501,14 +501,17 @@ function todayMarkup(){
   const counts=topicCounts(rows.map(r=>r.bill));
   if(state.todayTopic&&!counts.some(c=>c.topic===state.todayTopic))state.todayTopic='';
   const shown=state.todayTopic?rows.filter(r=>r.bill.topics.includes(state.todayTopic)):rows;
-  const chips=`<div class="topic-strip" aria-label="Topics in this day's activity"><button class="topic-chip ${state.todayTopic===''?'selected':''}" data-today-topic="">All · ${rows.length}</button>${counts.map(c=>`<button class="topic-chip ${state.todayTopic===c.topic?'selected':''}" data-today-topic="${esc(c.topic)}">${esc(c.topic)} · ${c.count}</button>`).join('')}</div>`;
+  // Every topic is reachable: the 12 largest show first, the rest behind "+N more"; a selected topic always shows.
+  const TOP=12,listed=state.todayAllTopics?counts:counts.filter((c,i)=>i<TOP||c.topic===state.todayTopic);
+  const chip=(topic,label)=>`<button class="topic-chip ${state.todayTopic===topic?'selected':''}" data-today-topic="${esc(topic)}" aria-pressed="${state.todayTopic===topic}">${label}</button>`;
+  const chips=`<div class="today-topics" role="group" aria-label="Filter this day's bills by topic">${chip('',`All · ${rows.length}`)}${listed.map(c=>chip(c.topic,`${esc(c.topic)} · ${c.count}`)).join('')}${counts.length>TOP?`<button class="text-button" id="today-topics-toggle">${state.todayAllTopics?'Show fewer':`+${counts.length-listed.length} more topics`}</button>`:''}</div>`;
   let budget=state.todayLimit;
   const sections=groupByActionType(shown).map(g=>{
     const part=g.rows.slice(0,Math.max(0,budget));budget-=part.length;
     return part.length?`<section class="today-group"><h3>${esc(g.label)} <span>${g.rows.length}</span></h3>${part.map(todayRow).join('')}</section>`:'';
   }).join('');
   return `<div class="section-head"><div><div class="section-overline">${day===today?'TODAY':'MOST RECENT ACTIVITY'}</div><h2>${esc(dateText(day))}</h2></div><span class="subtitle">${shown.length} ${shown.length===1?'bill':'bills'} with recorded action</span></div>
-    ${note?`<div class="info-callout">${note}</div>`:''}<div class="info-callout">${esc(TODAY_INTERIM_NOTE)}</div>
+    <div class="info-callout today-note">${note?`<p>${note}</p>`:''}<p>${esc(TODAY_INTERIM_NOTE)}</p></div>
     ${rows.length?chips:''}${sections||'<div class="empty-state"><h3>No activity to show</h3><p>Nothing is recorded for this day yet.</p></div>'}
     ${shown.length>state.todayLimit?`<button class="outline-button" id="today-more">Show 100 more · showing ${state.todayLimit} of ${shown.length}</button>`:''}`;
 }
@@ -813,6 +816,7 @@ function handleClick(e){
   const copyAi=e.target.closest('[data-copy-ai]');if(copyAi){copyForAi(copyAi);return}
   const todayTopic=e.target.closest('[data-today-topic]');if(todayTopic){state.todayTopic=todayTopic.dataset.todayTopic;state.todayLimit=100;renderContent();return}
   if(e.target.closest('#today-more')){state.todayLimit+=100;renderContent();return}
+  if(e.target.closest('#today-topics-toggle')){state.todayAllTopics=!state.todayAllTopics;renderContent();return}
   if(e.target.closest('#copy-view-link,#share-watch,#export-watch,#import-watch,#shared-add,#shared-close,[id^="sync-"]')){handleSaveClick(e.target);return}
   const group=e.target.closest('[data-watch-group]');if(group){
     const known=new Set(state.bills.map(b=>b.id));const ids=group.dataset.watchGroup.split(',').filter(id=>known.has(id));
