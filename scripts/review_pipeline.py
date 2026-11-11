@@ -562,6 +562,38 @@ def load_markdown_document(bill_id: str, text_dir: Path, version: str = "I") -> 
     return document
 
 
+def version_listed(bill_id: str, text_dir: Path, code: str | None) -> bool:
+    """Whether the bill's text index lists this version. An unreadable index counts as listed, so the load
+    that follows reports it as a download failure as before."""
+    try:
+        index = json.loads((text_dir / bill_id / "index.json").read_text("utf-8"))
+        return any(isinstance(v, dict) and v.get("code") == code for v in index["versions"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return True
+
+
+def rebind_dependent_records(cache_dir: Path, bill_id: str, bundle: dict, from_sha: str | None, to_sha: str) -> None:
+    """Move the audit record and fiscal check made for this exact review from its old text hash to the new one.
+    Only records bound to this review (review hash / first-pass key) and to from_sha (or already to_sha) move."""
+    import review_audit
+    audit_path = cache_dir / "audit" / (bill_id + ".json")
+    record = _read_json(audit_path)
+    if (isinstance(record, dict) and record.get("text_sha256") == from_sha
+            and record.get("review_hash") == review_audit.review_hash(bundle)):
+        record["text_sha256"] = to_sha
+        atomic_json(audit_path, record)
+    fiscal_path = cache_dir / "fiscal" / (bill_id + ".json")
+    record = _read_json(fiscal_path)
+    binding = record.get("binding") if isinstance(record, dict) else None
+    if (isinstance(binding, dict) and binding.get("text_sha256") == from_sha
+            and binding.get("review_key") == bundle.get("first_pass_request_key")):
+        binding["text_sha256"] = to_sha
+        report_binding = (record.get("report") or {}).get("binding")
+        if isinstance(report_binding, dict) and report_binding.get("text_sha256") == from_sha:
+            report_binding["text_sha256"] = to_sha
+        atomic_json(fiscal_path, record)
+
+
 def rebind_equivalent_reviews(cache_dir: Path, text_dir: Path) -> tuple[list[str], list[str]]:
     """Re-attach reviews whose served text changed bytes but not content (e.g. a converter re-render).
 
@@ -589,11 +621,15 @@ def rebind_equivalent_reviews(cache_dir: Path, text_dir: Path) -> tuple[list[str
         if served["text_hash"] != document.get("text_hash") or served["spans"] != document.get("spans"):
             changed.append(bill_id)
             continue
+        from_sha, to_sha = document.get("text_sha256"), served["text_sha256"]
+        # Records bound to this review's text move with it. They are written before the review so that a crash
+        # in between leaves the review unrebound and the next run finishes the job.
+        rebind_dependent_records(cache_dir, bill_id, bundle, from_sha, to_sha)
         stat = path.stat()
         bundle.setdefault("text_rebindings", []).append({
-            "at": utc_stamp(), "version": code, "from_sha256": document.get("text_sha256"),
-            "to_sha256": served["text_sha256"], "text_hash": served["text_hash"]})
-        document["text_sha256"] = served["text_sha256"]
+            "at": utc_stamp(), "version": code, "from_sha256": from_sha,
+            "to_sha256": to_sha, "text_hash": served["text_hash"]})
+        document["text_sha256"] = to_sha
         atomic_json(path, bundle)
         os.utime(path, (stat.st_atime, stat.st_mtime))  # reviewed_at stays the review's own time
         rebound.append(bill_id)
@@ -1193,6 +1229,8 @@ def main():
         print("Previous review run is still active; exiting", flush=True)
         return 0
     with worker:
+        # Runs before the lock is released (LIFO), on every exit; acts only on a stop.
+        worker.push(lambda exc_type, error, tb: publish_after_stop(args, error))
         limits = (None, None) if args.no_spending_cap else (args.daily_budget, args.run_budget)
         if args.transport == "flex":
             import flex_boundary
@@ -1241,18 +1279,27 @@ def main():
             import review_stages
             plans = {b: visit_plan(b) for b in queue["seen"] if b in ids}
             revised = [b for b, plan in plans.items() if plan and plan["reason"] == "text_revised"]
-            if len(revised) > max(5, len(queue["seen"]) // 50):
+            # Bills the breaker held stay held while their text is still revised, until --allow-text-rereview
+            # releases them: re-checking the shrinking count each run would re-review the rest unapproved.
+            held = set(queue.get("text_blocked") or [])
+            tripped = len(revised) > max(5, len(queue["seen"]) // 50)
+            pool = revised if tripped else [b for b in revised if b in held]
+            if tripped or pool or held:
+                queue["text_blocked"] = sorted(pool)
+                if args.execute:
+                    atomic_json(queue_path, queue)
+            if pool:
                 # Many reviewed texts changed content under the same version code at once (identical re-renders
                 # were re-attached above): likely a converter change, not new bill text. Re-reviewing them all
                 # would re-bill everything, so only an operator-approved number (--allow-text-rereview) is visited.
                 # Any visit would review the changed file, so the rest are not visited at all this run; the
                 # publish check keeps them off the site until their text is reviewed.
-                blocked = set(revised[args.allow_text_rereview:])
+                blocked = set(pool[args.allow_text_rereview:])
                 candidates = [c for c in candidates if c not in blocked]
                 plans = {b: plan for b, plan in plans.items() if b not in blocked}
                 print("Stage 2: %d reviewed bills changed text under the same version; not visiting %d of them "
                       "(check the text converter; --allow-text-rereview N approves re-reviews)"
-                      % (len(revised), len(blocked)), flush=True)
+                      % (len(pool), len(blocked)), flush=True)
             due = {b for b, plan in plans.items() if b not in queue["failed"] and plan is not None
                    and (plan["review"] == "update" or plan["fiscal_due"])}
             if due and not args.bill_id:
@@ -1320,7 +1367,8 @@ def main():
                 try:
                     if args.input == "markdown":
                         document = load_markdown_document(bill_id, text_dir, plan["code"] if plan else "I")
-                        if plan and plan["review"] == "update" and plan["reason"] == "new_version":
+                        if (plan and plan["review"] == "update" and plan["reason"] == "new_version"
+                                and version_listed(bill_id, text_dir, plan["from_code"])):
                             stored = json.loads((args.cache_dir / "reviews" / (bill_id + ".json")).read_text("utf-8"))
                             old_document = load_markdown_document(bill_id, text_dir, plan["from_code"])
                             update = {"from_code": plan["from_code"],
@@ -1332,7 +1380,8 @@ def main():
                             if update:
                                 old_document = load_markdown_document(bill_id, text_dir, update["from_code"])
                         # A text revised under the same version code is reviewed afresh: its earlier text is gone,
-                        # so there is no previous version to compare with.
+                        # so there is no previous version to compare with. So is a new version whose reviewed
+                        # version left the index (else the bill would fail to load it on every run).
                     else:
                         document = download_document(bill_id, args.cache_dir)
                 except DOWNLOAD_ERRORS as error:
@@ -1544,55 +1593,82 @@ def main():
         if args.audit_sample and args.input == "markdown" and not stopped and not halt.is_set():
             audit_reviews(args, queue, budget, deadline)
         print("New model spending this run: $%.6f" % budget.run_spent)
-        if args.publish_tags and not served_text_dir(args.publish_tags).is_dir():
-            print("Live bill text directory missing; no Luna files published (earlier files kept)", flush=True)
-        elif args.publish_tags:
-            # Only reviews of the exact Markdown the site serves are published, by every publisher below.
-            served = served_text_dir(args.publish_tags)
-            live, withheld = live_reviews(args.cache_dir, served)
-            if withheld:
-                print("Withheld %d reviews whose text is not the live Markdown, e.g. %s"
-                      % (len(withheld), ", ".join(withheld[:8])), flush=True)
+        publish_luna(args, network_ok=not halt.is_set())
+
+
+def publish_after_stop(args, error) -> bool:
+    """A run that stops (exit 2) skips the end-of-run publish; without this, reviews whose text changed meanwhile
+    would stay public until some run finished. Makes no calls. Never suppresses the stop."""
+    if isinstance(error, SystemExit) and error.code == 2 and args.publish_tags:
+        print("Run stopped; publishing only reviews of the live text (no new calls)", flush=True)
+        try:
+            publish_luna(args, network_ok=False)
+        except SystemExit:
+            pass  # a publish failure is already printed; the run still exits with its stop code
+    return False
+
+
+def publish_luna(args, *, network_ok: bool) -> None:
+    """Every public Luna output, limited to reviews of the exact Markdown the site serves. network_ok=False
+    (a stopped run) skips the embedding step; the other publishers make no calls."""
+    if not args.publish_tags:
+        return
+    if not served_text_dir(args.publish_tags).is_dir():
+        print("Live bill text directory missing; no Luna files published (earlier files kept)", flush=True)
+    else:
+        # Only reviews of the exact Markdown the site serves are published, by every publisher below.
+        served = served_text_dir(args.publish_tags)
+        if args.input == "markdown" and args.execute:
+            # The data sync can re-render text during a long run; re-attach again so an identical re-render
+            # landing after the run-start pass is not withheld. All workers have finished here.
+            late, _ = rebind_equivalent_reviews(args.cache_dir, served)
+            if late:
+                print("Re-attached %d reviews to text re-rendered during the run, e.g. %s"
+                      % (len(late), ", ".join(late[:8])), flush=True)
+        live, withheld = live_reviews(args.cache_dir, served)
+        if withheld:
+            print("Withheld %d reviews whose text is not the live Markdown, e.g. %s"
+                  % (len(withheld), ", ".join(withheld[:8])), flush=True)
+        try:
+            print("Published Luna tags for", publish_tags(args.cache_dir, args.publish_tags,
+                                                           detailed.load_registry(), live), "bills", flush=True)
+        except OSError as error:
+            print("Tag publish failed:", type(error).__name__, flush=True)
+            raise SystemExit(3)
+        if args.snapshot:
             try:
-                print("Published Luna tags for", publish_tags(args.cache_dir, args.publish_tags,
-                                                               detailed.load_registry(), live), "bills", flush=True)
-            except OSError as error:
-                print("Tag publish failed:", type(error).__name__, flush=True)
-                raise SystemExit(3)
-            if args.snapshot:
+                print("Published Luna highlights for",
+                      publish_highlights(args.cache_dir, served, args.publish_tags.parent / "highlights", live),
+                      "bills", flush=True)
+            except Exception as error:
+                print("Highlight publish failed:", type(error).__name__, flush=True)
+            if args.related_bills and args.execute and network_ok:
                 try:
-                    print("Published Luna highlights for",
-                          publish_highlights(args.cache_dir, served, args.publish_tags.parent / "highlights", live),
-                          "bills", flush=True)
+                    publish_related(args, live)
                 except Exception as error:
-                    print("Highlight publish failed:", type(error).__name__, flush=True)
-                if args.related_bills and args.execute and not halt.is_set():
+                    print("Related bills not updated:", type(error).__name__, flush=True)
+            if args.stages:
+                for name, folder, publish in (("changes", "changes", publish_changes),
+                                              ("fiscal checks", "fiscal", publish_fiscal)):
                     try:
-                        publish_related(args, live)
+                        print("Published Luna", name, "for",
+                              publish(args.cache_dir, args.publish_tags.parent / folder, live), "bills",
+                              flush=True)
                     except Exception as error:
-                        print("Related bills not updated:", type(error).__name__, flush=True)
-                if args.stages:
-                    for name, folder, publish in (("changes", "changes", publish_changes),
-                                                  ("fiscal checks", "fiscal", publish_fiscal)):
-                        try:
-                            print("Published Luna", name, "for",
-                                  publish(args.cache_dir, args.publish_tags.parent / folder, live), "bills",
-                                  flush=True)
-                        except Exception as error:
-                            print("Publishing", name, "failed:", type(error).__name__, flush=True)
-            for flag, name, module, filename in ((args.suggest_topics, "extras", "topic_suggestions", "extras.json"),
-                                                 (args.audit_sample, "audit counts", "review_audit", "audit.json")):
-                if not flag:
-                    continue
-                try:
-                    publisher = __import__(module)
-                    publish = publisher.publish_extras if name == "extras" else publisher.publish
-                    reviews = [(bill_id, bundle) for bill_id, bundle, _ in _current_reviews(args.cache_dir, live)]
-                    print("Published Luna", name, "for", publish(reviews, args.cache_dir,
-                                                                  args.publish_tags.parent / filename),
-                          "bills", flush=True)
-                except Exception as error:
-                    print("Publishing", name, "failed:", type(error).__name__, flush=True)
+                        print("Publishing", name, "failed:", type(error).__name__, flush=True)
+        for flag, name, module, filename in ((args.suggest_topics, "extras", "topic_suggestions", "extras.json"),
+                                             (args.audit_sample, "audit counts", "review_audit", "audit.json")):
+            if not flag:
+                continue
+            try:
+                publisher = __import__(module)
+                publish = publisher.publish_extras if name == "extras" else publisher.publish
+                reviews = [(bill_id, bundle) for bill_id, bundle, _ in _current_reviews(args.cache_dir, live)]
+                print("Published Luna", name, "for", publish(reviews, args.cache_dir,
+                                                              args.publish_tags.parent / filename),
+                      "bills", flush=True)
+            except Exception as error:
+                print("Publishing", name, "failed:", type(error).__name__, flush=True)
 
 
 if __name__ == "__main__":

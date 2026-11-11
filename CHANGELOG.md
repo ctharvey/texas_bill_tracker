@@ -4,6 +4,10 @@
 - Markdown only: the PDF review path is retired, and every published Luna file includes a bill only while its
   review matches, byte for byte, a Markdown version the site serves. Re-rendered but identical text keeps its
   review (re-attached with evidence, no cost); real changes wait for re-review (`--allow-text-rereview N`).
+- Audit fixes: a re-attach also moves the review's audit record and fiscal check, and runs again just before
+  publishing; bills the converter breaker holds stay held across runs until approved; a new version whose reviewed
+  version left the index is reviewed afresh instead of failing every run; a run that stops still withdraws reviews
+  whose text is no longer served (offline publishers only).
 - Second pass also writes a plain-language "In brief" headline plus search and opposing-side terms (extras.json);
   `--audit-sample` spot-checks ~2% of reviews (counts only published); `--related-bills` adds a Related bills
   section from cached embeddings. Production unit runs all three.
