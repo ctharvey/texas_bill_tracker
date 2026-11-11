@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-11-10
+- Review worker runs `--workers 3` for the full Markdown re-review (earlier reviews archived on the server).
 - Review worker reads the official Markdown text (`--input markdown`) instead of the introduced PDF. The prompt
   no longer has the summary repeat the standard effective-date clause, and local-government money, programs,
   powers or duties count for Local government.

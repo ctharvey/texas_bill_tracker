@@ -125,7 +125,7 @@ The production unit runs `--transport flex --input markdown`.
 `--workers N` (default 1, needs `--transport flex`) reviews up to N bills at once. Workers only download and call
 the model; queue, status and review files are written by the main thread. A capacity refusal pauses new bills for
 every worker; an unknown outcome, quota/auth error or budget stop lets in-flight bills finish and starts no new
-one. The ledger and response cache stop two workers from sending the same request. The production unit runs 1.
+one. The ledger and response cache stop two workers from sending the same request. The production unit runs 3.
 
 At most three new targeted queries per bill run; cached resolutions do not consume this allowance. Later
 runs progress through remaining questions. Requested official statute chapters are cached privately for
