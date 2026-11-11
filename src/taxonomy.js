@@ -200,6 +200,50 @@ export function applyLunaTags(bill, entry, registryNames = {}) {
   return out;
 }
 
+// Optional Luna extras (texas-bill-luna-extras-v1): plain-language headline plus extra search terms.
+export function applyLunaExtras(bill, entry) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return bill;
+  const out = {...bill};
+  if (typeof entry.headline === 'string' && entry.headline.trim()) out.headline = entry.headline.trim().slice(0, 300);
+  const terms = [];
+  for (const key of ['search_terms', 'opposing_terms']) {
+    if (!Array.isArray(entry[key])) continue;
+    for (const t of entry[key]) {
+      if (typeof t !== 'string') continue;
+      const s = t.trim().slice(0, 60);
+      if (s && !terms.includes(s)) terms.push(s);
+    }
+  }
+  if (terms.length) out.search_terms = terms.slice(0, 20);
+  return out;
+}
+
+// Related bills (texas-bill-related-v1): up to 5 known ids for a bill.
+export function relatedFor(id, related, knownIds) {
+  const bills = related && typeof related.bills === 'object' && related.bills && !Array.isArray(related.bills) ? related.bills : null;
+  if (!bills || !Object.hasOwn(bills, id) || !Array.isArray(bills[id]) || !(knownIds instanceof Set)) return [];
+  const out = [];
+  for (const e of bills[id]) {
+    const rid = e && typeof e === 'object' ? e.id : null;
+    if (typeof rid === 'string' && rid !== id && knownIds.has(rid) && !out.includes(rid)) out.push(rid);
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
+// Spot-check audit (texas-bill-luna-audit-v1) as one sentence, or null.
+export function auditLine(audit) {
+  if (!audit || typeof audit !== 'object') return null;
+  const n = v => Number.isInteger(v) && v >= 0 ? v : null;
+  const checked = n(audit.checked), agree = n(audit.agree);
+  if (checked === null || checked < 1 || agree === null) return null;
+  const minor = n(audit.minor_issues) || 0, major = n(audit.major_issues) || 0;
+  const parts = [`Spot check: ${checked} ${checked === 1 ? 'review' : 'reviews'} re-checked independently`, `${agree} agreed`];
+  if (minor) parts.push(`${minor} with minor issues`);
+  if (major) parts.push(`${major} with major issues`);
+  return parts.join(' · ');
+}
+
 // Member roster (texas-bill-members-v1): identity is the exact (chamber, TLO display name) pair; no surname guessing.
 const ROLE_GROUPS = [['authors', 'origin'], ['coauthors', 'origin'], ['sponsors', 'other'], ['cosponsors', 'other']];
 export function billChamber(bill) { return /^H/i.test(bill.id || '') ? 'house' : 'senate'; }

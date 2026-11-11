@@ -12,7 +12,7 @@ from test_review_stages_pipeline import (  # noqa: E402
     CLASSIFY, QUOTE_I, FakeSDK, StagesCase, body, classification_result, pipeline)
 from test_flex_boundary import Err  # noqa: E402
 
-SUGGEST = 'texas_bill_topic_suggestions_v1'
+SUGGEST = 'texas_bill_second_pass_v1'
 REAL_TAGS = pipeline.classification.load_policy_tags
 
 
@@ -38,7 +38,11 @@ class SuggestionCase(StagesCase):
         self.suggestions = [{'topic': 'Water', 'reason': 'It regulates wells.', 'closest_existing': None},
                             {'topic': 'taxes', 'reason': 'Same as a current topic.', 'closest_existing': 'Taxes'}]
         self.overrides[CLASSIFY] = self.classify
-        self.overrides[SUGGEST] = lambda bill, text: body({'suggestions': self.suggestions})
+        self.overrides[SUGGEST] = lambda bill, text: body(self.second_pass())
+
+    def second_pass(self):
+        return {'headline': 'Sets rules for water wells.', 'search_terms': ['groundwater'],
+                'opposing_terms': [], 'suggestions': self.suggestions}
 
     def classify(self, bill, text):
         result = classification_result(bill, QUOTE_I, self.first_uncertainties)
@@ -114,7 +118,7 @@ class TopicSuggestionTests(SuggestionCase):
     def test_one_rejected_bill_does_not_hold_up_the_others(self):
         self.seed(['HB1', 'HB2', 'HB3'])
         reply = lambda bill, text: (Err(429, 'flex_unavailable') if bill == 'HB2'
-                                    else body({'suggestions': self.suggestions}))
+                                    else body(self.second_pass()))
         self.overrides[SUGGEST] = reply
         out = self.run_once()
         self.assertIn('capacity unavailable for HB2', out)

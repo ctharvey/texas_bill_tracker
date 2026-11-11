@@ -949,65 +949,140 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--suggest-topics", action="store_true",
                         help="Second pass, only once this run's review queue is empty: one low-effort Luna call per "
                              "settled review suggesting topics the tracker lacks (private; see topic_suggestions.py)")
+    parser.add_argument("--audit-sample", action="store_true",
+                        help="Lowest-priority pass after topic suggestions: re-check about 2%% of settled reviews "
+                             "against their bill text (private findings; counts published in audit.json)")
+    parser.add_argument("--related-bills", action="store_true",
+                        help="With --execute and --publish-tags: publish related.json from embeddings of each bill's "
+                             "caption and verified summary (text-embedding-3-small; cached by content)")
     parser.add_argument("--questions-inline", action="store_true",
                         help="Ask a new bill's follow-up questions right after its first pass (default: first passes "
                              "for every unseen bill come first; questions run on the bill's next visit)")
     return parser
 
 
-def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
-    """Lowest-priority second pass (main thread, after the review queue emptied): topic suggestions per settled
-    review. Capacity ends the pass for this run; an unknown outcome stops the worker like any other call."""
-    import topic_suggestions
-    topics, registry = classification.load_policy_tags(), detailed.load_registry()
-    cache = getattr(budget, "response_cache", None)
-    key_fn = cache.key if cache is not None else ResponseCache.key
-    retry, out, done, rejections = set(queue.get("retry", [])), args.cache_dir / "suggestions", 0, 0
-
-    def read(path: Path):
-        try:
-            return json.loads(path.read_text("utf-8"))
-        except (OSError, ValueError):
-            return None
-
-    for path in sorted((args.cache_dir / "reviews").glob("*.json"), reverse=args.order == "reverse"):
-        bill_id = path.stem
-        if not topic_suggestions.BILL_RE.fullmatch(bill_id):
-            continue
-        bundle = read(path)
-        if not topic_suggestions.due(bundle, read(out / (bill_id + ".json")), topics, retry, key_fn):
-            continue
+def _second_pass(label: str, jobs, args, deadline: float) -> int:
+    """Run one lowest-priority pass (main thread, after the review queue emptied). `jobs` yields due
+    (bill_id, call, save) items. Capacity skips a bill (three in a row end the pass); an unknown outcome stops the
+    worker like any other call; a budget stop, unresolved outcome or dry run ends the pass."""
+    done, rejections = 0, 0
+    for bill_id, call, save in jobs:
         if time.monotonic() > deadline:
-            print("Topic suggestions: run time limit; the rest wait for a later run", flush=True)
+            print(f"{label}: run time limit; the rest wait for a later run", flush=True)
             break
         try:
-            report = topic_suggestions.suggest(bundle, topics, registry, args.cache_dir, execute=args.execute,
-                                               sender=budget.send, cache=cache)
+            report = call()
         except CapacityUnavailable:
             # The cooldown is per request, so other bills may still go; three rejections in a row end the pass.
             rejections += 1
-            print("Topic suggestions: capacity unavailable for", bill_id, flush=True)
+            print(f"{label}: capacity unavailable for", bill_id, flush=True)
             if rejections >= 3:
-                print("Topic suggestions: capacity unavailable 3 times in a row; the rest wait for a later run",
-                      flush=True)
+                print(f"{label}: capacity unavailable 3 times in a row; the rest wait for a later run", flush=True)
                 break
             continue
         except (CacheCoolingDown, CacheBusy, OSError, ValueError) as error:
-            print(bill_id, "topic suggestions skipped:", type(error).__name__, flush=True)
+            print(bill_id, f"{label.lower()} skipped:", type(error).__name__, flush=True)
             continue
         except Exception as error:
-            print(bill_id, "stopped", type(error).__name__, "(topic suggestions)", flush=True)
+            print(bill_id, "stopped", type(error).__name__, f"({label.lower()})", flush=True)
             raise SystemExit(2)
         if report.get("action") == "not_submitted":
             if report.get("reason_type") in PER_BILL_NOT_SUBMITTED:
                 continue
             if args.execute:
-                print("Topic suggestions stopped:", report.get("reason_type"), flush=True)
+                print(f"{label} stopped:", report.get("reason_type"), flush=True)
             break  # budget, an unresolved outcome, or a dry run: nothing more is sent this run
-        atomic_json(out / (bill_id + ".json"), topic_suggestions.record_for(bundle, report))
+        save(report)
         done, rejections = done + 1, 0
-    print("Topic suggestions checked for", done, "bills", flush=True)
+    print(label, "checked for", done, "bills", flush=True)
     return done
+
+
+def _read_json(path: Path):
+    try:
+        return json.loads(path.read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _key_fn(budget):
+    cache = getattr(budget, "response_cache", None)
+    return cache, (cache.key if cache is not None else ResponseCache.key)
+
+
+def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
+    """Second pass: topic suggestions (private) plus headline and search terms (published via extras.json)."""
+    import topic_suggestions
+    topics, registry = classification.load_policy_tags(), detailed.load_registry()
+    cache, key_fn = _key_fn(budget)
+    retry, out = set(queue.get("retry", [])), args.cache_dir / "suggestions"
+
+    def jobs():
+        for path in sorted((args.cache_dir / "reviews").glob("*.json"), reverse=args.order == "reverse"):
+            bill_id = path.stem
+            if not topic_suggestions.BILL_RE.fullmatch(bill_id):
+                continue
+            bundle = _read_json(path)
+            if not topic_suggestions.due(bundle, _read_json(out / (bill_id + ".json")), topics, retry, key_fn):
+                continue
+            yield (bill_id,
+                   lambda b=bundle: topic_suggestions.suggest(b, topics, registry, args.cache_dir,
+                                                              execute=args.execute, sender=budget.send, cache=cache),
+                   lambda report, b=bundle, i=bill_id: atomic_json(out / (i + ".json"),
+                                                                   topic_suggestions.record_for(b, report)))
+    return _second_pass("Topic suggestions", jobs(), args, deadline)
+
+
+def audit_reviews(args, queue: dict, budget, deadline: float) -> int:
+    """Lowest priority of all: the ~2% spot-check sample, each against the exact text version it reviewed."""
+    import review_audit
+    import review_stages
+    registry = detailed.load_registry()
+    cache, key_fn = _key_fn(budget)
+    retry, out = set(queue.get("retry", [])), args.cache_dir / "audit"
+    text_dir = args.text_dir or args.snapshot.parent / "text"
+
+    def jobs():
+        for path in sorted((args.cache_dir / "reviews").glob("*.json"), reverse=args.order == "reverse"):
+            bill_id = path.stem
+            bundle = _read_json(path)
+            if (not isinstance(bundle, dict) or not isinstance(bundle.get("result"), dict) or bill_id in retry
+                    or bundle.get("bill_id") != bill_id
+                    or not review_audit.sampled(bill_id, bundle.get("first_pass_request_key"))):
+                continue
+            try:
+                document = load_markdown_document(bill_id, text_dir, review_stages.version_code(bundle["document"]))
+                if document["text_sha256"] != bundle["document"].get("text_sha256"):
+                    continue  # the reviewed text is not the one on disk; check once the review catches up
+                key = key_fn(review_audit.build_request(bundle, document))
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+            if not review_audit.due(bundle, _read_json(out / (bill_id + ".json")), key):
+                continue
+            yield (bill_id,
+                   lambda b=bundle, d=document: review_audit.audit(b, d, registry, args.cache_dir,
+                                                                   execute=args.execute, sender=budget.send,
+                                                                   cache=cache),
+                   lambda report, b=bundle, i=bill_id: atomic_json(out / (i + ".json"),
+                                                                   review_audit.record_for(b, report)))
+    return _second_pass("Review audit", jobs(), args, deadline)
+
+
+def publish_related(args) -> None:
+    """Related bills from embeddings (not Flex: no Luna ledger). Any failure keeps the previous file."""
+    import related_bills
+    import topic_suggestions
+    snapshot = json.loads(args.snapshot.read_text("utf-8"))
+    summaries = {bill_id: topic_suggestions.review_input(bundle)["summary"]
+                 for bill_id, bundle, _ in _current_reviews(args.cache_dir)}
+    count, tokens = related_bills.publish(snapshot["bills"], {k: v for k, v in summaries.items() if v},
+                                          args.cache_dir, args.publish_tags.parent / "related.json",
+                                          embedder=RELATED_EMBEDDER or related_bills.openai_embedder)
+    print("Published related bills for", count, "bills; embedded", tokens, "new tokens (~$%.6f)"
+          % (tokens * related_bills.PRICE_PER_MILLION / 1e6), flush=True)
+
+
+RELATED_EMBEDDER = None  # tests replace this; production uses the OpenAI embeddings API
 
 
 def main():
@@ -1364,6 +1439,8 @@ def main():
             try_publish_status(status_path, queue, current=None, upcoming=[], running=False)
         if args.suggest_topics and not stopped and not halt.is_set():
             suggest_topics(args, queue, budget, deadline)
+        if args.audit_sample and args.input == "markdown" and not stopped and not halt.is_set():
+            audit_reviews(args, queue, budget, deadline)
         print("New model spending this run: $%.6f" % budget.run_spent)
         if args.publish_tags:
             try:
@@ -1379,6 +1456,11 @@ def main():
                                              args.publish_tags.parent / "highlights"), "bills", flush=True)
                 except Exception as error:
                     print("Highlight publish failed:", type(error).__name__, flush=True)
+                if args.related_bills and args.execute and not halt.is_set():
+                    try:
+                        publish_related(args)
+                    except Exception as error:
+                        print("Related bills not updated:", type(error).__name__, flush=True)
                 if args.stages:
                     for name, folder, publish in (("changes", "changes", publish_changes),
                                                   ("fiscal checks", "fiscal", publish_fiscal)):
@@ -1387,6 +1469,19 @@ def main():
                                   publish(args.cache_dir, args.publish_tags.parent / folder), "bills", flush=True)
                         except Exception as error:
                             print("Publishing", name, "failed:", type(error).__name__, flush=True)
+            for flag, name, module, filename in ((args.suggest_topics, "extras", "topic_suggestions", "extras.json"),
+                                                 (args.audit_sample, "audit counts", "review_audit", "audit.json")):
+                if not flag:
+                    continue
+                try:
+                    publisher = __import__(module)
+                    publish = publisher.publish_extras if name == "extras" else publisher.publish
+                    reviews = [(bill_id, bundle) for bill_id, bundle, _ in _current_reviews(args.cache_dir)]
+                    print("Published Luna", name, "for", publish(reviews, args.cache_dir,
+                                                                  args.publish_tags.parent / filename),
+                          "bills", flush=True)
+                except Exception as error:
+                    print("Publishing", name, "failed:", type(error).__name__, flush=True)
 
 
 if __name__ == "__main__":

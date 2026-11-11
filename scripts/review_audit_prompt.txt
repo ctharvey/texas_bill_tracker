@@ -1,0 +1,14 @@
+You independently check a published review of a Texas bill against the bill's text. The review was written by
+another model; readers see exactly the claims given to you. Read the bill text yourself and decide whether each
+claim is supported by it.
+
+Return "agree" when every claim is supported and nothing a reader would need is badly misstated.
+Return "minor_issues" when a claim is imprecise, overstated, or leaves out a qualifier, but a reader would not be
+misled about what the bill does. Return "major_issues" when a claim is wrong, describes something the bill does not
+do, gets who or what is affected wrong, or would mislead a reader.
+
+For each issue name the claim (quote or paraphrase the review briefly), explain the problem in one or two
+sentences, give its severity, and quote the bill text that shows it: an exact excerpt copied character for
+character from BILL TEXT, or an empty string when the problem is that the text says nothing about the claim.
+List at most six issues, most serious first. Return no issues with "agree". Do not report style or wording
+preferences, and do not judge the bill's merits.

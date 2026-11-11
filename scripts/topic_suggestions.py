@@ -1,14 +1,19 @@
-"""Second-pass topic suggestions: a cheap, cacheable Luna call per settled review, kept private.
+"""Second pass: one cheap, cacheable Luna call per settled review for topic suggestions (private) and reader
+extras (public via extras.json): a plain-language headline, search terms, and opposing-side terms.
 
-The request is built only from the stored review and the current topic list, so a repeat is an exact
-response-cache hit and a bill is re-asked only when its review or the topic list changes. Usage for the tally:
+The request is built only from the review's verified claims and the current topic list, so a repeat is an exact
+response-cache hit and a bill is re-asked only when its verified review or the topic list changes. Extras are
+published only while the record's input hash matches the bill's current verified review. Usage for the tally:
     python scripts/topic_suggestions.py --cache-dir <cache> [--min-bills 2]
 """
 from __future__ import annotations
 
 import argparse
 import collections
+import datetime as dt
+import hashlib
 import json
+import os
 from pathlib import Path
 import re
 
@@ -16,7 +21,9 @@ import classify_bill
 import extract_bill as detailed
 
 ROOT = detailed.ROOT
-FORMAT = "texas-bill-topic-suggestions-v1"
+FORMAT = "texas-bill-topic-suggestions-v2"
+EXTRAS_FORMAT = "texas-bill-luna-extras-v1"
+TERM = {"type": "string", "minLength": 2, "maxLength": 40}
 BILL_RE = re.compile(r"[A-Z]{2,4}\d{1,5}")
 
 
@@ -25,8 +32,12 @@ def _canonical(value) -> str:
 
 
 def _schema(topics: list[str]) -> dict:
-    return {"type": "object", "additionalProperties": False, "required": ["suggestions"],
-            "properties": {"suggestions": {"type": "array", "maxItems": 3, "items": {
+    return {"type": "object", "additionalProperties": False,
+            "required": ["headline", "search_terms", "opposing_terms", "suggestions"],
+            "properties": {"headline": {"type": "string", "maxLength": 160},
+                           "search_terms": {"type": "array", "maxItems": 8, "items": TERM},
+                           "opposing_terms": {"type": "array", "maxItems": 6, "items": TERM},
+                           "suggestions": {"type": "array", "maxItems": 3, "items": {
                 "type": "object", "additionalProperties": False,
                 "required": ["topic", "reason", "closest_existing"],
                 "properties": {"topic": {"type": "string", "minLength": 2, "maxLength": 40},
@@ -36,13 +47,22 @@ def _schema(topics: list[str]) -> dict:
 
 
 def review_input(bundle: dict) -> dict:
-    # No bill ID or version: identical companion reviews then send identical requests (one call, one cache hit).
+    """Verified claims only (as published): unverified text must not reach a public headline or search terms.
+    No bill ID or version, so identical companion reviews send identical requests (one call, one cache hit)."""
     result = bundle["result"]
-    return {"summary": (result.get("summary") or {}).get("text"),
-            "topics": sorted(t.get("tag") for t in result.get("policy_tags") or [] if t.get("tag")),
-            "major_effects": [{k: e.get(k) for k in ("effect", "label", "explanation")}
-                              for e in result.get("major_effects") or []],
-            "affected_groups": sorted(g.get("name") for g in result.get("affected_groups") or [] if g.get("name"))}
+    verified = {c.get("claim") for c in (bundle.get("validation") or {}).get("verified_citations", [])
+                if c.get("status") == "resolved"}
+
+    def kept(field):
+        return [item for i, item in enumerate(result.get(field) or []) if f"{field}:{i}" in verified]
+    return {"summary": (result.get("summary") or {}).get("text") if "summary" in verified else None,
+            "topics": sorted(t.get("tag") for t in kept("policy_tags") if t.get("tag")),
+            "major_effects": [{k: e.get(k) for k in ("effect", "label", "explanation")} for e in kept("major_effects")],
+            "affected_groups": sorted(g.get("group") for g in kept("affected_groups") if g.get("group"))}
+
+
+def input_hash(bundle: dict) -> str:
+    return hashlib.sha256(_canonical(review_input(bundle)).encode("utf-8")).hexdigest()
 
 
 def build_request(bundle: dict, topics: list[str]) -> dict:
@@ -52,7 +72,7 @@ def build_request(bundle: dict, topics: list[str]) -> dict:
     return {
         "model": classify_bill.MODEL, "service_tier": "flex", "store": False, "reasoning": {"effort": "low"},
         "max_output_tokens": 3000, "prompt_cache_options": {"mode": "explicit", "ttl": "30m"},
-        "text": {"format": {"type": "json_schema", "name": "texas_bill_topic_suggestions_v1", "strict": True,
+        "text": {"format": {"type": "json_schema", "name": "texas_bill_second_pass_v1", "strict": True,
                             "schema": _schema(topics)}},
         "input": [
             # Same developer text for every bill: one 12-hour prompt-cache prefix serves the whole pass.
@@ -74,7 +94,18 @@ def validate(result: dict, topics: list[str]) -> dict:
     kept, dropped = [], []
     for item in result["suggestions"]:
         (dropped if _norm(item["topic"]) in existing else kept).append(item)
-    return {"errors": [], "kept": kept, "dropped": dropped, "status": "checked"}
+    return {"errors": [], "kept": kept, "dropped": dropped, "status": "checked",
+            "headline": " ".join(result["headline"].split()) or None,
+            "search_terms": _terms(result["search_terms"]), "opposing_terms": _terms(result["opposing_terms"])}
+
+
+def _terms(items: list[str]) -> list[str]:
+    out, seen = [], set()
+    for item in items:
+        term = " ".join(item.split())
+        if term and term.lower() not in seen:
+            seen.add(term.lower()); out.append(term)
+    return out
 
 
 def due(bundle: dict | None, record: dict | None, topics: list[str], retry: set[str], key_fn) -> bool:
@@ -86,6 +117,8 @@ def due(bundle: dict | None, record: dict | None, topics: list[str], retry: set[
     if bundle.get("bill_id") in retry:
         return False  # its review still changes when the questions run; ask once it settles
     try:
+        if not any(review_input(bundle).values()):
+            return False  # nothing verified to work from
         key = key_fn(build_request(bundle, topics))
     except (KeyError, TypeError, AttributeError):
         return False
@@ -109,7 +142,43 @@ def record_for(bundle: dict, report: dict) -> dict:
     return {"format": FORMAT, "bill_id": bundle["bill_id"], "request_key": report["request_key"],
             "review_key": bundle.get("first_pass_request_key"), "status": report.get("status"),
             "errors": report.get("errors", []), "suggestions": report.get("kept", []),
-            "dropped": report.get("dropped", [])}
+            "dropped": report.get("dropped", []), "input_sha256": input_hash(bundle),
+            "headline": report.get("headline"), "search_terms": report.get("search_terms", []),
+            "opposing_terms": report.get("opposing_terms", [])}
+
+
+def extras_entry(bundle: dict, record: dict | None) -> dict | None:
+    """Public extras for a bill, or None unless the record answered this exact verified review."""
+    if not isinstance(record, dict) or record.get("status") != "checked" or "result" not in bundle:
+        return None
+    if record.get("input_sha256") != input_hash(bundle):
+        return None  # the review changed since; stale extras are not shown
+    entry = {"search_terms": record.get("search_terms") or [], "opposing_terms": record.get("opposing_terms") or []}
+    if record.get("headline") and review_input(bundle)["summary"]:
+        entry["headline"] = record["headline"]
+    return entry if entry.get("headline") or entry["search_terms"] or entry["opposing_terms"] else None
+
+
+def publish_extras(reviews, cache_dir: Path, out: Path) -> int:
+    """`reviews`: (bill_id, bundle) pairs of current reviews. Writes the world-readable extras file."""
+    bills = {}
+    for bill_id, bundle in reviews:
+        try:
+            record = json.loads((cache_dir / "suggestions" / (bill_id + ".json")).read_text("utf-8"))
+        except (OSError, ValueError):
+            continue
+        entry = extras_entry(bundle, record)
+        if entry:
+            bills[bill_id] = entry
+    payload = {"format": EXTRAS_FORMAT, "model": classify_bill.MODEL,
+               "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+               "bills": bills}
+    out.parent.mkdir(parents=True, exist_ok=True)
+    temporary = out.with_name(out.name + ".tmp")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n", "utf-8")
+    os.chmod(temporary, 0o644)
+    os.replace(temporary, out)
+    return len(bills)
 
 
 def tally(cache_dir: Path, min_bills: int = 1) -> list[dict]:
