@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-11
+- "All state agencies" marker is a vote: two second-pass calls, a third only as a tie-breaker; it publishes once two
+  agree (one extra call per bill, two on a disagreement; roughly $0.00015 each). Each vote is its own cached, ledgered request
+  bound to the review and text it answered.
 - Review progress: shows every bill under review at once (up to three with `--workers 3`), not just the last one
   started. `status.json` gains `in_progress`, rewritten as each bill starts and finishes; `current` stays.
 - Data sync: TLC's "not currently available, see the PDF" placeholder text is counted as `not_posted` and logged as

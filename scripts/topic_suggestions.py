@@ -2,6 +2,10 @@
 via extras.json: a plain-language headline, search terms, opposing-side terms) and the "all state agencies" scope
 marker (public via tags.json), which is decided here from the bill text, not by the first pass.
 
+The marker is a 2-of-3 vote: vote 1 is the call above; votes 2 and 3 repeat it as separate requests (a trailing
+run line makes their cache keys differ), vote 3 only when the first two do not settle it. Each vote is bound to the
+review and text it answered, and a vote made for an earlier review never counts.
+
 The request is built from the review's verified claims, the bill text and the current topic list, so a repeat is an
 exact response-cache hit and a bill is re-asked only when one of them changes. Extras are published only while the
 record's input hash matches the bill's current verified review; the scope marker only while its quotes verified and
@@ -103,7 +107,14 @@ def check_scope(scope: dict, document: dict) -> dict:
             "quotes": quotes if applies else [], "verified": not applies or (bool(quotes) and all(found))}
 
 
-def build_request(bundle: dict, topics: list[str]) -> dict:
+VOTES = (1, 2, 3)
+
+
+def build_request(bundle: dict, topics: list[str], vote: int = 1) -> dict:
+    """Vote 1 is the original request, byte for byte. Votes 2 and 3 add one trailing part after the bill text, so
+    each is its own cache and ledger entry while the shared prompt prefix still caches."""
+    if vote not in VOTES:
+        raise ValueError(f"unknown vote {vote}")
     topics = sorted(topics)
     instructions = ((ROOT / "scripts/topic_suggestions_prompt.txt").read_text("utf-8")
                     + "\nCURRENT TOPICS:\n" + _canonical(topics))
@@ -117,7 +128,8 @@ def build_request(bundle: dict, topics: list[str]) -> dict:
             {"role": "developer", "content": [{"type": "input_text", "text": instructions,
                 "prompt_cache_breakpoint": {"mode": "explicit", "ttl": "12h"}}]},
             {"role": "user", "content": [{"type": "input_text", "text": "REVIEW:\n" + _canonical(review_input(bundle))
-                                          + "\n\nBILL TEXT:\n" + bill_text(bundle)}]},
+                                          + "\n\nBILL TEXT:\n" + bill_text(bundle)}]
+                                        + ([{"type": "input_text", "text": f"RUN: {vote}"}] if vote > 1 else [])},
         ],
     }
 
@@ -166,9 +178,9 @@ def due(bundle: dict | None, record: dict | None, topics: list[str], retry: set[
 
 
 def suggest(bundle: dict, topics: list[str], registry: list[dict], cache_root: Path, *, execute=False,
-            sender=None, cache=None) -> dict:
+            sender=None, cache=None, vote: int = 1) -> dict:
     """One call (or cache hit). Returns the extract report; `result` is present only when it validated."""
-    request = build_request(bundle, topics)
+    request = build_request(bundle, topics, vote)
 
     def validator(result, document, registry, schema, key, sources=None):
         return validate(result, topics, document)
@@ -178,25 +190,83 @@ def suggest(bundle: dict, topics: list[str], registry: list[dict], cache_root: P
                             cost_estimator=classify_bill.response_cost, cache=cache)
 
 
-def record_for(bundle: dict, report: dict) -> dict:
+def _vote_entry(bundle: dict, report: dict) -> dict:
+    return {"request_key": report["request_key"], "status": report.get("status"),
+            "scope": ({**report["scope"], "input_sha256": scope_hash(bundle)} if report.get("scope") else None)}
+
+
+def _valid(entry, bundle: dict) -> bool:
+    scope = entry.get("scope") if isinstance(entry, dict) and entry.get("status") == "checked" else None
+    return isinstance(scope, dict) and scope.get("input_sha256") == scope_hash(bundle)
+
+
+def votes(bundle: dict, record: dict | None) -> dict[int, dict]:
+    """Scope votes made for this exact review and text, by vote number. A record from before voting counts its
+    own scope as vote 1."""
+    if not isinstance(record, dict):
+        return {}
+    raw = record.get("votes")
+    if not isinstance(raw, dict):
+        raw = {"1": {"request_key": record.get("request_key"), "status": record.get("status"),
+                     "scope": record.get("scope")}}
+    names = {str(v): v for v in VOTES}
+    return {names[str(n)]: e["scope"] for n, e in raw.items() if str(n) in names and _valid(e, bundle)}
+
+
+def decision(scopes: dict[int, dict]) -> dict | None:
+    """2 of 3. A true vote needs verified quotes; a true vote whose quotes failed abstains (it is neither)."""
+    trues = [n for n in sorted(scopes) if scopes[n].get("applies") and scopes[n].get("verified")]
+    falses = [n for n in sorted(scopes) if not scopes[n].get("applies")]
+    if len(trues) >= 2:
+        first = scopes[trues[0]]
+        return {"applies": True, "explanation": first.get("explanation") or "",
+                "quotes": list(first.get("quotes") or [])}
+    if len(falses) >= 2:
+        return {"applies": False, "explanation": scopes[falses[0]].get("explanation") or "", "quotes": []}
+    return None
+
+
+def vote_due(bundle: dict | None, record: dict | None, retry: set[str]) -> int | None:
+    """The next scope vote to ask (2 or 3), or None. Asked only after vote 1 answered this review and text."""
+    if not isinstance(bundle, dict) or not isinstance(bundle.get("result"), dict) or bundle.get("bill_id") in retry:
+        return None
+    try:
+        have = votes(bundle, record)
+        if 1 not in have or decision(have) is not None:
+            return None
+    except (KeyError, TypeError, AttributeError):
+        return None
+    return next((v for v in VOTES if v not in have), None)
+
+
+def with_vote(bundle: dict, record: dict, vote: int, report: dict) -> dict:
+    """`record` with `vote` added; votes for any other review or text are dropped so they never pair up."""
+    kept = {str(n): e for n, e in (record.get("votes") or {}).items() if _valid(e, bundle)}
+    return {**record, "votes": {**kept, str(vote): _vote_entry(bundle, report)}}
+
+
+def record_for(bundle: dict, report: dict, previous: dict | None = None) -> dict:
+    """Vote 1's record: extras and suggestions come only from it. Earlier votes 2 and 3 for the same review and
+    text are kept."""
+    kept = {}
+    if isinstance(previous, dict) and isinstance(previous.get("votes"), dict):
+        kept = {str(n): e for n, e in previous["votes"].items() if str(n) != "1" and _valid(e, bundle)}
     return {"format": FORMAT, "bill_id": bundle["bill_id"], "request_key": report["request_key"],
             "review_key": bundle.get("first_pass_request_key"), "status": report.get("status"),
             "errors": report.get("errors", []), "suggestions": report.get("kept", []),
             "dropped": report.get("dropped", []), "input_sha256": input_hash(bundle),
             "headline": report.get("headline"), "search_terms": report.get("search_terms", []),
             "opposing_terms": report.get("opposing_terms", []),
-            "scope": ({**report["scope"], "input_sha256": scope_hash(bundle)} if report.get("scope") else None)}
+            "scope": ({**report["scope"], "input_sha256": scope_hash(bundle)} if report.get("scope") else None),
+            "votes": {**kept, "1": _vote_entry(bundle, report)}}
 
 
 def scope_entry(bundle: dict, record: dict | None) -> dict | None:
-    """The public all-state-agencies marker, or None while the second pass has not decided it for this exact
-    review and text (the site then keeps its caption inference). Never the first pass's own marker."""
-    scope = record.get("scope") if isinstance(record, dict) and record.get("status") == "checked" else None
-    if (not isinstance(scope, dict) or not scope.get("verified") or "result" not in bundle
-            or scope.get("input_sha256") != scope_hash(bundle)):
+    """The public all-state-agencies marker, or None until 2 of 3 votes for this exact review and text agree (the
+    site then keeps its caption inference). Never the first pass's own marker."""
+    if "result" not in bundle:
         return None
-    return {"applies": bool(scope["applies"]), "explanation": scope.get("explanation") or "",
-            "quotes": list(scope.get("quotes") or [])}
+    return decision(votes(bundle, record))
 
 
 def read_scope(cache_dir: Path, bill_id: str, bundle: dict) -> dict | None:

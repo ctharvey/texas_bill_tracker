@@ -151,9 +151,12 @@ headline as "In brief" and adds the terms to search. No headline is shown when t
 The same call also decides the **All state agencies** scope marker from the bill text, under a stricter rule than the
 first pass had (federal-waiver riders, savings and applicability clauses, cooperation-with-a-task-force duties and
 mixed state/local classes do not count). It is published in `tags.json` (and as a highlight) only when every quote is
-current, undeleted bill text, and only for the review and text content it was made for. The first pass's own marker is
-no longer published (a 2026-11-11 audit found about half wrong); until a bill's second pass runs, the site falls back to
-the caption inference.
+current, undeleted bill text, and only for the review and text content it was made for. It is a vote: the call above
+is vote 1, a second identical call (its own request, cache entry and ledger row, told apart by a trailing `RUN: 2`
+line) is vote 2, and a third runs only when the two disagree; the marker publishes once two votes agree. A true vote
+whose quotes fail abstains. Every bill's vote 1 runs before any vote 2, so headlines are not held back. The first
+pass's own marker is no longer published (a 2026-11-11 audit found about half wrong); until two votes agree, the site
+falls back to the caption inference.
 
 `--audit-sample` runs after the topic pass: an independent medium-effort Luna re-check of about 2% of settled reviews
 (a deterministic sample by bill and review), against the exact text version reviewed. Findings stay private in

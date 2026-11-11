@@ -42,7 +42,7 @@ class ScopeTests(SuggestionCase):
     def test_a_verified_marker_is_published_and_highlighted(self):
         self.start()
         sent = [n for _, n in self.sdk.requests]
-        self.assertEqual(sent, [CLASSIFY, SUGGEST])
+        self.assertEqual(sent, [CLASSIFY, SUGGEST, SUGGEST])  # votes 1 and 2 agree; no vote 3
         self.assertEqual(self.published()['all_state_agencies'],
                          {'applies': True, 'explanation': 'Every state agency must adopt a policy.'})
         claims = {c['id']: c for c in self.luna('highlights')['claims']}

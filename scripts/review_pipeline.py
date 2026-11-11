@@ -1167,7 +1167,7 @@ def _second_pass(label: str, jobs, args, deadline: float) -> int:
     """Run one lowest-priority pass (main thread, after the review queue emptied). `jobs` yields due
     (bill_id, call, save) items. Capacity skips a bill (three in a row end the pass); an unknown outcome stops the
     worker like any other call; a budget stop, unresolved outcome or dry run ends the pass."""
-    done, rejections = 0, 0
+    done, rejections = set(), 0  # bills, not calls: one bill may take several (scope votes)
     for bill_id, call, save in jobs:
         if time.monotonic() > deadline:
             print(f"{label}: run time limit; the rest wait for a later run", flush=True)
@@ -1195,9 +1195,9 @@ def _second_pass(label: str, jobs, args, deadline: float) -> int:
                 print(f"{label} stopped:", report.get("reason_type"), flush=True)
             break  # budget, an unresolved outcome, or a dry run: nothing more is sent this run
         save(report)
-        done, rejections = done + 1, 0
-    print(label, "checked for", done, "bills", flush=True)
-    return done
+        done.add(bill_id); rejections = 0
+    print(label, "checked for", len(done), "bills", flush=True)
+    return len(done)
 
 
 def _read_json(path: Path):
@@ -1219,19 +1219,40 @@ def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
     cache, key_fn = _key_fn(budget)
     retry, out = set(queue.get("retry", [])), args.cache_dir / "suggestions"
 
-    def jobs():
+    def paths():
         for path in sorted((args.cache_dir / "reviews").glob("*.json"), reverse=args.order == "reverse"):
-            bill_id = path.stem
-            if not topic_suggestions.BILL_RE.fullmatch(bill_id):
-                continue
+            if topic_suggestions.BILL_RE.fullmatch(path.stem):
+                yield path.stem, path
+
+    def jobs():
+        # Vote 1 (extras, suggestions, first scope vote) for every due bill first, so headlines are not held back.
+        for bill_id, path in paths():
             bundle = _read_json(path)
             if not topic_suggestions.due(bundle, _read_json(out / (bill_id + ".json")), topics, retry, key_fn):
                 continue
             yield (bill_id,
                    lambda b=bundle: topic_suggestions.suggest(b, topics, registry, args.cache_dir,
                                                               execute=args.execute, sender=budget.send, cache=cache),
-                   lambda report, b=bundle, i=bill_id: atomic_json(out / (i + ".json"),
-                                                                   topic_suggestions.record_for(b, report)))
+                   lambda report, b=bundle, i=bill_id: atomic_json(
+                       out / (i + ".json"), topic_suggestions.record_for(b, report, _read_json(out / (i + ".json")))))
+        # Then the scope votes. The record is re-read after each saved vote, so vote 3 goes only when 1 and 2 split.
+        for bill_id, path in paths():
+            asked = set()  # one try per vote per run, even if its answer did not validate
+            while True:
+                bundle, record = _read_json(path), _read_json(out / (bill_id + ".json"))
+                vote = topic_suggestions.vote_due(bundle, record, retry)
+                if vote is None or vote in asked:
+                    break
+                asked.add(vote)
+                yield (bill_id,
+                       lambda b=bundle, v=vote: topic_suggestions.suggest(b, topics, registry, args.cache_dir,
+                                                                          execute=args.execute, sender=budget.send,
+                                                                          cache=cache, vote=v),
+                       lambda report, b=bundle, r=record, v=vote, i=bill_id: atomic_json(
+                           out / (i + ".json"), topic_suggestions.with_vote(b, r, v, report)))
+                after = _read_json(out / (bill_id + ".json"))
+                if after == record:
+                    break  # not saved (capacity, a skip or a per-bill refusal): leave it for a later run
     return _second_pass("Topic suggestions", jobs(), args, deadline)
 
 

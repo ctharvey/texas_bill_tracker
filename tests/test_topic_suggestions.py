@@ -65,7 +65,8 @@ class TopicSuggestionTests(SuggestionCase):
     def test_runs_once_the_queue_is_empty_and_drops_current_topics(self):
         self.seed()
         out = self.run_once()
-        self.assertEqual(self.sdk.requests, [('HB1', CLASSIFY), ('HB1', SUGGEST)])  # review first, then the pass
+        # Review first, then the pass: vote 1, and vote 2 for the scope marker (the two agree, so no vote 3).
+        self.assertEqual(self.sdk.requests, [('HB1', CLASSIFY), ('HB1', SUGGEST), ('HB1', SUGGEST)])
         record = self.record()
         self.assertEqual([s['topic'] for s in record['suggestions']], ['Water'])
         self.assertEqual([s['topic'] for s in record['dropped']], ['taxes'])
@@ -85,7 +86,7 @@ class TopicSuggestionTests(SuggestionCase):
         self.summary = lambda bill: 'Shared companion summary.'
         self.seed(['HB1', 'SB1'])
         self.run_once()
-        self.assertEqual(self.count(SUGGEST), 2)
+        self.assertEqual(self.count(SUGGEST), 4)  # two votes each
         self.assertNotEqual(self.record('HB1')['request_key'], self.record('SB1')['request_key'])
 
     def test_a_bill_with_queued_questions_waits_until_its_review_settles(self):
