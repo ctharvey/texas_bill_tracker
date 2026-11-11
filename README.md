@@ -236,7 +236,10 @@ or last-action stage. This is separate from the "stage" filter, which is the fur
 - **Copy page for AI** (top bar): copies the view on screen as text (`pageAiText` in `src/taxonomy.js`). Explorer,
   watchlist and Today copy their filters, an equivalent agent-edition search link when one exists, and up to 50 of
   the bills shown with each bill's `.md` link; reference views copy their agent-edition page. With a bill open the
-  drawer covers the top bar, so the drawer's own Copy for AI is used there.
+  drawer covers the top bar, so the drawer's own Copy for AI is used there. Both copies name each bill's companions.
+- **Agency filter and companions**: filtering by an agency also lists a bill whose companion (any relation the
+  Legislative Council records) carries that agency, with a dashed "via companion" tag; the agent-edition search and
+  the Agency index counts still count direct tags only.
 
 ### Saving and sharing without accounts
 

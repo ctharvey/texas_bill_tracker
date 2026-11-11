@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, AI_LIST_LIMIT} from '../src/taxonomy.js';
+import {aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, AI_LIST_LIMIT, companionLabel, agencyViaCompanion, companionIndex} from '../src/taxonomy.js';
 import {parseHash, buildHash, VIEWS} from '../src/prefs.js';
 
 const bill = (id, extra = {}) => ({id, number: id.replace(/^([A-Z]+)/, '$1 '), title: `Title of ${id}`, topics: [], last_action: '11/10/2026 H Filed', last_action_date: '2026-11-10', ...extra});
@@ -108,6 +108,22 @@ test('pageAiText: long lists are capped and point to the rest', () => {
   assert.equal(text.split('\n').filter(l => l.startsWith('- HB')).length, AI_LIST_LIMIT);
   assert.ok(text.includes('...and 3 more (open the page link for the rest).'));
   assert.ok(!text.includes('search?'));
+});
+
+test('companions: label, agency-via-companion and both copy texts', () => {
+  assert.equal(companionLabel({id: 'HB234', relation: 'Identical'}), 'HB 234 (identical)');
+  const senate = bill('SB108', {agencies: [{id: 'ers'}], companions: [{id: 'HB234', author: 'Bucy', relation: 'Identical'}]});
+  const house = bill('HB234', {agencies: []}), other = bill('HB690', {agencies: [{id: 'ers'}]});
+  const index = companionIndex([senate, house, other]);
+  const via = agencyViaCompanion([senate, house, other], 'ers', index);
+  assert.deepEqual([...via], [['HB234', ['SB108']]]);
+  assert.equal(agencyViaCompanion([senate, house, other], 'tea', index).size, 0);
+  assert.ok(aiPrompt(senate, index.get('SB108')).includes('Companion bill HB 234 (identical): https://agent.bills.ctharvey.me/bills/HB234.md'));
+  const text = pageAiText({view: 'all', label: 'Bill explorer', pageUrl: 'u', bills: [senate, house], filters: {agency: 'ers'},
+    companions: id => index.get(id) || [], via});
+  assert.ok(text.split('\n').find(l => l.startsWith('- SB 108')).includes('| Companion: HB 234 (identical) |'));
+  assert.ok(text.split('\n').find(l => l.startsWith('- HB 234')).includes('| Listed because its companion SB 108 is tagged with this agency |'));
+  assert.ok(text.includes('Bills tagged with this agency directly (companions not added), AI-readable: https://agent.bills.ctharvey.me/search?agency=ers'));
 });
 
 test('pageAiText: reference views link their agent page', () => {

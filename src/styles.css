@@ -161,6 +161,7 @@ a.bill-number:hover{text-decoration:underline}
 .ai-fallback{width:100%;font:12px/1.4 monospace;padding:8px;border:1px solid var(--line);border-radius:6px}
 .ai-top-button{border:1px solid #9ac7c5;background:#e7f4f2;color:var(--teal);font-size:12px;font-weight:700;padding:7px 12px;border-radius:8px;white-space:nowrap}
 .ai-top-button:hover{background:#d8eeeb}
+.tag.via-companion{border-style:dashed}
 .today-note{margin:0 0 16px}
 .today-note p{margin:0}.today-note p+p{margin-top:4px}
 .today-topics{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 8px}

@@ -505,15 +505,31 @@ export const agentUrl = bill => `${AGENT_BASE}bills/${encodeURIComponent(bill.id
 const httpsUrl = value => { try { const u = new URL(String(value)); return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : ''; } catch { return ''; } };
 
 // Text for pasting into an AI assistant: where to read the bill, and one neutral instruction.
-export function aiPrompt(bill) {
+export function aiPrompt(bill, companions = []) {
   const versions = Array.isArray(bill.text_versions) ? bill.text_versions.filter(v => v && httpsUrl(v.html)) : [];
   const latest = versions[versions.length - 1];
   const textLine = latest
     ? `Official bill text${latest.name ? ` (${latest.name})` : ''}: ${httpsUrl(latest.html)}`
     : `Official bill history and text: ${officialUrl(bill)}`;
   return [`Texas ${bill.number} (90th Legislature): ${bill.title}`, '',
-    `AI-readable version with history and review: ${agentUrl(bill)}`, textLine, '',
+    `AI-readable version with history and review: ${agentUrl(bill)}`, textLine,
+    ...companions.map(c => `Companion bill ${companionLabel(c)}: ${agentUrl(c)}`), '',
     'Summarize what this bill does, who it affects, and its current status, citing the bill text.'].join('\n');
+}
+
+// "HB 234 (identical)" for a companion entry from companionIndex.
+export const companionLabel = c => `${c.number || String(c.id).replace(/^([A-Z]+)(\d)/, '$1 $2')}${c.relation ? ` (${c.relation.toLowerCase()})` : ''}`;
+
+// Bills that lack `agencyId` themselves but have a companion carrying it: Map(billId -> [companion ids]).
+export function agencyViaCompanion(bills, agencyId, index) {
+  const tagged = new Set(bills.filter(b => (b.agencies || []).some(a => a.id === agencyId)).map(b => b.id));
+  const via = new Map();
+  for (const b of bills) {
+    if (tagged.has(b.id)) continue;
+    const ids = (index.get(b.id) || []).map(c => c.id).filter(id => tagged.has(id));
+    if (ids.length) via.set(b.id, ids);
+  }
+  return via;
 }
 
 // A plain left-click on empty card space opens the drawer; controls, links, selections and modified clicks do not.
@@ -587,9 +603,11 @@ export const AI_LIST_LIMIT = 50;
 const VIEW_PAGES = {agencies: ['Agency index', 'agencies/index.md'], review: ['Full-text review progress', 'review-progress.md'],
   method: ['Scoring method', 'llms.txt'], saving: ['Saving your info', 'saving.md'], data: ['Data & imports', 'llms.txt']};
 
-// ctx: {view, label, pageUrl, bill, bills, filters:{query,topic,agency,chamber}, agencyName, day}
+// ctx: {view, label, pageUrl, bill, bills, filters:{query,topic,agency,chamber}, agencyName, day,
+//       companions: id -> [companion entries], via: Map(id -> [companion ids]) for bills listed through a companion}
 export function pageAiText(ctx) {
-  if (ctx.bill) return aiPrompt(ctx.bill);
+  const companions = ctx.companions || (() => []);
+  if (ctx.bill) return aiPrompt(ctx.bill, companions(ctx.bill.id));
   const f = ctx.filters || {};
   const lines = [];
   if (VIEW_PAGES[ctx.view]) {
@@ -610,11 +628,15 @@ export function pageAiText(ctx) {
   const bills = ctx.bills || [];
   lines.push(`Texas Bill Atlas (90th Legislature): ${ctx.label}${ctx.day ? ` for ${ctx.day}` : ''}${described.length ? ` (${described.join(', ')})` : ''}`,
     `Page: ${ctx.pageUrl}`, `${bills.length} ${bills.length === 1 ? 'bill' : 'bills'} shown.`, '');
-  if (search) lines.push(`Same list, AI-readable: ${search}`);
+  const viaShown = bills.some(b => ctx.via?.has(b.id));
+  if (search) lines.push(`${viaShown ? 'Bills tagged with this agency directly (companions not added), AI-readable' : 'Same list, AI-readable'}: ${search}`);
   lines.push(`Everything available: ${AGENT_BASE}llms.txt`, '');
   for (const b of bills.slice(0, AI_LIST_LIMIT)) {
     const last = lastActionInfo(b);
-    lines.push(`- ${b.number}: ${b.title}${b.headline ? ` | In brief: ${b.headline}` : ''} | Last action: ${last.text || last.label}${last.date ? ` (${last.date})` : ''} | ${agentUrl(b)}`);
+    const comp = companions(b.id), via = ctx.via?.get(b.id);
+    lines.push(`- ${b.number}: ${b.title}${b.headline ? ` | In brief: ${b.headline}` : ''} | Last action: ${last.text || last.label}${last.date ? ` (${last.date})` : ''}`
+      + `${comp.length ? ` | Companion: ${comp.map(companionLabel).join(', ')}` : ''}`
+      + `${via ? ` | Listed because its companion ${via.map(id => companionLabel({id})).join(', ')} is tagged with this agency` : ''} | ${agentUrl(b)}`);
   }
   if (bills.length > AI_LIST_LIMIT) lines.push(`- ...and ${bills.length - AI_LIST_LIMIT} more${search ? `; the full list is at ${search}` : ' (open the page link for the rest)'}.`);
   lines.push('', 'Use these links to answer my questions about these bills; open a bill\'s page for its full details.');

@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-11
+- Companions: an agency filter also lists a bill whose companion carries that agency (dashed "via companion" tag),
+  and both Copy for AI texts name each bill's companions.
 - "Copy page for AI" in the top bar copies the current view (filters, AI-readable links, up to 50 bills) as text.
 - Frontend: bill titles and numbers are real links and empty card space opens the drawer; the drawer has "Copy for
   AI" and an AI-readable link; new "Today" view (`#today`) shows the day's activity by action type and topic.
