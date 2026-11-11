@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType} from '../src/taxonomy.js';
+import {aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, AI_LIST_LIMIT} from '../src/taxonomy.js';
 import {parseHash, buildHash, VIEWS} from '../src/prefs.js';
 
 const bill = (id, extra = {}) => ({id, number: id.replace(/^([A-Z]+)/, '$1 '), title: `Title of ${id}`, topics: [], last_action: '11/10/2026 H Filed', last_action_date: '2026-11-10', ...extra});
@@ -85,4 +85,32 @@ test('the today view round-trips through the address', () => {
   const p = parseHash('#today?bill=hb5');
   assert.deepEqual([p.view, p.bill], ['today', 'HB5']);
   assert.equal(buildHash('today', {}, {bill: 'HB5'}), '#today?bill=HB5');
+});
+
+test('pageAiText: an open bill copies that bill', () => {
+  assert.equal(pageAiText({view: 'all', bill: bill('HB5'), bills: [bill('SB1')]}), aiPrompt(bill('HB5')));
+});
+
+test('pageAiText: a filtered list names its filters, an equivalent search link and each bill', () => {
+  const text = pageAiText({view: 'all', label: 'Bill explorer', pageUrl: 'https://bills.ctharvey.me/#all?topic=Taxes',
+    bills: [bill('HB5', {headline: 'Cuts a tax.'})], filters: {topic: 'Taxes', agency: 'tea', chamber: ''}, agencyName: id => id.toUpperCase()});
+  assert.match(text, /^Texas Bill Atlas \(90th Legislature\): Bill explorer \(topic Taxes, agency TEA\)/);
+  assert.ok(text.includes('Page: https://bills.ctharvey.me/#all?topic=Taxes'));
+  assert.ok(text.includes('Same list, AI-readable: https://agent.bills.ctharvey.me/search?topic=Taxes&agency=tea'));
+  assert.ok(text.includes('- HB 5: Title of HB5 | In brief: Cuts a tax. | Last action:'));
+  assert.ok(text.includes('https://agent.bills.ctharvey.me/bills/HB5.md'));
+});
+
+test('pageAiText: long lists are capped and point to the rest', () => {
+  const bills = Array.from({length: AI_LIST_LIMIT + 3}, (_, i) => bill(`HB${i + 1}`));
+  const text = pageAiText({view: 'today', label: 'Today', day: '2026-11-10', pageUrl: 'u', bills, filters: {}});
+  assert.match(text, /Today for 2026-11-10/);
+  assert.equal(text.split('\n').filter(l => l.startsWith('- HB')).length, AI_LIST_LIMIT);
+  assert.ok(text.includes('...and 3 more (open the page link for the rest).'));
+  assert.ok(!text.includes('search?'));
+});
+
+test('pageAiText: reference views link their agent page', () => {
+  const text = pageAiText({view: 'agencies', pageUrl: 'u'});
+  assert.ok(text.includes('AI-readable version: https://agent.bills.ctharvey.me/agencies/index.md'));
 });

@@ -581,3 +581,42 @@ export function groupByActionType(rows) {
   const order = key => { const i = LAST_ACTION_TYPES.findIndex(t => t.key === key); return i < 0 ? LAST_ACTION_TYPES.length : i; };
   return [...groups.values()].sort((a, b) => order(a.key) - order(b.key));
 }
+
+// ---- "Copy page for AI": the view on screen as text an AI assistant can follow ----
+export const AI_LIST_LIMIT = 50;
+const VIEW_PAGES = {agencies: ['Agency index', 'agencies/index.md'], review: ['Full-text review progress', 'review-progress.md'],
+  method: ['Scoring method', 'llms.txt'], saving: ['Saving your info', 'saving.md'], data: ['Data & imports', 'llms.txt']};
+
+// ctx: {view, label, pageUrl, bill, bills, filters:{query,topic,agency,chamber}, agencyName, day}
+export function pageAiText(ctx) {
+  if (ctx.bill) return aiPrompt(ctx.bill);
+  const f = ctx.filters || {};
+  const lines = [];
+  if (VIEW_PAGES[ctx.view]) {
+    const [title, path] = VIEW_PAGES[ctx.view];
+    lines.push(`Texas Bill Atlas (90th Legislature): ${title}`, `Page: ${ctx.pageUrl}`, '',
+      `AI-readable version: ${AGENT_BASE}${path}`, `Everything available: ${AGENT_BASE}llms.txt`, '',
+      'Use these links to answer my questions about Texas bills; open a bill\'s page for its details.');
+    return lines.join('\n');
+  }
+  const described = [f.query && `search "${f.query}"`, f.topic && `topic ${f.topic}`,
+    f.agency && `agency ${ctx.agencyName ? ctx.agencyName(f.agency) : f.agency}`, f.chamber && `chamber ${f.chamber}`].filter(Boolean);
+  const params = new URLSearchParams();
+  if (f.query) params.set('q', f.query);
+  if (f.topic) params.set('topic', f.topic);
+  if (f.agency) params.set('agency', f.agency);
+  if (f.chamber) params.set('chamber', f.chamber);
+  const search = [...params].length ? `${AGENT_BASE}search?${params}` : null;
+  const bills = ctx.bills || [];
+  lines.push(`Texas Bill Atlas (90th Legislature): ${ctx.label}${ctx.day ? ` for ${ctx.day}` : ''}${described.length ? ` (${described.join(', ')})` : ''}`,
+    `Page: ${ctx.pageUrl}`, `${bills.length} ${bills.length === 1 ? 'bill' : 'bills'} shown.`, '');
+  if (search) lines.push(`Same list, AI-readable: ${search}`);
+  lines.push(`Everything available: ${AGENT_BASE}llms.txt`, '');
+  for (const b of bills.slice(0, AI_LIST_LIMIT)) {
+    const last = lastActionInfo(b);
+    lines.push(`- ${b.number}: ${b.title}${b.headline ? ` | In brief: ${b.headline}` : ''} | Last action: ${last.text || last.label}${last.date ? ` (${last.date})` : ''} | ${agentUrl(b)}`);
+  }
+  if (bills.length > AI_LIST_LIMIT) lines.push(`- ...and ${bills.length - AI_LIST_LIMIT} more${search ? `; the full list is at ${search}` : ' (open the page link for the rest)'}.`);
+  lines.push('', 'Use these links to answer my questions about these bills; open a bill\'s page for its full details.');
+  return lines.join('\n');
+}

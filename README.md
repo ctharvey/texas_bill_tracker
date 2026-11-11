@@ -233,6 +233,10 @@ or last-action stage. This is separate from the "stage" filter, which is the fur
   clicks on controls, links or a text selection.
 - The drawer's **Copy for AI** button copies a short prompt (bill, agent-edition Markdown URL, official text URL, one
   neutral instruction); next to it is a plain link to the AI-readable `.md`. No prefilled links to AI services.
+- **Copy page for AI** (top bar): copies the view on screen as text (`pageAiText` in `src/taxonomy.js`). Explorer,
+  watchlist and Today copy their filters, an equivalent agent-edition search link when one exists, and up to 50 of
+  the bills shown with each bill's `.md` link; reference views copy their agent-edition page. With a bill open the
+  drawer covers the top bar, so the drawer's own Copy for AI is used there.
 
 ### Saving and sharing without accounts
 

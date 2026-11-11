@@ -1,7 +1,7 @@
 import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal} from './review.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, watchlistFile, parseWatchlistFile} from './prefs.js';
 import {createSyncClient} from './sync.js';
-import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, searchTerms, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType} from './taxonomy.js';
+import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, searchTerms, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText} from './taxonomy.js';
 
 const $ = (selector, root=document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -490,7 +490,8 @@ function billCard(b,unwatchedCompanion=false){
 // Remove this line once the Legislature is in session and the view has real floor and hearing content.
 const TODAY_INTERIM_NOTE='The 90th Legislature convenes in January 2027; floor calendars and hearings will appear here then.';
 
-function todayMarkup(){
+// The Today view's day and rows, shared by its markup and "Copy page for AI".
+function todayData(){
   const today=chicagoDate(new Date());
   let day=today,rows=activityOn(state.bills,day),note='';
   if(!rows.length){
@@ -501,6 +502,11 @@ function todayMarkup(){
   const counts=topicCounts(rows.map(r=>r.bill));
   if(state.todayTopic&&!counts.some(c=>c.topic===state.todayTopic))state.todayTopic='';
   const shown=state.todayTopic?rows.filter(r=>r.bill.topics.includes(state.todayTopic)):rows;
+  return {today,day,rows,note,counts,shown};
+}
+
+function todayMarkup(){
+  const {today,day,rows,note,counts,shown}=todayData();
   // Every topic is reachable: the 12 largest show first, the rest behind "+N more"; a selected topic always shows.
   const TOP=12,listed=state.todayAllTopics?counts:counts.filter((c,i)=>i<TOP||c.topic===state.todayTopic);
   const chip=(topic,label)=>`<button class="topic-chip ${state.todayTopic===topic?'selected':''}" data-today-topic="${esc(topic)}" aria-pressed="${state.todayTopic===topic}">${label}</button>`;
@@ -814,6 +820,7 @@ function handleClick(e){
     if(open.tagName!=='A'||cardClickOpens({button:e.button,metaKey:e.metaKey,ctrlKey:e.ctrlKey,shiftKey:e.shiftKey,altKey:e.altKey})){e.preventDefault();showDrawer(open.dataset.open,true)}
     return}
   const copyAi=e.target.closest('[data-copy-ai]');if(copyAi){copyForAi(copyAi);return}
+  const copyPage=e.target.closest('#copy-page-ai');if(copyPage){copyPageForAi(copyPage);return}
   const todayTopic=e.target.closest('[data-today-topic]');if(todayTopic){state.todayTopic=todayTopic.dataset.todayTopic;state.todayLimit=100;renderContent();return}
   if(e.target.closest('#today-more')){state.todayLimit+=100;renderContent();return}
   if(e.target.closest('#today-topics-toggle')){state.todayAllTopics=!state.todayAllTopics;renderContent();return}
@@ -847,6 +854,20 @@ async function copyToClipboard(text){
     document.body.appendChild(t);t.select();const ok=document.execCommand('copy');t.remove();return ok;
   }catch{return false}
 }
+// Top-bar button: the open bill, or the list/page on screen, as text for an AI assistant.
+async function copyPageForAi(button){
+  const bill=state.openBill?state.bills.find(x=>x.id===state.openBill):null;
+  const labels={all:'Bill explorer',watchlist:'Watchlist',today:'Today'};
+  const today=state.view==='today'?todayData():null;
+  const text=pageAiText({view:state.view,label:labels[state.view]||state.view,pageUrl:location.href,bill,agencyName,
+    bills:today?today.shown.map(r=>r.bill):['all','watchlist'].includes(state.view)?filteredBills():[],
+    day:today?today.day:null,filters:{query:state.query,topic:state.view==='today'?state.todayTopic:state.topic,
+      agency:state.agency,chamber:state.chamber}});
+  const label=button.dataset.label||(button.dataset.label=button.textContent);
+  if(await copyToClipboard(text)){button.textContent='Copied';clearTimeout(button.timer);button.timer=setTimeout(()=>{button.textContent=label},2000)}
+  else toast('Copy failed; your browser blocked the clipboard');
+}
+
 async function copyForAi(button){
   const b=state.bills.find(x=>x.id===state.openBill);if(!b)return;
   const text=aiPrompt(b);

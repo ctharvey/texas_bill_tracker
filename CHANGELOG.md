@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-11-11
+- "Copy page for AI" in the top bar copies the current view (filters, AI-readable links, up to 50 bills) as text.
 - Frontend: bill titles and numbers are real links and empty card space opens the drawer; the drawer has "Copy for
   AI" and an AI-readable link; new "Today" view (`#today`) shows the day's activity by action type and topic.
 - Generic agency names ("the department", "the commission") are published as the registry agency when the amended
