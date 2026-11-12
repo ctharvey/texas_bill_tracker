@@ -5,6 +5,10 @@
   than four million") and the places that meet it under the 2020 Census (Harris County), including threshold changes
   with the places newly covered, extra conditions flagged, and limits quoted from existing law. Built hourly into
   `live/brackets/` from a committed 2020 census table; the data unit needs reinstalling to copy that table.
+- Population limits, after a hand check: tests on a neighboring or contained place ("adjacent to a county with
+  ...", "contains a municipality with ...") are labeled as such instead of read as the bill's target; "between X and
+  Y", "county or municipality", plural "populations" and renumbered list items are read; each limit shows its own
+  SECTION; and every population phrase that could not be read is counted.
 - Statute tracking: each bill lists the sections of Texas law it amends, adds or repeals ("Laws this bill changes"),
   and each section has a page (`#statute?law=LA&sec=62.051`) with every bill that changes it and any two versions
   side by side, current law included. Searching a section number ("62.051", "Penal Code 46.06") finds the bills.

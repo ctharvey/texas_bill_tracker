@@ -167,3 +167,67 @@ def test_repository_census_table_is_valid():
     assert table is not None and len(table["counties"]) == 254
     assert sum(v[1] for v in table["counties"].values()) == 29_145_505
     assert table["counties"]["48201"] == ["Harris County", 4731145]
+
+
+def test_between_is_inclusive_and_its_threshold_change_pairs():
+    assert b.bracket_bounds("between 10,000 and 200,000") == (10_000, 200_000)
+    assert b.bracket_bounds("between 200,000 and 10,000") is None
+    text = section("Section 1.001, Local Government Code, is amended to read as follows:",
+                   r"(2) for a county with a population between 10,000 and <ins>200,000</ins> \[<del>68,750</del>\], $350,000.")
+    [c] = b.bill_brackets(text)[0]
+    assert c["status"] == "changed" and c["bounds"] == (10_000, 200_000) and c["was"]["bounds"] == (10_000, 68_750)
+
+
+def test_county_or_municipality_is_both_and_plural_populations_read():
+    text = section("This Act applies to an event in a county or municipality with a population of less than 500,000 "
+                   "and to counties with populations of more than 3,000.")
+    assert sorted(((c["kind"], c["bounds"]) for c in b.bill_brackets(text)[0]), key=repr) == sorted([
+        ("city", (None, 499_999)), ("county", (None, 499_999)), ("county", (3_001, None))], key=repr)
+
+
+@pytest.mark.parametrize("wording,rel", [
+    ("a county that is adjacent to a county with a population of 4 million or more", "near"),
+    ("a county that borders a county with a population of 4 million or more", "near"),
+    ("a county on the international border that contains a municipality with a population of 500,000 or more", "inside"),
+    ("a county that includes a municipality with a population of more than 500,000", "inside"),
+    ("a municipality that is the county seat of a county with a population of more than 10,000", "seat"),
+    ("an authority in which the principal municipality has a population of less than 1.9 million", "principal"),
+    ("an entity located in a county with a population of 800,000 or more", None),
+    ("a county with a population of 800,000 or more", None),
+])
+def test_tests_on_related_places_are_marked(wording, rel):
+    [c] = b.bill_brackets(section(f"This Act applies only to {wording}."))[0]
+    assert c["rel"] == rel
+
+
+def test_related_flag_reaches_the_index(tmp_path):
+    index = build(tmp_path, section("This Act applies only to a county with a population of 800,000 or more that is "
+                                    "adjacent to a county with a population of 4 million or more."))
+    rows = index["bills"]["HB1"]["c"]
+    assert [r.get("rel") for r in rows] == [None, "near"]
+
+
+def test_lead_in_naming_no_place_keeps_the_one_before_and_relabelled_items_pair():
+    text = section("Section 1.001, Local Government Code, is amended to read as follows:",
+                   r"(a) This chapter applies only to a municipality\[<del>:</del>",
+                   r"\[<del>(1)</del>\] that:",
+                   r"<ins>(1)</ins> \[<del>(A)</del>\] has a population of <ins>25,000</ins> \[<del>10,000</del>\] or more; <ins>and</ins>",
+                   "<ins>(2)</ins> is subject to restrictive covenants.")
+    [c] = b.bill_brackets(text)[0]
+    assert (c["kind"], c["status"], c["bounds"], c["was"]["bounds"], c["cond"]) == ("city", "changed", (25_000, None), (10_000, None), True)
+
+
+def test_every_unread_population_phrase_is_counted_but_percentages_are_not():
+    text = section("This Act applies only to a municipality located in two counties, one of which has a population of "
+                   "less than 110,000, and to a county with a population of either more than 600,000 or less than 50,000.",
+                   "This Act applies to a county with a population of 3,000 or more.",
+                   "A district whose population is at least 70 percent of the county's is not covered.")
+    clauses, unparsed = b.bill_brackets(text)
+    assert [c["bounds"] for c in clauses] == [(3_000, None)]
+    assert unparsed == 2  # "one of which has a population of less than 110,000" and the "either ... or" test
+
+
+def test_each_clause_keeps_its_own_section():
+    text = ("### SECTION 1.\n\nThis Act applies only to a county with a population of more than four million.\n\n"
+            "### SECTION 2.\n\nThis Act applies only to a municipality with a population of 50,000 or more.")
+    assert [c["section"] for c in b.bill_brackets(text)[0]] == ["SECTION 1", "SECTION 2"]

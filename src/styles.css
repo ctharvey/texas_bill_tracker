@@ -223,6 +223,7 @@ a.bill-number:hover{text-decoration:underline}
 .bracket-list li{font-size:13px;line-height:1.45;overflow-wrap:anywhere}
 .bracket-list p{margin:3px 0 0}.bracket-list small{color:var(--muted)}
 .bracket-many{color:var(--muted)}
+.bracket-rel{border-left:2px solid var(--line,#ccc);padding-left:8px}.bracket-related small{color:var(--ink)}
 .law-intro p{margin:0}
 .statute-hint{margin-bottom:12px}
 .law-versions{list-style:none;margin:0;padding:0;display:grid;gap:8px}

@@ -478,14 +478,24 @@ _OP_BEFORE = (r"(?:not more than|not less than|not greater than|at least|more th
               r"in excess of|exceeding|that exceeds|over|under)")
 _OP_AFTER = r"(?:or more|or greater|or less|or fewer)"
 _ONE = rf"(?:{_OP_BEFORE} )?{_POP_NUM}(?: {_OP_AFTER})?"
-_RANGE = rf"(?P<range>{_ONE}(?:,? (?:and|but) {_ONE})?)"
-_ENTITY = r"(?P<entity>municipality|municipalities|city|cities|county|counties)"
+_RANGE = rf"(?P<range>between {_POP_NUM} and {_POP_NUM}|{_ONE}(?:,? (?:and|but) {_ONE})?)"
+_ENTITY = (r"(?P<entity>county or municipality|municipality or county|municipality|municipalities|city|cities|county|"
+           r"counties)")
 _HAS = r"(?:,? (?:that|which) (?:has|had)|,? having|,? with|,? of|,? has)"
-_BRACKET = re.compile(rf"\b{_ENTITY}{_HAS} a (?:total )?population (?:of |that is )?{_RANGE}", re.I)
-_ITEM = re.compile(rf"^\([0-9A-Za-z-]+\) (?:(?:that|which) (?:has|had) |having |with |has )a (?:total )?population "
+_POPULATION = r"(?:a (?:total )?population|populations)"
+_BRACKET = re.compile(rf"\b{_ENTITY}{_HAS} {_POPULATION} (?:of |that is )?{_RANGE}", re.I)
+_ITEM = re.compile(rf"^\([0-9A-Za-z-]+\) (?:(?:that|which) (?:has|had) |having |with |has ){_POPULATION} "
                    rf"(?:of |that is )?{_RANGE}", re.I)
 _LEAD_ENTITY = re.compile(rf"\b{_ENTITY}\b", re.I)
-_POP_MENTION = re.compile(r"population (?:of |in excess |greater |exceeding |that |less |more |not )[^.;]{0,40}?\d")
+# Any "population ... <number>" phrase, for counting the ones no clause covers.
+_POP_PHRASE = re.compile(r"populations?(?:(?!population)[^.;:]){0,60}?(?=\d|(?:one|two|three|four|five|six|seven|eight|"
+                         r"nine|ten) million)", re.I)
+# A test on a related place, not on the place the provision covers; the last such word before the bracket wins.
+_RELATED = re.compile(r".*\b(adjacent to|adjoining|bordering|borders|border|neighboring|contains|contain|containing|"
+                      r"includes|include|including|seat of|principal)\b[^.;:]{0,30}$", re.I)
+_RELATION = {"adjacent to": "near", "adjoining": "near", "bordering": "near", "borders": "near", "border": "near",
+             "neighboring": "near", "contains": "inside", "contain": "inside", "containing": "inside",
+             "includes": "inside", "include": "inside", "including": "inside", "seat of": "seat", "principal": "principal"}
 _CENSUS_YEAR = re.compile(r"\b(1[89]\d0|20\d0) (?:federal )?(?:decennial )?census", re.I)
 _CENSUS_TAIL = re.compile(r"^,? ?(?:as determined by|according to|under) (?:the )?(?:most recent )?(?:federal )?"
                           r"(?:decennial )?census,?", re.I)
@@ -502,6 +512,10 @@ def _population_number(text: str) -> int:
 def bracket_bounds(text: str) -> tuple[int | None, int | None] | None:
     """Inclusive (low, high) for a range such as "more than 2.1 million" or "50,000 or more but less than 250,000".
     None when a part has no comparison word (a bare number) or the range is empty."""
+    between = re.fullmatch(rf"between ({_POP_NUM}) and ({_POP_NUM})", text.strip(), re.I)
+    if between:  # read as inclusive at both ends
+        low, high = _population_number(between.group(1)), _population_number(between.group(2))
+        return (low, high) if low <= high else None
     low = high = None
     for part in re.split(r",? (?:and|but) ", text.strip()):
         m = re.fullmatch(rf"(?:({_OP_BEFORE}) )?({_POP_NUM})(?: ({_OP_AFTER}))?", part, re.I)
@@ -541,11 +555,30 @@ def _paragraph_brackets(text: str, lead: tuple[str, bool] | None) -> list[dict]:
     for m, entity, joint in found:
         tail = re.split(r"(?<=[.;:])(?:\s|$)", text[m.end():m.end() + 240])[0]
         year = _CENSUS_YEAR.search(tail)
-        out.append({"kind": "county" if entity.lower().startswith("count") else "city", "text": m.group(0)[:200],
-                    "bounds": bracket_bounds(m.group("range")),
-                    "census": int(year.group(1)) if year and year.group(1) != "2020" else None,
-                    "cond": joint or bool(_CONDITION.match(_CENSUS_TAIL.sub("", tail.strip()).strip()))})
+        related = _RELATED.match(text[max(0, m.start() - 60):m.start()]) if m is not item else None
+        entity = entity.lower()
+        kinds = ["county", "city"] if " or " in entity else ["county" if entity.startswith("count") else "city"]
+        for kind in kinds:
+            out.append({"kind": kind, "text": m.group(0)[:200], "bounds": bracket_bounds(m.group("range")),
+                        "census": int(year.group(1)) if year and year.group(1) != "2020" else None,
+                        "cond": joint or bool(_CONDITION.match(_CENSUS_TAIL.sub("", tail.strip()).strip())),
+                        "rel": _RELATION[related.group(1).lower()] if related else None})
     return out
+
+
+def _unread(wordings: list[str], clauses: list[dict]) -> int:
+    """Population phrases with a number that no readable clause covers (bare numbers, "either ... or", nested wording)."""
+    covered = [c["text"] for c in clauses if c["bounds"] is not None]
+    missing = set()
+    for wording in wordings:
+        for m in _POP_PHRASE.finditer(wording):
+            number = re.match(r"\d+(?:[,.]\d+)*|\w+ million", wording[m.end():])
+            if number and re.match(r"\s*(?:percent|%)", wording[m.end() + len(number.group(0)):]):
+                continue
+            phrase = m.group(0) + (number.group(0) if number else "")
+            if not any(phrase in t for t in covered):
+                missing.add(phrase)
+    return len(missing)
 
 
 def bill_brackets(markdown: str) -> tuple[list[dict], int]:
@@ -553,13 +586,13 @@ def bill_brackets(markdown: str) -> tuple[list[dict], int]:
     wording is existing law inside a SECTION that amends a code and new law in any other SECTION."""
     clauses: list[dict] = []
     unparsed = 0
-    section, codified, lead, expect_clause = "", False, None, False
+    section, codified, lead, expect_clause, last_entity = "", False, None, False, None
     for line in markdown.splitlines():
         line = line.strip()
         if not line:
             continue
         if line.startswith("### "):
-            section, expect_clause, lead = line[4:].strip().rstrip("."), True, None
+            section, expect_clause, lead, last_entity = line[4:].strip().rstrip("."), True, None, None
             continue
         if expect_clause:
             codified, expect_clause = parse_clause(plain_text(line))["kind"] != "none", False
@@ -576,23 +609,27 @@ def bill_brackets(markdown: str) -> tuple[list[dict], int]:
                 elif c["text"] in before_texts:
                     c["status"] = "existing"
                 else:
-                    was = next((g for g in gone if g["kind"] == c["kind"] and g["text"].split(" population")[0]
-                                == c["text"].split(" population")[0]), None)
+                    # "(1) has a population of 25,000 [(A) ... 10,000]": list labels may be renumbered too.
+                    stem = lambda t: re.sub(r"^\([0-9A-Za-z-]+\) ", "", t).split(" population")[0]
+                    was = next((g for g in gone if g["kind"] == c["kind"] and stem(g["text"]) == stem(c["text"])), None)
                     c["status"] = "changed" if was else "new"
                     if was:
                         gone.remove(was)
                         c["was"] = was
+                c["section"] = section
                 clauses.append(c)
             for g in gone:
-                clauses.append({**g, "status": "removed"})
-            if not now and not before and (_POP_MENTION.search(new) or _POP_MENTION.search(cur)):
-                unparsed += 1
-            unparsed += sum(1 for c in now + before if c["bounds"] is None)
+                clauses.append({**g, "status": "removed", "section": section})
+            unparsed += _unread([new, cur] if marked else [new], now + before)
+        entities = _LEAD_ENTITY.findall(new)
         if new.endswith(":"):
-            entities = _LEAD_ENTITY.findall(new)
-            lead = (entities[-1], bool(re.search(r"\b(?:that|which)\s*:$", new))) if entities else None
+            # "a municipality[:] / [(1)] that:" - a lead-in naming no place keeps the place named just before it.
+            entity = entities[-1] if entities else (lead[0] if lead else last_entity)
+            lead = (entity, bool(re.search(r"\b(?:that|which)\s*:$", new))) if entity else None
         elif not re.match(r"^\([0-9A-Za-z-]+\) ", new):
             lead = None
+        if entities:
+            last_entity = entities[-1]
     seen, out = set(), []
     for c in clauses:
         if c["bounds"] is None:
@@ -600,7 +637,6 @@ def bill_brackets(markdown: str) -> tuple[list[dict], int]:
         key = (c["kind"], c["text"], c["status"], c.get("was", {}).get("text"))
         if key not in seen:
             seen.add(key)
-            c["section"] = section
             out.append(c)
     return out, unparsed
 
@@ -658,6 +694,8 @@ def build_brackets(snapshot: dict, text_dir: Path, table: dict) -> dict:
             low, high = c["bounds"]
             row = {"s": c["status"], "k": c["kind"], "t": c["text"], "lo": low, "hi": high, "sec": c["section"],
                    "cond": c["cond"]}
+            if c["rel"]:
+                row["rel"] = c["rel"]   # a neighbor, a place inside, the county a city is seat of, or the principal city
             if c["census"]:
                 row["census"] = c["census"]       # tied to an older census: not resolved
             else:

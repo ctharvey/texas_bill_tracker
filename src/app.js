@@ -1,6 +1,6 @@
 import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal,
   STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
-  compareLaw, currentLaw, groupStatuteEntries, validBracketIndex, bracketRows, placeCount} from './review.js';
+  compareLaw, currentLaw, groupStatuteEntries, validBracketIndex, bracketRows, placeCount, BRACKET_RELATIONS} from './review.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
   cleanSearches, applySearchOps, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
 import {createSyncClient} from './sync.js';
@@ -912,13 +912,14 @@ function bracketNames(names,n,kind){
 function bracketItem(r){
   const noun=r.kind==='county'?'Counties':'Cities';
   const where=r.section?` · ${esc(r.section.replace(/^SECTION/i,'Section'))}`:'';
-  const head=`<strong>${noun} with a population of ${esc(r.test)}</strong> <small>${r.status==='changed'?'· threshold changed':r.status==='new'?'· new in this bill':''}${where}${r.times>1?` · appears ${r.times} times`:''}</small>`;
-  if(r.census)return `<li>${head}<p><small>Tied to the ${r.census} census, so not matched to places here.</small></p></li>`;
-  const meets=r.n===null?'':`<p>${r.n===0?'':`${esc(placeCount(r.n,r.kind))} ${r.n===1?'meets':'meet'} this test: `}${bracketNames(r.names,r.n,r.kind)}</p>`;
+  const related=r.rel?`<p class="bracket-related"><small>Describes ${esc(BRACKET_RELATIONS[r.rel])}.</small></p>`:'';
+  const head=`<strong>${noun} with a population ${/^between /i.test(r.test)?'':'of '}${esc(r.test)}</strong> <small>${r.status==='changed'?'· threshold changed':r.status==='new'?'· new in this bill':''}${where}${r.times>1?` · appears ${r.times} times`:''}</small>`;
+  if(r.census)return `<li${r.rel?' class="bracket-rel"':''}>${head}${related}<p><small>Tied to the ${r.census} census, so not matched to places here.</small></p></li>`;
+  const meets=r.n===null?'':`<p>${r.n===0||!r.names?'':`${esc(placeCount(r.n,r.kind))} ${r.n===1?'meets':'meet'} this test: `}${r.names||!r.n?bracketNames(r.names,r.n,r.kind):`${esc(placeCount(r.n,r.kind))} meet this test.`}</p>`;
   const was=r.was?`<p class="bracket-was"><small>Was ${esc(r.was.test)}${r.was.n!==null?` (${esc(placeCount(r.was.n,r.kind))})`:''}.${r.was.added?` Newly meets the test: ${r.was.addedNames?esc(shortNames(r.was.addedNames)):esc(placeCount(r.was.added,r.kind))}.`:''}${r.was.dropped?` No longer meets it: ${r.was.droppedNames?esc(shortNames(r.was.droppedNames)):esc(placeCount(r.was.dropped,r.kind))}.`:''}</small></p>`:'';
   const cond=r.cond?'<p><small>The bill adds other conditions here, so fewer places may qualify; see the bill text.</small></p>':'';
   const near=r.near.length?`<p><small>Close to the line: ${esc(r.near.map(p=>`${p.name}${Number.isInteger(p.pop)?` (${p.pop.toLocaleString('en-US')})`:''}`).join(', '))}. The 2030 census could move them across it.</small></p>`:'';
-  return `<li>${head}${meets}${was}${cond}${near}</li>`;
+  return `<li${r.rel?' class="bracket-rel"':''}>${head}${related}${meets}${was}${r.rel?'':cond}${near}</li>`;
 }
 function fillDrawerBrackets(id){
   const el=$('#drawer-brackets');

@@ -655,8 +655,11 @@ bill's latest text: every population test on a county or municipality ("a county
 million", list items under "a county that:"), whether the bill adds it, changes its threshold (with the old test and
 the places that newly meet or no longer meet it), quotes it from existing law or strikes it, and the places that meet
 it under the 2020 Census. Unmarked wording counts as new law outside a SECTION that amends a code. Extra conditions
-("adjacent to ...") are flagged, never resolved; a test tied to an older census is labeled and not resolved; sets of
-more than 40 places are counted, not listed. The counts are `data/census/tx_population_2020.json`, written by
+("adjacent to ...") are flagged, never resolved; a test on a related place (a neighbor, a city inside, the county
+a city is seat of, a principal city) is labeled as such; "between X and Y" is inclusive; "county or municipality"
+counts as both; a test tied to an older census is labeled and not resolved; sets of more than 40 places are counted,
+not listed. Every population phrase with a number that no test covers ("either ... or", "two counties, one of which
+...") is counted per bill as unread. A hand check of the 2026-11-12 snapshot covered 401 of 424 phrases. The counts are `data/census/tx_population_2020.json`, written by
 `scripts/census_places.py` from the Census Bureau's 2020 P.L. 94-171 file for Texas (no key needed): 254 counties
 and the active incorporated places, each with its main county. The data unit copies that file beside `build_feeds.py`;
 without it the bracket step is skipped and the run still succeeds. The bill drawer shows "Population limits".
