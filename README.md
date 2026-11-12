@@ -328,8 +328,9 @@ There are no logins. People keep and move their choices in these ways:
   page matches them, newest 200 items, each captioned with their role. Members with no bills get an empty feed, so a
   link never breaks. Linked from the member page.
 - **Followed legislators:** **Follow** on a member page or a Near you card keeps the member's code in this browser
-  (`tx-bill-atlas-follow-90r`, at most 200, `cleanFollows`). The Watchlist shows a "Followed legislators" section
-  with their bills, newest first (`followedBills` in `src/geo.js`). Follows are not in share links, files or sync.
+  (`tx-bill-atlas-follow-90r`, at most 200, `cleanFollows`). The **Following** page (`#following`, its own nav
+  item beside Watchlist) lists them with their bills, newest first (`followedBills` in `src/geo.js`); the Watchlist
+  stays starred bills only. Follows are not in share links, files or sync.
 - **Private sync links** (`scripts/sync_service.py`, `src/sync.js`): a random edit key and a derived view key;
   only SHA-256 hashes are stored (SQLite), no email, name or IP. The edit key travels in the URL fragment and
   the `X-Sync-Key` header only and is removed from the address bar once read. Saves are versioned; on a conflict

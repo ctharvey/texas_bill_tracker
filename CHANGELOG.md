@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-12
+- Following: a new nav item and page (`#following`) for followed legislators and their bills, separate from the
+  Watchlist, which keeps starred bills and the save/share/sync tools.
 - Follow a legislator: a Follow button on member pages and Near you cards, kept in this browser only; their bills
   appear in a "Followed legislators" section on the Watchlist. Every legislator also has an RSS feed of the actions
   on their bills (`live/feeds/members/<CODE>.xml`), linked from the member page.
