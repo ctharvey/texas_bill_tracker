@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-12
+- Saved data as one profile: "Export file" now saves the watchlist and followed legislators together
+  (`texas-bill-atlas-profile-v1`; older watchlist files still import), and sync links carry follows across devices
+  once the sync service is updated. Share links and view-only links still show bills only.
 - Following: a new nav item and page (`#following`) for followed legislators and their bills, separate from the
   Watchlist, which keeps starred bills and the save/share/sync tools.
 - Follow a legislator: a Follow button on member pages and Near you cards, kept in this browser only; their bills

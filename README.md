@@ -316,8 +316,11 @@ There are no logins. People keep and move their choices in these ways:
   so any view can be bookmarked or sent. A share link (`#all?list=HB5,SB12`) opens a read-only shared list that
   never changes the recipient's own watchlist until they choose "Add all".
 - **This browser:** the watchlist and the last filters are kept in localStorage (`src/prefs.js`).
-- **Files:** the watchlist exports to `texas-bill-atlas-watchlist-v1` JSON; import also accepts plain text or CSV
-  containing bill numbers, and merges.
+- **Files:** "Export file" writes a profile, `texas-bill-atlas-profile-v1` JSON
+  (`{lists: [{id: 'main', name: 'Watchlist', bills}], follows}`; `profileFile`/`parseProfileFile` in
+  `src/prefs.js`). Import adds bills and follows, and still reads older `texas-bill-atlas-watchlist-v1` files, JSON
+  arrays, and plain text or CSV containing bill numbers. Device-only data (Near you districts, filters, the sync
+  link) is never in the file. Share links stay separate: they carry the watchlist's bills only.
 - **Feeds:** `scripts/build_feeds.py` writes `live/feeds/<ID>.xml` (RSS, one per bill) after each hourly sync,
   from the dated actions `sync_ftp.py` now records in `action_dates`. Item ids are stable as the 12-action
   window slides. A published Luna full-text review (`live/luna/tags.json`, read by default from beside the
@@ -330,11 +333,15 @@ There are no logins. People keep and move their choices in these ways:
 - **Followed legislators:** **Follow** on a member page or a Near you card keeps the member's code in this browser
   (`tx-bill-atlas-follow-90r`, at most 200, `cleanFollows`). The **Following** page (`#following`, its own nav
   item beside Watchlist) lists them with their bills, newest first (`followedBills` in `src/geo.js`); the Watchlist
-  stays starred bills only. Follows are not in share links, files or sync.
+  stays starred bills only. Follows go into exported files and sync links, never share or view-only links.
 - **Private sync links** (`scripts/sync_service.py`, `src/sync.js`): a random edit key and a derived view key;
   only SHA-256 hashes are stored (SQLite), no email, name or IP. The edit key travels in the URL fragment and
   the `X-Sync-Key` header only and is removed from the address bar once read. Saves are versioned; on a conflict
-  the client replays its unsaved adds/removes onto the newer list. Limits: 16 KB body, 500 bills, per-client
+  the client replays its unsaved adds/removes (and follows/unfollows) onto the newer list. Synced data is
+  `{watch, filters, follows}`. A write without `follows` keeps the stored ones, so an older cached page cannot
+  erase them, and view-only links return `{watch, filters}` only. A reply without `follows` (a server that predates
+  them) means "unknown", so the device keeps its own; each device unions its follows into the link's until a
+  write confirms the server stored them, so the first devices to sync follows cannot erase each other's. Limits: 16 KB body, 500 bills, per-client
   rate limits (one IPv4 address or one IPv6 /64), 100,000 lists, deletion after a year unused. A view key also serves a combined watchlist RSS at
   `/api/sync/feed/<view key>.xml`. The tracker hides sync when `/api/sync/health` is unavailable.
   Live since 2026-11-10: the shared gateway (cth.hosting) proxies `/api/sync*` to the `texas-bill-sync`

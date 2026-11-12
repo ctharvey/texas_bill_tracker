@@ -1,5 +1,5 @@
 import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal} from './review.js';
-import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, watchlistFile, parseWatchlistFile, cleanFollows, MAX_FOLLOWS} from './prefs.js';
+import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS} from './prefs.js';
 import {createSyncClient} from './sync.js';
 import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, followedBills, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
 import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, searchTerms, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
@@ -13,7 +13,7 @@ const reviews = new Map();
 const storageKey = 'tx-bill-atlas-watch-90r';
 const STORAGE_OK = (()=>{try{localStorage.setItem('__txb_test','1');localStorage.removeItem('__txb_test');return true}catch{return false}})();
 try{state.watch=new Set(JSON.parse(localStorage.getItem(storageKey)||'[]'))}catch{}
-// Followed legislators (member codes): this browser only; never in sync links, files or any request.
+// Followed legislators (member codes): this browser, exported files and sync links; never share or view-only links.
 const followKey = 'tx-bill-atlas-follow-90r';
 state.follow=[];state.followShow=30;
 try{state.follow=cleanFollows(JSON.parse(localStorage.getItem(followKey)||'[]'))}catch{}
@@ -140,7 +140,7 @@ const prefsKey='tx-bill-atlas-prefs-v1';
 const readJson=key=>{try{return JSON.parse(localStorage.getItem(key)||'null')}catch{return null}};
 const writeJson=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value))}catch{}};
 const memoryStorage=()=>{const m=new Map();return {getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)}};
-const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>[...state.watch]});
+const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>[...state.watch],getFollows:()=>[...state.follow]});
 let syncAvailable=null,lastPull=0;
 const siteBase=()=>location.href.split('#')[0];
 
@@ -218,11 +218,21 @@ function persistState(push=false){
 }
 
 function saveWatchLocal(){if(STORAGE_OK)writeJson(storageKey,[...state.watch])}
+function setFollows(list){state.follow=cleanFollows(list);if(STORAGE_OK)writeJson(followKey,state.follow)}
+// `follows` from sync is the link's list, or null when the server did not say (then this device's list stands).
+function adoptFollows(follows){
+  if(!follows||follows.join()===state.follow.join())return false;
+  setFollows(follows);return true;
+}
+function changeFollow(op,codes){
+  for(const code of codes){const has=state.follow.includes(code);if(op==='follow'?has:!has)continue;
+    if(op==='follow'&&state.follow.length>=MAX_FOLLOWS)break;
+    setFollows(op==='follow'?[...state.follow,code]:state.follow.filter(c=>c!==code));sync.record(op,code,onSynced)}
+}
 function toggleFollow(code){
   const on=state.follow.includes(code);
   if(!on&&state.follow.length>=MAX_FOLLOWS){toast(`You can follow up to ${MAX_FOLLOWS} legislators`);return}
-  state.follow=cleanFollows(on?state.follow.filter(c=>c!==code):[...state.follow,code]);
-  if(STORAGE_OK)writeJson(followKey,state.follow);
+  changeFollow(on?'unfollow':'follow',[code]);
   const m=memberByCode(state.roster,code);
   toast(`${on?'Unfollowed':'Following'} ${m?memberTitle(m):code}${on||state.view==='following'?'':' · their bills are under Following'}`);
   renderOverview();renderContent();
@@ -232,7 +242,7 @@ const followButton=m=>{if(!m?.code)return '';const on=state.follow.includes(m.co
 const memberFeedHref=code=>`./live/feeds/members/${encodeURIComponent(code)}.xml`;
 // Following: followed legislators now; later also saved searches and named watchlists.
 function followingMarkup(){
-  return `<div class="section-head"><div><div class="section-overline">FOLLOWING</div><h2>Your legislators</h2></div><span class="subtitle">Kept in this browser only</span></div>${followedMarkup()}`;
+  return `<div class="section-head"><div><div class="section-overline">FOLLOWING</div><h2>Your legislators</h2></div><span class="subtitle">Saved in this browser, files and sync links</span></div>${followedMarkup()}`;
 }
 function followedMarkup(){
   if(!state.follow.length)return `<section class="followed-section"><h3>Followed legislators</h3><p class="tools-note">Follow a legislator from their member page or from <a class="text-link" href="#local" data-view="local">Near you</a> to see every bill they file or sign onto here.</p></section>`;
@@ -240,11 +250,13 @@ function followedMarkup(){
   const members=state.follow.map(code=>memberByCode(state.roster,code)).filter(Boolean);
   const rows=followedBills(state.bills,state.roster,state.follow,newestFirst),limit=state.followShow||30;
   const chips=members.map(m=>`<span class="followed-member">${memberNameHtml(m,memberTitle(m))} <a class="text-link" href="${esc(memberFeedHref(m.code))}" target="_blank" rel="noopener noreferrer" title="RSS feed of this legislator's bills">RSS</a> <button class="text-button" data-follow="${esc(m.code)}" aria-label="Unfollow ${esc(memberTitle(m))}">Unfollow</button></span>`).join('');
-  return `<section class="followed-section"><h3>Followed legislators <span>${members.length}</span></h3><div class="followed-members">${chips}</div><p class="tools-note">Kept in this browser only; not part of share links, files or sync. Newest bills first.</p>${rows.length?`${rows.slice(0,limit).map(nearRow).join('')}${rows.length>limit?`<button class="outline-button" id="follow-more">Show 30 more · showing ${limit} of ${rows.length}</button>`:''}`:'<p class="review-empty">No bills by the legislators you follow in this snapshot yet.</p>'}</section>`;
+  return `<section class="followed-section"><h3>Followed legislators <span>${members.length}</span></h3><div class="followed-members">${chips}</div><p class="tools-note">Saved in this browser, in exported files and with your sync link; never in share or view-only links. Newest bills first.</p>${rows.length?`${rows.slice(0,limit).map(nearRow).join('')}${rows.length>limit?`<button class="outline-button" id="follow-more">Show 30 more · showing ${limit} of ${rows.length}</button>`:''}`:'<p class="review-empty">No bills by the legislators you follow in this snapshot yet.</p>'}</section>`;
 }
 function setWatch(ids){state.watch=new Set(ids);saveWatchLocal()}
-function refreshWatch(){renderOverview();if(state.view==='all'||state.view==='watchlist')renderContent()}
-const onSynced=(watch,error)=>{if(error){toast(`Sync: ${error.message}`);return}setWatch(watch);renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults()};
+const FOLLOW_VIEWS=new Set(['following','member','local']);
+function refreshWatch(){renderOverview();if(state.view==='all'||state.view==='watchlist'||FOLLOW_VIEWS.has(state.view))renderContent()}
+const onSynced=(watch,error,follows)=>{if(error){toast(`Sync: ${error.message}`);return}setWatch(watch);const moved=adoptFollows(follows);renderOverview();
+  if(state.view==='all'||state.view==='watchlist')renderResults();else if(moved&&FOLLOW_VIEWS.has(state.view))renderContent()};
 function changeWatch(op,ids){
   for(const id of ids){if(op==='add'?state.watch.has(id):!state.watch.has(id))continue;op==='add'?state.watch.add(id):state.watch.delete(id);sync.record(op,id,onSynced)}
   saveWatchLocal();
@@ -278,9 +290,9 @@ async function pullSync(mergeLocal){
   if(!syncAvailable||!sync.linked)return;
   lastPull=Date.now();
   try{
-    const {watch}=await sync.pull();
+    const {watch,follows}=await sync.pull();  // The client already merged this device's follows into the link's.
     const local=[...state.watch];
-    setWatch(watch);
+    setWatch(watch);adoptFollows(follows);
     if(mergeLocal)changeWatch('add',local.filter(id=>!watch.includes(id)));  // Joining keeps this device's bills.
     refreshWatch();
   }catch(error){toast(`Sync: ${error.message}`);refreshWatch()}
@@ -305,18 +317,18 @@ function watchTools(){
   const syncPart=syncAvailable===false?'<p class="tools-note">Private sync links aren’t switched on for this site yet. Use a share link or a file to move your list for now.</p>'
     :linked?.editKey?`<p class="tools-note">This device is synced; changes save automatically.</p><div class="tools-row"><button class="outline-button" id="sync-copy-edit">Copy edit link</button><button class="outline-button" id="sync-copy-view">Copy view-only link</button><a class="outline-button" href="./api/sync/feed/${esc(linked.viewKey||'')}.xml" target="_blank" rel="noopener noreferrer">Watchlist RSS</a></div><p class="tools-note">Open the <strong>edit link</strong> on your other devices. Anyone who has it can change this list, so keep it private, like a password. The <strong>view-only link</strong> is safe to share.</p><div class="tools-row"><button class="text-button" id="sync-forget">Stop syncing on this device</button><button class="text-button danger" id="sync-delete">Delete sync link</button></div>`
     :`<p class="tools-note">Get a private link that keeps this watchlist the same on your phone, laptop and work computer. No account, email or name.</p><div class="tools-row"><button class="primary-button" id="sync-create" ${syncAvailable?'':'disabled'}>Create sync link</button></div><p class="tools-note">Already have one? Open it on this device.</p>`;
-  return `<div class="watch-tools"><section><h3>Save and share</h3><p class="tools-note">Your watchlist is kept in this browser. To move it to another device or person:</p><div class="tools-row"><button class="outline-button" id="share-watch" ${none}>Copy share link</button><button class="outline-button" id="export-watch" ${none}>Export file</button><button class="outline-button" id="import-watch">Import file</button><input type="file" id="import-watch-file" accept=".json,.txt,.csv,application/json,text/plain,text/csv" hidden></div><p class="tools-note">Each bill also has an RSS feed in its details, for following it in Outlook or a feed reader. <a href="#saving" data-view="saving">How saving works →</a></p></section><section><h3>Sync across devices</h3>${syncPart}</section></div>`;
+  return `<div class="watch-tools"><section><h3>Save and share</h3><p class="tools-note">Your watchlist is kept in this browser. To move it to another device or person:</p><div class="tools-row"><button class="outline-button" id="share-watch" ${none}>Copy share link</button><button class="outline-button" id="export-watch" ${n||state.follow.length?'':'disabled'} title="Your watchlist and followed legislators, in one file">Export file</button><button class="outline-button" id="import-watch">Import file</button><input type="file" id="import-watch-file" accept=".json,.txt,.csv,application/json,text/plain,text/csv" hidden></div><p class="tools-note">Each bill also has an RSS feed in its details, for following it in Outlook or a feed reader. <a href="#saving" data-view="saving">How saving works →</a></p></section><section><h3>Sync across devices</h3>${syncPart}</section></div>`;
 }
 
 async function handleSaveClick(target){
   const hit=sel=>target.closest(sel);
   if(hit('#copy-view-link')){persistState();return copyText(location.href,'Link to this view')}
   if(hit('#share-watch'))return copyText(siteBase()+buildHash('all',{},{list:[...state.watch]}),'Share link');
-  if(hit('#export-watch')){download('texas-bill-atlas-watchlist.json',watchlistFile(state.watch),'application/json');return toast('Watchlist exported')}
+  if(hit('#export-watch')){download('texas-bill-atlas-saved.json',profileFile({watch:state.watch,follows:state.follow}),'application/json');return toast('Watchlist and followed legislators exported')}
   if(hit('#import-watch')){$('#import-watch-file').click();return}
   if(hit('#shared-add')){const before=state.watch.size;changeWatch('add',state.sharedList);refreshWatch();return toast(`Added ${state.watch.size-before} bills to your watchlist`)}
   if(hit('#shared-close')){Object.assign(state,{sharedList:null,sharedMode:null,sharedSyncKey:null,visibleCount:30});return renderContent()}
-  if(hit('#sync-create')){try{await sync.create([...state.watch]);renderContent();toast('Sync link created. Copy the edit link to your other devices.')}catch(error){toast(error.message)}return}
+  if(hit('#sync-create')){try{await sync.create([...state.watch],[...state.follow]);adoptFollows(sync.follows);renderContent();toast('Sync link created. Copy the edit link to your other devices.')}catch(error){toast(error.message)}return}
   if(hit('#sync-copy-edit'))return copyText(siteBase()+'#watchlist?sync='+sync.linked.editKey,'Edit link');
   if(hit('#sync-copy-view'))return copyText(siteBase()+'#watchlist?sync='+sync.linked.viewKey,'View-only link');
   if(hit('#sync-forget')){sync.forget();renderContent();return toast('This device stopped syncing; your list stays here')}
@@ -330,9 +342,9 @@ async function handleSaveClick(target){
 async function importWatchlist(file){
   try{
     if(file.size>1024*1024)throw Error('Select a file smaller than 1 MB');
-    const ids=parseWatchlistFile(await file.text()),before=state.watch.size;
-    changeWatch('add',ids);refreshWatch();
-    toast(`Added ${state.watch.size-before} of ${ids.length} bills to your watchlist`);
+    const {bills,follows}=parseProfileFile(await file.text()),before=state.watch.size,followed=state.follow.length;
+    changeWatch('add',bills);changeFollow('follow',follows);refreshWatch();
+    toast(`Added ${state.watch.size-before} of ${bills.length} bills${follows.length?` and ${state.follow.length-followed} of ${follows.length} legislators`:''}`);
   }catch(error){toast(`Import failed: ${error.message}`)}
 }
 
@@ -808,12 +820,12 @@ function savingMarkup(){
     ['02','Remembered filters','Your last filters and sort order are remembered on this device and come back the next time you visit.'],
     ['03','Links to any view','The address bar always describes what you are looking at: the page, filters, sort and any open bill. Use <strong>Copy link</strong> above the results, or bookmark the page, to return to it or send it to someone.'],
     ['04','Share links','On the Watchlist, <strong>Copy share link</strong> makes a link to your bills. Whoever opens it sees a read-only list and can add those bills to their own watchlist. It is a snapshot: later changes to your list are not included.'],
-    ['05','Export and import a file','<strong>Export file</strong> saves your watchlist as a small file you can keep or email. <strong>Import file</strong> adds bills from that file, or from any text or spreadsheet export that mentions bill numbers such as “HB 5” or “SJR 9”. Importing only adds; it never removes bills.'],
-    ['06','Private sync links','<strong>Create sync link</strong> on the Watchlist keeps one list the same on your phone, laptop and work computer, with no account. Open the <strong>edit link</strong> on each device; treat it like a password, because anyone with it can change the list. The <strong>view-only link</strong> is safe to share and stays current as you edit. You can stop syncing one device, or delete the link for every device.'],
+    ['05','Export and import a file','<strong>Export file</strong> saves your watchlist and followed legislators as one small file you can keep or email. <strong>Import file</strong> adds bills and legislators from that file (or an older watchlist export), or from any text or spreadsheet export that mentions bill numbers such as “HB 5” or “SJR 9”. Importing only adds; it never removes bills.'],
+    ['06','Private sync links','<strong>Create sync link</strong> on the Watchlist keeps your watchlist and followed legislators the same on your phone, laptop and work computer, with no account. Open the <strong>edit link</strong> on each device; treat it like a password, because anyone with it can change the list. The <strong>view-only link</strong> is safe to share: it shows your watchlist’s bills only, never who you follow, and stays current as you edit. You can stop syncing one device, or delete the link for every device.'],
     ['07','RSS feeds','Each bill’s details include an <strong>RSS feed</strong> of its recorded actions, for Outlook or any feed reader. A synced watchlist also has one feed for all of its bills, linked from the Watchlist. Each legislator has a feed too, linked from their member page.'],
-    ['08','Followed legislators','<strong>Follow</strong> a legislator on their member page or in Near you, and their bills appear under <strong>Following</strong>. Follows are kept in this browser only, like the watchlist, and are not included in share links, files or sync.']
+    ['08','Followed legislators','<strong>Follow</strong> a legislator on their member page or in Near you, and their bills appear under <strong>Following</strong>. Follows are kept in this browser like the watchlist, and go into exported files and sync links. Share links and view-only links never include them.']
   ];
-  return `<div class="section-head"><div><div class="section-overline">NO ACCOUNT NEEDED</div><h2>Saving and sharing your info</h2></div><button class="outline-button" data-view="watchlist">Open your watchlist →</button></div><div class="info-callout"><strong>There are no logins on this site.</strong> Everything below works without an account, email address or name. Pick whichever fits: keep things on one device, carry them in a link or file, or sync a private link across devices.</div><div class="method-grid">${parts.map(([n,title,body])=>`<article class="method-card"><span class="n">${n}</span><h3>${title}</h3><p>${body}</p></article>`).join('')}</div><div class="section-head"><div><div class="section-overline">PRIVACY</div><h2>What is stored, and where</h2></div></div><div class="subpage-card"><div class="data-field long"><span class="data-label">On this device</span><span class="data-value">Watchlist, followed legislators, last filters, that you saw the disclaimer, and your sync link if you made one</span></div><div class="data-field long"><span class="data-label">On the server (sync links only)</span><span class="data-value">The watched bill numbers, a version number and dates. Links are stored only as one-way fingerprints, so the database cannot be used to open a list.</span></div><div class="data-field long"><span class="data-label">Never collected</span><span class="data-value">Names, email addresses, accounts, tracking cookies or analytics</span></div><div class="data-field long"><span class="data-label">Abuse limits</span><span class="data-value">The sync service counts requests per address in memory for up to an hour, and never writes addresses down</span></div><div class="data-field long"><span class="data-label">Retention</span><span class="data-value">A sync link unused for a year is deleted. Deleting it yourself removes it at once; each device keeps its own copy of the list.</span></div><div class="data-field"><span class="data-label">Sync on this site</span><span class="data-value">${esc(syncState)}</span></div><div class="data-field"><span class="data-label">This device</span><span class="data-value">${esc(deviceState)} · ${state.watch.size} ${state.watch.size===1?'bill':'bills'} watched</span></div><p style="font-size:11px;color:#91a0ad;margin:14px 0 0">Limits: up to 500 bills per synced list. Lost your edit link? Your list is still on each device that had it; create a new sync link from any of them.</p></div>`;
+  return `<div class="section-head"><div><div class="section-overline">NO ACCOUNT NEEDED</div><h2>Saving and sharing your info</h2></div><button class="outline-button" data-view="watchlist">Open your watchlist →</button></div><div class="info-callout"><strong>There are no logins on this site.</strong> Everything below works without an account, email address or name. Pick whichever fits: keep things on one device, carry them in a link or file, or sync a private link across devices.</div><div class="method-grid">${parts.map(([n,title,body])=>`<article class="method-card"><span class="n">${n}</span><h3>${title}</h3><p>${body}</p></article>`).join('')}</div><div class="section-head"><div><div class="section-overline">PRIVACY</div><h2>What is stored, and where</h2></div></div><div class="subpage-card"><div class="data-field long"><span class="data-label">On this device</span><span class="data-value">Watchlist, followed legislators, last filters, that you saw the disclaimer, and your sync link if you made one</span></div><div class="data-field long"><span class="data-label">On the server (sync links only)</span><span class="data-value">The watched bill numbers, the member codes of legislators you follow, a version number and dates. Links are stored only as one-way fingerprints, so the database cannot be used to open a list.</span></div><div class="data-field long"><span class="data-label">Never collected</span><span class="data-value">Names, email addresses, accounts, tracking cookies or analytics</span></div><div class="data-field long"><span class="data-label">Abuse limits</span><span class="data-value">The sync service counts requests per address in memory for up to an hour, and never writes addresses down</span></div><div class="data-field long"><span class="data-label">Retention</span><span class="data-value">A sync link unused for a year is deleted. Deleting it yourself removes it at once; each device keeps its own copy of the list.</span></div><div class="data-field"><span class="data-label">Sync on this site</span><span class="data-value">${esc(syncState)}</span></div><div class="data-field"><span class="data-label">This device</span><span class="data-value">${esc(deviceState)} · ${state.watch.size} ${state.watch.size===1?'bill':'bills'} watched</span></div><p style="font-size:11px;color:#91a0ad;margin:14px 0 0">Limits: up to 500 bills per synced list. Lost your edit link? Your list is still on each device that had it; create a new sync link from any of them.</p></div>`;
 }
 
 function dataMarkup(){

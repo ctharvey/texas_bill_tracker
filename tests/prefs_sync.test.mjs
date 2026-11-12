@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseHash, buildHash, parseWatchlistFile, watchlistFile, applyOps, cleanFilters, FILTER_DEFAULTS, cleanFollows, MAX_FOLLOWS} from '../src/prefs.js';
+import {parseHash, buildHash, parseWatchlistFile, watchlistFile, applyOps, cleanFilters, FILTER_DEFAULTS, cleanFollows, MAX_FOLLOWS,
+  applyFollowOps, profileFile, parseProfileFile} from '../src/prefs.js';
 
 test('followed legislators keep valid member codes only, unique, in order, capped', () => {
   assert.deepEqual(cleanFollows(['A2345', 'A2345', 'a2345', 'B1234', 7, null, '../x', 'A12', 'A123']), ['A2345', 'A123']);
@@ -125,6 +126,135 @@ test('a deleted list unlinks every device', async () => {
   assert.equal(storage.getItem('tx-bill-atlas-sync-v1'), null);
   await assert.rejects(b.pull(), /no longer exists/);
   assert.equal(b.linked, null);
+});
+
+// Like sync_service.py after follows: a write without `follows` keeps the stored ones; view links get bills only.
+function followsServer({keeps = true} = {}) {
+  const lists = new Map();
+  let n = 0;
+  const server = {
+    lists, puts: 0,
+    // keeps=false acts like the server before follows: it stores and returns the watchlist only.
+    set keeps(value) { keeps = value; },
+    async fetch(url, {method, headers, body}) {
+      const reply = (status, data) => ({status, text: async () => (data === undefined ? '' : JSON.stringify(data))});
+      if (url.endsWith('/health')) return reply(200, {ok: true});
+      const key = headers['X-Sync-Key'];
+      if (method === 'POST') {
+        const edit = `edit${String(++n).padStart(18, '0')}`, view = `view${String(n).padStart(18, '0')}`;
+        const data = JSON.parse(body).data;
+        lists.set(edit, {view, version: 1, data: {watch: data.watch, ...(data.follows && keeps ? {follows: data.follows} : {})}});
+        return reply(201, {edit_key: edit, view_key: view, version: 1, data: lists.get(edit).data});
+      }
+      const entry = lists.get(key) || [...lists.values()].find(l => l.view === key);
+      if (!entry) return reply(404, {error: 'unknown'});
+      const mode = lists.has(key) ? 'edit' : 'view';
+      if (method === 'GET') return reply(200, {mode, version: entry.version, data: mode === 'edit' ? entry.data : {watch: entry.data.watch}});
+      if (mode !== 'edit') return reply(403, {error: 'edit link required'});
+      server.puts++;
+      const request = JSON.parse(body);
+      if (request.version !== entry.version) return reply(409, {version: entry.version, data: entry.data});
+      if (!keeps) { const {follows, ...rest} = request.data; request.data = rest; }
+      entry.data = {...request.data, ...(request.data.follows || !entry.data.follows ? {} : {follows: entry.data.follows})};
+      entry.version++;
+      return reply(200, {version: entry.version, data: entry.data});
+    },
+  };
+  return server;
+}
+
+test('follow ops replay separately from bill ops', () => {
+  const ops = [{op: 'add', id: 'HB1'}, {op: 'follow', id: 'A1001'}, {op: 'unfollow', id: 'A2002'}, {op: 'remove', id: 'HB2'}];
+  assert.deepEqual(applyOps(['HB2'], ops), ['HB1']);
+  assert.deepEqual(applyFollowOps(['A2002', 'A3003'], ops), ['A3003', 'A1001']);
+});
+
+test('an old sync server that drops follows never clears them and is not rewritten every pull', async () => {
+  const server = fakeServer();  // Stores only the watchlist, like the server before follows.
+  let follows = ['A1001'];
+  const phone = createSyncClient({fetchImpl: server.fetch, storage: memoryStorage(), getWatch: () => ['HB1'], getFollows: () => follows, debounceMs: 0});
+  const {editKey} = await phone.create(['HB1']);
+  assert.equal(phone.follows, null);  // Unknown, so the device keeps its own.
+  const laptop = createSyncClient({fetchImpl: server.fetch, storage: memoryStorage(), getWatch: () => [], getFollows: () => ['A2002'], debounceMs: 0});
+  laptop.connect(editKey);
+  const first = await laptop.pull();
+  assert.deepEqual([first.watch, first.follows], [['HB1'], null]);
+  const versionAfterFirst = server.lists.get(editKey).version;
+  await laptop.pull(); await laptop.pull();
+  assert.equal(server.lists.get(editKey).version, versionAfterFirst);  // One merge attempt per session, not per pull.
+  phone.record('follow', 'A3003'); follows = [...follows, 'A3003'];
+  await phone.flush();
+  assert.equal(phone.follows, null);
+});
+
+test('two devices bringing follows to one link keep both, then sync unfollows', async () => {
+  const server = followsServer();
+  let phoneFollows = ['A1001'], laptopFollows = ['A2002'];
+  const phone = createSyncClient({fetchImpl: server.fetch, storage: memoryStorage(), getWatch: () => ['HB1'], getFollows: () => phoneFollows, debounceMs: 0});
+  const laptop = createSyncClient({fetchImpl: server.fetch, storage: memoryStorage(), getWatch: () => [], getFollows: () => laptopFollows, debounceMs: 0});
+  const {editKey, viewKey} = await phone.create(['HB1']);
+  assert.deepEqual(phone.follows, ['A1001']);
+  laptop.connect(editKey);
+  const joined = await laptop.pull();
+  assert.deepEqual([joined.watch, joined.follows], [['HB1'], ['A1001', 'A2002']]);  // Union, not replace.
+  laptopFollows = joined.follows;
+  phoneFollows = (await phone.pull()).follows;
+  assert.deepEqual(phoneFollows, ['A1001', 'A2002']);
+  // Once merged, the link's list wins: an unfollow on one device reaches the other.
+  laptopFollows = ['A2002']; laptop.record('unfollow', 'A1001'); await laptop.flush();
+  assert.deepEqual((await phone.pull()).follows, ['A2002']);
+  // An old cached page writing only bills leaves follows alone.
+  const entry = server.lists.get(editKey);
+  await server.fetch('/api/sync', {method: 'PUT', headers: {'X-Sync-Key': editKey}, body: JSON.stringify({version: entry.version, data: {watch: ['HB9']}})});
+  assert.deepEqual((await phone.pull()).follows, ['A2002']);
+  // The view-only link sees bills, never follows.
+  const viewer = createSyncClient({fetchImpl: server.fetch, storage: memoryStorage(), getWatch: () => [], debounceMs: 0});
+  viewer.connect(viewKey);
+  assert.deepEqual(await viewer.pull(), {mode: 'view', watch: ['HB9']});
+});
+
+test('devices that synced before the server kept follows still merge, not replace, after it is upgraded', async () => {
+  const server = followsServer({keeps: false});
+  const phoneStore = memoryStorage(), laptopStore = memoryStorage();
+  let phoneFollows = ['A1001'], laptopFollows = ['A2002'];
+  const open = (storage, get) => createSyncClient({fetchImpl: server.fetch, storage, getWatch: () => [], getFollows: get, debounceMs: 0});
+  const {editKey} = await open(phoneStore, () => phoneFollows).create([]);
+  const laptop = open(laptopStore, () => laptopFollows);
+  laptop.connect(editKey);
+  assert.equal((await laptop.pull()).follows, null);
+  server.keeps = true;  // The sync service is updated; both devices reload the page.
+  const phone2 = open(phoneStore, () => phoneFollows), laptop2 = open(laptopStore, () => laptopFollows);
+  phoneFollows = (await phone2.pull()).follows;
+  laptopFollows = (await laptop2.pull()).follows;
+  assert.deepEqual(laptopFollows, ['A1001', 'A2002']);
+  assert.deepEqual((await phone2.pull()).follows, ['A1001', 'A2002']);
+});
+
+test('concurrent follow changes on two devices both survive a conflict', async () => {
+  const server = followsServer();
+  let a = ['A1001', 'A2002'], b;
+  const phone = createSyncClient({fetchImpl: server.fetch, storage: memoryStorage(), getWatch: () => [], getFollows: () => a, debounceMs: 0});
+  const {editKey} = await phone.create([]);
+  const laptop = createSyncClient({fetchImpl: server.fetch, storage: memoryStorage(), getWatch: () => [], getFollows: () => b, debounceMs: 0});
+  b = [];
+  laptop.connect(editKey);
+  b = (await laptop.pull()).follows;
+  a = [...a, 'A3003']; phone.record('follow', 'A3003'); await phone.flush();
+  b = b.filter(c => c !== 'A1001'); laptop.record('unfollow', 'A1001'); await laptop.flush();  // Stale: conflicts.
+  assert.deepEqual(laptop.follows, ['A2002', 'A3003']);
+  assert.deepEqual((await phone.pull()).follows, ['A2002', 'A3003']);
+});
+
+test('profile files carry bills and follows; older watchlist files still import', () => {
+  const file = profileFile({watch: new Set(['HB5', 'SB12']), follows: ['A1001', 'bad']}, new Date('2026-11-12T00:00:00Z'));
+  const data = JSON.parse(file);
+  assert.equal(data.format, 'texas-bill-atlas-profile-v1');
+  assert.deepEqual(data.lists, [{id: 'main', name: 'Watchlist', bills: ['HB5', 'SB12']}]);
+  assert.deepEqual(parseProfileFile(file), {bills: ['HB5', 'SB12'], follows: ['A1001']});
+  assert.deepEqual(parseProfileFile(watchlistFile(['HB5'])), {bills: ['HB5'], follows: []});
+  assert.deepEqual(parseProfileFile('HB 7 and SB 9'), {bills: ['HB7', 'SB9'], follows: []});
+  assert.deepEqual(parseProfileFile(profileFile({watch: [], follows: ['A1001']})), {bills: [], follows: ['A1001']});
+  assert.throws(() => parseProfileFile(profileFile({})), /no bills or legislators/);
 });
 
 test('unavailable server is detected, not thrown', async () => {

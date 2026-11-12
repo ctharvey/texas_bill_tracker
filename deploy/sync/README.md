@@ -11,8 +11,8 @@ Layout on the VPS (root-owned except the database directory):
   texas-bill-atlas), `SYNC_APP` (the extracted release below). No secrets.
 - `/srv/sites/texas-bill-atlas/sync/app/<commit>/` - `sync_service.py`, `build_feeds.py` and `search_bills.py` from that main commit
   (`git --git-dir=/var/lib/texas-bill-atlas/repository.git show <commit>:scripts/<file>`).
-- `/var/lib/texas-bill-atlas/sync/` - SQLite database, mode 0700, owned by texas-bill-atlas. It holds key hashes and
-  watchlists only. No backup: people keep export files, and a lost list only unlinks devices.
+- `/var/lib/texas-bill-atlas/sync/` - SQLite database, mode 0700, owned by texas-bill-atlas. It holds key hashes,
+  watchlists and followed legislators' member codes only. No backup: people keep export files, and a lost list only unlinks devices.
 
 Update: extract a new `app/<commit>`, point `SYNC_APP` at it, then
 `docker compose --env-file sync.env -f compose.yaml up -d` and confirm

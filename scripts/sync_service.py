@@ -31,6 +31,8 @@ FEED_RE = re.compile(r"/api/sync/feed/([A-Za-z0-9_-]{22})\.xml")
 MAX_BODY = 16 * 1024
 DISCARD_LIMIT, DISCARD_SECONDS = 1024 * 1024, 2  # Bounds on draining a refused body (make_handler).
 MAX_BILLS = 500
+MAX_FOLLOWS = 200
+MEMBER_CODE = re.compile(r"A\d{3,5}")
 MAX_LISTS = 100_000
 RETENTION_SECONDS = 365 * 86400
 FEED_ITEMS = 300
@@ -78,7 +80,33 @@ def clean_data(data) -> dict:
             kept[name] = value
         else:
             raise Rejected(400, "unsupported filter")
-    return {"watch": bills, "filters": kept}
+    cleaned = {"watch": bills, "filters": kept}
+    if "follows" in data:  # Absent means "not sent" (an older client), never "none": see merge_data.
+        follows = data["follows"]
+        if not isinstance(follows, list) or len(follows) > MAX_FOLLOWS:
+            raise Rejected(400, f"follows must be a list of at most {MAX_FOLLOWS} member codes")
+        codes = []
+        for code in follows:
+            if not isinstance(code, str) or not MEMBER_CODE.fullmatch(code):
+                raise Rejected(400, "invalid member code")
+            if code not in codes:
+                codes.append(code)
+        cleaned["follows"] = codes
+    return cleaned
+
+
+def merge_data(stored: dict, cleaned: dict) -> dict:
+    """A write replaces the sections it carries and keeps the rest, so a client that predates a section (an old
+    cached page sends only `watch`) cannot erase what newer clients saved there."""
+    merged = dict(cleaned)
+    if "follows" not in cleaned and "follows" in stored:
+        merged["follows"] = stored["follows"]
+    return merged
+
+
+def view_data(data: dict) -> dict:
+    # View-only links share the watchlist (and its filters), never the rest of the profile such as follows.
+    return {"watch": data.get("watch", []), "filters": data.get("filters", {})}
 
 
 class Store:
@@ -118,16 +146,18 @@ class Store:
                 self.db.execute("UPDATE lists SET seen_at = ? WHERE edit_hash = ?", (int(now), row[4]))
             return row[0], json.loads(row[1]), row[2]
 
-    def update(self, edit_key: str, version: int, data: dict, now: float) -> int:
+    def update(self, edit_key: str, version: int, data: dict, now: float) -> tuple[int, dict]:
+        """Returns the new version and the stored data (sections the write did not carry are kept)."""
         with self.lock:
             row = self.db.execute("SELECT data, version FROM lists WHERE edit_hash = ?", (key_hash(edit_key),)).fetchone()
             if row is None:
                 raise Rejected(403 if self._is_view(edit_key) else 404, "an edit link is required")
             if version != row[1]:
                 raise Rejected(409, "changed on another device", version=row[1], data=json.loads(row[0]))
+            merged = merge_data(json.loads(row[0]), data)
             self.db.execute("UPDATE lists SET data = ?, version = ?, updated_at = ?, seen_at = ? WHERE edit_hash = ?",
-                            (json.dumps(data), row[1] + 1, int(now), int(now), key_hash(edit_key)))
-            return row[1] + 1
+                            (json.dumps(merged), row[1] + 1, int(now), int(now), key_hash(edit_key)))
+            return row[1] + 1, merged
 
     def delete(self, edit_key: str) -> None:
         with self.lock:
@@ -276,14 +306,15 @@ class App:
             payload = {"mode": mode, "version": version, "data": data, "view_key": view_key_for(key)}
             if mode == "view":
                 payload.pop("view_key")
+                payload["data"] = view_data(data)
             return self.json(200, payload)
         if method == "PUT":
             self.limiter.check(client, "write", now)
             request = self.read_json(headers, body)
             if not isinstance(request.get("version"), int):
                 raise Rejected(400, "version is required")
-            data = clean_data(request.get("data"))
-            return self.json(200, {"version": self.store.update(key, request["version"], data, now), "data": data})
+            version, stored = self.store.update(key, request["version"], clean_data(request.get("data")), now)
+            return self.json(200, {"version": version, "data": stored})
         if method == "DELETE":
             self.limiter.check(client, "write", now)
             self.store.delete(key)

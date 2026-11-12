@@ -511,7 +511,7 @@ A sync list has an edit key and a view key (22 characters each). Never ask a per
 - \`GET ${SITE}api/sync\` with header \`X-Sync-Key: <view key>\` returns \`{"mode": "view", "version": n, "data": {"watch": ["HB1", ...], "filters": {}}}\`
 - \`GET ${SITE}api/sync/feed/<view key>.xml\` is an RSS feed of the latest actions on every bill in the list
 
-Requests are rate limited per client address, per rolling hour: 1200 reads (including feeds), 300 writes and 10 new lists; agent search allows 1200 searches. Over the limit the service returns 429 with a \`Retry-After\` header in seconds. The service stores only the bill numbers, a version and dates; keys are stored as one-way hashes. No names, emails or accounts.
+Requests are rate limited per client address, per rolling hour: 1200 reads (including feeds), 300 writes and 10 new lists; agent search allows 1200 searches. Over the limit the service returns 429 with a \`Retry-After\` header in seconds. The service stores only the bill numbers, followed legislators' member codes, a version and dates; keys are stored as one-way hashes. No names, emails or accounts.
 
 ---
 ${DISCLAIMER}

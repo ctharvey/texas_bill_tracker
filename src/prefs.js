@@ -1,4 +1,4 @@
-// Saving choices without accounts: URL state, remembered filters, watchlist files and sync merging.
+// Saving choices without accounts: URL state, remembered filters, profile and watchlist files, and sync merging.
 export const FILTER_DEFAULTS = {query: '', topic: '', agency: '', chamber: '', stage: '', action: '', outlook: '', sort: 'newest', onlyWatch: false};
 const FILTER_NAMES = Object.keys(FILTER_DEFAULTS);
 export const VIEWS = ['all', 'watchlist', 'following', 'today', 'local', 'member', 'agencies', 'review', 'method', 'saving', 'data'];
@@ -83,9 +83,37 @@ export function parseWatchlistFile(text) {
   return clean;
 }
 
-// Replays this device's unsynced adds/removes on top of the newest server list.
+// Replays this device's unsynced adds/removes on top of the newest server list. Other ops (follows) are skipped.
 export function applyOps(watch, ops) {
   const set = new Set(watch);
-  for (const {op, id} of ops || []) op === 'add' ? set.add(id) : set.delete(id);
+  for (const {op, id} of ops || []) if (op === 'add') set.add(id); else if (op === 'remove') set.delete(id);
   return [...set];
+}
+
+// The same for followed legislators: follow/unfollow ops on top of the server's follows.
+export function applyFollowOps(follows, ops) {
+  const set = new Set(follows);
+  for (const {op, id} of ops || []) if (op === 'follow') set.add(id); else if (op === 'unfollow') set.delete(id);
+  return cleanFollows([...set]);
+}
+
+// One file for everything saved: the watchlist (as the first of `lists`, ready for named lists) and follows.
+// Device-only things (Near you districts, filters, the sync link) are never in it.
+export const PROFILE_FORMAT = 'texas-bill-atlas-profile-v1';
+export function profileFile({watch = [], follows = []} = {}, now = new Date()) {
+  return JSON.stringify({format: PROFILE_FORMAT, session: '90R', exported_at: now.toISOString(),
+    lists: [{id: 'main', name: 'Watchlist', bills: [...watch]}], follows: cleanFollows([...follows])}, null, 2);
+}
+
+// A profile file, or anything parseWatchlistFile reads (older watchlist exports, arrays, pasted text).
+// Returns {bills, follows}; importing only adds.
+export function parseProfileFile(text) {
+  let data = null;
+  try { data = JSON.parse(text); } catch {}
+  if (data?.format !== PROFILE_FORMAT) return {bills: parseWatchlistFile(text), follows: []};
+  const lists = Array.isArray(data.lists) ? data.lists : [];
+  const bills = uniqueIds(lists.flatMap(l => Array.isArray(l?.bills) ? l.bills.filter(x => typeof x === 'string') : []));
+  const follows = cleanFollows(data.follows);
+  if (!bills.length && !follows.length) throw Error('This file has no bills or legislators');
+  return {bills, follows};
 }

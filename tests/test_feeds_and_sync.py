@@ -173,6 +173,35 @@ class SyncAppTests(unittest.TestCase):
         self.assertEqual((status, conflict['version'], conflict['data']['watch']), (409, 2, ['HB5', 'SB7']))
         self.assertEqual(self.call('GET', key=key)[1]['data']['watch'], ['HB5', 'SB7'])
 
+    def test_follows_sync_but_older_clients_and_view_links_never_touch_them(self):
+        status, made = self.call('POST', body={'data': {'watch': ['HB5'], 'follows': ['A1001', 'A1001', 'A2002']}})
+        self.assertEqual((status, made['data']['follows']), (201, ['A1001', 'A2002']))
+        key = made['edit_key']
+        # An old cached page sends only the watchlist: the stored follows survive, and the reply carries them.
+        status, saved = self.call('PUT', body={'version': 1, 'data': {'watch': ['HB5', 'SB7']}}, key=key)
+        self.assertEqual((status, saved['data']['follows']), (200, ['A1001', 'A2002']))
+        self.assertEqual(self.call('GET', key=key)[1]['data']['follows'], ['A1001', 'A2002'])
+        # An empty list is a real "none", unlike an absent one.
+        self.assertEqual(self.call('PUT', body={'version': 2, 'data': {'watch': ['HB5'], 'follows': []}}, key=key)[1]['data']['follows'], [])
+        self.assertEqual(self.call('PUT', body={'version': 3, 'data': {'watch': ['HB5']}}, key=key)[1]['data']['follows'], [])
+        # A conflict hands back the follows, so the losing device can replay onto them.
+        self.call('PUT', body={'version': 4, 'data': {'watch': ['HB5'], 'follows': ['A2002']}}, key=key)
+        status, conflict = self.call('PUT', body={'version': 1, 'data': {'watch': []}}, key=key)
+        self.assertEqual((status, conflict['data']['follows']), (409, ['A2002']))
+        # View-only links and the watchlist feed never reveal who the owner follows.
+        status, view = self.call('GET', key=made['view_key'])
+        self.assertEqual((status, set(view['data'])), (200, {'watch', 'filters'}))
+        status, feed = self.call('GET', path=f"/api/sync/feed/{made['view_key']}.xml")
+        self.assertEqual(status, 200)
+        self.assertNotIn(b'A2002', feed)
+
+    def test_follows_are_validated(self):
+        made = self.create()
+        for follows in ('A1001', ['../x'], ['a1001'], [7], ['A1'], [f'A{1000 + i}' for i in range(201)]):
+            status, _ = self.call('PUT', body={'version': 1, 'data': {'watch': [], 'follows': follows}}, key=made['edit_key'])
+            self.assertEqual(status, 400, follows)
+        self.assertEqual(self.call('POST', body={'data': {'watch': [], 'follows': {'A1001': 1}}})[0], 400)
+
     def test_delete_then_unknown(self):
         made = self.create()
         self.assertEqual(self.call('DELETE', key=made['edit_key'])[0], 204)
