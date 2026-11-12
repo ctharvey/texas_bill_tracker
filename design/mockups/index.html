@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Texas Bill Atlas mock-ups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Manrope:wght@600;800&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap" rel="stylesheet">
+<style>
+/* Static mock-up. Sample data. Not wired to the app. */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font-size:15px;line-height:1.45}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- Direction A: current identity, refined ---------- */
+body[data-dir="a"]{
+  --bg:#f5f7fa;--surface:#fff;--ink:#14243a;--muted:#55657a;--line:#dbe2ea;
+  --accent:#087d7a;--accent-ink:#fff;--accent-soft:#e2f2f1;
+  --nav-bg:#14243a;--nav-ink:#e8eef5;--nav-muted:#93a4b8;--nav-active:#22395a;
+  --mark:#b8862b;--radius:10px;--radius-s:6px;
+  --font-ui:"DM Sans",system-ui,sans-serif;--font-head:"Manrope",system-ui,sans-serif;--font-title:"Manrope",system-ui,sans-serif;
+  --head-weight:800;--title-weight:600;--title-size:16px;--h1-size:26px;
+}
+/* ---------- Direction B: Capitol granite and live oak ---------- */
+body[data-dir="b"]{
+  --bg:#eceeed;--surface:#fbfbfa;--ink:#1c2422;--muted:#56625f;--line:#cfd5d2;
+  --accent:#2b5c4c;--accent-ink:#fff;--accent-soft:#dfe9e4;
+  --nav-bg:#5e3a40;--nav-ink:#f4ecec;--nav-muted:#cdb3b6;--nav-active:#7a4c53;
+  --mark:#5e3a40;--radius:3px;--radius-s:2px;
+  --font-ui:"Public Sans",system-ui,sans-serif;--font-head:"Newsreader",Georgia,serif;--font-title:"Newsreader",Georgia,serif;
+  --head-weight:600;--title-weight:500;--title-size:19px;--h1-size:32px;
+}
+/* ---------- Direction C: docket, top navigation ---------- */
+body[data-dir="c"]{
+  --bg:#fff;--surface:#fff;--ink:#16191f;--muted:#5a6270;--line:#d9dde4;
+  --accent:#2447c8;--accent-ink:#fff;--accent-soft:#e7ecfb;
+  --nav-bg:#fff;--nav-ink:#16191f;--nav-muted:#5a6270;--nav-active:#e7ecfb;
+  --mark:#16191f;--radius:4px;--radius-s:4px;
+  --font-ui:"IBM Plex Sans",system-ui,sans-serif;--font-head:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;--font-title:"IBM Plex Sans",system-ui,sans-serif;
+  --head-weight:600;--title-weight:500;--title-size:16px;--h1-size:26px;
+}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-ui)}
+:root{--dem:#2b62b8;--rep:#b8322b}
+
+/* ---------- Mock-up controls (not part of the design) ---------- */
+.controls{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;
+  padding:8px 16px;background:#222;color:#eee;font:13px/1.3 system-ui,sans-serif}
+.controls b{font-weight:600}
+.controls .grp{display:flex;gap:4px;align-items:center}
+.controls button{background:#3a3a3a;border:1px solid #555;color:#eee;border-radius:4px;padding:4px 10px}
+.controls button[aria-pressed="true"]{background:#eee;color:#111;border-color:#eee}
+.controls .note{margin-left:auto;color:#bbb}
+
+/* ---------- Shell ---------- */
+.shell{display:grid;grid-template-columns:228px minmax(0,1fr);min-height:calc(100vh - 42px)}
+.side{background:var(--nav-bg);color:var(--nav-ink);padding:18px 12px;display:flex;flex-direction:column;gap:18px}
+.brand{font-family:var(--font-head);font-weight:var(--head-weight);font-size:19px;padding:0 8px;line-height:1.15}
+.brand small{display:block;font-family:var(--font-ui);font-weight:400;font-size:12px;color:var(--nav-muted);margin-top:3px}
+.navgroup h2{margin:0 0 4px;padding:0 8px;font:500 12px var(--font-ui);color:var(--nav-muted)}
+.navgroup a{display:flex;justify-content:space-between;gap:8px;padding:7px 8px;border-radius:var(--radius-s);text-decoration:none;font-size:14px}
+.navgroup a[aria-current]{background:var(--nav-active);font-weight:600}
+.navgroup a span{color:var(--nav-muted);font-variant-numeric:tabular-nums;font-size:13px}
+.main{min-width:0;max-width:1360px;padding:22px 28px 80px}
+
+/* Direction C turns the sidebar into a top bar */
+body[data-dir="c"] .shell{grid-template-columns:minmax(0,1fr)}
+body[data-dir="c"] .side{flex-direction:row;align-items:center;gap:22px;padding:8px 28px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+body[data-dir="c"] .brand small,body[data-dir="c"] .navgroup h2{display:none}
+body[data-dir="c"] .navgroup{display:flex;gap:2px}
+body[data-dir="c"] .navgroup + .navgroup{padding-left:20px;border-left:1px solid var(--line)}
+body[data-dir="c"] .navgroup a{padding:6px 10px}
+body[data-dir="c"] .navgroup a[aria-current]{color:var(--accent)}
+
+/* ---------- Page top ---------- */
+.pagetop{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;margin-bottom:4px}
+h1{font-family:var(--font-head);font-weight:var(--head-weight);font-size:var(--h1-size);line-height:1.1;margin:0;letter-spacing:-.01em}
+.counts{color:var(--muted);font-size:14px}
+.source{color:var(--muted);font-size:13px;margin:0 0 16px}
+.source::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#2c8a4b;margin-right:6px}
+
+/* ---------- Filters ---------- */
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.filters input,.filters select,.btn{height:38px;border:1px solid var(--line);border-radius:var(--radius-s);background:var(--surface);padding:0 12px;font:inherit;color:inherit}
+.filters input{flex:1 1 260px;min-width:0}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.quiet{background:transparent}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:16px;font-size:13px;color:var(--muted)}
+.chip{background:var(--accent-soft);color:var(--ink);border:0;border-radius:99px;padding:3px 10px;font-size:13px}
+.chip::after{content:" \00d7";color:var(--muted)}
+
+/* ---------- Results + preview ---------- */
+.results{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}
+.listhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px;color:var(--muted)}
+.card{position:relative;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--party,var(--line));
+  border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;cursor:pointer}
+.card[data-party="D"]{--party:var(--dem)} .card[data-party="R"]{--party:var(--rep)}
+.card[aria-selected="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.headrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.num{font-weight:700;font-variant-numeric:tabular-nums;font-size:15px;text-decoration:none}
+.pill{font-size:12px;padding:1px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.pill.stage{background:var(--accent-soft);border-color:transparent;color:var(--ink)}
+.title{grid-column:1;font-family:var(--font-title);font-weight:var(--title-weight);font-size:var(--title-size);line-height:1.3;margin:2px 0 0}
+.title a{text-decoration:none} .title a:hover{text-decoration:underline}
+.brief{grid-column:1;margin:0;color:var(--muted);font-size:14px}
+.brief b{font-weight:500;color:var(--ink);font-size:12px;border:1px solid var(--line);border-radius:var(--radius-s);padding:0 5px;margin-right:6px}
+.meta{grid-column:1;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted);margin-top:2px}
+.star{grid-column:2;grid-row:1 / span 2;align-self:start;width:36px;height:36px;border:1px solid var(--line);border-radius:var(--radius-s);background:var(--surface);font-size:17px;line-height:1}
+.star[aria-pressed="true"]{color:var(--mark);border-color:var(--mark)}
+.group{border:1px dashed var(--line);border-radius:var(--radius);padding:8px 10px 0;margin-bottom:10px}
+.group > p{margin:0 0 8px;font-size:13px;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+
+.preview{position:sticky;top:58px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.preview h2{font-family:var(--font-title);font-weight:var(--title-weight);font-size:18px;line-height:1.3;margin:6px 0 10px}
+.preview dl{margin:0 0 14px;display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:14px}
+.preview dt{color:var(--muted)} .preview dd{margin:0}
+.preview .actions{display:flex;gap:8px;flex-wrap:wrap}
+.preview .hint{font-size:12px;color:var(--muted);margin:12px 0 0}
+
+/* ---------- Bill page ---------- */
+.back{display:inline-block;font-size:14px;color:var(--muted);margin-bottom:10px}
+.billhead{position:sticky;top:42px;z-index:5;background:var(--bg);padding:10px 0 12px;border-bottom:1px solid var(--line);
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 20px;align-items:start}
+.billhead h1{font-family:var(--font-title);font-weight:var(--title-weight);font-size:calc(var(--h1-size) - 2px);line-height:1.2;max-width:34ch}
+.billhead .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.track{list-style:none;display:flex;gap:0;margin:16px 0 0;padding:0;font-size:13px;grid-column:1 / -1}
+.track li{flex:1;padding-top:10px;border-top:4px solid var(--line);color:var(--muted)}
+.track li.done{border-color:var(--accent);color:var(--ink)}
+.track li.now{border-color:var(--mark);color:var(--ink);font-weight:600}
+.track li small{display:block;font-weight:400;color:var(--muted)}
+.sectionnav{display:flex;gap:4px;flex-wrap:wrap;margin:14px 0 18px;border-bottom:1px solid var(--line)}
+.sectionnav a{padding:8px 12px;text-decoration:none;font-size:14px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.sectionnav a[aria-current]{color:var(--ink);border-color:var(--accent);font-weight:600}
+.billbody{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:32px;align-items:start}
+.billbody h2{font-family:var(--font-head);font-weight:var(--head-weight);font-size:19px;margin:26px 0 8px}
+.billbody h2:first-child{margin-top:0}
+.billbody p{max-width:68ch;margin:0 0 10px}
+.ai{border-left:3px solid var(--mark);padding:2px 0 2px 14px}
+.ai .by{font-size:13px;color:var(--muted)}
+.law{font-size:14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:10px 14px;display:flex;justify-content:space-between;gap:12px;max-width:68ch}
+/* Bill text set the way the Legislature prints it: numbered lines, underlined additions, struck deletions */
+.billtext{counter-reset:ln;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px 18px 0;max-width:76ch;font-size:15px;line-height:1.7}
+.billtext div{counter-increment:ln;display:grid;grid-template-columns:48px 1fr}
+.billtext div::before{content:counter(ln);color:var(--muted);font-size:12px;text-align:right;padding-right:14px;font-variant-numeric:tabular-nums;user-select:none}
+.billtext ins{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px;background:var(--accent-soft)}
+.billtext del{color:var(--muted)}
+.legend{font-size:13px;color:var(--muted);margin:8px 0 0}
+.rail{position:sticky;top:210px;display:grid;gap:14px}
+.fact{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+.fact h3{margin:0 0 8px;font:600 14px var(--font-ui)}
+.fact dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:14px}
+.fact dt{color:var(--muted)} .fact dd{margin:0}
+.fact ul{margin:0;padding:0;list-style:none;font-size:14px;display:grid;gap:6px}
+.how{font-size:13px;color:var(--muted)}
+.how summary{cursor:pointer}
+
+.bottombar{display:none}
+[hidden]{display:none!important}
+
+@media (max-width:1100px){
+  .results{grid-template-columns:minmax(0,1fr)} .preview{display:none}
+  .billbody{grid-template-columns:minmax(0,1fr)} .rail{position:static}
+}
+@media (max-width:760px){
+  .side{display:none} body[data-dir="c"] .side{display:none}
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .main{padding:16px 16px 90px}
+  .billhead{grid-template-columns:minmax(0,1fr);position:static}
+  .billhead .actions{justify-content:flex-start}
+  .track li small{display:none}
+  .bottombar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;z-index:15;
+    background:var(--surface);border-top:1px solid var(--line)}
+  .bottombar a{padding:12px 4px;text-align:center;text-decoration:none;font-size:13px;color:var(--muted)}
+  .bottombar a[aria-current]{color:var(--accent);font-weight:600}
+  .controls .note{display:none}
+}
+</style>
+</head>
+<body data-dir="a">
+
+<div class="controls" role="region" aria-label="Mock-up controls">
+  <div class="grp"><b>Direction</b>
+    <button data-setdir="a" aria-pressed="true">A Current, refined</button>
+    <button data-setdir="b" aria-pressed="false">B Granite</button>
+    <button data-setdir="c" aria-pressed="false">C Docket</button>
+  </div>
+  <div class="grp"><b>Screen</b>
+    <button data-setscreen="explorer" aria-pressed="true">Bills list</button>
+    <button data-setscreen="bill" aria-pressed="false">Bill page</button>
+  </div>
+  <span class="note">Static mock-up, sample data. Narrow the window for the phone layout.</span>
+</div>
+
+<div class="shell">
+  <nav class="side" aria-label="Main">
+    <div class="brand">Texas Bill Atlas<small>90th Legislature, 2027</small></div>
+    <div class="navgroup"><h2>Browse</h2>
+      <a href="#" aria-current="page">Bills <span>1,441</span></a>
+      <a href="#">Today <span>63</span></a>
+      <a href="#">Near you</a>
+      <a href="#">Agencies</a>
+    </div>
+    <div class="navgroup"><h2>Yours</h2>
+      <a href="#">Watchlist <span>12</span></a>
+      <a href="#">Following <span>4</span></a>
+    </div>
+    <div class="navgroup"><h2>About</h2>
+      <a href="#">How this works</a>
+      <a href="#">Saving and sync</a>
+      <a href="#">Data and review status</a>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <!-- ================= Bills list ================= -->
+    <section id="screen-explorer">
+      <div class="pagetop">
+        <h1>Bills</h1>
+        <span class="counts">214 of 1,441 match, 9 filed today, no hearings scheduled yet</span>
+      </div>
+      <p class="source">Official Texas Legislature data, updated today at 6:10 am</p>
+
+      <div class="filters">
+        <input type="search" value="wage" aria-label="Search bills">
+        <select aria-label="Policy area"><option>Labor and employment</option></select>
+        <select aria-label="Chamber"><option>Either chamber</option></select>
+        <select aria-label="Stage"><option>Any stage</option></select>
+        <button class="btn">More filters</button>
+        <button class="btn">Share or save</button>
+      </div>
+      <div class="chips">Filtering by
+        <button class="chip">wage</button>
+        <button class="chip">Labor and employment</button>
+        <button class="btn quiet" style="height:28px">Clear all</button>
+      </div>
+
+      <div class="results">
+        <div>
+          <div class="listhead"><span>Showing 30 of 214</span>
+            <select aria-label="Sort" style="height:32px;border:1px solid var(--line);border-radius:var(--radius-s);background:var(--surface);font:inherit;padding:0 8px"><option>Newest action first</option></select>
+          </div>
+
+          <div class="group">
+            <p><span>5 companion bills with the same text</span><button class="btn quiet" style="height:26px;padding:0 8px">Watch all 5</button></p>
+            <article class="card" data-party="D" aria-selected="true" data-card>
+              <div class="headrow"><a class="num" href="#" data-open>HB 1051</a><span class="pill">House</span><span class="pill stage">Filed</span><span class="pill">Democrat</span></div>
+              <button class="star" aria-pressed="true" aria-label="Stop watching HB 1051">&#9733;</button>
+              <h3 class="title"><a href="#" data-open>Relating to the minimum wage.</a></h3>
+              <p class="brief"><b>AI summary</b>Would raise the state minimum wage to $15 an hour.</p>
+              <div class="meta"><span>Filed Nov 9</span><span>1 author</span><span>Changes Labor Code 62.051</span></div>
+            </article>
+            <article class="card" data-party="D" data-card>
+              <div class="headrow"><a class="num" href="#" data-open>SB 212</a><span class="pill">Senate</span><span class="pill stage">Filed</span><span class="pill">Democrat</span></div>
+              <button class="star" aria-pressed="false" aria-label="Watch SB 212">&#9734;</button>
+              <h3 class="title"><a href="#" data-open>Relating to the minimum wage.</a></h3>
+              <div class="meta"><span>Filed Nov 9</span><span>1 author</span></div>
+            </article>
+          </div>
+
+          <article class="card" data-party="R" data-card>
+            <div class="headrow"><a class="num" href="#" data-open>HB 733</a><span class="pill">House</span><span class="pill stage">Filed</span><span class="pill">Republican</span></div>
+            <button class="star" aria-pressed="false" aria-label="Watch HB 733">&#9734;</button>
+            <h3 class="title"><a href="#" data-open>Relating to the authority of a municipality or county to regulate wages and employment benefits.</a></h3>
+            <p class="brief"><b>AI summary</b>Would bar cities and counties from setting their own wage or benefit rules.</p>
+            <div class="meta"><span>Filed Nov 9</span><span>1 author, 3 coauthors</span><span>2 agencies</span></div>
+          </article>
+
+          <article class="card" data-party="D" data-card>
+            <div class="headrow"><a class="num" href="#" data-open>HB 418</a><span class="pill">House</span><span class="pill stage">Filed</span><span class="pill">Democrat</span></div>
+            <button class="star" aria-pressed="false" aria-label="Watch HB 418">&#9734;</button>
+            <h3 class="title"><a href="#" data-open>Relating to payment of wages to tipped employees.</a></h3>
+            <div class="meta"><span>Filed Nov 9</span><span>1 author</span><span>Texas Workforce Commission</span></div>
+          </article>
+        </div>
+
+        <aside class="preview" aria-label="Preview">
+          <div class="headrow"><span class="num">HB 1051</span><span class="pill">House</span><span class="pill stage">Filed</span></div>
+          <h2>Relating to the minimum wage.</h2>
+          <dl>
+            <dt>Last action</dt><dd>Filed, Nov 9</dd>
+            <dt>Author</dt><dd>Rep. Sample Author (D)</dd>
+            <dt>Hearing</dt><dd>None scheduled</dd>
+            <dt>Companions</dt><dd>4 bills, same text</dd>
+          </dl>
+          <div class="actions"><button class="btn primary" data-open>Open bill</button><button class="btn">Stop watching</button></div>
+          <p class="hint">Click a card to preview it here. Click the number or title to open the bill.</p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ================= Bill page ================= -->
+    <section id="screen-bill" hidden>
+      <a class="back" href="#" data-back>Back to results (214 bills for "wage")</a>
+      <header class="billhead">
+        <div>
+          <div class="headrow"><span class="num" style="font-size:17px">HB 1051</span><span class="pill">House</span><span class="pill">Democrat</span><span class="pill">Rep. Sample Author</span></div>
+          <h1>Relating to the minimum wage.</h1>
+        </div>
+        <div class="actions">
+          <button class="btn primary">Watching &#9733;</button>
+          <button class="btn">Read official bill</button>
+          <button class="btn">RSS feed</button>
+          <button class="btn">Copy for AI</button>
+        </div>
+        <ol class="track" aria-label="Progress">
+          <li class="now">Filed<small>Nov 9</small></li>
+          <li>House committee</li>
+          <li>House floor</li>
+          <li>Senate</li>
+          <li>Governor</li>
+        </ol>
+      </header>
+
+      <nav class="sectionnav" aria-label="Bill sections">
+        <a href="#" aria-current="true">Overview</a><a href="#">Text</a><a href="#">Changes to law</a><a href="#">People</a><a href="#">Agencies and impact</a><a href="#">History</a><a href="#">Sources</a>
+      </nav>
+
+      <div class="billbody">
+        <div>
+          <h2>What it would do</h2>
+          <div class="ai">
+            <p>Would raise the Texas minimum wage from the federal rate to $15 an hour, or the federal rate if that is ever higher.</p>
+            <p class="by">AI summary from a full-text review by Luna. Check it against the bill text below.</p>
+          </div>
+
+          <h2>Law it changes</h2>
+          <div class="law"><span><b>Labor Code 62.051</b>, Minimum wage</span><a href="#">Compare old and new</a></div>
+
+          <h2>Bill text</h2>
+          <div class="billtext">
+            <div><span>SECTION 1. Section 62.051, Labor Code, is amended to read as follows:</span></div>
+            <div><span>Sec. 62.051. MINIMUM WAGE. Except as provided by Section 62.057,</span></div>
+            <div><span>an employer shall pay to each employee <ins>not less than the greater of:</ins></span></div>
+            <div><span><ins>(1) $15 an hour; or</ins></span></div>
+            <div><span><ins>(2)</ins> the federal minimum wage under Section 6, Fair Labor</span></div>
+            <div><span>Standards Act of 1938 (29 U.S.C. Section 206).</span></div>
+            <div><span>SECTION 2. This Act takes effect September 1, 2027.</span></div>
+          </div>
+          <p class="legend">Underlined text is added. Struck text is removed. Sample text for layout, not the filed bill.</p>
+
+          <h2>Who it may affect</h2>
+          <p>Employers and hourly workers statewide. The Texas Workforce Commission would possibly enforce it.</p>
+          <details class="how"><summary>How we know</summary><p>Agencies are matched from the bill text and official subjects. A match means the bill may involve the agency, not that it does.</p></details>
+        </div>
+
+        <aside class="rail">
+          <div class="fact"><h3>Status</h3>
+            <dl><dt>Stage</dt><dd>Filed</dd><dt>Last action</dt><dd>Nov 9, filed</dd><dt>Hearing</dt><dd>None scheduled</dd><dt>Takes effect</dt><dd>Sept 1, 2027</dd></dl>
+          </div>
+          <div class="fact"><h3>Same text in 4 other bills</h3>
+            <ul><li><a href="#">SB 212</a>, Senate, filed</li><li><a href="#">HB 1102</a>, House, filed</li><li><a href="#">HB 1340</a>, House, filed</li><li><a href="#">SB 377</a>, Senate, filed</li></ul>
+          </div>
+          <div class="fact"><h3>People</h3>
+            <dl><dt>Author</dt><dd><a href="#">Rep. Sample Author</a> (D)</dd></dl>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+</div>
+
+<nav class="bottombar" aria-label="Main, phone">
+  <a href="#" aria-current="page">Bills</a><a href="#">Today</a><a href="#">Watchlist</a><a href="#">More</a>
+</nav>
+
+<script>
+const press=(sel,attr,val)=>document.querySelectorAll(sel).forEach(b=>b.setAttribute('aria-pressed',String(b.getAttribute(attr)===val)));
+function setScreen(s){
+  document.getElementById('screen-explorer').hidden=s!=='explorer';
+  document.getElementById('screen-bill').hidden=s!=='bill';
+  press('[data-setscreen]','data-setscreen',s);window.scrollTo(0,0);
+}
+document.addEventListener('click',e=>{
+  const t=e.target;
+  const d=t.closest('[data-setdir]');if(d){document.body.dataset.dir=d.dataset.setdir;press('[data-setdir]','data-setdir',d.dataset.setdir);return}
+  const s=t.closest('[data-setscreen]');if(s){setScreen(s.dataset.setscreen);return}
+  if(t.closest('[data-open]')){e.preventDefault();setScreen('bill');return}
+  if(t.closest('[data-back]')){e.preventDefault();setScreen('explorer');return}
+  const star=t.closest('.star');if(star){const on=star.getAttribute('aria-pressed')!=='true';star.setAttribute('aria-pressed',String(on));star.innerHTML=on?'&#9733;':'&#9734;';return}
+  const c=t.closest('[data-card]');if(c){document.querySelectorAll('[data-card]').forEach(x=>x.removeAttribute('aria-selected'));c.setAttribute('aria-selected','true')}
+  if(t.closest('a[href="#"]'))e.preventDefault();
+});
+</script>
+</body>
+</html>
