@@ -1,0 +1,15 @@
+{
+  "format": "texas-bill-text-index-v1",
+  "bill_id": "HB381",
+  "versions": [
+    {
+      "code": "I",
+      "name": "Introduced",
+      "path": "I.md",
+      "source_url": "ftp://ftp.legis.state.tx.us/bills/90R/billtext/HTML/house_bills/HB00300_HB00399/HB00381I.HTM",
+      "source_modified": "11/11/2026 2:00:16 AM",
+      "sha256": "0e425ba8f5fd8923f9d61d2c056fa4dbdccc43a901095c87aad4ab1027d33725",
+      "generated_at": "2026-11-11T08:27:07.698538Z"
+    }
+  ]
+}

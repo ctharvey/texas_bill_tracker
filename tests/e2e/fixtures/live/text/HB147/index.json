@@ -1,0 +1,15 @@
+{
+  "format": "texas-bill-text-index-v1",
+  "bill_id": "HB147",
+  "versions": [
+    {
+      "code": "I",
+      "name": "Introduced",
+      "path": "I.md",
+      "source_url": "ftp://ftp.legis.state.tx.us/bills/90R/billtext/HTML/house_bills/HB00100_HB00199/HB00147I.HTM",
+      "source_modified": "11/10/2026 2:00:07 AM",
+      "sha256": "15c09978080fb37295bac600b9d466531847e6bf1968a24f8f09a877732e4e9f",
+      "generated_at": "2026-11-10T23:27:48.418955Z"
+    }
+  ]
+}

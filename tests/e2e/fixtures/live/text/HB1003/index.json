@@ -1,0 +1,15 @@
+{
+  "format": "texas-bill-text-index-v1",
+  "bill_id": "HB1003",
+  "versions": [
+    {
+      "code": "I",
+      "name": "Introduced",
+      "path": "I.md",
+      "source_url": "ftp://ftp.legis.state.tx.us/bills/90R/billtext/HTML/house_bills/HB01000_HB01099/HB01003I.HTM",
+      "source_modified": "11/11/2026 2:00:12 AM",
+      "sha256": "c4743ba86d9c55c3f2fa3477b87a791df0e6ee883afb8a16abf11ac26a6e1f17",
+      "generated_at": "2026-11-11T09:27:08.614005Z"
+    }
+  ]
+}

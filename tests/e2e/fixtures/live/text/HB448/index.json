@@ -1,0 +1,15 @@
+{
+  "format": "texas-bill-text-index-v1",
+  "bill_id": "HB448",
+  "versions": [
+    {
+      "code": "I",
+      "name": "Introduced",
+      "path": "I.md",
+      "source_url": "ftp://ftp.legis.state.tx.us/bills/90R/billtext/HTML/house_bills/HB00400_HB00499/HB00448I.HTM",
+      "source_modified": "11/11/2026 2:00:17 AM",
+      "sha256": "f7d9960b3762f8dc7a8202b445cc12f8b613a5c995f283abc92999c5f39a7318",
+      "generated_at": "2026-11-11T08:27:07.698538Z"
+    }
+  ]
+}

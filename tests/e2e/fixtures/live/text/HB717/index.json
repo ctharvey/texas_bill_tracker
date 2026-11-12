@@ -1,0 +1,15 @@
+{
+  "format": "texas-bill-text-index-v1",
+  "bill_id": "HB717",
+  "versions": [
+    {
+      "code": "I",
+      "name": "Introduced",
+      "path": "I.md",
+      "source_url": "ftp://ftp.legis.state.tx.us/bills/90R/billtext/HTML/house_bills/HB00700_HB00799/HB00717I.HTM",
+      "source_modified": "11/10/2026 2:00:23 AM",
+      "sha256": "c0a6f94266625011dd5f60973a6e4ace72c1eb014221289d9331989c1440a0ba",
+      "generated_at": "2026-11-11T00:27:10.295769Z"
+    }
+  ]
+}

@@ -1,0 +1,447 @@
+{
+ "captured_at": "2026-11-12T15:41:55Z",
+ "source": "https://bills.ctharvey.me/",
+ "commit": "1810fee",
+ "bills": [
+  "HB1",
+  "HB110",
+  "HB147",
+  "HB239",
+  "HB381",
+  "HB448",
+  "HB717",
+  "HB1001",
+  "HB1002",
+  "HB1003"
+ ],
+ "files": {
+  "bills.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 1956641,
+   "sha256": "1a076a299a676efa95dad06fb7cf6c93d704561990a9668a8e7bc1ffc3aa44fd"
+  },
+  "brackets/index.json": {
+   "status": 200,
+   "origin": "local build (index.json)",
+   "type": "application/json",
+   "bytes": 99532,
+   "sha256": "933ea15202a67d0be32fa6fa700b79f466a7d4e9312d59dccb815e7ce5c8bc33"
+  },
+  "history/HB1001/witnesses-H.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB1001/witnesses-S.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB1002/witnesses-H.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB1002/witnesses-S.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB1003/witnesses-H.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB1003/witnesses-S.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB110/witnesses-H.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB110/witnesses-S.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB147/witnesses-H.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB147/witnesses-S.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB239/witnesses-H.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB239/witnesses-S.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB381/witnesses-H.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB381/witnesses-S.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB448/witnesses-H.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB448/witnesses-S.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB717/witnesses-H.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "history/HB717/witnesses-S.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/audit.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 168,
+   "sha256": "7fac7d289ce32dfc75797c8c5adc56acdd1091086a9ed9d89fc9f127f5ab7e92"
+  },
+  "luna/changes/HB1001.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/changes/HB1002.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/changes/HB1003.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/changes/HB110.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/changes/HB147.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/changes/HB239.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/changes/HB381.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/changes/HB448.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/changes/HB717.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/extras.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 291642,
+   "sha256": "f569dc9e4f11afe3151284fa4145b59a063ebf281115f3ec14e6e8f29a5f4d00"
+  },
+  "luna/fiscal/HB1001.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/fiscal/HB1002.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/fiscal/HB1003.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/fiscal/HB110.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/fiscal/HB147.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/fiscal/HB239.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/fiscal/HB381.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/fiscal/HB448.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/fiscal/HB717.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/highlights/HB1001.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 4171,
+   "sha256": "bee06587c3bb18022bb43f466f9a93b53e13cdf40e05f51cfe7b10908945f79e"
+  },
+  "luna/highlights/HB1002.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 4811,
+   "sha256": "a629e95b605154ac661fce356f54a9996aceea4d0293f83a458f354b30a2cc52"
+  },
+  "luna/highlights/HB1003.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 2502,
+   "sha256": "f6d5e077000cd23b5568b4d5c5228695a9ca88586948bd761e319088e0aa4ac8"
+  },
+  "luna/highlights/HB110.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 2540,
+   "sha256": "aacac173358658d5c051cafcb0371f11619b85c57b3dcefb83c8068461d1b728"
+  },
+  "luna/highlights/HB147.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 4753,
+   "sha256": "96673da7f61705bb4789f61cc7dfd1e93b709bc650d364e4f886d5d898700f1e"
+  },
+  "luna/highlights/HB239.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 5690,
+   "sha256": "be85696eeac44178158b9835302fd112da58cd2efdf2146a9d2dffc3cf118b12"
+  },
+  "luna/highlights/HB381.json": {
+   "status": 404,
+   "origin": "production"
+  },
+  "luna/highlights/HB448.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 3207,
+   "sha256": "4d7832406dc019c8b18d2ef9160ae818358aed0cb9dfbacca97b6b81aaa83765"
+  },
+  "luna/highlights/HB717.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 3393,
+   "sha256": "fd8e4b3459db05c576057eabc93ca588f7e394f3b8ea2e91555242dbc9eb9f05"
+  },
+  "luna/related.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 212332,
+   "sha256": "59b2290abb27501d6085978030ca7a39da327efaac087e0da4058e42cdfc5f78"
+  },
+  "luna/status.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 13784,
+   "sha256": "7176ee8e2491f70ed7bbd0e5571e9c36910832ce41ca89e8ad078e523825750d"
+  },
+  "luna/tags.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 3301689,
+   "sha256": "d5db5d38843d0945baf4d4782c8b2583602da1302009f0700a932fe2ecc1d35a"
+  },
+  "members.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 138477,
+   "sha256": "4d62db92ff6bceac3db5150d1014b8becef586066fef806c5110d78d6364dd8a"
+  },
+  "statutes/index.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 253510,
+   "sha256": "b6dd13287e9acd917403ba3bcb35388fcd32571873261d6bbf239baa1a5b5486"
+  },
+  "statutes/sections/GV-475.0001.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 1437,
+   "sha256": "9c3e5ae353a2ba783685b668afd0265512402c2e14c1ac93e89921f754f9f05b"
+  },
+  "statutes/sections/GV-475.0051.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 510,
+   "sha256": "6b747095951c77ee3bebca686b6072323c32bb108bb9eed935777c8df0fa4295"
+  },
+  "statutes/sections/GV-614.015.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 5032,
+   "sha256": "5656a3eef31479d5a259fa071dc0b76ea0097ff7b985c2eb850fb08810e930ec"
+  },
+  "statutes/sections/HS-382.0162.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 1704,
+   "sha256": "08a4fcda4be25b76aff5ae23c76300916118a57983416579f9bc33a799523b00"
+  },
+  "statutes/sections/HS-64.051.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 1204,
+   "sha256": "339f34dd96ada450e7a86aa442c32964f6132da71217dac5dc8aeee0cb0319fd"
+  },
+  "statutes/sections/HS-64.052.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 1043,
+   "sha256": "b87975d33d76b3e88577840567c5a962dadbdfaadf428e0bdff00b2f6e522eeb"
+  },
+  "statutes/sections/LA-408.006.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 542,
+   "sha256": "ba2be0f46b67ab11ef5cb37ad50eda45a996292798094a5873fe665d7a9b91c2"
+  },
+  "statutes/sections/LA-409.021.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 1066,
+   "sha256": "6093fee13c8f9abe251562b492bf8ec2ab33e48f95980aba7969297e597e2158"
+  },
+  "statutes/sections/LA-62.051.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 3553,
+   "sha256": "77ae3fd6a048b30c146676d47de88b87e5a97818754fdfd0477b6018b5e98dc0"
+  },
+  "statutes/sections/LA-62.151.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 1127,
+   "sha256": "0861074b238933c9624ca4d3f3feef7d92bc0704ca4b0193a6d4178f30403e61"
+  },
+  "statutes/sections/LG-130.914.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 732,
+   "sha256": "89a0dd8e635aef6c7a307cbe5414aaf6e6c74e4927650bcb0eb08e6d09a79665"
+  },
+  "statutes/sections/LG-143.002.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 903,
+   "sha256": "c62901b023a66cf0ae105ca95a3cb6047bcc62ebe995a3482cfe12c5634eb62b"
+  },
+  "statutes/sections/LG-143.004.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 278,
+   "sha256": "74775a493fe1c5075067700b8d2cc6396a35df0508197ae07f16910d8734bf13"
+  },
+  "statutes/sections/TN-372.053.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 832,
+   "sha256": "44605a049e6c2632451f7dcb5c7f418650b5711f30213a3565d18dc20827b325"
+  },
+  "text/HB1001/index.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 470,
+   "sha256": "696a0ed1eb7d9028aca5a0a3e9d4dc9a399fbc95472ce0cd7e5e1616c283cce1"
+  },
+  "text/HB1002/index.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 470,
+   "sha256": "a43f1b8141d62e719ceabfd8984c1574a3c0e057743d699edc7e013dfd89fdc3"
+  },
+  "text/HB1003/index.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 470,
+   "sha256": "6d9186a6cd84d1d3c81bd5772ebf2e0a297a3f3bb9e32ac6d10bd8958d8c1c3e"
+  },
+  "text/HB110/index.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 469,
+   "sha256": "14e3ec66478b6bd4be91662cce6a334bfb3528015aa3c707f5a3e181614f841b"
+  },
+  "text/HB147/index.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 469,
+   "sha256": "f8adfd70cf82904aa900a42e61ed213103ed6711a386b5793d3d45839b84734f"
+  },
+  "text/HB239/index.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 469,
+   "sha256": "09b2d452c21c80ddb1608f88f9762dc505b2ca1f045a42552c0eef7261158a89"
+  },
+  "text/HB381/index.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 469,
+   "sha256": "2816f8bb1f419270988bff5bc6e870960ffc029a82c950fecc4029cef631a462"
+  },
+  "text/HB448/index.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 469,
+   "sha256": "8e13a704eecc17fc8f3532dd5e3235c61b805f438069724e94ede1760f6a7bfe"
+  },
+  "text/HB717/index.json": {
+   "status": 200,
+   "origin": "production",
+   "type": "application/json",
+   "bytes": 469,
+   "sha256": "88f92234f561a5dfbbac3db350924a23537b93ee7b11ce97a91be1343b2f2ccc"
+  }
+ }
+}

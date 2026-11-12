@@ -1,0 +1,15 @@
+{
+  "format": "texas-bill-text-index-v1",
+  "bill_id": "HB110",
+  "versions": [
+    {
+      "code": "I",
+      "name": "Introduced",
+      "path": "I.md",
+      "source_url": "ftp://ftp.legis.state.tx.us/bills/90R/billtext/HTML/house_bills/HB00100_HB00199/HB00110I.HTM",
+      "source_modified": "11/10/2026 2:00:06 AM",
+      "sha256": "83b8d278b60df879aa4f3571983cc1bfb52f8ad9862c95152b635abd36a9c5cc",
+      "generated_at": "2026-11-10T23:27:48.418955Z"
+    }
+  ]
+}
