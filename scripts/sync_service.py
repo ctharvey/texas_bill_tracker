@@ -28,11 +28,18 @@ import search_bills
 SEARCH_PATHS = {"/search", "/search.md", "/search.json", "/api/search"}
 KEY_RE = re.compile(r"[A-Za-z0-9_-]{22}")
 FEED_RE = re.compile(r"/api/sync/feed/([A-Za-z0-9_-]{22})\.xml")
-MAX_BODY = 16 * 1024
+# Matches the gateway's request_body limit (cth.hosting 07-bills.ctharvey.me.caddy). 500 bills, 200 follows and 20
+# searches with SEARCH_FILTER_BYTES each come to about 21 KB.
+MAX_BODY = 32 * 1024
+SEARCH_FILTER_BYTES = 600
 DISCARD_LIMIT, DISCARD_SECONDS = 1024 * 1024, 2  # Bounds on draining a refused body (make_handler).
 MAX_BILLS = 500
 MAX_FOLLOWS = 200
 MEMBER_CODE = re.compile(r"A\d{3,5}")
+MAX_SEARCHES = 20
+SEARCH_ID = re.compile(r"[a-z0-9]{8,16}")
+DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
+OPTIONAL_SECTIONS = ("follows", "searches")
 MAX_LISTS = 100_000
 RETENTION_SECONDS = 365 * 86400
 FEED_ITEMS = 300
@@ -69,18 +76,7 @@ def clean_data(data) -> dict:
             raise Rejected(400, "invalid bill id")
         if bill_id not in bills:
             bills.append(bill_id)
-    filters = data.get("filters") or {}
-    if not isinstance(filters, dict):
-        raise Rejected(400, "filters must be an object")
-    kept = {}
-    for name, value in filters.items():
-        if name in TEXT_FILTERS and isinstance(value, str) and len(value) <= 200:
-            kept[name] = value
-        elif name in BOOL_FILTERS and isinstance(value, bool):
-            kept[name] = value
-        else:
-            raise Rejected(400, "unsupported filter")
-    cleaned = {"watch": bills, "filters": kept}
+    cleaned = {"watch": bills, "filters": clean_filters(data.get("filters") or {})}
     if "follows" in data:  # Absent means "not sent" (an older client), never "none": see merge_data.
         follows = data["follows"]
         if not isinstance(follows, list) or len(follows) > MAX_FOLLOWS:
@@ -92,15 +88,49 @@ def clean_data(data) -> dict:
             if code not in codes:
                 codes.append(code)
         cleaned["follows"] = codes
+    if "searches" in data:
+        searches = data["searches"]
+        if not isinstance(searches, list) or len(searches) > MAX_SEARCHES:
+            raise Rejected(400, f"searches must be a list of at most {MAX_SEARCHES}")
+        kept, ids = [], set()
+        for item in searches:
+            if (not isinstance(item, dict) or not isinstance(item.get("id"), str) or not SEARCH_ID.fullmatch(item["id"])
+                    or not isinstance(item.get("name"), str) or not 0 < len(item["name"].strip()) <= 80
+                    or not (item.get("seen") is None or isinstance(item["seen"], str) and DAY.fullmatch(item["seen"]))
+                    or set(item) - {"id", "name", "filters", "seen"}):
+                raise Rejected(400, "invalid saved search")
+            if item["id"] in ids:
+                continue
+            filters = clean_filters(item.get("filters") or {})
+            if len(json.dumps(filters, separators=(",", ":"), ensure_ascii=False).encode("utf-8")) > SEARCH_FILTER_BYTES:
+                raise Rejected(400, "saved search filters too long")
+            ids.add(item["id"])
+            kept.append({"id": item["id"], "name": item["name"].strip(), "filters": filters, "seen": item.get("seen")})
+        cleaned["searches"] = kept
     return cleaned
+
+
+def clean_filters(filters) -> dict:
+    if not isinstance(filters, dict):
+        raise Rejected(400, "filters must be an object")
+    kept = {}
+    for name, value in filters.items():
+        if name in TEXT_FILTERS and isinstance(value, str) and len(value) <= 200:
+            kept[name] = value
+        elif name in BOOL_FILTERS and isinstance(value, bool):
+            kept[name] = value
+        else:
+            raise Rejected(400, "unsupported filter")
+    return kept
 
 
 def merge_data(stored: dict, cleaned: dict) -> dict:
     """A write replaces the sections it carries and keeps the rest, so a client that predates a section (an old
     cached page sends only `watch`) cannot erase what newer clients saved there."""
     merged = dict(cleaned)
-    if "follows" not in cleaned and "follows" in stored:
-        merged["follows"] = stored["follows"]
+    for section in OPTIONAL_SECTIONS:
+        if section not in cleaned and section in stored:
+            merged[section] = stored[section]
     return merged
 
 

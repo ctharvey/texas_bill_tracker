@@ -1,6 +1,10 @@
 # Changelog
 
 ## 2026-11-12
+- Saved searches: "Save search" in the explorer keeps the current filters under a name (up to 20). They are
+  listed on the Following page with their bill count and how many bills have new actions since the search was last
+  opened, can be renamed or deleted, and go into exported files and sync links (never share or view-only links).
+  The sync service accepts bodies up to 32 KB, the gateway's limit.
 - Saved data as one profile: "Export file" now saves the watchlist and followed legislators together
   (`texas-bill-atlas-profile-v1`; older watchlist files still import), and sync links carry follows across devices
   once the sync service is updated. Share links and view-only links still show bills only.

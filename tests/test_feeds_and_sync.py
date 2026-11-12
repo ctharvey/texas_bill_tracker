@@ -195,6 +195,40 @@ class SyncAppTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertNotIn(b'A2002', feed)
 
+    def test_saved_searches_sync_but_older_clients_and_view_links_never_touch_them(self):
+        saved = [{'id': 'abcd1234', 'name': ' Taxes ', 'filters': {'topic': 'Taxes', 'onlyWatch': True}, 'seen': '2026-11-12'},
+                 {'id': 'abcd1234', 'name': 'dupe', 'filters': {}, 'seen': None}]
+        status, made = self.call('POST', body={'data': {'watch': [], 'follows': ['A1001'], 'searches': saved}})
+        self.assertEqual((status, made['data']['searches']),
+                         (201, [{'id': 'abcd1234', 'name': 'Taxes', 'filters': {'topic': 'Taxes', 'onlyWatch': True}, 'seen': '2026-11-12'}]))
+        key = made['edit_key']
+        # A page from before saved searches (bills and follows only), then one from before follows (bills only).
+        self.call('PUT', body={'version': 1, 'data': {'watch': ['HB5'], 'follows': []}}, key=key)
+        status, kept = self.call('PUT', body={'version': 2, 'data': {'watch': ['HB5']}}, key=key)
+        self.assertEqual((status, [s['name'] for s in kept['data']['searches']], kept['data']['follows']), (200, ['Taxes'], []))
+        self.assertEqual(self.call('PUT', body={'version': 3, 'data': {'watch': [], 'searches': []}}, key=key)[1]['data']['searches'], [])
+        status, view = self.call('GET', key=made['view_key'])
+        self.assertEqual((status, set(view['data'])), (200, {'watch', 'filters'}))
+
+    def test_saved_searches_are_validated(self):
+        made = self.create()
+        good = {'id': 'abcd1234', 'name': 'x', 'filters': {}, 'seen': None}
+        bad = ['x', [{**good, 'id': 'AB'}], [{**good, 'name': '  '}], [{**good, 'name': 'n' * 81}], [{**good, 'seen': 'today'}],
+               [{**good, 'filters': {'evil': 'x'}}], [{**good, 'extra': 1}], [{**good, 'filters': {'query': 'q' * 200, 'topic': 't' * 200, 'agency': 'a' * 200}}],
+               [{**good, 'id': f'abcd{i:04d}'} for i in range(21)]]
+        for searches in bad:
+            status, _ = self.call('PUT', body={'version': 1, 'data': {'watch': [], 'searches': searches}}, key=made['edit_key'])
+            self.assertEqual(status, 400, str(searches)[:80])
+        self.assertEqual(self.call('PUT', body={'version': 1, 'data': {'watch': [], 'searches': [good]}}, key=made['edit_key'])[0], 200)
+
+    def test_largest_valid_profile_fits_the_gateway_limit(self):
+        searches = [{'id': f'abcd{i:04d}', 'name': 'n' * 80, 'filters': {'query': 'q' * 200, 'topic': 't' * 150, 'agency': 'a' * 150},
+                     'seen': '2026-11-12'} for i in range(svc.MAX_SEARCHES)]
+        body = {'version': 1, 'data': {'watch': [f'HB{i}' for i in range(10000, 10000 + svc.MAX_BILLS)],
+                                       'follows': [f'A{i}' for i in range(10000, 10000 + svc.MAX_FOLLOWS)], 'searches': searches}}
+        self.assertLess(len(json.dumps(body).encode()), svc.MAX_BODY)
+        self.assertEqual(self.call('PUT', body=body, key=self.create()['edit_key'])[0], 200)
+
     def test_follows_are_validated(self):
         made = self.create()
         for follows in ('A1001', ['../x'], ['a1001'], [7], ['A1'], [f'A{1000 + i}' for i in range(201)]):

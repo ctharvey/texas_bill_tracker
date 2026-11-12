@@ -97,23 +97,65 @@ export function applyFollowOps(follows, ops) {
   return cleanFollows([...set]);
 }
 
-// One file for everything saved: the watchlist (as the first of `lists`, ready for named lists) and follows.
-// Device-only things (Near you districts, filters, the sync link) are never in it.
+// Saved searches: explorer filters under a name. `seen` is the Texas day the search was last opened.
+export const MAX_SEARCHES = 20;
+// The sync service's per-search limit (SEARCH_FILTER_BYTES), so a saved search always syncs.
+export const searchFitsSync = filters => new TextEncoder().encode(JSON.stringify(filters)).length <= 600;
+const SEARCH_ID = /^[a-z0-9]{8,16}$/;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+export function cleanSearch(raw) {
+  if (!raw || typeof raw !== 'object' || typeof raw.id !== 'string' || !SEARCH_ID.test(raw.id)) return null;
+  const name = typeof raw.name === 'string' ? raw.name.trim().slice(0, 80) : '';
+  const filters = cleanFilters(raw.filters);
+  if (!name || !searchFitsSync(filters)) return null;
+  return {id: raw.id, name, filters, seen: typeof raw.seen === 'string' && DAY.test(raw.seen) ? raw.seen : null};
+}
+export function cleanSearches(raw) {
+  const seen = new Set(), out = [];
+  for (const item of Array.isArray(raw) ? raw : []) {
+    const s = cleanSearch(item);
+    if (s && !seen.has(s.id)) { seen.add(s.id); out.push(s); }
+  }
+  return out.slice(0, MAX_SEARCHES);
+}
+// save-search replaces (or adds) one search by id; delete-search removes it.
+export function applySearchOps(searches, ops) {
+  const byId = new Map(cleanSearches(searches).map(s => [s.id, s]));
+  for (const {op, id, value} of ops || []) {
+    if (op === 'save-search') { const s = cleanSearch(value); if (s && s.id === id) byId.set(id, s); }
+    else if (op === 'delete-search') byId.delete(id);
+  }
+  return cleanSearches([...byId.values()]);
+}
+export function newSearchId(random = n => crypto.getRandomValues(new Uint8Array(n))) {
+  return [...random(10)].map(b => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');
+}
+// A readable default name from the filters that are set.
+export function searchName(filters, agencyName = id => id) {
+  const f = cleanFilters(filters);
+  const parts = [f.query && `“${f.query.trim()}”`, f.topic, f.agency && agencyName(f.agency), f.chamber, f.stage, f.outlook,
+    f.action, f.onlyWatch && 'Watched only'].filter(Boolean);
+  return (parts.join(' · ') || 'All bills').slice(0, 80);
+}
+
+// One file for everything saved: the watchlist (as the first of `lists`, ready for named lists), follows and saved
+// searches. Device-only things (Near you districts, remembered filters, the sync link) are never in it.
 export const PROFILE_FORMAT = 'texas-bill-atlas-profile-v1';
-export function profileFile({watch = [], follows = []} = {}, now = new Date()) {
+export function profileFile({watch = [], follows = [], searches = []} = {}, now = new Date()) {
   return JSON.stringify({format: PROFILE_FORMAT, session: '90R', exported_at: now.toISOString(),
-    lists: [{id: 'main', name: 'Watchlist', bills: [...watch]}], follows: cleanFollows([...follows])}, null, 2);
+    lists: [{id: 'main', name: 'Watchlist', bills: [...watch]}], follows: cleanFollows([...follows]),
+    searches: cleanSearches(searches)}, null, 2);
 }
 
 // A profile file, or anything parseWatchlistFile reads (older watchlist exports, arrays, pasted text).
-// Returns {bills, follows}; importing only adds.
+// Returns {bills, follows, searches}; importing only adds.
 export function parseProfileFile(text) {
   let data = null;
   try { data = JSON.parse(text); } catch {}
-  if (data?.format !== PROFILE_FORMAT) return {bills: parseWatchlistFile(text), follows: []};
+  if (data?.format !== PROFILE_FORMAT) return {bills: parseWatchlistFile(text), follows: [], searches: []};
   const lists = Array.isArray(data.lists) ? data.lists : [];
   const bills = uniqueIds(lists.flatMap(l => Array.isArray(l?.bills) ? l.bills.filter(x => typeof x === 'string') : []));
-  const follows = cleanFollows(data.follows);
-  if (!bills.length && !follows.length) throw Error('This file has no bills or legislators');
-  return {bills, follows};
+  const follows = cleanFollows(data.follows), searches = cleanSearches(data.searches);
+  if (!bills.length && !follows.length && !searches.length) throw Error('This file has no bills or legislators (or saved searches)');
+  return {bills, follows, searches};
 }

@@ -1,5 +1,6 @@
 import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal} from './review.js';
-import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS} from './prefs.js';
+import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
+  cleanSearches, applySearchOps, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
 import {createSyncClient} from './sync.js';
 import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, followedBills, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
 import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, searchTerms, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
@@ -17,6 +18,10 @@ try{state.watch=new Set(JSON.parse(localStorage.getItem(storageKey)||'[]'))}catc
 const followKey = 'tx-bill-atlas-follow-90r';
 state.follow=[];state.followShow=30;
 try{state.follow=cleanFollows(JSON.parse(localStorage.getItem(followKey)||'[]'))}catch{}
+// Saved searches: same rules as follows (browser, files, sync links; never share or view-only links).
+const searchesKey = 'tx-bill-atlas-searches-90r';
+state.searches=[];state.renamingSearch=null;
+try{state.searches=cleanSearches(JSON.parse(localStorage.getItem(searchesKey)||'[]'))}catch{}
 
 const shortDate = iso => iso ? new Date(`${String(iso).slice(0,10)}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}) : '';
 const dateText = iso => iso ? new Date(`${String(iso).slice(0,10)}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}) : 'Not available';
@@ -95,7 +100,10 @@ async function init(){
   document.addEventListener('click',handleClick);
   document.addEventListener('change',handleChange);
   document.addEventListener('input',handleInput);
-  document.addEventListener('submit',e=>{if(e.target.id==='near-address-form'){e.preventDefault();nearAddress($('#near-address')?.value)}});
+  document.addEventListener('submit',e=>{if(e.target.id==='near-address-form'){e.preventDefault();nearAddress($('#near-address')?.value)}
+    const form=e.target.closest?.('[data-search-rename-form]');
+    if(form){e.preventDefault();const s=state.searches.find(x=>x.id===form.dataset.searchRenameForm),name=form.elements.name.value.trim().slice(0,80);
+      if(s&&name&&name!==s.name)changeSearch('save-search',{...s,name});state.renamingSearch=null;renderContent()}});
   document.addEventListener('focusin',event=>{
     if(event.target.id==='filter-agency')showAgencyChoices('');
   });
@@ -140,7 +148,7 @@ const prefsKey='tx-bill-atlas-prefs-v1';
 const readJson=key=>{try{return JSON.parse(localStorage.getItem(key)||'null')}catch{return null}};
 const writeJson=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value))}catch{}};
 const memoryStorage=()=>{const m=new Map();return {getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)}};
-const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>[...state.watch],getFollows:()=>[...state.follow]});
+const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>[...state.watch],getFollows:()=>[...state.follow],getSearches:()=>state.searches});
 let syncAvailable=null,lastPull=0;
 const siteBase=()=>location.href.split('#')[0];
 
@@ -240,9 +248,52 @@ function toggleFollow(code){
 const followButton=m=>{if(!m?.code)return '';const on=state.follow.includes(m.code);
   return `<button class="${on?'outline-button following':'primary-button'} follow-button" data-follow="${esc(m.code)}" aria-pressed="${on}">${on?'✓ Following':'+ Follow'}</button>`};
 const memberFeedHref=code=>`./live/feeds/members/${encodeURIComponent(code)}.xml`;
-// Following: followed legislators now; later also saved searches and named watchlists.
+function setSearches(list){state.searches=cleanSearches(list);if(STORAGE_OK)writeJson(searchesKey,state.searches)}
+function adoptSearches(searches){
+  if(!searches||JSON.stringify(searches)===JSON.stringify(state.searches))return false;
+  setSearches(searches);return true;
+}
+// op: 'save-search' (search object) or 'delete-search' (id).
+function changeSearch(op,item){
+  const id=op==='save-search'?item.id:item;
+  setSearches(applySearchOps(state.searches,[{op,id,value:item}]));
+  sync.record(op,id,onSynced,op==='save-search'?item:undefined);
+}
+const todayDay=()=>chicagoDate(new Date());
+// Bills matching a saved search now, and those with a dated action after the day it was last opened.
+function searchCounts(s){
+  const list=filteredBills({...FILTER_DEFAULTS,...s.filters}),today=todayDay();
+  const fresh=s.seen?list.filter(b=>(latestActivityDay([b],today)||'')>s.seen).length:0;
+  return {total:list.length,fresh};
+}
+function saveCurrentSearch(){
+  if(state.searches.length>=MAX_SEARCHES){toast(`You can save up to ${MAX_SEARCHES} searches`);return}
+  const filters=cleanFilters(Object.fromEntries(Object.entries(pickFilters(state)).filter(([k,v])=>v!==FILTER_DEFAULTS[k])));
+  if(!searchFitsSync(filters)){toast('This search is too long to save; shorten the search words');return}
+  const name=searchName(filters,agencyName);
+  if(state.searches.some(s=>JSON.stringify(s.filters)===JSON.stringify(filters))){toast(`Already saved as “${state.searches.find(s=>JSON.stringify(s.filters)===JSON.stringify(filters)).name}”`);return}
+  changeSearch('save-search',{id:newSearchId(),name,filters,seen:todayDay()});
+  renderOverview();toast(`Saved “${name}” · find it under Following`);
+}
+function searchSummary(f){
+  const parts=[f.query&&`Search “${f.query}”`,f.topic&&`Topic: ${f.topic}`,f.agency&&`Agency: ${agencyName(f.agency)}`,f.chamber,f.stage&&`Stage: ${f.stage}`,
+    f.outlook&&`Hearing: ${f.outlook}`,f.action&&`Last action: ${f.action}`,f.onlyWatch&&'Watched bills only',f.sort&&f.sort!=='newest'&&`Sorted by ${SORTS[f.sort]||f.sort}`].filter(Boolean);
+  return parts.join(' · ')||'All bills';
+}
+function savedSearchesMarkup(){
+  if(!state.searches.length)return `<section class="followed-section"><h3>Saved searches</h3><p class="tools-note">Set filters or a search in the <a class="text-link" href="#all" data-view="all">Bill explorer</a>, then choose <strong>Save search</strong> to keep it here, with a count of bills that moved since you last opened it.</p></section>`;
+  const rows=state.searches.map(s=>{
+    const {total,fresh}=searchCounts(s);
+    const name=state.renamingSearch===s.id
+      ?`<form class="search-rename" data-search-rename-form="${esc(s.id)}"><input name="name" maxlength="80" value="${esc(s.name)}" aria-label="Name for this search" autocomplete="off"><button class="outline-button" type="submit">Save</button></form>`
+      :`<a class="text-link saved-search-name" href="${esc(buildHash('all',s.filters))}" data-search-open="${esc(s.id)}">${esc(s.name)}</a>`;
+    return `<div class="saved-search">${name}<p>${esc(searchSummary(s.filters))}</p><p class="saved-search-counts"><strong>${total.toLocaleString()}</strong> ${total===1?'bill':'bills'}${fresh?` · <span class="saved-search-new">${fresh.toLocaleString()} with new actions</span>`:''}${s.seen?` · opened ${esc(shortDate(s.seen))}`:''}</p><div class="tools-row">${state.renamingSearch===s.id?'':`<button class="text-button" data-search-rename="${esc(s.id)}">Rename</button>`}<button class="text-button danger" data-search-delete="${esc(s.id)}">Delete</button></div></div>`;
+  }).join('');
+  return `<section class="followed-section"><h3>Saved searches <span>${state.searches.length}</span></h3><p class="tools-note">“New actions” counts bills with an action dated after the day you last opened the search.</p><div class="saved-searches">${rows}</div></section>`;
+}
+// Following: saved searches and followed legislators; later also named watchlists.
 function followingMarkup(){
-  return `<div class="section-head"><div><div class="section-overline">FOLLOWING</div><h2>Your legislators</h2></div><span class="subtitle">Saved in this browser, files and sync links</span></div>${followedMarkup()}`;
+  return `<div class="section-head"><div><div class="section-overline">FOLLOWING</div><h2>Your searches and legislators</h2></div><span class="subtitle">Saved in this browser, files and sync links</span></div>${savedSearchesMarkup()}${followedMarkup()}`;
 }
 function followedMarkup(){
   if(!state.follow.length)return `<section class="followed-section"><h3>Followed legislators</h3><p class="tools-note">Follow a legislator from their member page or from <a class="text-link" href="#local" data-view="local">Near you</a> to see every bill they file or sign onto here.</p></section>`;
@@ -255,7 +306,8 @@ function followedMarkup(){
 function setWatch(ids){state.watch=new Set(ids);saveWatchLocal()}
 const FOLLOW_VIEWS=new Set(['following','member','local']);
 function refreshWatch(){renderOverview();if(state.view==='all'||state.view==='watchlist'||FOLLOW_VIEWS.has(state.view))renderContent()}
-const onSynced=(watch,error,follows)=>{if(error){toast(`Sync: ${error.message}`);return}setWatch(watch);const moved=adoptFollows(follows);renderOverview();
+// `sections` from sync: {follows, searches}, each the link's copy or null when the server did not say.
+const onSynced=(watch,error,sections)=>{if(error){toast(`Sync: ${error.message}`);return}setWatch(watch);const moved=adoptFollows(sections?.follows)|adoptSearches(sections?.searches);renderOverview();
   if(state.view==='all'||state.view==='watchlist')renderResults();else if(moved&&FOLLOW_VIEWS.has(state.view))renderContent()};
 function changeWatch(op,ids){
   for(const id of ids){if(op==='add'?state.watch.has(id):!state.watch.has(id))continue;op==='add'?state.watch.add(id):state.watch.delete(id);sync.record(op,id,onSynced)}
@@ -290,9 +342,9 @@ async function pullSync(mergeLocal){
   if(!syncAvailable||!sync.linked)return;
   lastPull=Date.now();
   try{
-    const {watch,follows}=await sync.pull();  // The client already merged this device's follows into the link's.
+    const {watch,follows,searches}=await sync.pull();  // The client already merged this device's follows and searches.
     const local=[...state.watch];
-    setWatch(watch);adoptFollows(follows);
+    setWatch(watch);adoptFollows(follows);adoptSearches(searches);
     if(mergeLocal)changeWatch('add',local.filter(id=>!watch.includes(id)));  // Joining keeps this device's bills.
     refreshWatch();
   }catch(error){toast(`Sync: ${error.message}`);refreshWatch()}
@@ -317,18 +369,18 @@ function watchTools(){
   const syncPart=syncAvailable===false?'<p class="tools-note">Private sync links aren’t switched on for this site yet. Use a share link or a file to move your list for now.</p>'
     :linked?.editKey?`<p class="tools-note">This device is synced; changes save automatically.</p><div class="tools-row"><button class="outline-button" id="sync-copy-edit">Copy edit link</button><button class="outline-button" id="sync-copy-view">Copy view-only link</button><a class="outline-button" href="./api/sync/feed/${esc(linked.viewKey||'')}.xml" target="_blank" rel="noopener noreferrer">Watchlist RSS</a></div><p class="tools-note">Open the <strong>edit link</strong> on your other devices. Anyone who has it can change this list, so keep it private, like a password. The <strong>view-only link</strong> is safe to share.</p><div class="tools-row"><button class="text-button" id="sync-forget">Stop syncing on this device</button><button class="text-button danger" id="sync-delete">Delete sync link</button></div>`
     :`<p class="tools-note">Get a private link that keeps this watchlist the same on your phone, laptop and work computer. No account, email or name.</p><div class="tools-row"><button class="primary-button" id="sync-create" ${syncAvailable?'':'disabled'}>Create sync link</button></div><p class="tools-note">Already have one? Open it on this device.</p>`;
-  return `<div class="watch-tools"><section><h3>Save and share</h3><p class="tools-note">Your watchlist is kept in this browser. To move it to another device or person:</p><div class="tools-row"><button class="outline-button" id="share-watch" ${none}>Copy share link</button><button class="outline-button" id="export-watch" ${n||state.follow.length?'':'disabled'} title="Your watchlist and followed legislators, in one file">Export file</button><button class="outline-button" id="import-watch">Import file</button><input type="file" id="import-watch-file" accept=".json,.txt,.csv,application/json,text/plain,text/csv" hidden></div><p class="tools-note">Each bill also has an RSS feed in its details, for following it in Outlook or a feed reader. <a href="#saving" data-view="saving">How saving works →</a></p></section><section><h3>Sync across devices</h3>${syncPart}</section></div>`;
+  return `<div class="watch-tools"><section><h3>Save and share</h3><p class="tools-note">Your watchlist is kept in this browser. To move it to another device or person:</p><div class="tools-row"><button class="outline-button" id="share-watch" ${none}>Copy share link</button><button class="outline-button" id="export-watch" ${n||state.follow.length||state.searches.length?'':'disabled'} title="Your watchlist, followed legislators and saved searches, in one file">Export file</button><button class="outline-button" id="import-watch">Import file</button><input type="file" id="import-watch-file" accept=".json,.txt,.csv,application/json,text/plain,text/csv" hidden></div><p class="tools-note">Each bill also has an RSS feed in its details, for following it in Outlook or a feed reader. <a href="#saving" data-view="saving">How saving works →</a></p></section><section><h3>Sync across devices</h3>${syncPart}</section></div>`;
 }
 
 async function handleSaveClick(target){
   const hit=sel=>target.closest(sel);
   if(hit('#copy-view-link')){persistState();return copyText(location.href,'Link to this view')}
   if(hit('#share-watch'))return copyText(siteBase()+buildHash('all',{},{list:[...state.watch]}),'Share link');
-  if(hit('#export-watch')){download('texas-bill-atlas-saved.json',profileFile({watch:state.watch,follows:state.follow}),'application/json');return toast('Watchlist and followed legislators exported')}
+  if(hit('#export-watch')){download('texas-bill-atlas-saved.json',profileFile({watch:state.watch,follows:state.follow,searches:state.searches}),'application/json');return toast('Watchlist, followed legislators and saved searches exported')}
   if(hit('#import-watch')){$('#import-watch-file').click();return}
   if(hit('#shared-add')){const before=state.watch.size;changeWatch('add',state.sharedList);refreshWatch();return toast(`Added ${state.watch.size-before} bills to your watchlist`)}
   if(hit('#shared-close')){Object.assign(state,{sharedList:null,sharedMode:null,sharedSyncKey:null,visibleCount:30});return renderContent()}
-  if(hit('#sync-create')){try{await sync.create([...state.watch],[...state.follow]);adoptFollows(sync.follows);renderContent();toast('Sync link created. Copy the edit link to your other devices.')}catch(error){toast(error.message)}return}
+  if(hit('#sync-create')){try{await sync.create([...state.watch],[...state.follow],state.searches);adoptFollows(sync.follows);adoptSearches(sync.searches);renderContent();toast('Sync link created. Copy the edit link to your other devices.')}catch(error){toast(error.message)}return}
   if(hit('#sync-copy-edit'))return copyText(siteBase()+'#watchlist?sync='+sync.linked.editKey,'Edit link');
   if(hit('#sync-copy-view'))return copyText(siteBase()+'#watchlist?sync='+sync.linked.viewKey,'View-only link');
   if(hit('#sync-forget')){sync.forget();renderContent();return toast('This device stopped syncing; your list stays here')}
@@ -342,9 +394,12 @@ async function handleSaveClick(target){
 async function importWatchlist(file){
   try{
     if(file.size>1024*1024)throw Error('Select a file smaller than 1 MB');
-    const {bills,follows}=parseProfileFile(await file.text()),before=state.watch.size,followed=state.follow.length;
-    changeWatch('add',bills);changeFollow('follow',follows);refreshWatch();
-    toast(`Added ${state.watch.size-before} of ${bills.length} bills${follows.length?` and ${state.follow.length-followed} of ${follows.length} legislators`:''}`);
+    const {bills,follows,searches}=parseProfileFile(await file.text()),before=state.watch.size,followed=state.follow.length;
+    changeWatch('add',bills);changeFollow('follow',follows);
+    const known=new Set(state.searches.map(s=>s.id)),added=searches.filter(s=>!known.has(s.id)).slice(0,Math.max(0,MAX_SEARCHES-state.searches.length));
+    for(const s of added)changeSearch('save-search',s);
+    refreshWatch();
+    toast(`Added ${state.watch.size-before} of ${bills.length} bills${follows.length?`, ${state.follow.length-followed} of ${follows.length} legislators`:''}${searches.length?`, ${added.length} of ${searches.length} saved searches`:''}`);
   }catch(error){toast(`Import failed: ${error.message}`)}
 }
 
@@ -399,7 +454,7 @@ function renderOverview(){
   $('#overview').innerHTML=cards.map(([label,count,icon,foot,accent])=>`<div class="stat-card"><div class="stat-top"><span>${label}</span><span class="stat-icon">${icon}</span></div><div class="stat-value ${accent||''}">${count.toLocaleString()}</div><div class="stat-foot">${foot}</div></div>`).join('');
   $('#nav-all').textContent=state.bills.length;
   $('#nav-watch').textContent=state.watch.size;
-  $('#nav-follow').textContent=state.follow.length;
+  $('#nav-follow').textContent=state.follow.length+state.searches.length;
   const progress=reviewProgress(state.bills.map(b=>b.id),state.reviewStatus,Object.keys(state.luna?.bills||{}));
   $('#nav-review').textContent=progress.reviewed.length+progress.inProgress.length;
 }
@@ -430,7 +485,7 @@ function explorerMarkup(){
   const popular=['Education','Healthcare','Elections','Taxes','Immigration','Data centers','Local government','Energy & utilities'];
   return `<div class="section-head"><div><div class="section-overline">EXPLORE LEGISLATION</div><h2>${state.view==='watchlist'?'Watched bills':'Bill explorer'}</h2></div><span class="subtitle">90R · House & Senate · All bill types</span></div>
     ${sharedBanner()}${state.view==='watchlist'?watchTools():''}
-    <div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><button class="outline-button" id="clear-filters">Clear filters</button><button class="outline-button" id="copy-view-link" title="Copy a link to this view, with its filters">Copy link</button><button class="primary-button" id="export-csv">↓ Export results</button></div>
+    <div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><button class="outline-button" id="clear-filters">Clear filters</button><button class="outline-button" id="copy-view-link" title="Copy a link to this view, with its filters">Copy link</button>${state.view==='all'&&!state.sharedList?'<button class="outline-button" id="save-search" title="Keep this search and its filters under Following">Save search</button>':''}<button class="primary-button" id="export-csv">↓ Export results</button></div>
     <div class="filter-row"><select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><div class="agency-combobox" id="agency-combobox"><input aria-label="Affected agency" aria-controls="agency-options" aria-expanded="false" aria-autocomplete="list" role="combobox" id="filter-agency" placeholder="All affected agencies" value="${esc(state.agency?agencyName(state.agency):'')}" autocomplete="off"><span class="agency-chevron" aria-hidden="true">⌄</span><div class="agency-options" id="agency-options" role="listbox" hidden><div id="agency-option-0" role="option" class="agency-option" data-agency-option="" data-agency-label="All affected agencies" aria-selected="${!state.agency}"><span>All affected agencies</span></div>${agencyOpts}<p class="agency-no-results" id="agency-no-results" hidden>No matching agencies</p></div></div><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted'],state.stage,'Any stage')}</select><select aria-label="Hearing status" id="filter-outlook">${options(['Not rated','Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><select aria-label="Last action" id="filter-action">${options(unique([...LAST_ACTION_TYPES.map(t=>t.label),'Other action']).filter(l=>l===state.action||state.bills.some(b=>lastActionInfo(b).label===l)),state.action,'Any last action')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></div>
     <div class="topic-strip" aria-label="Quick topic filters"><button class="topic-chip ${state.topic===''?'selected':''}" data-topic="">All topics</button>${popular.map(t=>`<button class="topic-chip ${state.topic===t?'selected':''}" data-topic="${esc(t)}">${esc(t)}</button>`).join('')}</div>
     <div class="results-header"><div><strong id="result-count">—</strong><span id="result-note"></span></div><select id="sort-order" aria-label="Sort bills">${options(Object.values(SORTS),SORTS[state.sort],'Sort by')}</select></div><div class="bill-list" id="bill-list"></div><div class="explorer-bottom" id="results-bottom"></div>`;
@@ -443,12 +498,12 @@ function companionsOf(id){
 }
 const relationText=c=>c.relation?c.relation.toLowerCase():'companion';
 // With an agency filter, bills whose companion carries the agency are listed too (marked on the card).
-const viaCache={bills:null,agency:null,map:new Map()};
-function agencyVia(){
-  if(!state.agency)return new Map();
-  if(viaCache.bills!==state.bills||viaCache.agency!==state.agency){companionsOf('');
-    Object.assign(viaCache,{bills:state.bills,agency:state.agency,map:agencyViaCompanion(state.bills,state.agency,companionCache.index)})}
-  return viaCache.map;
+const viaCache={bills:null,maps:new Map()};  // agency id -> bills tagged only through a companion
+function agencyVia(agency=state.agency){
+  if(!agency)return new Map();
+  if(viaCache.bills!==state.bills){companionsOf('');Object.assign(viaCache,{bills:state.bills,maps:new Map()})}
+  if(!viaCache.maps.has(agency))viaCache.maps.set(agency,agencyViaCompanion(state.bills,agency,companionCache.index));
+  return viaCache.maps.get(agency);
 }
 // One control for a bill and its companions: watches every one, or unwatches all when all are already watched.
 // The watchlist stays a plain list of ids, so sync, share links and export are unchanged.
@@ -479,19 +534,21 @@ function relatedBlock(b){
   return `<section class="drawer-section related-section"><h3>Related bills</h3><div class="review-chips">${ids.map(id=>`<button class="review-chip" data-open="${esc(id)}">${esc(id)}</button>`).join('')}</div><p><small>Similar captions and Luna summaries; computed automatically.</small></p></section>`;
 }
 
-function filteredBills(){
-  const shared=state.sharedList?new Set(state.sharedList):null;
-  const {q,compact}=searchTerms(state.query);
+// The explorer's list for its own filters, or for a saved search's (`f`: the explorer as a plain, unshared view).
+function filteredBills(f=state){
+  const own=f===state;
+  const shared=own&&state.sharedList?new Set(state.sharedList):null;
+  const {q,compact}=searchTerms(f.query||'');
   let list=state.bills.filter(b=>{
     if(shared&&!shared.has(b.id))return false;
-    if(state.view==='watchlist'&&!state.watch.has(b.id))return false;
-    if(state.onlyWatch&&!state.watch.has(b.id))return false;
-    if(state.topic&&!b.topics.includes(state.topic))return false;
-    if(state.agency&&!b.agencies.some(a=>a.id===state.agency)&&!agencyVia().has(b.id))return false;
-    if(state.chamber&&b.chamber!==state.chamber)return false;
-    if(state.outlook&&assessHearing(b).label!==state.outlook)return false;
-    if(state.action&&lastActionInfo(b).label!==state.action)return false;
-    if(state.stage){const st=(b.status||'').toLowerCase();const outlook=assessHearing(b).label.toLowerCase();if(!st.includes(state.stage.toLowerCase())&&outlook!==state.stage.toLowerCase())return false}
+    if(own&&state.view==='watchlist'&&!state.watch.has(b.id))return false;
+    if(f.onlyWatch&&!state.watch.has(b.id))return false;
+    if(f.topic&&!b.topics.includes(f.topic))return false;
+    if(f.agency&&!b.agencies.some(a=>a.id===f.agency)&&!agencyVia(f.agency).has(b.id))return false;
+    if(f.chamber&&b.chamber!==f.chamber)return false;
+    if(f.outlook&&assessHearing(b).label!==f.outlook)return false;
+    if(f.action&&lastActionInfo(b).label!==f.action)return false;
+    if(f.stage){const st=(b.status||'').toLowerCase();const outlook=assessHearing(b).label.toLowerCase();if(!st.includes(f.stage.toLowerCase())&&outlook!==f.stage.toLowerCase())return false}
     return !q||b.id.toLowerCase().includes(compact)||[b.id,b.number,b.title,b.caption,b.author,...b.authors,...(b.coauthors||[]),...(b.sponsors||[]),...(b.cosponsors||[]),b.last_action,...b.topics,...(b.subjects||[]),...(b.search_terms||[]),...b.impacts,...b.agencies.map(a=>agencyName(a.id))].join(' ').toLowerCase().includes(q);
   });
   const byNumber=(a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true});
@@ -502,7 +559,7 @@ function filteredBills(){
     latest:(a,b)=>(la(b).date||'').localeCompare(la(a).date||'')||la(b).rank-la(a).rank||byNumber(a,b),
     oldest:(a,b)=>(la(a).date||'9').localeCompare(la(b).date||'9')||la(a).rank-la(b).rank||byNumber(a,b),
     actionstage:(a,b)=>la(b).rank-la(a).rank||(la(b).date||'').localeCompare(la(a).date||'')||byNumber(a,b),number:byNumber,agencies:(a,b)=>realAgencies(b).length-realAgencies(a).length||byNumber(a,b),hearing:(a,b)=>assessHearing(b).level-assessHearing(a).level||byNumber(a,b),influence:(a,b)=>authorInfluence(b).level-authorInfluence(a).level||byNumber(a,b)};
-  return list.sort(sorters[state.sort]);
+  return list.sort(sorters[f.sort]||sorters.newest);
 }
 
 function renderResults(){
@@ -820,12 +877,13 @@ function savingMarkup(){
     ['02','Remembered filters','Your last filters and sort order are remembered on this device and come back the next time you visit.'],
     ['03','Links to any view','The address bar always describes what you are looking at: the page, filters, sort and any open bill. Use <strong>Copy link</strong> above the results, or bookmark the page, to return to it or send it to someone.'],
     ['04','Share links','On the Watchlist, <strong>Copy share link</strong> makes a link to your bills. Whoever opens it sees a read-only list and can add those bills to their own watchlist. It is a snapshot: later changes to your list are not included.'],
-    ['05','Export and import a file','<strong>Export file</strong> saves your watchlist and followed legislators as one small file you can keep or email. <strong>Import file</strong> adds bills and legislators from that file (or an older watchlist export), or from any text or spreadsheet export that mentions bill numbers such as “HB 5” or “SJR 9”. Importing only adds; it never removes bills.'],
-    ['06','Private sync links','<strong>Create sync link</strong> on the Watchlist keeps your watchlist and followed legislators the same on your phone, laptop and work computer, with no account. Open the <strong>edit link</strong> on each device; treat it like a password, because anyone with it can change the list. The <strong>view-only link</strong> is safe to share: it shows your watchlist’s bills only, never who you follow, and stays current as you edit. You can stop syncing one device, or delete the link for every device.'],
+    ['05','Export and import a file','<strong>Export file</strong> saves your watchlist, followed legislators and saved searches as one small file you can keep or email. <strong>Import file</strong> adds them from that file (or an older watchlist export), or from any text or spreadsheet export that mentions bill numbers such as “HB 5” or “SJR 9”. Importing only adds; it never removes bills.'],
+    ['06','Private sync links','<strong>Create sync link</strong> on the Watchlist keeps your watchlist, followed legislators and saved searches the same on your phone, laptop and work computer, with no account. Open the <strong>edit link</strong> on each device; treat it like a password, because anyone with it can change the list. The <strong>view-only link</strong> is safe to share: it shows your watchlist’s bills only, never who you follow or what you saved, and stays current as you edit. You can stop syncing one device, or delete the link for every device.'],
     ['07','RSS feeds','Each bill’s details include an <strong>RSS feed</strong> of its recorded actions, for Outlook or any feed reader. A synced watchlist also has one feed for all of its bills, linked from the Watchlist. Each legislator has a feed too, linked from their member page.'],
-    ['08','Followed legislators','<strong>Follow</strong> a legislator on their member page or in Near you, and their bills appear under <strong>Following</strong>. Follows are kept in this browser like the watchlist, and go into exported files and sync links. Share links and view-only links never include them.']
+    ['08','Followed legislators','<strong>Follow</strong> a legislator on their member page or in Near you, and their bills appear under <strong>Following</strong>. Follows are kept in this browser like the watchlist, and go into exported files and sync links. Share links and view-only links never include them.'],
+    ['09','Saved searches','On the Bill explorer, <strong>Save search</strong> keeps the current search words and filters under <strong>Following</strong>, with how many bills have new actions since you last opened it. Saved searches go into exported files and sync links like follows; share and view-only links never include them.']
   ];
-  return `<div class="section-head"><div><div class="section-overline">NO ACCOUNT NEEDED</div><h2>Saving and sharing your info</h2></div><button class="outline-button" data-view="watchlist">Open your watchlist →</button></div><div class="info-callout"><strong>There are no logins on this site.</strong> Everything below works without an account, email address or name. Pick whichever fits: keep things on one device, carry them in a link or file, or sync a private link across devices.</div><div class="method-grid">${parts.map(([n,title,body])=>`<article class="method-card"><span class="n">${n}</span><h3>${title}</h3><p>${body}</p></article>`).join('')}</div><div class="section-head"><div><div class="section-overline">PRIVACY</div><h2>What is stored, and where</h2></div></div><div class="subpage-card"><div class="data-field long"><span class="data-label">On this device</span><span class="data-value">Watchlist, followed legislators, last filters, that you saw the disclaimer, and your sync link if you made one</span></div><div class="data-field long"><span class="data-label">On the server (sync links only)</span><span class="data-value">The watched bill numbers, the member codes of legislators you follow, a version number and dates. Links are stored only as one-way fingerprints, so the database cannot be used to open a list.</span></div><div class="data-field long"><span class="data-label">Never collected</span><span class="data-value">Names, email addresses, accounts, tracking cookies or analytics</span></div><div class="data-field long"><span class="data-label">Abuse limits</span><span class="data-value">The sync service counts requests per address in memory for up to an hour, and never writes addresses down</span></div><div class="data-field long"><span class="data-label">Retention</span><span class="data-value">A sync link unused for a year is deleted. Deleting it yourself removes it at once; each device keeps its own copy of the list.</span></div><div class="data-field"><span class="data-label">Sync on this site</span><span class="data-value">${esc(syncState)}</span></div><div class="data-field"><span class="data-label">This device</span><span class="data-value">${esc(deviceState)} · ${state.watch.size} ${state.watch.size===1?'bill':'bills'} watched</span></div><p style="font-size:11px;color:#91a0ad;margin:14px 0 0">Limits: up to 500 bills per synced list. Lost your edit link? Your list is still on each device that had it; create a new sync link from any of them.</p></div>`;
+  return `<div class="section-head"><div><div class="section-overline">NO ACCOUNT NEEDED</div><h2>Saving and sharing your info</h2></div><button class="outline-button" data-view="watchlist">Open your watchlist →</button></div><div class="info-callout"><strong>There are no logins on this site.</strong> Everything below works without an account, email address or name. Pick whichever fits: keep things on one device, carry them in a link or file, or sync a private link across devices.</div><div class="method-grid">${parts.map(([n,title,body])=>`<article class="method-card"><span class="n">${n}</span><h3>${title}</h3><p>${body}</p></article>`).join('')}</div><div class="section-head"><div><div class="section-overline">PRIVACY</div><h2>What is stored, and where</h2></div></div><div class="subpage-card"><div class="data-field long"><span class="data-label">On this device</span><span class="data-value">Watchlist, followed legislators, saved searches, last filters, that you saw the disclaimer, and your sync link if you made one</span></div><div class="data-field long"><span class="data-label">On the server (sync links only)</span><span class="data-value">The watched bill numbers, the member codes of legislators you follow, your saved searches (their names, search words and filters), a version number and dates. Links are stored only as one-way fingerprints, so the database cannot be used to open a list.</span></div><div class="data-field long"><span class="data-label">Never collected</span><span class="data-value">Names, email addresses, accounts, tracking cookies or analytics</span></div><div class="data-field long"><span class="data-label">Abuse limits</span><span class="data-value">The sync service counts requests per address in memory for up to an hour, and never writes addresses down</span></div><div class="data-field long"><span class="data-label">Retention</span><span class="data-value">A sync link unused for a year is deleted. Deleting it yourself removes it at once; each device keeps its own copy of the list.</span></div><div class="data-field"><span class="data-label">Sync on this site</span><span class="data-value">${esc(syncState)}</span></div><div class="data-field"><span class="data-label">This device</span><span class="data-value">${esc(deviceState)} · ${state.watch.size} ${state.watch.size===1?'bill':'bills'} watched</span></div><p style="font-size:11px;color:#91a0ad;margin:14px 0 0">Limits: up to 500 bills per synced list. Lost your edit link? Your list is still on each device that had it; create a new sync link from any of them.</p></div>`;
 }
 
 function dataMarkup(){
@@ -1062,6 +1120,16 @@ function handleClick(e){
     if(!near){state.nearError='Enter a House district from 1 to 150, a Senate district from 1 to 31, or both.';renderContent();return}saveNear(near);return}
   const nearMore=e.target.closest('[data-near-more]');if(nearMore){state.nearShow[nearMore.dataset.nearMore]+=30;renderContent();return}
   const follow=e.target.closest('[data-follow]');if(follow){toggleFollow(follow.dataset.follow);return}
+  if(e.target.closest('#save-search')){saveCurrentSearch();return}
+  // Opening a saved search marks it seen today; the link itself navigates to the explorer with its filters.
+  const openSearch=e.target.closest('[data-search-open]');if(openSearch){const s=state.searches.find(x=>x.id===openSearch.dataset.searchOpen);
+    if(s&&s.seen!==todayDay())changeSearch('save-search',{...s,seen:todayDay()});return}
+  const rename=e.target.closest('[data-search-rename]');if(rename){state.renamingSearch=rename.dataset.searchRename;renderContent();
+    const input=$(`[data-search-rename-form="${state.renamingSearch}"] input`);input?.focus();input?.select();return}
+  const del=e.target.closest('[data-search-delete]');if(del){
+    if(del.dataset.armed!=='1'){del.dataset.armed='1';del.textContent='Click again to delete';return}
+    const s=state.searches.find(x=>x.id===del.dataset.searchDelete);changeSearch('delete-search',del.dataset.searchDelete);
+    renderOverview();renderContent();toast(s?`Deleted “${s.name}”`:'Deleted');return}
   if(e.target.closest('#follow-more')){state.followShow+=30;renderContent();return}
   const memberMore=e.target.closest('[data-member-more]');if(memberMore){const role=memberMore.dataset.memberMore;state.memberShow[role]=(state.memberShow[role]||30)+30;renderContent();return}
   const copyPage=e.target.closest('#copy-page-ai');if(copyPage){copyPageForAi(copyPage);return}

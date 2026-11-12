@@ -204,5 +204,12 @@ a.bill-number:hover{text-decoration:underline}
 .followed-section h3{margin:0 0 8px;font-size:15px}.followed-section h3 span{color:var(--muted);font-weight:600}
 .followed-members{display:flex;flex-wrap:wrap;gap:8px 16px;margin:0 0 6px;font-size:13px}
 .followed-member{display:inline-flex;align-items:center;gap:6px}
+.saved-searches{display:grid;gap:10px;margin-top:8px}
+.saved-search{border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0}
+.saved-search p{margin:4px 0 0;font-size:12px;color:var(--muted);line-height:1.5;overflow-wrap:anywhere}
+.saved-search-name{font-weight:700;font-size:14px}
+.saved-search-new{color:#0f7a6c;font-weight:700}
+.saved-search .tools-row{margin-top:6px}
+.search-rename{display:flex;gap:8px;flex-wrap:wrap}.search-rename input{flex:1;min-width:0;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px}
 .member-official{font-size:11px;margin-left:4px;white-space:nowrap}
 @media(max-width:760px){.near-ways,.near-members{grid-template-columns:1fr}.near-summary .tools-row{width:100%}}

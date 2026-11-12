@@ -317,8 +317,8 @@ There are no logins. People keep and move their choices in these ways:
   never changes the recipient's own watchlist until they choose "Add all".
 - **This browser:** the watchlist and the last filters are kept in localStorage (`src/prefs.js`).
 - **Files:** "Export file" writes a profile, `texas-bill-atlas-profile-v1` JSON
-  (`{lists: [{id: 'main', name: 'Watchlist', bills}], follows}`; `profileFile`/`parseProfileFile` in
-  `src/prefs.js`). Import adds bills and follows, and still reads older `texas-bill-atlas-watchlist-v1` files, JSON
+  (`{lists: [{id: 'main', name: 'Watchlist', bills}], follows, searches}`; `profileFile`/`parseProfileFile` in
+  `src/prefs.js`). Import adds bills, follows and saved searches (new ids only), and still reads older `texas-bill-atlas-watchlist-v1` files, JSON
   arrays, and plain text or CSV containing bill numbers. Device-only data (Near you districts, filters, the sync
   link) is never in the file. Share links stay separate: they carry the watchlist's bills only.
 - **Feeds:** `scripts/build_feeds.py` writes `live/feeds/<ID>.xml` (RSS, one per bill) after each hourly sync,
@@ -334,14 +334,22 @@ There are no logins. People keep and move their choices in these ways:
   (`tx-bill-atlas-follow-90r`, at most 200, `cleanFollows`). The **Following** page (`#following`, its own nav
   item beside Watchlist) lists them with their bills, newest first (`followedBills` in `src/geo.js`); the Watchlist
   stays starred bills only. Follows go into exported files and sync links, never share or view-only links.
+- **Saved searches:** "Save search" in the explorer toolbar keeps the current filters under a name
+  (`tx-bill-atlas-searches-90r`, `{id, name, filters, seen}`, at most 20, filters at most 600 bytes of JSON so
+  they always fit a sync write; `cleanSearches` in `src/prefs.js`). The same filters twice are refused. They are
+  listed first on the Following page with their bill count and how many matching bills have an action dated after
+  the Texas day the search was last opened (`seen`); opening one updates `seen`. Rename and delete in place.
+  Saved searches go into exported files and sync links, never share or view-only links.
 - **Private sync links** (`scripts/sync_service.py`, `src/sync.js`): a random edit key and a derived view key;
   only SHA-256 hashes are stored (SQLite), no email, name or IP. The edit key travels in the URL fragment and
   the `X-Sync-Key` header only and is removed from the address bar once read. Saves are versioned; on a conflict
-  the client replays its unsaved adds/removes (and follows/unfollows) onto the newer list. Synced data is
-  `{watch, filters, follows}`. A write without `follows` keeps the stored ones, so an older cached page cannot
-  erase them, and view-only links return `{watch, filters}` only. A reply without `follows` (a server that predates
-  them) means "unknown", so the device keeps its own; each device unions its follows into the link's until a
-  write confirms the server stored them, so the first devices to sync follows cannot erase each other's. Limits: 16 KB body, 500 bills, per-client
+  the client replays its unsaved changes (adds/removes, follows/unfollows, saved-search saves/deletes) onto the
+  newer data. Synced data is `{watch, filters, follows, searches}`. A write without `follows` or `searches` keeps
+  the stored ones, so an older cached page cannot erase them, and view-only links return `{watch, filters}` only.
+  A reply without a section (a server that predates it) means "unknown", so the device keeps its own; each device
+  unions its entries into the link's until a write confirms the server stored them, so the first devices to sync
+  a section cannot erase each other's. Limits: 32 KB body (the gateway's cap), 500 bills, 200 follows, 20 saved
+  searches, per-client
   rate limits (one IPv4 address or one IPv6 /64), 100,000 lists, deletion after a year unused. A view key also serves a combined watchlist RSS at
   `/api/sync/feed/<view key>.xml`. The tracker hides sync when `/api/sync/health` is unavailable.
   Live since 2026-11-10: the shared gateway (cth.hosting) proxies `/api/sync*` to the `texas-bill-sync`

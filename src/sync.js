@@ -1,20 +1,33 @@
 // Private sync link client. The key lives in this browser's storage and the X-Sync-Key header only.
-import {applyOps, applyFollowOps, cleanFollows} from './prefs.js';
+import {applyOps, applyFollowOps, cleanFollows, applySearchOps, cleanSearches} from './prefs.js';
 
 const STORE = 'tx-bill-atlas-sync-v1';
-const union = (a, b) => cleanFollows([...(a || []), ...(b || [])]);
 
-// Follows ride along with the watchlist. A reply without `follows` means "unknown" (a server that predates them,
-// or a link that never had any), never "none": this device's follows are then kept, not cleared. Until a write
-// that carried follows comes back with them stored (followsMerged), this device unions its own follows into the
-// link's instead of replacing them, so the first devices to sync follows cannot erase each other's.
-export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, base = './api/sync', getWatch, getFollows = () => [], debounceMs = 800} = {}) {
+// Sections that ride along with the watchlist. A reply without a section means "unknown" (a server that predates
+// it, or a link that never had one), never "none": this device's copy is then kept, not cleared. Until a write that
+// carried a section comes back with it stored (merged[name]), this device unions its own entries into the link's
+// instead of replacing them, so the first devices to sync a section cannot erase each other's.
+const SECTIONS = {
+  follows: {apply: applyFollowOps, ids: list => list, union: (server, local) => cleanFollows([...server, ...local])},
+  searches: {apply: applySearchOps, ids: list => list.map(s => s.id),
+    union: (server, local) => cleanSearches([...server, ...local.filter(s => !server.some(x => x.id === s.id))])},
+};
+const NAMES = Object.keys(SECTIONS);
+const has = (data, name) => Array.isArray(data?.[name]);
+
+export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, base = './api/sync', getWatch, getFollows = () => [], getSearches = () => [], debounceMs = 800} = {}) {
   let state = read(), available = null, timer = null, flushing = null;
-  let unsupported = false;  // This session's server dropped follows we sent; stop re-sending them each pull.
-  let follows = null;       // The link's follows after the last exchange (pending ops replayed), or null if unknown.
+  const getters = {follows: () => cleanFollows(getFollows()), searches: () => cleanSearches(getSearches())};
+  let unsupported = {};  // Sections this session's server dropped after we sent them; stop re-sending each pull.
+  let values = {};       // Each section after the last exchange (pending ops replayed), or null if unknown.
 
   function read() {
-    try { const v = JSON.parse(storage?.getItem(STORE) || 'null'); return v && typeof v.key === 'string' ? v : null; } catch { return null; }
+    try {
+      const v = JSON.parse(storage?.getItem(STORE) || 'null');
+      if (!v || typeof v.key !== 'string') return null;
+      if (!v.merged || typeof v.merged !== 'object') v.merged = {follows: v.followsMerged === true};  // Older saved state.
+      return v;
+    } catch { return null; }
   }
   function save() { try { state ? storage?.setItem(STORE, JSON.stringify(state)) : storage?.removeItem(STORE); } catch {} }
 
@@ -28,23 +41,25 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
     return {status: response.status, data};
   }
 
-  const hasFollows = data => Array.isArray(data?.follows);
-  // What to send: the device's follows, or before the first confirmed merge, those plus the link's.
-  const followsToSend = server => {
-    const local = cleanFollows(getFollows());
-    if (state.followsMerged) return hasFollows(server) ? applyFollowOps(server.follows, state.pending) : local;
-    return applyFollowOps(union(hasFollows(server) ? server.follows : [], local), state.pending);
-  };
-  // After a successful write that carried follows: did the server keep them?
-  function noteWrite(data) {
-    if (hasFollows(data)) state.followsMerged = true;
-    else unsupported = true;
+  // What to send for one section: the device's copy, or before the first confirmed merge, that plus the link's.
+  function sectionToSend(name, server) {
+    const {apply, union} = SECTIONS[name];
+    if (state.merged[name]) return has(server, name) ? apply(server[name], state.pending) : getters[name]();
+    return apply(union(has(server, name) ? server[name] : [], getters[name]()), state.pending);
   }
-  const settle = data => { follows = hasFollows(data) ? applyFollowOps(data.follows, state.pending) : null; };
+  const payload = (watch, server) => Object.fromEntries([['watch', watch], ...NAMES.map(n => [n, sectionToSend(n, server)])]);
+  // After a successful write that carried every section: which ones did the server keep?
+  function noteWrite(data) {
+    for (const name of NAMES) if (has(data, name)) state.merged[name] = true; else unsupported[name] = true;
+  }
+  function settle(data) {
+    values = Object.fromEntries(NAMES.map(n => [n, has(data, n) ? SECTIONS[n].apply(data[n], state.pending) : null]));
+  }
 
   const client = {
     get linked() { return state ? {mode: state.mode, viewKey: state.viewKey || null, editKey: state.mode === 'edit' ? state.key : null, pending: state.pending.length} : null; },
-    get follows() { return follows; },
+    get follows() { return values.follows ?? null; },
+    get searches() { return values.searches ?? null; },
 
     async isAvailable() {
       if (available === null) {
@@ -53,55 +68,56 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
       return available;
     },
 
-    async create(watch, followList = getFollows()) {
-      const sent = cleanFollows(followList);
-      const r = await call('POST', '', {data: {watch, follows: sent}});
+    async create(watch, followList = getFollows(), searchList = getSearches()) {
+      const r = await call('POST', '', {data: {watch, follows: cleanFollows(followList), searches: cleanSearches(searchList)}});
       if (r.status !== 201) throw Error(r.data?.error || `Sync is unavailable (HTTP ${r.status})`);
-      state = {key: r.data.edit_key, mode: 'edit', viewKey: r.data.view_key, version: r.data.version, pending: [], followsMerged: false};
-      unsupported = false;
+      state = {key: r.data.edit_key, mode: 'edit', viewKey: r.data.view_key, version: r.data.version, pending: [], merged: {}};
+      unsupported = {};
       noteWrite(r.data.data);
       settle(r.data.data);
       save();
       return client.linked;
     },
 
-    connect(key) { state = {key, mode: null, viewKey: null, version: 0, pending: [], followsMerged: false}; unsupported = false; follows = null; save(); },
+    connect(key) { state = {key, mode: null, viewKey: null, version: 0, pending: [], merged: {}}; unsupported = {}; values = {}; save(); },
 
-    // Returns {mode, watch} (edit links also {follows}, null when unknown) after pushing this device's pending
+    // Returns {mode, watch} (edit links also each section, null when unknown) after pushing this device's pending
     // changes, or null if unlinked.
     async pull() {
       if (!state) return null;
       if (state.pending.length) await client.flush();
       const r = await call('GET');
-      if (r.status === 404) { state = null; follows = null; save(); throw Error('This sync link no longer exists'); }
+      if (r.status === 404) { state = null; values = {}; save(); throw Error('This sync link no longer exists'); }
       if (r.status !== 200) throw Error(r.data?.error || `Sync is unavailable (HTTP ${r.status})`);
       Object.assign(state, {mode: r.data.mode, version: r.data.version, viewKey: r.data.view_key || state.viewKey});
       save();
       if (r.data.mode !== 'edit') return {mode: r.data.mode, watch: r.data.data.watch};
-      let data = r.data.data;
-      if (!state.followsMerged && !unsupported) {
-        const missing = cleanFollows(getFollows()).filter(c => !(hasFollows(data) ? data.follows : []).includes(c));
-        if (missing.length) {
-          // Write once with the union; the reply says whether this server keeps follows at all.
-          const merged = await client.flush(true, data, r.data.version);
-          if (merged && !Array.isArray(merged)) data = merged;  // An overlapping flush returns a list: retry next pull.
-        } else if (hasFollows(data)) {
-          state.followsMerged = true; save();
-        }
+      let data = r.data.data, needsWrite = false;
+      for (const name of NAMES) {
+        if (state.merged[name] || unsupported[name]) continue;
+        const theirs = new Set(SECTIONS[name].ids(has(data, name) ? data[name] : []));
+        if (SECTIONS[name].ids(getters[name]()).some(id => !theirs.has(id))) needsWrite = true;
+        else if (has(data, name)) { state.merged[name] = true; save(); }
+      }
+      if (needsWrite) {
+        // Write once with the unions; the reply says which sections this server keeps.
+        const merged = await client.flush(true, data, r.data.version);
+        if (merged && !Array.isArray(merged)) data = merged;  // An overlapping flush returns a list: retry next pull.
       }
       settle(data);
-      return {mode: 'edit', watch: applyOps(data.watch, state.pending), follows};
+      return {mode: 'edit', watch: applyOps(data.watch, state.pending), ...values};
     },
 
-    record(op, id, onSynced) {
+    // `value` travels with ops that carry one (a saved search).
+    record(op, id, onSynced, value) {
       if (state?.mode !== 'edit') return;
-      state.pending.push({op, id}); save();
+      state.pending.push(value === undefined ? {op, id} : {op, id, value}); save();
       clearTimeout(timer);
-      timer = setTimeout(() => client.flush().then(w => w && onSynced?.(w, null, follows), error => onSynced?.(null, error)), debounceMs);
+      timer = setTimeout(() => client.flush().then(w => w && onSynced?.(w, null, {...values}), error => onSynced?.(null, error)), debounceMs);
     },
 
-    // Pushes the local list and follows. On a conflict, replays pending changes onto the newer server data and
-    // retries. `force` writes even with nothing pending (the first follows merge), from `server` at `version`.
+    // Pushes the local list and sections. On a conflict, replays pending changes onto the newer server data and
+    // retries. `force` writes even with nothing pending (the first merge), from `server` at `version`.
     // Returns the watchlist (or, when forced, the stored data).
     async flush(force = false, server = null, version = null) {
       if (flushing) return flushing;
@@ -111,7 +127,7 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
         let current = version ?? state.version, base = server;
         for (let attempt = 0; attempt < 3; attempt++) {
           const sent = state.pending.length;
-          const r = await call('PUT', '', {version: current, data: {watch, follows: followsToSend(base)}});
+          const r = await call('PUT', '', {version: current, data: payload(watch, base)});
           if (r.status === 200) {
             state.version = r.data.version; state.pending = state.pending.slice(sent);
             noteWrite(r.data.data);
@@ -127,7 +143,7 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
       try { return await flushing; } finally { flushing = null; }
     },
 
-    forget() { clearTimeout(timer); state = null; follows = null; save(); },
+    forget() { clearTimeout(timer); state = null; values = {}; save(); },
 
     async remove() {
       if (state?.mode !== 'edit') throw Error('Only the edit link can delete a synced list');
