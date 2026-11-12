@@ -29,6 +29,12 @@ def search(page, query):
         "q => (new URLSearchParams(location.hash.split('?')[1] || '').get('query') || '') === q", arg=query)
 
 
+def count_for(page, query) -> int:
+    search(page, query)
+    expect(page.locator("#result-count")).to_have_text(COUNT)
+    return count(page)
+
+
 def expect_count(page, text):
     expect(page.locator("#result-count")).to_have_text(text)
 
@@ -72,7 +78,7 @@ def test_a_resolution_is_found_by_its_long_name(device):
 def test_a_bill_number_with_leading_zeros_is_found(device):
     page = device.open("#all")
     search(page, "HB0110")
-    expect_count(page, "1 bill")
+    expect(page.locator(".bill-card .bill-number")).to_have_text(["HB 110"])
 
 
 # ---- Words ----
@@ -133,25 +139,22 @@ def test_search_finds_an_accented_name_typed_with_its_accent(device):
 
 
 @pytest.mark.xfail(strict=True, reason="an accented name typed without the accent matches nothing")
-@pytest.mark.parametrize("plain, expected", [("Menendez", "80 bills"), ("Anchia", "13 bills")])
-def test_search_finds_an_accented_name_typed_without_its_accent(device, plain, expected):
+@pytest.mark.parametrize("plain, accented", [("Menendez", "Men\u00e9ndez"), ("Anchia", "Anch\u00eda")])
+def test_search_finds_an_accented_name_typed_without_its_accent(device, plain, accented):
     page = device.open("#all")
-    search(page, plain)
-    expect_count(page, expected)
+    assert count_for(page, plain) == count_for(page, accented) > 0
 
 
 @pytest.mark.xfail(strict=True, reason="a name is only found in the order the source writes it (Last, First)")
 def test_search_finds_a_member_by_first_name_then_last(device):
     page = device.open("#all")
-    search(page, "Molly Cook")
-    expect_count(page, "25 bills")
+    assert count_for(page, "Molly Cook") == count_for(page, "Cook, Molly") > 0
 
 
 @pytest.mark.xfail(strict=True, reason="words are matched as one exact phrase, so their order matters")
 def test_search_finds_the_same_bills_whatever_the_word_order(device):
     page = device.open("#all")
-    search(page, "district school")
-    expect_count(page, "75 bills")
+    assert count_for(page, "district school") == count_for(page, "school district") > 0
 
 
 def test_search_finds_a_bill_by_agency_and_topic_names(device):
@@ -162,6 +165,30 @@ def test_search_finds_a_bill_by_agency_and_topic_names(device):
     expect_count(page, "22 bills")
     search(page, "data center")
     expect_count(page, "22 bills")
+
+
+def test_search_finds_a_bill_by_official_subject_and_by_impact(device):
+    page = device.open("#all")
+    search(page, "Labor--Wages")
+    expect(page.locator('.bill-card[data-bill-id="HB110"]')).to_be_visible()
+    search(page, "MINIMUM WAGE")  # an official subject heading, matched whatever its case
+    expect(page.locator('.bill-card[data-bill-id="HB110"]')).to_be_visible()
+    search(page, "Eligibility expansion")
+    expect(page.locator("#result-count")).not_to_have_text("0 bills")
+    assert count(page) < 1384
+
+
+def test_search_reads_the_last_action_line(device):
+    page = device.open("#all")
+    search(page, "H Filed")
+    expect_count(page, "1065 bills")  # every House bill in the fixture is at "H Filed"
+    page.select_option("#filter-chamber", label="Senate")
+    expect_count(page, "0 bills")
+    page.select_option("#filter-chamber", label="House")
+    expect_count(page, "1065 bills")
+    search(page, "11/09/2026 H Filed")
+    expect(page.locator("#result-count")).not_to_have_text("1065 bills")
+    assert 0 < count(page) < 1065
 
 
 @pytest.mark.parametrize("typed", ["62.051", "Labor Code 62.051", "Sec. 62.051"])
@@ -191,8 +218,7 @@ def test_an_apostrophe_and_a_hyphen_are_searched_as_typed(device):
 @pytest.mark.xfail(strict=True, reason="a curly apostrophe (what phones type) matches nothing")
 def test_a_curly_apostrophe_matches_like_a_straight_one(device):
     page = device.open("#all")
-    search(page, "children\u2019s")
-    expect_count(page, "7 bills")
+    assert count_for(page, "children\u2019s") == count_for(page, "children's") > 0
 
 
 # ---- Empty and odd input ----
@@ -216,7 +242,7 @@ def test_a_query_is_plain_text_not_a_pattern(device):
     expect_count(page, "0 bills")
 
 
-ODD = ["<img src=x onerror=alert(1)>", "<script>window.__xss=1</script>", "\\", "(", "[", "%20", "%", "#", "?", "=", "&",
+ODD = ["<img src=x onerror=alert(1)>", '"><img src=x onerror="window.__xss=1">', "'><svg onload='window.__xss=1'>", "<script>window.__xss=1</script>", "\\", "(", "[", "%20", "%", "#", "?", "=", "&",
        "a+b", "50%", '"', "'", "`${1}`", "../../etc", "\U0001F920 rodeo", "x" * 150]
 
 
@@ -226,12 +252,14 @@ def test_odd_input_is_safe_and_survives_the_address_bar(device, typed):
     search(page, typed)
     expect(page.locator("#result-count")).to_have_text(COUNT)
     shown = page.locator("#result-count").inner_text()
-    assert page.locator("#dynamic-content img[src='x']").count() == 0
-    assert page.evaluate("window.__xss") is None
     # The same address in a new tab gives the same box and the same results.
     again = device.open(page.evaluate("location.hash"), page=device.new_page())
     expect(again.locator("#bill-search")).to_have_value(typed)
     expect(again.locator("#result-count")).to_have_text(shown)
+    # Nothing typed, or read back from the address, is ever turned into markup.
+    for tab in (page, again):
+        assert tab.locator("img[src='x'], svg[onload]").count() == 0
+        assert tab.evaluate("window.__xss") is None
 
 
 def test_a_very_long_query_finds_nothing_and_is_cut_in_the_address(device):
