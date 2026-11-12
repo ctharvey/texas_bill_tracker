@@ -120,3 +120,13 @@ test('census lookup URL and reply parsing', () => {
     {lon: -97.74, lat: 30.27, matched: 'A'});
   assert.equal(censusPoint({result: {addressMatches: []}}), null);
 });
+
+test('a member by roster code, across both chambers; unknown codes give null', async () => {
+  const {memberByCode} = await import('../src/geo.js');
+  const [rep] = membersFor(roster, 'house', '49');
+  assert.equal(memberByCode(roster, rep.code).display_name, rep.display_name);
+  const senator = Object.values(roster.members).find(m => m.chamber === 'senate');
+  assert.equal(memberByCode(roster, senator.code).chamber, 'senate');
+  assert.equal(memberByCode(roster, 'A0000'), null);
+  assert.equal(memberByCode(roster, null), null);
+});

@@ -126,3 +126,14 @@ test('unavailable server is detected, not thrown', async () => {
   const offline = createSyncClient({fetchImpl: async () => { throw TypeError('network'); }, storage: memoryStorage(), getWatch: () => []});
   assert.equal(await offline.isAvailable(), false);
 });
+
+test('member pages keep their code in the address; bad codes and other views drop it', () => {
+  assert.equal(buildHash('member', {}, {member: 'A4875'}), '#member?code=A4875');
+  assert.equal(buildHash('member', {}, {member: 'A4875', bill: 'HB5'}), '#member?code=A4875&bill=HB5');
+  assert.deepEqual([parseHash('#member?code=a4875').view, parseHash('#member?code=a4875').member], ['member', 'A4875']);
+  assert.equal(parseHash('#member?code=A4875&bill=HB5').bill, 'HB5');
+  assert.equal(parseHash('#member?code=<script>').member, null);
+  assert.equal(parseHash('#all?code=A4875').member, null);
+  assert.equal(buildHash('all', {}, {member: 'A4875'}), '#all');
+  assert.equal(buildHash('member', {}, {member: 'X1'}), '#member');
+});

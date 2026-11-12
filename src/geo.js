@@ -110,7 +110,14 @@ export function membersFor(roster, chamber, district) {
     .map(([key, m]) => ({key, ...m}));
 }
 
-const ROLES = [['authors', 'Author'], ['coauthors', 'Coauthor'], ['sponsors', 'Sponsor'], ['cosponsors', 'Cosponsor']];
+// One roster member by Texas Legislature Online code, or null. Codes are unique across both chambers.
+export function memberByCode(roster, code) {
+  if (!code) return null;
+  const found = Object.entries(roster?.members || {}).find(([, m]) => m?.code === code);
+  return found ? {key: found[0], ...found[1]} : null;
+}
+
+export const ROLES = [['authors', 'Author'], ['coauthors', 'Coauthor'], ['sponsors', 'Sponsor'], ['cosponsors', 'Cosponsor']];
 
 // Bills a member filed or signed onto, with the member's role. Matches the roster entry attached to each bill
 // (attachMembers joins by chamber and display name), so a same-name member of the other chamber never matches.

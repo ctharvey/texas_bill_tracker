@@ -1,12 +1,12 @@
 import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal} from './review.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, watchlistFile, parseWatchlistFile} from './prefs.js';
 import {createSyncClient} from './sync.js';
-import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, membersFor, billsByMember, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
+import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
 import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, searchTerms, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
 
 const $ = (selector, root=document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state = {view:'all',bills:[],watch:new Set(),query:'',topic:'',agency:'',chamber:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30,meta:null,luna:null,related:null,audit:null,roster:null,reviewStatus:null,sharedList:null,sharedMode:null,sharedSyncKey:null,openBill:null,todayTopic:'',todayLimit:100,todayAllTopics:false,near:null,nearGeo:null,nearPick:null,nearBusy:'',nearError:'',nearShow:{members:30,area:30}};
+const state = {view:'all',bills:[],watch:new Set(),query:'',topic:'',agency:'',chamber:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30,meta:null,luna:null,related:null,audit:null,roster:null,reviewStatus:null,sharedList:null,sharedMode:null,sharedSyncKey:null,openBill:null,todayTopic:'',todayLimit:100,todayAllTopics:false,near:null,nearGeo:null,nearPick:null,nearBusy:'',nearError:'',nearShow:{members:30,area:30},memberCode:null,memberShow:{},geoTables:null};
 const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last action',actionstage:'Last action stage',number:'Bill number',agencies:'Most agencies',hearing:'Hearing progress',influence:'Author influence'};
 const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
 const reviews = new Map();
@@ -186,6 +186,8 @@ function applyLocation(initial){
   if(urlFilters&&FILTERED_VIEWS.has(p.view))filtersFor=p.view;
   if(p.list){state.sharedList=p.list;state.sharedMode='link'}
   else if(!initial&&state.sharedMode==='link'){state.sharedList=null;state.sharedMode=null}
+  if(p.member!==state.memberCode)state.memberShow={};
+  state.memberCode=p.member;
   setView(p.view);
   if(p.bill&&state.bills.some(b=>b.id===p.bill))showDrawer(p.bill);
   return p.sync;
@@ -193,13 +195,13 @@ function applyLocation(initial){
 
 function currentHash(){
   return buildHash(state.view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
-    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null});
+    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode});
 }
 
 // Address of this view with `id` open, so a bill title is a real link (new tab, copy link) as well as a click target.
 function billHref(id){
   return buildHash(state.view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:id,
-    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null});
+    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode});
 }
 
 // push=true adds a history entry (opening a bill), so Back closes it instead of leaving the site.
@@ -320,7 +322,7 @@ function setView(view){
   switchFilters(view);
   state.view=view;
   document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===view));
-  const heads={all:['See what’s moving.<br><em>Know what it changes.</em>','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],watchlist:['Your watchlist.<br><em>Keep the signal.</em>','Bills you are following on this device, with a clear view of their movement.'],today:['Today at the Lege.<br><em>What moved, by topic.</em>','Bills with a recorded action today, grouped by type of action. Dates follow Texas time.'],local:['Near you.<br><em>Your legislators, your bills.</em>','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],agencies:['Follow the agencies.<br><em>Not just the bills.</em>','Explore where legislation might land across Texas government.'],review:['Full-text review.<br><em>Bill by bill.</em>','Which bills Luna has read in full, which it is working on, and what is still waiting.'],method:['The scoring method.<br><em>No black boxes.</em>','Signals and uncertainty are displayed separately from verified legislative actions.'],saving:['Save your work.<br><em>No account needed.</em>','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],data:['Behind the tracker.<br><em>Follow the source.</em>','Understand coverage, refreshes, and how to load or export bill data.']};
+  const heads={all:['See what’s moving.<br><em>Know what it changes.</em>','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],watchlist:['Your watchlist.<br><em>Keep the signal.</em>','Bills you are following on this device, with a clear view of their movement.'],today:['Today at the Lege.<br><em>What moved, by topic.</em>','Bills with a recorded action today, grouped by type of action. Dates follow Texas time.'],local:['Near you.<br><em>Your legislators, your bills.</em>','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],member:['One legislator.<br><em>Every bill they’re on.</em>','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],agencies:['Follow the agencies.<br><em>Not just the bills.</em>','Explore where legislation might land across Texas government.'],review:['Full-text review.<br><em>Bill by bill.</em>','Which bills Luna has read in full, which it is working on, and what is still waiting.'],method:['The scoring method.<br><em>No black boxes.</em>','Signals and uncertainty are displayed separately from verified legislative actions.'],saving:['Save your work.<br><em>No account needed.</em>','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],data:['Behind the tracker.<br><em>Follow the source.</em>','Understand coverage, refreshes, and how to load or export bill data.']};
   $('#page-title').innerHTML=heads[view][0];$('#page-subtitle').textContent=heads[view][1];
   $('#overview').hidden=!['all','watchlist'].includes(view);
   renderNotice();renderOverview();renderContent();persistState();
@@ -366,6 +368,7 @@ function renderContent(){
   if(state.view==='all'||state.view==='watchlist')el.innerHTML=explorerMarkup();
   else if(state.view==='today')el.innerHTML=todayMarkup();
   else if(state.view==='local')el.innerHTML=nearMarkup();
+  else if(state.view==='member')el.innerHTML=memberMarkup();
   else if(state.view==='agencies')el.innerHTML=agenciesMarkup();
   else if(state.view==='review')el.innerHTML=reviewMarkup();
   else if(state.view==='method')el.innerHTML=methodMarkup();
@@ -611,7 +614,7 @@ function memberCard(chamber,district){
   if(!district)return `<div class="near-member"><small>${title}</small><strong>District not set</strong></div>`;
   const people=membersFor(state.roster,chamber,district);
   if(!people.length)return `<div class="near-member"><small>${title} · District ${esc(district)}</small><strong>No member listed yet</strong><p>The roster has no member with a known district here yet (a new member's district may not be recorded, or results are not posted). Check <a class="text-link" href="https://capitol.texas.gov/Members/Members.aspx?Chamber=${chamber==='house'?'H':'S'}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a>.</p></div>`;
-  return people.map(m=>`<div class="near-member"><small>${title} · District ${esc(district)}</small><strong>${chamber==='house'?'Rep.':'Sen.'} ${esc(m.full_name||m.display_name)}</strong><p>${esc(m.party||'Party not recorded')}${m.new_to_chamber?' · new to the chamber':''}</p>${safeHref(m.links?.tlo)?`<a class="text-link" href="${esc(safeHref(m.links.tlo))}" target="_blank" rel="noopener noreferrer">Member page ↗</a>`:''}</div>`).join('');
+  return people.map(m=>`<div class="near-member"><small>${title} · District ${esc(district)}</small><strong>${m.code?`<a class="text-link" href="${esc(memberHref(m.code))}">${esc(memberTitle(m))}</a>`:esc(memberTitle(m))}</strong><p>${esc(m.party||'Party not recorded')}${m.new_to_chamber?' · new to the chamber':''}</p>${m.code?`<a class="text-link" href="${esc(memberHref(m.code))}">All their bills →</a> `:''}${safeHref(m.links?.tlo)?`<a class="text-link" href="${esc(safeHref(m.links.tlo))}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a>`:''}</div>`).join('');
 }
 function nearData(){
   const near=state.near,geo=state.nearGeo;
@@ -628,7 +631,7 @@ function nearData(){
     statewide:state.bills.filter(b=>(b.locations||[]).some(l=>l.kind==='statewide')).length};
 }
 function nearRow({bill:b,notes}){
-  return `<article class="today-row" data-bill-id="${esc(b.id)}"><div class="today-row-head">${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span>${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</div>${headlineLine(b,'card')}<p class="today-action">${notes.map(esc).join(' · ')}</p><div class="bill-tags">${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}<span class="tag">${esc(lastActionInfo(b).label)}</span></div></article>`;
+  return `<article class="today-row" data-bill-id="${esc(b.id)}"><div class="today-row-head">${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span>${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</div>${headlineLine(b,'card')}${notes.length?`<p class="today-action">${notes.map(esc).join(' · ')}</p>`:''}<div class="bill-tags">${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}<span class="tag">${esc(lastActionInfo(b).label)}</span></div></article>`;
 }
 function nearList(key,rows,empty){
   const limit=state.nearShow?.[key]||30;
@@ -647,6 +650,53 @@ function nearMarkup(){
     <section class="today-group"><h3>Filed or signed by your legislators <span>${d.members.length}</span></h3>${nearList('members',d.members,'No bills by your legislators in this snapshot yet.')}</section>
     <section class="today-group"><h3>Bills that name ${esc(areaLabel)} <span>${d.local.length}</span></h3><p class="near-hint">A bill is listed when its full-text review names a county or city here, or its caption names the county. Bills written for areas by population size are not matched yet. ${d.statewide.toLocaleString()} reviewed bills apply statewide and are not listed here.</p>${nearList('area',d.local,'No bill names this area yet.')}</section>
     <p class="near-hint">Official check: <a class="text-link" href="https://wrm.capitol.texas.gov/home" target="_blank" rel="noopener noreferrer">Who Represents Me? (Texas Legislative Council) ↗</a></p>`;
+}
+
+// ---- Member page (#member?code=A1234): one legislator, their district and their bills by role ----
+const memberHref=code=>buildHash('member',{},{member:code});
+const memberTitle=m=>`${m.chamber==='house'?'Rep.':'Sen.'} ${m.full_name||m.display_name}`;
+// Only the district tables (about 240 KB), not the maps; reused when Near you already loaded everything.
+let tablesLoading=null;
+function districtTables(){
+  if(state.nearGeo?.tables)return state.nearGeo.tables;
+  if(state.geoTables)return state.geoTables;
+  if(!tablesLoading)tablesLoading=fetch(NEAR_FILES.tables,{signal:timeoutSignal(15000)})
+    .then(r=>{if(!r.ok)throw Error(`HTTP ${r.status}`);return r.json()})
+    .then(t=>{if(t?.format!=='texas-bill-districts-v1')throw Error('Unrecognized district tables');state.geoTables=t})
+    .catch(error=>console.warn('District tables unavailable',error.message))
+    .finally(()=>{if(state.view==='member')renderContent()});
+  return null;
+}
+function memberData(m){
+  const groups=Object.fromEntries(ROLES.map(([,role])=>[role,[]]));
+  for(const {bill,role} of billsByMember(state.bills,m))groups[role].push({bill,notes:[]});
+  for(const rows of Object.values(groups))rows.sort((a,b)=>newestFirst(a.bill,b.bill));
+  return groups;
+}
+function memberList(role,rows){
+  const limit=state.memberShow?.[role]||30;
+  return `${rows.slice(0,limit).map(nearRow).join('')}${rows.length>limit?`<button class="outline-button" data-member-more="${esc(role)}">Show 30 more · showing ${limit} of ${rows.length}</button>`:''}`;
+}
+function memberMarkup(){
+  const head=title=>`<div class="section-head"><div><div class="section-overline">MEMBER</div><h2>${title}</h2></div><span class="subtitle">90th Legislature</span></div>`;
+  if(!state.roster)return `${head('Member roster unavailable')}<div class="info-callout">The member roster could not be loaded, so member pages are not available right now. Try again later.</div>`;
+  const m=memberByCode(state.roster,state.memberCode);
+  if(!m)return `${head('Member not found')}<div class="info-callout">No member of the 90th Legislature has the code ${state.memberCode?`<strong>${esc(state.memberCode)}</strong>`:'in this address'}. Find members from a bill's authors or from <a class="text-link" href="#local" data-view="local">Near you</a>.</div>`;
+  const tables=districtTables();
+  const counties=m.district&&tables?countiesOf(tables,m.chamber,m.district):[];
+  const split=c=>Object.keys(tables?.counties?.[c]?.[m.chamber]||{}).length>1;
+  const chamber=m.chamber==='house'?'Texas House':'Texas Senate';
+  const groups=memberData(m),total=Object.values(groups).reduce((n,rows)=>n+rows.length,0);
+  const links=[[m.links?.tlo,'Texas Legislature Online'],[m.links?.lrl,'Legislative Reference Library']].filter(([u])=>safeHref(u))
+    .map(([u,label])=>`<a class="text-link" href="${esc(safeHref(u))}" target="_blank" rel="noopener noreferrer">${label} ↗</a>`).join(' · ');
+  const where=m.district?`${chamber} · District ${esc(m.district)}`:`${chamber} · district not recorded yet`;
+  const countyLine=!m.district?'':tables?(counties.length?`<p>${counties.map(c=>`${esc(c)} County${split(c)?' (part)':''}`).join(', ')}</p>`:''):'<p class="near-hint">Loading the district’s counties…</p>';
+  const sections=ROLES.map(([,role])=>[role,groups[role]]).filter(([,rows])=>rows.length)
+    .map(([role,rows])=>`<section class="today-group"><h3>${role} <span>${rows.length}</span></h3>${memberList(role,rows)}</section>`).join('');
+  const roleNote=m.chamber==='house'?'Representatives author and coauthor House bills and sponsor Senate bills that reach the House.':'Senators author and coauthor Senate bills and sponsor House bills that reach the Senate.';
+  return `${head(esc(memberTitle(m)))}<div class="info-callout member-profile"><div><small>${where}</small><strong>${esc(memberSummary(m))}</strong>${countyLine}${m.new_to_chamber?'<p class="near-hint">New to this chamber in the 90th Legislature.</p>':''}${links?`<p>${links}</p>`:''}</div></div>
+    <p class="near-hint">${total?`${total} ${total===1?'bill':'bills'} in this snapshot. `:''}${roleNote} Sponsors and cosponsors are listed once a bill crosses chambers, so early in the session most bills show authors only.</p>
+    ${sections||'<p class="review-empty">No bills by this member in this snapshot yet.</p>'}`;
 }
 
 function agenciesMarkup(){
@@ -731,9 +781,11 @@ function lunaBlock(b){
 
 function memberItem({name,member}){
   const letter=member?.party==='Democratic'?'dem':member?.party==='Republican'?'rep':'unknown';
-  const link=safeHref(member?.links?.lrl||member?.links?.tlo);
+  const official=safeHref(member?.links?.lrl||member?.links?.tlo);
   const label=member?.full_name||name;
-  return `<li><span class="party-dot party-${letter}" aria-hidden="true"></span>${link?`<a class="text-link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`:`<strong>${esc(label)}</strong>`} <small>${esc(memberSummary(member))}</small></li>`;
+  // The name opens the member's page here; the official record stays one click away.
+  const who=member?.code?`<a class="text-link" href="${esc(memberHref(member.code))}">${esc(label)}</a>`:`<strong>${esc(label)}</strong>`;
+  return `<li><span class="party-dot party-${letter}" aria-hidden="true"></span>${who} <small>${esc(memberSummary(member))}</small>${official?` <a class="text-link member-official" href="${esc(official)}" target="_blank" rel="noopener noreferrer" aria-label="Official record for ${esc(label)}">official ↗</a>`:''}</li>`;
 }
 
 function billTextSection(b){
@@ -950,6 +1002,7 @@ function handleClick(e){
   if(e.target.closest('#near-numbers-use')){const near=cleanNear({house:$('#near-house-num')?.value,senate:$('#near-senate-num')?.value,source:'district'},state.nearGeo?.tables);
     if(!near){state.nearError='Enter a House district from 1 to 150, a Senate district from 1 to 31, or both.';renderContent();return}saveNear(near);return}
   const nearMore=e.target.closest('[data-near-more]');if(nearMore){state.nearShow[nearMore.dataset.nearMore]+=30;renderContent();return}
+  const memberMore=e.target.closest('[data-member-more]');if(memberMore){const role=memberMore.dataset.memberMore;state.memberShow[role]=(state.memberShow[role]||30)+30;renderContent();return}
   const copyPage=e.target.closest('#copy-page-ai');if(copyPage){copyPageForAi(copyPage);return}
   const todayTopic=e.target.closest('[data-today-topic]');if(todayTopic){state.todayTopic=todayTopic.dataset.todayTopic;state.todayLimit=100;renderContent();return}
   if(e.target.closest('#today-more')){state.todayLimit+=100;renderContent();return}
@@ -987,11 +1040,12 @@ async function copyToClipboard(text){
 // Top-bar button: the open bill, or the list/page on screen, as text for an AI assistant.
 async function copyPageForAi(button){
   const bill=state.openBill?state.bills.find(x=>x.id===state.openBill):null;
-  const labels={all:'Bill explorer',watchlist:'Watchlist',today:'Today',local:'Near you'};
+  const member=state.view==='member'?memberByCode(state.roster,state.memberCode):null;
+  const labels={all:'Bill explorer',watchlist:'Watchlist',today:'Today',local:'Near you',member:member?`Bills by ${memberTitle(member)}`:'Member'};
   const today=state.view==='today'?todayData():null;
   const text=pageAiText({view:state.view,label:labels[state.view]||state.view,pageUrl:location.href,bill,agencyName,
-    companions:companionsOf,via:state.view==='today'?null:agencyVia(),
-    bills:today?today.shown.map(r=>r.bill):['all','watchlist'].includes(state.view)?filteredBills():state.view==='local'&&state.near?(d=>[...d.members,...d.local].map(r=>r.bill).filter((b,i,a)=>a.indexOf(b)===i))(nearData()):[],
+    companions:companionsOf,via:state.view==='today'||state.view==='member'?null:agencyVia(),
+    bills:today?today.shown.map(r=>r.bill):['all','watchlist'].includes(state.view)?filteredBills():state.view==='local'&&state.near?(d=>[...d.members,...d.local].map(r=>r.bill).filter((b,i,a)=>a.indexOf(b)===i))(nearData()):member?Object.values(memberData(member)).flat().map(r=>r.bill):[],
     day:today?today.day:null,filters:{query:state.query,topic:state.view==='today'?state.todayTopic:state.topic,
       agency:state.agency,chamber:state.chamber}});
   const label=button.dataset.label||(button.dataset.label=button.textContent);

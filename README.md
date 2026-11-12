@@ -284,6 +284,16 @@ A district with no member who has a known district shows "No member listed yet" 
 2026-11-11 that is Senate districts 14 and 16: they were not up in 2026, and Texas Legislature Online lists no 90th
 Legislature member for them.
 
+### Member pages
+
+`#member?code=<TLO member code>` (for example `#member?code=A4875`) shows one legislator: chamber, district, party
+and tenure (`memberSummary`), the district's counties (from `data/geo/districts.json`, loaded alone without the maps;
+"(part)" marks a split county), links to Texas Legislature Online and the Legislative Reference Library, and their
+bills grouped by role (author, coauthor, sponsor, cosponsor; matched by roster code and chamber, as in Near you).
+Every member on the roster has one, including members with no bills yet. A member's name in a bill's drawer and on
+the Near you cards opens it; the official record stays linked beside the name. An unknown code says so. A bill opened
+from the page keeps the member in the address (`#member?code=A4875&bill=HB5`).
+
 ### Saving and sharing without accounts
 
 There are no logins. People keep and move their choices in five ways:
