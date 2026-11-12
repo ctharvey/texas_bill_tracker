@@ -308,6 +308,31 @@ export function memberSummary(member) {
   return bits.join(' · ');
 }
 
+// Tenure tag from time in the member's current chamber, counted like the roster's years_served (term years from the
+// Legislative Reference Library, up to the 2027 session start). Newcomer = first term (House under 2 years, Senate
+// under 4); Senior = 12+ years (the chamber's top quarter, and authorInfluence's "Established member" line).
+// Service in the other chamber is reported, never counted. Null when the record's years cannot be read.
+export const TENURE_SESSION_START = 2027;
+export const TENURE_SENIOR_YEARS = 12;
+const TERM_YEARS = {house: 2, senate: 4};
+export function tenureTag(member) {
+  if (!member || !TERM_YEARS[member.chamber]) return null;
+  const years = {house: 0, senate: 0};
+  for (const stint of Array.isArray(member.service) ? member.service : []) {
+    const span = /^(\d{4})\s*-\s*(\d{4})$/.exec(String(stint?.years || '').trim());
+    if (!span) return null;
+    if (years[stint.chamber] === undefined) continue;
+    years[stint.chamber] += Math.max(0, Math.min(Number(span[2]), TENURE_SESSION_START) - Number(span[1]));
+  }
+  const chamber = member.chamber, other = chamber === 'house' ? 'senate' : 'house', here = years[chamber];
+  const key = here < TERM_YEARS[chamber] ? 'newcomer' : here >= TENURE_SENIOR_YEARS ? 'senior' : 'average';
+  const name = {house: 'House', senate: 'Senate'};
+  const label = {newcomer: 'Newcomer', average: 'Average tenure', senior: 'Senior'}[key];
+  const detail = `${here ? `${here} ${here === 1 ? 'year' : 'years'} in the ${name[chamber]}` : `New to the ${name[chamber]}`}`
+    + `${years[other] ? ` · ${years[other]} ${years[other] === 1 ? 'year' : 'years'} in the ${name[other]}` : ''}`;
+  return {key, label, years: here, otherYears: years[other], detail};
+}
+
 // Last action: TLO writes "MM/DD/YYYY H|S|E description". Rules are ordered most specific first; rank orders
 // categories along the legislative path (withdrawn/vetoed rank by where they stop, not as progress).
 export const LAST_ACTION_TYPES = [

@@ -63,3 +63,19 @@ test('member summary is explicit about missing records', () => {
   assert.match(memberSummary(roster.members['house|Bailey']), /member-elect; no prior service on record/);
   assert.equal(memberSummary(roster.members['house|Bucy']), 'Democratic · HD 1 · 12 years served · since 2015');
 });
+
+test('tenure tags count time in the current chamber: first term, 12+ years, other chamber reported only', async () => {
+  const {tenureTag} = await import('../src/taxonomy.js');
+  const m = (chamber, ...spans) => ({chamber, service: spans.map(([c, years]) => ({chamber: c, years}))});
+  assert.equal(tenureTag(m('house')).key, 'newcomer');                                   // member-elect, no record
+  assert.equal(tenureTag(m('house', ['house', '2025 - 2027'])).key, 'average');            // second term starts
+  assert.equal(tenureTag(m('senate', ['senate', '2025 - 2029'])).key, 'newcomer');         // still in a first 4-year term
+  assert.equal(tenureTag(m('senate', ['senate', '2023 - 2027'])).key, 'average');
+  assert.equal(tenureTag(m('house', ['house', '2015 - 2027'])).key, 'senior');             // 12 years
+  assert.equal(tenureTag(m('house', ['house', '2016 - 2027'])).key, 'average');            // 11 years
+  const moved = tenureTag(m('senate', ['house', '2013 - 2027']));                          // representative now senator
+  assert.deepEqual([moved.key, moved.years, moved.otherYears, moved.detail], ['newcomer', 0, 14, 'New to the Senate · 14 years in the House']);
+  assert.equal(tenureTag(m('house', ['house', '2019 - 2029'])).years, 8);                  // counted only to the 2027 start
+  assert.equal(tenureTag(m('house', ['house', 'unknown'])), null);                        // unreadable years: no tag
+  assert.equal(tenureTag(null), null);
+});

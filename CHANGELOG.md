@@ -1,6 +1,10 @@
 # Changelog
 
 ## 2026-11-11
+- Tenure tags: Newcomer (first term), Average tenure, Senior (12+ years), by time in the current chamber, with other-
+  chamber service shown beside it; on member pages, Near you cards and the drawer's author list.
+- Near you: numbers or an address typed while the district maps were still loading were wiped when they arrived;
+  they are now kept.
 - Member pages (`#member?code=A4875`): each legislator's district, counties, tenure, official links and bills by
   role, for every roster member. Every legislator name (card "By" line, drawer "Filed by" and author list,
   companion rows, Near you) links to it when the roster matches the name.

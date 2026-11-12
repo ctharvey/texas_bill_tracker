@@ -293,7 +293,15 @@ bills grouped by role (author, coauthor, sponsor, cosponsor; matched by roster c
 Every member on the roster has one, including members with no bills yet. Every place a legislator is named links to
 it: the "By" line on bill cards, the drawer's "Filed by" and its author/sponsor list (the official record stays linked
 beside the name), companion rows ("by …", in the companion's chamber), Near you cards and rows. A name links only when
-the roster has that exact (chamber, name), the same match bills use (`attachMembers`); otherwise it stays plain text. An unknown code says so. A bill opened
+the roster has that exact (chamber, name), the same match bills use (`attachMembers`); otherwise it stays plain text.
+
+Tenure tags (`tenureTag` in `src/taxonomy.js`) count term years in the member's current chamber, from the Legislative
+Reference Library service record up to the 2027 session start: **Newcomer** in a first term (House under 2 years,
+Senate under 4), **Senior** at 12+ years (the House's top quarter, close to the Senate's, and the line
+`authorInfluence` already uses for "Established member"), **Average tenure** in between. Service in the other chamber
+is shown beside the tag ("New to the Senate · 14 years in the House") but never counted, so a representative newly in
+the Senate is a Senate newcomer. No tag when a record's years cannot be read. On the 2026-11-11 roster: House 41
+newcomers, 69 average, 40 senior; Senate 8, 10, 11. Shown on member pages, Near you cards and the drawer's author list. An unknown code says so. A bill opened
 from the page keeps the member in the address (`#member?code=A4875&bill=HB5`).
 
 ### Saving and sharing without accounts

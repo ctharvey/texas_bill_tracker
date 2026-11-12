@@ -2,7 +2,7 @@ import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, watchlistFile, parseWatchlistFile} from './prefs.js';
 import {createSyncClient} from './sync.js';
 import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
-import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, memberSummary, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, searchTerms, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
+import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, searchTerms, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
 
 const $ = (selector, root=document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -549,6 +549,16 @@ const NEAR_FILES={house:'./data/geo/house.json',senate:'./data/geo/senate.json',
 const NEAR_NOTICE='Your location is used once, in this browser, to find your districts. Only the district numbers and county are saved on this device; nothing is sent to this site.';
 const ADDRESS_NOTICE='Looking up an address sends the address you type to the US Census Bureau’s geocoder (census.gov) to get its map coordinates. This site never receives or stores it.';
 let nearLoading=null;
+// The maps can finish loading while someone is typing district numbers or an address; keep what they typed.
+const NEAR_INPUTS=['near-house-num','near-senate-num','near-address'];
+function keepTyping(render){
+  const typed=Object.fromEntries(NEAR_INPUTS.map(id=>[id,document.getElementById(id)?.value||'']));
+  const focus=document.activeElement?.id,open=document.querySelector('.near-address')?.open;
+  render();
+  for(const [id,value] of Object.entries(typed)){const el=document.getElementById(id);if(el&&value)el.value=value}
+  if(open){const d=document.querySelector('.near-address');if(d)d.open=true}
+  if(NEAR_INPUTS.includes(focus))document.getElementById(focus)?.focus();
+}
 function loadNearGeo(){
   if(state.nearGeo||nearLoading)return nearLoading;
   nearLoading=Promise.all(Object.entries(NEAR_FILES).map(async([k,url])=>{
@@ -558,7 +568,7 @@ function loadNearGeo(){
     if(geo.tables?.format!=='texas-bill-districts-v1'||!Array.isArray(geo.house?.features))throw Error('Unrecognized district files');
     state.nearGeo=geo;state.nearError='';
   }).catch(error=>{state.nearError='District maps could not be loaded; try again later.';console.warn('Near you data unavailable',error.message)})
-    .finally(()=>{nearLoading=null;if(state.view==='local')renderContent()});
+    .finally(()=>{nearLoading=null;if(state.view==='local')keepTyping(renderContent)});
   return nearLoading;
 }
 function saveNear(near){
@@ -614,7 +624,7 @@ function memberCard(chamber,district){
   if(!district)return `<div class="near-member"><small>${title}</small><strong>District not set</strong></div>`;
   const people=membersFor(state.roster,chamber,district);
   if(!people.length)return `<div class="near-member"><small>${title} · District ${esc(district)}</small><strong>No member listed yet</strong><p>The roster has no member with a known district here yet (a new member's district may not be recorded, or results are not posted). Check <a class="text-link" href="https://capitol.texas.gov/Members/Members.aspx?Chamber=${chamber==='house'?'H':'S'}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a>.</p></div>`;
-  return people.map(m=>`<div class="near-member"><small>${title} · District ${esc(district)}</small><strong>${m.code?`<a class="text-link" href="${esc(memberHref(m.code))}">${esc(memberTitle(m))}</a>`:esc(memberTitle(m))}</strong><p>${esc(m.party||'Party not recorded')}${m.new_to_chamber?' · new to the chamber':''}</p>${m.code?`<a class="text-link" href="${esc(memberHref(m.code))}">All their bills →</a> `:''}${safeHref(m.links?.tlo)?`<a class="text-link" href="${esc(safeHref(m.links.tlo))}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a>`:''}</div>`).join('');
+  return people.map(m=>`<div class="near-member"><small>${title} · District ${esc(district)}</small><strong>${m.code?`<a class="text-link" href="${esc(memberHref(m.code))}">${esc(memberTitle(m))}</a>`:esc(memberTitle(m))}</strong><p>${tenurePill(m)} ${esc(m.party||'Party not recorded')}${tenureTag(m)?` · ${esc(tenureTag(m).detail)}`:''}</p>${m.code?`<a class="text-link" href="${esc(memberHref(m.code))}">All their bills →</a> `:''}${safeHref(m.links?.tlo)?`<a class="text-link" href="${esc(safeHref(m.links.tlo))}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a>`:''}</div>`).join('');
 }
 function nearData(){
   const near=state.near,geo=state.nearGeo;
@@ -656,6 +666,8 @@ const memberHref=code=>buildHash('member',{},{member:code});
 const memberTitle=m=>`${m.chamber==='house'?'Rep.':'Sen.'} ${m.full_name||m.display_name}`;
 // A name as the bill lists it, linked to the member page only when the roster places that exact (chamber, name).
 const rosterMember=(chamber,name)=>{const m=state.roster?.members?.[`${chamber}|${name}`];return m&&typeof m==='object'?m:null};
+// Newcomer / Average tenure / Senior, by time in the current chamber; the detail is in the tooltip and on member pages.
+const tenurePill=m=>{const t=tenureTag(m);return t?`<span class="tenure-pill tenure-${t.key}" title="${esc(t.detail)}">${esc(t.label)}</span>`:''};
 const memberNameHtml=(member,label)=>member?.code?`<a class="text-link member-name" href="${esc(memberHref(member.code))}">${esc(label)}</a>`:esc(label);
 // Authors serve in the bill's own chamber.
 const authorHtml=(b,name)=>memberNameHtml(b.people?.authors?.find(p=>p.name===name)?.member||rosterMember(String(b.chamber||'').toLowerCase(),name),name);
@@ -698,7 +710,7 @@ function memberMarkup(){
   const sections=ROLES.map(([,role])=>[role,groups[role]]).filter(([,rows])=>rows.length)
     .map(([role,rows])=>`<section class="today-group"><h3>${role} <span>${rows.length}</span></h3>${memberList(role,rows)}</section>`).join('');
   const roleNote=m.chamber==='house'?'Representatives author and coauthor House bills and sponsor Senate bills that reach the House.':'Senators author and coauthor Senate bills and sponsor House bills that reach the Senate.';
-  return `${head(esc(memberTitle(m)))}<div class="info-callout member-profile"><div><small>${where}</small><strong>${esc(memberSummary(m))}</strong>${countyLine}${m.new_to_chamber?'<p class="near-hint">New to this chamber in the 90th Legislature.</p>':''}${links?`<p>${links}</p>`:''}</div></div>
+  return `${head(esc(memberTitle(m)))}<div class="info-callout member-profile"><div><small>${where}</small><strong>${esc(memberSummary(m))}</strong>${tenureTag(m)?`<p>${tenurePill(m)} ${esc(tenureTag(m).detail)}</p>`:''}${countyLine}${links?`<p>${links}</p>`:''}</div></div>
     <p class="near-hint">${total?`${total} ${total===1?'bill':'bills'} in this snapshot. `:''}${roleNote} Sponsors and cosponsors are listed once a bill crosses chambers, so early in the session most bills show authors only.</p>
     ${sections||'<p class="review-empty">No bills by this member in this snapshot yet.</p>'}`;
 }
@@ -789,7 +801,7 @@ function memberItem({name,member}){
   const label=member?.full_name||name;
   // The name opens the member's page here; the official record stays one click away.
   const who=member?.code?`<a class="text-link" href="${esc(memberHref(member.code))}">${esc(label)}</a>`:`<strong>${esc(label)}</strong>`;
-  return `<li><span class="party-dot party-${letter}" aria-hidden="true"></span>${who} <small>${esc(memberSummary(member))}</small>${official?` <a class="text-link member-official" href="${esc(official)}" target="_blank" rel="noopener noreferrer" aria-label="Official record for ${esc(label)}">official ↗</a>`:''}</li>`;
+  return `<li><span class="party-dot party-${letter}" aria-hidden="true"></span>${who} ${tenurePill(member)} <small>${esc(memberSummary(member))}</small>${official?` <a class="text-link member-official" href="${esc(official)}" target="_blank" rel="noopener noreferrer" aria-label="Official record for ${esc(label)}">official ↗</a>`:''}</li>`;
 }
 
 function billTextSection(b){
