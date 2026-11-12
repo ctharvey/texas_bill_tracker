@@ -9,14 +9,14 @@ User=texas-bill-atlas
 Group=texas-bill-atlas
 RuntimeDirectory=texas-bill-data
 UMask=0022
-# sync_ftp.py comes from the same main commit the deployer publishes; it uses the standard library only.
-ExecStartPre=/bin/sh -c '/usr/bin/git --git-dir=/var/lib/texas-bill-atlas/repository.git show main:scripts/sync_ftp.py > "$RUNTIME_DIRECTORY/sync_ftp.py"'
-ExecStartPre=/bin/sh -c '/usr/bin/git --git-dir=/var/lib/texas-bill-atlas/repository.git show main:scripts/build_feeds.py > "$RUNTIME_DIRECTORY/build_feeds.py"'
-# 2020 census counts for population brackets; build_feeds.py reads it from beside itself and skips brackets without it.
-ExecStartPre=-/bin/sh -c '/usr/bin/git --git-dir=/var/lib/texas-bill-atlas/repository.git show main:data/census/tx_population_2020.json > "$RUNTIME_DIRECTORY/tx_population_2020.json"'
-ExecStart=/bin/sh -c 'exec /usr/bin/python3 "$RUNTIME_DIRECTORY/sync_ftp.py" --out /var/www/html/texas-bill-atlas/live/bills.json'
+# The whole scripts/ folder (standard library only) from one main commit of the repository the deployer fetches, so
+# moving code between files never needs this unit changed. main is resolved once so code and data match; the archive
+# goes to a file first because /bin/sh has no pipefail. data/census (2020 counts for population brackets) is optional:
+# build_feeds.py reads ../data/census and skips brackets without it.
+ExecStartPre=/bin/sh -c 'set -e; cd "$RUNTIME_DIRECTORY"; g="/usr/bin/git --git-dir=/var/lib/texas-bill-atlas/repository.git"; c=$$($$g rev-parse --verify "main^{commit}"); paths=scripts; if $$g cat-file -e "$$c:data/census" 2>/dev/null; then paths="$$paths data/census"; fi; $$g archive --format=tar -o code.tar "$$c" $$paths; /usr/bin/tar -xf code.tar; rm code.tar; echo "code from $$c: $$paths"'
+ExecStart=/bin/sh -c 'exec /usr/bin/python3 "$RUNTIME_DIRECTORY/scripts/sync_ftp.py" --out /var/www/html/texas-bill-atlas/live/bills.json'
 # Per-bill RSS feeds; files are rewritten only when a bill's actions change.
-ExecStart=/bin/sh -c 'exec /usr/bin/python3 "$RUNTIME_DIRECTORY/build_feeds.py" --snapshot /var/www/html/texas-bill-atlas/live/bills.json --out /var/www/html/texas-bill-atlas/live/feeds'
+ExecStart=/bin/sh -c 'exec /usr/bin/python3 "$RUNTIME_DIRECTORY/scripts/build_feeds.py" --snapshot /var/www/html/texas-bill-atlas/live/bills.json --out /var/www/html/texas-bill-atlas/live/feeds'
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

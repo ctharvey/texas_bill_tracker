@@ -1,5 +1,8 @@
 """Versioned asset folders written by the static deployer."""
 from pathlib import Path
+import posixpath
+import re
+import subprocess
 import sys
 import tempfile
 import types
@@ -12,6 +15,8 @@ import deploy_static as deploy
 
 INDEX = (b'<link rel="stylesheet" href="./src/styles.css">\n'
          b'<script type="module" src="./src/app.js"></script>\n')
+# from '...', import '...' (side effect), export ... from '...', and import('...') with a literal path.
+IMPORT = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(?\s*)['"](\.{1,2}/[^'"]+)['"]""")
 
 
 def bundle(changes: dict[str, bytes] | None = None) -> dict[str, bytes]:
@@ -20,21 +25,74 @@ def bundle(changes: dict[str, bytes] | None = None) -> dict[str, bytes]:
     return files | (changes or {})
 
 
+def page_modules(read) -> set[str]:
+    """Every file the page loads: its two references, then each relative import, resolved against its own folder."""
+    pending, seen = [ref[len('./'):] for ref in deploy.PAGE_REFERENCES], set()
+    while pending:
+        name = pending.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        if name.endswith('.js'):
+            folder = posixpath.dirname(name)
+            pending += [posixpath.normpath(posixpath.join(folder, m)) for m in IMPORT.findall(read(name))]
+    return seen
+
+
+def tracked_files() -> list[str]:
+    out = subprocess.run(['git', '-C', str(ROOT), 'ls-files', '-z'], capture_output=True, check=True).stdout
+    return [name for name in out.decode().split('\0') if name]
+
+
 class ShippedModuleTests(unittest.TestCase):
-    def test_every_module_the_page_imports_is_deployed(self):
-        # The installed deployer copies FILES only; an import of anything else 404s and the page never starts.
-        import re
-        src = Path(__file__).resolve().parents[1] / 'src'
-        shipped = {name for name in deploy.FILES if name.startswith('src/')}
-        pending, seen = ['src/app.js'], set()
-        while pending:
-            name = pending.pop()
-            if name in seen:
-                continue
-            seen.add(name)
-            self.assertIn(name, shipped, f'{name} is imported by the page but not in deploy_static.FILES')
-            text = (src.parent / name).read_text(encoding='utf-8')
-            pending += [f'src/{m}' for m in re.findall(r"""from\s+['"]\./([\w.-]+\.js)['"]""", text)]
+    def test_every_module_the_page_imports_is_published(self):
+        # An import of anything the deployer does not publish 404s and the page never starts.
+        published = set(deploy.release_files(tracked_files()))
+        for name in page_modules(lambda n: (ROOT / n).read_text(encoding='utf-8')):
+            self.assertIn(name, published, f'{name} is loaded by the page but would not be published')
+
+    def test_crawl_follows_nested_folders_and_every_import_form(self):
+        files = {'src/app.js': "import {a} from './features/x/view.js';\nimport './core/boot.js';",
+                 'src/features/x/view.js': "export {b} from '../../core/state.js';\nconst m = import('./lazy.js');",
+                 'src/core/boot.js': '', 'src/core/state.js': '', 'src/features/x/lazy.js': ''}
+        self.assertEqual(page_modules(lambda n: files[n]), {'src/styles.css', *files})
+
+
+class ReleaseFilesTests(unittest.TestCase):
+    TRACKED = ['index.html', 'README.md', 'src/app.js', 'src/features/brackets/view.js', 'scripts/x.py', *deploy.DATA_FILES]
+
+    def test_publishes_page_all_of_src_and_data(self):
+        files = deploy.release_files(self.TRACKED)
+        self.assertEqual(files[0], 'index.html')
+        self.assertEqual(set(files), {'index.html', 'src/app.js', 'src/features/brackets/view.js', *deploy.DATA_FILES})
+        self.assertNotIn('scripts/x.py', files)
+
+    def test_refuses_a_commit_without_the_page_or_data(self):
+        for gone in ('index.html', 'data/geo/house.json', deploy.SNAPSHOT):
+            with self.subTest(gone=gone), self.assertRaises(ValueError):
+                deploy.release_files([n for n in self.TRACKED if n != gone])
+
+    def test_commit_listing_includes_nested_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            for name in ('index.html', 'src/app.js', 'src/features/brackets/view.js'):
+                (work / name).parent.mkdir(parents=True, exist_ok=True)
+                (work / name).write_text('x', encoding='utf-8')
+            git = ['git', '-C', tmp, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid']
+            subprocess.run(git[:3] + ['init', '-q'], check=True)
+            subprocess.run(git + ['add', '.'], check=True)
+            subprocess.run(git + ['commit', '-qm', 'x'], check=True)
+            saved, deploy.REPOSITORY = deploy.REPOSITORY, work / '.git'
+            try:
+                listed = deploy.commit_files('HEAD')
+            finally:
+                deploy.REPOSITORY = saved
+        self.assertEqual(sorted(listed), ['index.html', 'src/app.js', 'src/features/brackets/view.js'])
+
+    def test_refuses_an_empty_asset_but_not_the_validated_snapshot(self):
+        deploy.require_assets(bundle({deploy.SNAPSHOT: b''}))
+        with self.assertRaises(ValueError):
+            deploy.require_assets(bundle({'src/features/brackets/view.js': b'  \n'}))
 
 
 class VersionedAssetTests(unittest.TestCase):
@@ -49,6 +107,10 @@ class VersionedAssetTests(unittest.TestCase):
         self.assertIn(f'href="./assets/{digest}/styles.css"'.encode(), page)
         self.assertIn(f'src="./assets/{digest}/app.js"'.encode(), page)
         self.assertNotIn(b'./src/', page)
+
+    def test_nested_modules_keep_their_folders(self):
+        digest, files = deploy.versioned_assets(bundle({'src/features/brackets/view.js': b'export const v = 1;'}))
+        self.assertEqual(files[f'assets/{digest}/features/brackets/view.js'], b'export const v = 1;')
 
     def test_any_module_change_changes_the_folder(self):
         first, _ = deploy.versioned_assets(bundle())

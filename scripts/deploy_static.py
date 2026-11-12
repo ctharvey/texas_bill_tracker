@@ -15,12 +15,34 @@ from pathlib import Path
 ROOT = Path('/var/www/html/texas-bill-atlas')
 STATE = Path('/var/lib/texas-bill-atlas')
 REPOSITORY = STATE / 'repository.git'
-FILES = ('index.html', 'src/app.js', 'src/taxonomy.js', 'src/styles.css', 'src/review.js', 'src/prefs.js', 'src/sync.js',
-         'src/geo.js', 'data/members.json', 'data/geo/districts.json', 'data/geo/house.json', 'data/geo/senate.json',
-         'data/geo/counties.json', 'data/bills.json')
+# Published besides index.html and everything under src/. bills.json is the bundled fallback snapshot, validated below.
+DATA_FILES = ('data/members.json', 'data/geo/districts.json', 'data/geo/house.json', 'data/geo/senate.json',
+              'data/geo/counties.json', 'data/bills.json')
+SNAPSHOT = 'data/bills.json'
 KEEP_RELEASES = 10
 ASSETS = 'assets'
 PAGE_REFERENCES = ('./src/styles.css', './src/app.js')
+
+
+def release_files(tracked) -> tuple[str, ...]:
+    """The published files of a commit: index.html, every file under src/ and DATA_FILES.
+
+    Listing src/ from the commit (not by name) is what lets code move between src/ folders without a deployer change."""
+    tracked = set(tracked)
+    missing = [name for name in ('index.html', *DATA_FILES) if name not in tracked]
+    if missing:
+        raise ValueError('Missing from the commit: ' + ', '.join(missing))
+    return ('index.html', *sorted(name for name in tracked if name.startswith('src/')), *DATA_FILES)
+
+
+def commit_files(commit: str) -> list[str]:
+    return [name.decode() for name in git('ls-tree', '-r', '-z', '--name-only', commit).split(b'\0') if name]
+
+
+def require_assets(bundle: dict[str, bytes]) -> None:
+    for name, content in bundle.items():
+        if name != SNAPSHOT and not content.strip():
+            raise ValueError('Empty application asset: ' + name)
 
 
 def versioned_assets(bundle: dict[str, bytes]) -> tuple[str, dict[str, bytes]]:
@@ -70,8 +92,8 @@ def main() -> None:
         if current.is_symlink() and current.resolve() == release:
             print('Already current:', commit)
             return
-        bundle = {name: git('show', f'{commit}:{name}') for name in FILES}
-        snapshot = json.loads(bundle['data/bills.json'])
+        bundle = {name: git('show', f'{commit}:{name}') for name in release_files(commit_files(commit))}
+        snapshot = json.loads(bundle[SNAPSHOT])
         datetime.fromisoformat(snapshot['generated_at'].replace('Z', '+00:00'))
         bills = snapshot.get('bills', [])
         ids = [bill.get('id', '') for bill in bills]
@@ -79,9 +101,7 @@ def main() -> None:
                 or len(bills) < 1000 or len(set(ids)) != len(ids)
                 or not all(re.fullmatch(r'(?:HB|SB|HJR|SJR|HCR|SCR|HR|SR)\d{1,5}', key) for key in ids)):
             raise ValueError('Refusing incomplete, curated or invalid legislative snapshot')
-        for name in FILES[:-1]:
-            if not bundle[name].strip():
-                raise ValueError('Empty application asset: ' + name)
+        require_assets(bundle)
         digest, versioned = versioned_assets(bundle)
         bundle.update(versioned)
         release.parent.mkdir(parents=True, exist_ok=True)

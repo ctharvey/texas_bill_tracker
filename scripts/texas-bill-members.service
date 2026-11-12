@@ -9,10 +9,10 @@ User=texas-bill-atlas
 Group=texas-bill-atlas
 RuntimeDirectory=texas-bill-members
 UMask=0022
-# sync_members.py comes from the same main commit the deployer publishes; it uses the standard library only.
-ExecStartPre=/bin/sh -c '/usr/bin/git --git-dir=/var/lib/texas-bill-atlas/repository.git show main:scripts/sync_members.py > "$RUNTIME_DIRECTORY/sync_members.py"'
-ExecStartPre=/bin/sh -c '/usr/bin/git --git-dir=/var/lib/texas-bill-atlas/repository.git show main:data/members_elect_2026.json > "$RUNTIME_DIRECTORY/members_elect_2026.json"'
-ExecStart=/bin/sh -c 'exec /usr/bin/python3 "$RUNTIME_DIRECTORY/sync_members.py" --elect "$RUNTIME_DIRECTORY/members_elect_2026.json" --out /var/www/html/texas-bill-atlas/live/members.json'
+# The whole scripts/ folder (standard library only) and the elect list from one main commit of the repository the
+# deployer fetches; resolved once, archived to a file first because /bin/sh has no pipefail.
+ExecStartPre=/bin/sh -c 'set -e; cd "$RUNTIME_DIRECTORY"; g="/usr/bin/git --git-dir=/var/lib/texas-bill-atlas/repository.git"; c=$$($$g rev-parse --verify "main^{commit}"); $$g archive --format=tar -o code.tar "$$c" scripts data/members_elect_2026.json; /usr/bin/tar -xf code.tar; rm code.tar; echo "code from $$c"'
+ExecStart=/bin/sh -c 'exec /usr/bin/python3 "$RUNTIME_DIRECTORY/scripts/sync_members.py" --elect "$RUNTIME_DIRECTORY/data/members_elect_2026.json" --out /var/www/html/texas-bill-atlas/live/members.json'
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

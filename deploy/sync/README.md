@@ -9,8 +9,11 @@ Layout on the VPS (root-owned except the database directory):
 - `/srv/sites/texas-bill-atlas/sync/compose.yaml` - this file's copy.
 - `/srv/sites/texas-bill-atlas/sync/sync.env` - `PYTHON_IMAGE` (pinned digest), `SYNC_USER` (uid:gid of
   texas-bill-atlas), `SYNC_APP` (the extracted release below). No secrets.
-- `/srv/sites/texas-bill-atlas/sync/app/<commit>/` - `sync_service.py`, `build_feeds.py` and `search_bills.py` from that main commit
-  (`git --git-dir=/var/lib/texas-bill-atlas/repository.git show <commit>:scripts/<file>`).
+- `/srv/sites/texas-bill-atlas/sync/app/<commit>/scripts/` - the whole `scripts/` folder of that main commit, so moving
+  code between files needs no change here. Extract it with
+  `git --git-dir=/var/lib/texas-bill-atlas/repository.git archive --format=tar -o /tmp/sync-app.tar <commit> scripts`, then
+  `mkdir app/<commit> && tar -xf /tmp/sync-app.tar -C app/<commit>`. Releases extracted before this layout (flat files
+  directly in `app/<commit>/`) only work with the previous compose command, `/app/sync_service.py`.
 - `/var/lib/texas-bill-atlas/sync/` - SQLite database, mode 0700, owned by texas-bill-atlas. It holds key hashes,
   watchlists, followed legislators' member codes and saved searches only. There is no scheduled backup. A one-off
   backup is taken before each deploy that touches sync (below); people also keep their lists on each device.
@@ -30,5 +33,8 @@ every link that existed at backup time opens its list again; changes made after 
 
 Update: extract a new `app/<commit>`, point `SYNC_APP` at it, then
 `docker compose --env-file sync.env -f compose.yaml up -d` and confirm
-`https://bills.ctharvey.me/api/sync/health` returns 200. Roll back by pointing `SYNC_APP` at the previous commit.
+`https://bills.ctharvey.me/api/sync/health` returns 200. Roll back by pointing `SYNC_APP` at the previous commit, as long
+as both use the same layout. The compose command and the app folder layout are coupled: switching from flat releases to
+`scripts/` releases means replacing `compose.yaml` and `SYNC_APP` together in one `up -d` (keep the old `compose.yaml`),
+and rolling back across that change means restoring both.
 Stopping the container is safe: the site reports sync as unavailable and keeps share links and files working.

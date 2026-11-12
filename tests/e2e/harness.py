@@ -6,6 +6,7 @@ deployer would not publish 404s here exactly as it would in production.
 
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -27,9 +28,11 @@ MODES = ("src", "bundle")
 
 
 def release_files() -> tuple[str, ...]:
-    """The files the deployer publishes, by its own rule."""
-    lister = getattr(deploy_static, "release_files", None)
-    return tuple(lister(REPO)) if lister else deploy_static.FILES
+    """The files the deployer publishes, by its own rule, from the tracked files (the deployer lists the commit's tree).
+
+    A new file that is not yet added to git is left out, as a deploy of the commit would leave it out."""
+    tracked = subprocess.run(["git", "-C", str(REPO), "ls-files", "-z"], capture_output=True, check=True).stdout
+    return deploy_static.release_files(name for name in tracked.decode().split("\0") if name)
 
 
 def build_bundle(target: Path) -> str:
