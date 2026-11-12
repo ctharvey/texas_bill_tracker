@@ -12,7 +12,21 @@ Layout on the VPS (root-owned except the database directory):
 - `/srv/sites/texas-bill-atlas/sync/app/<commit>/` - `sync_service.py`, `build_feeds.py` and `search_bills.py` from that main commit
   (`git --git-dir=/var/lib/texas-bill-atlas/repository.git show <commit>:scripts/<file>`).
 - `/var/lib/texas-bill-atlas/sync/` - SQLite database, mode 0700, owned by texas-bill-atlas. It holds key hashes,
-  watchlists, followed legislators' member codes and saved searches only. No backup: people keep export files, and a lost list only unlinks devices.
+  watchlists, followed legislators' member codes and saved searches only. There is no scheduled backup. A one-off
+  backup is taken before each deploy that touches sync (below); people also keep their lists on each device.
+
+Backup (before any sync deploy): copy `scripts/sync_backup.py` from the reviewed commit, then
+`sudo -u texas-bill-atlas python3 sync_backup.py backup`. It writes `/var/lib/texas-bill-atlas/sync-backups/sync-<UTC>.sqlite3`
+(directory 0700, file 0600) from one consistent snapshot of the live database, refuses to finish unless the copy passes
+`integrity_check`, has the expected `lists` columns, holds readable data in every row, and has the same row count as the
+live database had at that moment. It prints only the path, size and counts. `sync_backup.py check <file>` re-checks a
+file without changing it. Backups hold lists that were deleted after they were taken, so they are removed once the
+change they protect is settled.
+
+Restore (only after a failed release has damaged lists): `docker compose --env-file sync.env -f compose.yaml stop sync`;
+as texas-bill-atlas, move `sync.sqlite3` and any `sync.sqlite3-wal`/`-shm` aside (keep them), copy the checked backup to
+`sync.sqlite3` (mode 0600); `docker compose ... up -d`; confirm health returns 200. Links are stored as fingerprints, so
+every link that existed at backup time opens its list again; changes made after the backup are lost.
 
 Update: extract a new `app/<commit>`, point `SYNC_APP` at it, then
 `docker compose --env-file sync.env -f compose.yaml up -d` and confirm
