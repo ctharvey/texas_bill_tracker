@@ -1,10 +1,10 @@
 {
- "HB1001/classify": "d3cafeb8d6a0f550f1b2d19db7d60f1cb5a8f85c258087853dada167d9fc6b94",
- "HB1001/extract": "7b158530192e3a00eefda088d88f514fe6e179192c6ebe41e020588726f4b7c5",
- "HB110/classify": "d1c71e5cec61363911424b1aa123ba4750a831e1ecd6d9b99497c161db0c2954",
- "HB110/extract": "9f121505e2b9b177ddbc64ee9d8c1cf22016733e5ba011664ca40e9227f1855d",
- "HB717/classify": "e01cf61839a2dcfe91f87f9acfd3c93c6edf0dea893524d2f2b008fd68fb901a",
- "HB717/extract": "49d755e42e600d20b1aa1c4230b9a358a931d27350e097140f9d272a63226fa3",
+ "HB1001/classify": "ecab9efff5e8da55c212b4ef936e9bce965724ffa5dc66cae9077b095fc97494",
+ "HB1001/extract": "5e31949278ce4acc793eb10c9d3f923f8789d24e536876da0d989dfde7b2e57c",
+ "HB110/classify": "22ddd49d20e7595d4b8cd21ec5550f9708838ac0b72e9e37477057f95a408bfe",
+ "HB110/extract": "858182b219e883cc15a43d878fdb95c55d74aeb8b143fbf5fc2b28a757dc8814",
+ "HB717/classify": "17bfd71c9d8b299f769ff51b0bb1d28e0e3d4969762b76f547da5169763b8c6b",
+ "HB717/extract": "7b1aab31b0d1052b0a2f7617b1a493023c226e2c6cf43df4c734edbe2e3493d4",
  "policy_tags": [
   "Education",
   "School choice",
@@ -31,5 +31,5 @@
   "Economic development",
   "Government operations"
  ],
- "registry": "cb611283a9e066fa2ff97c1aac7bcaf517597d7bdcda5dff1003780698d527f9"
+ "registry": "cdb5b3f85b1b3929b13d070e54822eafd453972a4fd69cce3361e5fe4d1ff9ab"
 }
