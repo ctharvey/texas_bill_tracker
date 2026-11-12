@@ -1,1 +1,2 @@
 scripts/vendor/** text eol=lf
+tests/e2e/fixtures/** -text

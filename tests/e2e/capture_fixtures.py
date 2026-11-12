@@ -91,13 +91,16 @@ def main() -> int:
                 member_pages += page.eval_on_selector_all("#detail-drawer a[href^='#member']", "a=>a.map(x=>x.getAttribute('href'))")[:1]
                 show = page.locator(".bill-text-section button", has_text="Show bill text")
                 if show.count():
-                    show.click()
-                    page.wait_for_load_state("networkidle")
+                    # networkidle returns before the click's fetches start; wait for the text itself.
+                    with page.expect_response(lambda r: r.url.endswith(".md"), timeout=20000):
+                        show.click()
                     select = page.locator(".bill-text-section select")
-                    if select.count():
-                        for i in range(select.locator("option").count()):
+                    for i in range(select.locator("option").count() if select.count() else 0):
+                        code = select.locator("option").nth(i).inner_text().rsplit("(", 1)[-1].rstrip(")")
+                        if files.get(f"text/{bill}/{code}.md"):
+                            continue
+                        with page.expect_response(lambda r, c=code: r.url.endswith(f"/{c}.md"), timeout=20000):
                             select.select_option(index=i)
-                            page.wait_for_load_state("networkidle")
             for href in list(dict.fromkeys(statute_pages + member_pages)):
                 page.goto(site.base + href, wait_until="networkidle")
                 page.wait_for_timeout(300)
