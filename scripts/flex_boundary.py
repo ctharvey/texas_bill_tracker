@@ -24,10 +24,11 @@ from cth_flex import (  # noqa: E402 - needs the vendor path
 from cth_flex import cache as flex_cache  # noqa: E402
 from cth_flex import ledger as flex_ledger  # noqa: E402
 from cth_flex.adapters import openai_responses_sender  # noqa: E402
+from cth_flex.client import uncertain_attempts  # noqa: E402
 
 from extraction_cache import (  # noqa: E402
     AlreadyBilled, ApiRejected, ApiStopped, BudgetExceeded, CacheBusy, CacheCoolingDown, CachedResponse,
-    CapacityUnavailable, LongContext, NotSubmitted, OutcomeUnresolved, UnresolvedCall,
+    CapacityUnavailable, LongContext, NotSubmitted, OutcomeUnresolved, ResponseCache, UnresolvedCall,
 )
 
 # Luna Flex short-context rates per million tokens (classify_bill.response_cost; verified 2026-11-09). With these,
@@ -40,6 +41,10 @@ LEDGER_ZONE = "America/Chicago"
 # full) hands the bill back to the worker's cooling list instead of sleeping.
 TEXAS_POLICY = RetryPolicy(capacity_attempts=3, rate_limit_attempts=3, base_s=30, cap_s=60, jitter=False,
                            max_hint_s=7 * 24 * 3600, defer_over_s=60)
+
+# Held calls (unknown outcome, booked at their upper bound, waiting for an operator) allowed before every new call
+# is refused: one uncertain reply holds only its bill, but a provider outage cannot keep paying for unknowns.
+HELD_LIMIT = 3
 
 _SAME_NAME = {flex_ledger.BudgetExceeded: BudgetExceeded, flex_ledger.OutcomeUnresolved: OutcomeUnresolved,
               flex_ledger.AlreadyBilled: AlreadyBilled, flex_ledger.LongContext: LongContext}
@@ -94,7 +99,10 @@ class FlexBoundary:
     Build one per run: the ledger's run total and owner token are per instance."""
 
     def __init__(self, cache_dir: Path, daily_limit: float | None, run_limit: float | None, *,
-                 openai_factory=None, sleep=time.sleep, log=None):
+                 openai_factory=None, sleep=time.sleep, log=None, max_held: int = HELD_LIMIT):
+        if isinstance(max_held, bool) or not isinstance(max_held, int) or max_held < 1:
+            raise ValueError("max_held must be an integer >= 1")
+        self.max_held = max_held
         self.cache = flex_cache.ResponseCache(Path(cache_dir) / "responses")
         self.spend = SpendLedger(Path(cache_dir) / "budget.json", daily_limit_usd=daily_limit,
                                  run_limit_usd=run_limit, tz=LEDGER_ZONE, max_request_bytes=MAX_REQUEST_BYTES,
@@ -135,6 +143,7 @@ class FlexBoundary:
     def send(self, request: dict) -> dict:
         """Reserve, send and settle. Raises cth.flex errors; call it only inside `execute`."""
         self._flex_client()  # a missing SDK or key fails here, as NotSent, before anything is reserved
+        self._check_held_limit()  # durable outage cap: N held calls stop every new one (overshoot < workers)
         key = self.key(request)
         with self._lock:
             self._inflight.add(key)
@@ -177,7 +186,9 @@ class FlexBoundary:
                 stored = None
             if stored is not None:  # a refused billed reply: never resent, revalidated offline like the legacy cache
                 return CachedResponse(stored, True, key)
-            raise translate(error) from error
+            translated = translate(error)
+            translated.request_key = key  # the operator releases a held call by this key
+            raise translated from error
         except Exception as error:  # noqa: BLE001 - translated once, here
             translated = translate(error)
             if translated is error:
@@ -204,6 +215,9 @@ class FlexBoundary:
     def _checked_send(self, request: dict) -> dict:
         try:
             response = self._flex_client().call(request)
+        except UncertainOutcome as error:
+            self._hold(request, error)
+            raise
         except TierMismatch:
             # Billed on another tier: Luna Flex rates would under-count it, so keep the reservation for an operator
             # (the legacy Budget could not price it either).
@@ -220,6 +234,100 @@ class FlexBoundary:
         if isinstance(usage, dict) and (usage.get("input_tokens") or 0) > MAX_REQUEST_BYTES:
             raise UnpricedResponse("long-context reply; reservation kept for an operator")
         return response
+
+    def _hold(self, request: dict, error: UncertainOutcome) -> None:
+        """Book a maybe-billed call at its upper bound and mark it held, so only its bill waits for an operator.
+
+        Runs inside the ledger's send, while the row is still this instance's in-flight call: no other worker can
+        see it as a pending row (which would stop the run). Fails closed: on any problem the row stays pending, the
+        error carries no `held` mark, and the run stops as before. The key stays in the ledger (AlreadyBilled) and
+        the cache records the call indeterminate (UnresolvedCall), so the request is never resent by itself."""
+        if outcome_of(error) != "maybe_sent":
+            return
+        key = self.key(request)
+        attempts = max(1, uncertain_attempts.get())  # each maybe-billed send of this call may have cost a ceiling
+        try:
+            with self.spend._locked() as data:
+                for rows in data.values():
+                    row = rows.get(key)
+                    if (isinstance(row, dict) and row.get("state") == "pending"
+                            and row.get("owner") == self.spend.owner):
+                        bound = float(row.get("reserved", 0)) * attempts
+                        rows[key] = {"state": "returned", "cost": bound, "reserved": 0, "held": True,
+                                     "held_at": time.time(), "error_type": type(error).__name__}
+                        self.spend._save(data)
+                        self.spend.run_spent += bound
+                        break
+                else:
+                    return
+        except Exception:  # noqa: BLE001 - fail closed: the pending row stays and stops the run
+            return
+        error.held = True
+        error.request_key = key
+
+    def held(self) -> list[tuple[str, str, dict]]:
+        """(day, request key, row) for every held call: unknown outcome, booked at its bound, not yet released."""
+        with self.spend._locked() as data:
+            return [(day, key, row) for day, rows in data.items() for key, row in rows.items()
+                    if isinstance(row, dict) and row.get("held") is True]
+
+    def _check_held_limit(self) -> None:
+        try:
+            count = len(self.held())
+        except NotSent:
+            raise
+        except Exception as error:  # noqa: BLE001 - nothing was sent; a NotSent, never a maybe-billed error
+            raise flex_ledger.LedgerUnavailable(f"not sent: ledger unavailable ({type(error).__name__})") from error
+        if count >= self.max_held:
+            raise flex_ledger.OutcomeUnresolved(
+                f"{count} calls are held with unknown outcomes; new calls are blocked until an operator releases them")
+
+    def release_held(self, key: str) -> str:
+        """Operator: let one held request be sent again (e.g. after checking the provider's usage log). Its booked
+        bound stays in the ledger under a renamed key; the ledger row moves first, so a failure in between leaves the
+        cache refusing the resend rather than a key the ledger would refuse as AlreadyBilled. Returns the new key."""
+        with self.spend._locked() as data:
+            for rows in data.values():
+                row = rows.get(key)
+                if isinstance(row, dict) and row.get("held") is True:
+                    released = f"{key}:released-{int(time.time())}"
+                    rows[released] = {**row, "held": False, "released_at": time.time()}
+                    del rows[key]
+                    self.spend._save(data)
+                    break
+            else:
+                raise KeyError(key)
+        self.cache.forget(key)
+        return released
+
+
+def main(argv=None) -> int:
+    """Operator CLI: list held calls, or release one. Takes the review worker lock, so no run may be active."""
+    import argparse
+    parser = argparse.ArgumentParser(description="List or release held Luna calls (unknown outcome, booked at "
+                                                 "their upper bound). Check the provider usage log before releasing.")
+    parser.add_argument("--cache-dir", type=Path, required=True)
+    parser.add_argument("--release", metavar="REQUEST_KEY", help="let this held request be sent again")
+    args = parser.parse_args(argv)
+    try:
+        lock = ResponseCache(args.cache_dir / "worker-lock")._lock("worker")
+        lock.__enter__()
+    except CacheBusy:
+        print("A review run is active; try again when it ends", file=sys.stderr)
+        return 1
+    try:
+        boundary = FlexBoundary(args.cache_dir, None, None)
+        if args.release:
+            print("Released", args.release, "(booked cost kept as", boundary.release_held(args.release) + ")")
+        for day, key, row in boundary.held():
+            print(day, key, "booked $%.6f" % row.get("cost", 0), row.get("error_type", ""))
+    finally:
+        lock.__exit__(None, None, None)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 
 
 def _default_openai():

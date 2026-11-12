@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-12
+- Luna review (flex): a call with an unknown outcome (timeout, 5xx after sending) no longer stops every lane. It
+  is booked at its upper bound and held: never resent, only its bill (or question, or fiscal check) waits, and the
+  other bills keep going. Three held calls stop all new calls until an operator releases them with
+  `scripts/flex_boundary.py --release`, which keeps the booked cost and lets the bill send once more.
+
 ## 2026-11-11
 - Tenure tags: Newcomer (first term), Average tenure, Senior (12+ years), by time in the current chamber, with other-
   chamber service shown beside it; on member pages, Near you cards and the drawer's author list.

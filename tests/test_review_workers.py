@@ -41,41 +41,22 @@ class ConcurrentWorkerTests(FlexLoopCase):
         self.assertEqual(sorted(self.sdk.calls), sorted(self.ids))  # every bill sent exactly once
         self.assertEqual([r['state'] for r in self.ledger_rows()], ['returned'] * len(self.ids))
 
-    def test_unknown_outcome_on_one_worker_stops_new_calls_and_blocks_the_next_run(self):
-        # HB1 times out (maybe billed) while HB2 is still in flight. HB2 still settles; nothing new is sent.
-        hb2_may_return = threading.Event()
-
-        def handler(bill, n):
-            if bill == 'HB1':
-                barrier.wait()
-                return TimeoutError('read timeout')
-            if bill == 'HB2':
-                barrier.wait()
-                hb2_may_return.wait(TIMEOUT)
-            return OK
-        barrier = threading.Barrier(2, timeout=TIMEOUT)
-        original = pipeline.ThreadPoolExecutor
-
-        class ReleaseHB2AfterHB1(original):
-            # Let HB2 finish only once HB1's failure has been raised on the main thread.
-            def __exit__(self, *exc):
-                hb2_may_return.set()
-                return super().__exit__(*exc)
-
-        self.sdk = BillSDK(handler)
-        with patch.object(pipeline, 'ThreadPoolExecutor', ReleaseHB2AfterHB1), \
-                self.assertRaises(SystemExit) as stopped:
-            self.run_workers()
-        self.assertEqual(stopped.exception.code, 2)
-        self.assertEqual(sorted(self.sdk.calls), ['HB1', 'HB2'])
-        states = sorted(r['state'] for r in self.ledger_rows())
-        self.assertEqual(states, ['pending', 'returned'])  # HB1 unknown, HB2 billed and recorded
-        # The next run, whatever its worker count, sends nothing while HB1's outcome is unresolved.
-        self.sdk.handler = lambda bill, n: self.fail('Must not send while an outcome is unresolved')
-        with self.assertRaises(SystemExit) as blocked:  # HB1's indeterminate entry stops it (as legacy)
-            self.run_workers()
-        self.assertEqual(blocked.exception.code, 2)
-        self.assertEqual(sorted(self.sdk.calls), ['HB1', 'HB2'])
+    def test_unknown_outcome_on_one_worker_holds_only_that_bill(self):
+        # HB1 times out (maybe billed) while HB2 is in flight on the other worker: HB1 is held, every other bill
+        # is reviewed (a pending row seen by the other worker would have stopped the run), HB1 is never resent.
+        self.sdk = BillSDK(both_in_flight(then=lambda bill: TimeoutError('read timeout') if bill == 'HB1' else OK))
+        queue = self.run_workers()
+        self.assertEqual(sorted(self.sdk.calls), sorted(self.ids))  # every bill sent exactly once
+        self.assertEqual(sorted(queue['seen']), sorted(set(self.ids) - {'HB1'}))
+        self.assertEqual(queue['failed']['HB1']['stage'], 'held')
+        rows = self.ledger_rows()
+        self.assertEqual(sorted((r['state'], r.get('held', False)) for r in rows),
+                         [('returned', False)] * (len(self.ids) - 1) + [('returned', True)])
+        # The next run, whatever its worker count, never resends HB1 and keeps it held.
+        self.sdk.handler = lambda bill, n: self.fail('Must not resend a held call')
+        queue = self.run_workers(workers=3)
+        self.assertEqual(sorted(self.sdk.calls), sorted(self.ids))
+        self.assertEqual(queue['failed']['HB1']['stage'], 'held')
 
     def test_capacity_refusal_on_one_worker_while_another_is_in_flight(self):
         self.fake_time()
@@ -186,7 +167,8 @@ class BoundaryThreadTests(unittest.TestCase):
         release.set(); worker.join(TIMEOUT)
         self.assertEqual(seen['during'], {})
         self.assertEqual(seen['error'], 'UncertainOutcome')
-        self.assertEqual(len(boundary.ledger['pending']), 1)  # now unresolved: run_document stops on it
+        self.assertEqual(boundary.ledger['pending'], {})  # held, not pending: other workers' calls go on
+        self.assertEqual(len(boundary.held()), 1)
 
     def test_billed_call_counts_are_per_thread(self):
         boundary = self.boundary(BillSDK())

@@ -266,12 +266,12 @@ class StageTwoTests(StagesCase):
         self.put('HB1', 'H', md_h('HB1'))
         self.overrides[UPDATE] = lambda bill, text: TimeoutError('unknown submission outcome')
         mark = len(self.sdk.requests)
-        with self.assertRaises(SystemExit) as caught:
-            self.run_main()
-        self.assertEqual(caught.exception.code, 2)
+        self.run_main()  # only HB1's update is held; the run goes on
         self.assertEqual(self.sent_since(mark), [('HB1', UPDATE)])
         self.assertEqual((self.cache / 'reviews' / 'HB1.json').read_bytes(), old_bytes)
-        self.assertIn('pending', self.ledger_states())
+        ledger = json.loads((self.cache / 'budget.json').read_text('utf-8'))
+        self.assertEqual(sum(1 for day in ledger.values() for row in day.values() if row.get('held')), 1)
+        self.assertNotIn('pending', self.ledger_states())
         self.overrides[UPDATE] = lambda bill, text: body({})  # would be accepted if a resend happened
         mark = len(self.sdk.requests)
         try:
@@ -347,6 +347,19 @@ class FiscalTests(StagesCase):
         published = self.luna('fiscal')
         self.assertEqual(published['text_version'], 'H')
         self.assertIn(FISCAL_QUOTE_H, json.dumps(published))
+
+
+    def test_unknown_outcome_on_a_fiscal_check_is_held_not_resent(self):
+        self.run_main()
+        self.overrides[FISCAL] = lambda bill, text: TimeoutError('unknown submission outcome')
+        mark = len(self.sdk.requests)
+        self.run_main()  # the review is recorded and the run goes on
+        self.assertEqual(self.sent_since(mark), [('HB1', FISCAL)])
+        self.assertFalse((self.cache / 'fiscal' / 'HB1.json').exists())
+        self.overrides[FISCAL] = lambda bill, text: self.fail('Must not resend a held fiscal check')
+        mark = len(self.sdk.requests)
+        self.run_main()
+        self.assertEqual(self.sent_since(mark), [])
 
 
 class BreakerTests(StagesCase):

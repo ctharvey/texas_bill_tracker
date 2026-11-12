@@ -239,14 +239,18 @@ class CapacityBackoffTests(FlexLoopCase):
         self.assertEqual(queue.get('seen', []), [])
         self.assertEqual(self.ledger_rows(), [])
 
-    def test_unknown_outcome_during_first_pass_still_stops_the_worker(self):
+    def test_unknown_outcomes_hold_their_bills_until_the_held_cap_stops_the_run(self):
         self.sdk = BillSDK(lambda bill, n: TimeoutError('unknown submission outcome'))
-        with self.assertRaises(SystemExit) as caught:
-            self.run_main()
-        self.assertEqual(caught.exception.code, 2)
+        queue = self.run_main()
         self.assertEqual(self.sleeps, [])
-        self.assertEqual(self.sdk.calls, ['HB1'])  # never resent
-        self.assertEqual([r['state'] for r in self.ledger_rows()], ['pending'])  # the reservation blocks the rest
+        self.assertEqual(self.sdk.calls, ['HB1', 'HB2', 'HB3'])  # each sent once, never resent; HB4 refused unsent
+        self.assertEqual([(r['state'], r['held']) for r in self.ledger_rows()], [('returned', True)] * 3)
+        self.assertEqual({b: f['stage'] for b, f in queue['failed'].items()},
+                         {'HB1': 'held', 'HB2': 'held', 'HB3': 'held'})
+        self.assertEqual(queue.get('seen', []), [])
+        self.sdk.handler = lambda bill, n: self.fail('Must not send while three calls are held')
+        self.run_main()  # the cap is durable: the next run sends nothing either
+        self.assertEqual(self.sdk.calls, ['HB1', 'HB2', 'HB3'])
 
 
 class FirstPassStatusTests(unittest.TestCase):

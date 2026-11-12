@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import review_pipeline as pipeline
 import classify_bill as classification
-from extraction_cache import CapacityUnavailable, NotSubmitted
+from extraction_cache import CapacityUnavailable, NotSubmitted, UnresolvedCall
 
 
 def bundle(bill_id, status='ready_for_review', pending=(), stop_run=None):
@@ -290,6 +290,35 @@ class CapacityBackoffTests(WorkerLoopTests):
         with self.assertRaises(SystemExit):
             self.run_main(lambda b, r: {'bill_id': b}, run_document)
         self.assertEqual(self.sleeps, [])
+
+
+class HeldQuestionTests(unittest.TestCase):
+    def test_a_held_question_waits_with_its_bill_and_does_not_stop_the_run(self):
+        fresh = RuntimeError('outcome unknown'); fresh.held = True  # as flex_boundary marks a held call
+        first = {'result': {'uncertainties': [], 'agencies': []}, 'request_key': 'k'}
+        questions = [{'id': 'q1', 'question': 'a'}, {'id': 'q2', 'question': 'b'}]
+        for error in (UnresolvedCall('earlier outcome is uncertain'), fresh):
+            with self.subTest(type(error).__name__):
+                budget = type('Budget', (), {'ledger': {}, 'run_spent': 0.0, 'send': None})()
+                with patch.object(classification, 'classify', return_value=first), \
+                        patch.object(pipeline, 'questions_for', return_value=questions), \
+                        patch.object(pipeline, 'resolve', side_effect=error) as resolve, \
+                        patch.object(classification, 'build_request', return_value={'text': {'format': {'schema': {}}}}), \
+                        patch.object(classification, 'validate_result', return_value={'errors': []}):
+                    out = pipeline.run_document({'bill_id': 'HB9'}, [], Path('.'), budget, True)
+                self.assertEqual(resolve.call_count, 1)  # the bill's later question waits with it
+                self.assertIsNone(out['stop_run'])
+                self.assertEqual([q['reason'] for q in out['pending_questions']],
+                                 [type(error).__name__, 'Deferred with preceding request'])
+
+    def test_an_unmarked_unknown_outcome_with_a_pending_row_still_stops(self):
+        first = {'result': {'uncertainties': [], 'agencies': []}, 'request_key': 'k'}
+        budget = type('Budget', (), {'ledger': {'d': {'x': {'state': 'pending'}}}, 'run_spent': 0.0, 'send': None})()
+        with patch.object(classification, 'classify', return_value=first), \
+                patch.object(pipeline, 'questions_for', return_value=[{'id': 'q1', 'question': 'a'}]), \
+                patch.object(pipeline, 'resolve', side_effect=TimeoutError('read timeout')), \
+                self.assertRaises(RuntimeError):
+            pipeline.run_document({'bill_id': 'HB9'}, [], Path('.'), budget, True)
 
 
 class FirstPassStatusTests(unittest.TestCase):

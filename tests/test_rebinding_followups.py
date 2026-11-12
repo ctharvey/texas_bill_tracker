@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_review_stages_pipeline import (CLASSIFY, FISCAL_QUOTE, StagesCase, body, md_h, md_i,  # noqa: E402
                                          pipeline, sha)
 from test_text_rebinding import BILLS, rerender, reword  # noqa: E402
+from test_flex_worker_loop import Err  # noqa: E402
 import review_audit  # noqa: E402
 
 AUDIT = 'texas_bill_review_audit_v1'
@@ -113,7 +114,8 @@ class FollowupTests(StagesCase):
         self.run_main()
         self.assertEqual(sorted(self.published()), ['HB1', 'HB2'])
         self.put('HB1', 'I', reword(md_i('HB1')))  # real change: HB1's review no longer matches the site
-        self.overrides[CLASSIFY] = lambda bill, text: RuntimeError('unknown outcome')  # the run stops
+        # The run stops (exit 2). Quota, since an unknown outcome now holds only its bill (flex held calls).
+        self.overrides[CLASSIFY] = lambda bill, text: Err(429, 'insufficient_quota')
         with self.assertRaises(SystemExit) as caught:
             self.run_main()
         self.assertEqual(caught.exception.code, 2)

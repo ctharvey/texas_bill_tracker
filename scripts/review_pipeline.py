@@ -23,7 +23,7 @@ import extract_bill as detailed
 import contextlib
 from extraction_cache import (
     AlreadyBilled, ApiStopped, BudgetExceeded, CacheBusy, CacheCoolingDown, CapacityUnavailable, LongContext,
-    NotSubmitted, OutcomeUnresolved, ResponseCache, atomic_json, canonical_hash,
+    NotSubmitted, OutcomeUnresolved, ResponseCache, UnresolvedCall, atomic_json, canonical_hash,
 )
 
 ROOT = detailed.ROOT
@@ -40,6 +40,18 @@ PER_BILL_NOT_SUBMITTED = ("LongContext", "AlreadyBilled")
 # Review errors the worker loop records against one bill and continues past; any other error stops the run.
 PER_BILL_ERRORS = (CacheCoolingDown, CacheBusy, CapacityUnavailable, OSError, ValueError)
 LEDGER_ZONE = "America/Chicago"
+
+
+def held_outcome(error: BaseException) -> bool:
+    """One call of this bill waits for an operator and is never resent by itself: an earlier outcome the cache
+    refuses to resend, or a new unknown outcome the flex boundary booked at its bound and held. Only that bill
+    waits; the ledger (a pending row, or the held-call cap) still stops every new call when it must."""
+    return isinstance(error, UnresolvedCall) or getattr(error, "held", False) is True
+
+
+def held_note(error: BaseException) -> str:
+    key = getattr(error, "request_key", None)
+    return ("request %s; release it with scripts/flex_boundary.py --release once reconciled" % key) if key else ""
 
 
 def ledger_day() -> str:
@@ -428,6 +440,11 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
         except Exception as error:
             if spend_marker(budget) > before_spending:
                 new_calls += 1
+            if held_outcome(error):
+                # This question's call waits for an operator; the bill's later questions wait with it, other bills go on.
+                pending.append({**question, "reason": type(error).__name__})
+                pending.extend({**q, "reason": "Deferred with preceding request"} for q in questions[index+1:])
+                break
             if any(row.get("state") == "pending" for day in budget.ledger.values() for row in day.values()):
                 raise RuntimeError("Unknown request outcome; worker stopped") from None
             if isinstance(error, ApiStopped) or getattr(error, "code", None) in (
@@ -437,9 +454,10 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
             if isinstance(error, ValueError):
                 reason += ': ' + str(error)[:180]
             pending.append({**question, "reason": reason})
-            if isinstance(error, (BudgetExceeded, CapacityUnavailable)):
+            if isinstance(error, (BudgetExceeded, CapacityUnavailable, OutcomeUnresolved)):
                 pending.extend({**q, "reason": "Deferred with preceding request"} for q in questions[index+1:])
-                stop_run = reason  # Budget stops the run; capacity makes the worker wait and redo this bill.
+                # Budget or the held-call cap stops the run; capacity makes the worker wait and redo this bill.
+                stop_run = reason
                 retry_after = getattr(error, "retry_after", 0)
                 break
     resolved_ids = {r["question"]["id"] for r in resolutions if r["result"]["status"] == "resolved"}
@@ -1186,6 +1204,9 @@ def _second_pass(label: str, jobs, args, deadline: float) -> int:
             print(bill_id, f"{label.lower()} skipped:", type(error).__name__, flush=True)
             continue
         except Exception as error:
+            if held_outcome(error):
+                print(bill_id, f"{label.lower()} held:", type(error).__name__, held_note(error), flush=True)
+                continue
             print(bill_id, "stopped", type(error).__name__, f"({label.lower()})", flush=True)
             raise SystemExit(2)
         if report.get("action") == "not_submitted":
@@ -1466,7 +1487,7 @@ def main():
                     return "skipped", None  # another worker's outcome is stopping the run; this bill stays queued
                 kind, value = fetch_and_review(bill_id, ask, plan)
                 if (kind == "download_stopped"
-                        or kind == "error" and not isinstance(value, PER_BILL_ERRORS)
+                        or kind == "error" and not isinstance(value, PER_BILL_ERRORS) and not held_outcome(value)
                         or kind == "bundle" and (value["status"] == "deferred" or (
                             value.get("stop_run") and not value["stop_run"].startswith("CapacityUnavailable")))):
                     halt.set()  # mirrors the outcomes `handle` stops the run on
@@ -1542,6 +1563,9 @@ def main():
                     print(bill_id, "fiscal check skipped:", type(error).__name__, flush=True)
                     return  # retried on a later visit; never billed
                 except Exception as error:
+                    if held_outcome(error):
+                        print(bill_id, "fiscal check held:", type(error).__name__, held_note(error), flush=True)
+                        return  # this check waits for an operator; never resent
                     # Unknown outcome, quota or budget: the run stops after this bill's review is recorded.
                     bundle["stop_run"] = type(error).__name__ + " (fiscal check)"
                     return
@@ -1605,6 +1629,12 @@ def main():
                             print("Stopped: repeated new failures; FTP or storage may be unavailable", flush=True)
                             return True
                         return False
+                    if held_outcome(error):
+                        # Only this bill waits for an operator (its call is never resent); other bills go on.
+                        record_failure(queue, bill_id, 'held', error)
+                        atomic_json(queue_path, queue)
+                        print(bill_id, "held", type(error).__name__, held_note(error), flush=True)
+                        return False
                     print(bill_id, "stopped", type(error).__name__, flush=True)
                     raise SystemExit(2)
                 bundle = value
@@ -1631,7 +1661,8 @@ def main():
                     atomic_json(args.cache_dir / "fiscal" / (bill_id + ".json"), fiscal)
                     print(bill_id, "fiscal check", fiscal["report"].get("status"), flush=True)
                 retryable = any(q.get('reason', '').startswith(('CapacityUnavailable', 'CacheCoolingDown',
-                    'NotSubmitted', 'BudgetExceeded', 'Deferred')) for q in bundle.get('pending_questions', []))
+                    'NotSubmitted', 'BudgetExceeded', 'Deferred', 'UncertainOutcome', 'UnresolvedCall',
+                    'OutcomeUnresolved')) for q in bundle.get('pending_questions', []))
                 if retryable and bill_id not in queue['retry']:
                     queue['retry'].append(bill_id)
                 if not retryable and bill_id in queue['retry']:

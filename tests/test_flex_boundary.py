@@ -2,8 +2,10 @@
 
 No network and no paid calls: the OpenAI SDK is a fake (or the real SDK over httpx.MockTransport).
 """
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import sys
@@ -120,20 +122,25 @@ class OutcomeTests(BoundaryCase):
             self.run_once(b)
         self.assertEqual(len(self.sdk.calls), 1)
 
-    def test_timeout_is_uncertain_untranslated_and_blocks_the_next_request(self):
-        b = self.boundary([TimeoutError("t")])
+    def test_timeout_is_uncertain_untranslated_and_held_without_blocking_other_requests(self):
+        b = self.boundary([TimeoutError("t"), OK])
         with self.assertRaises(cth_flex.UncertainOutcome) as caught:
             self.run_once(b)
         self.assertIsInstance(caught.exception, cth_flex.UncertainOutcome)
         self.assertNotIsInstance(caught.exception, (ec.NotSubmitted, ec.CapacityUnavailable))
+        self.assertIs(caught.exception.held, True)
+        self.assertEqual(caught.exception.request_key, fb.FlexBoundary.key(REQ))
         self.assertEqual(len(self.sdk.calls), 1)
         self.assertEqual(self.sleeps, [])
         self.assertEqual(self.entry()["state"], "indeterminate")
-        self.assertEqual(self.states(), ["pending"])
-        with self.assertRaises(ec.OutcomeUnresolved):
-            self.run_once(b, REQ2)
-        self.assertEqual(len(self.sdk.calls), 1)
-        self.assertEqual(self.states(), ["pending"])
+        legacy = (len(json.dumps(REQ, ensure_ascii=False).encode()) * .125 + REQ["max_output_tokens"] * .25) / 1e6
+        [row] = self.rows()
+        self.assertEqual((row["state"], row["held"], row["cost"], row["reserved"]), ("returned", True, legacy, 0))
+        self.assertEqual(b.ledger, {"pending": {}})
+        self.assertEqual(self.run_once(b, REQ2).response, OK)  # another request still goes out
+        with self.assertRaises(ec.UnresolvedCall):  # the held one is never resent
+            self.run_once(b)
+        self.assertEqual(len(self.sdk.calls), 2)
 
     def test_quota_and_auth_stop_the_run_without_billing(self):
         for status, code in ((429, "insufficient_quota"), (401, "invalid_api_key")):
@@ -234,6 +241,70 @@ class OutcomeTests(BoundaryCase):
 
 
 @unittest.skipUnless(HAS_OPENAI, "Install optional OpenAI SDK and httpx for the mock wire test")
+class HeldCallTests(BoundaryCase):
+    """An unknown outcome holds only its request; the cap, a failed hold and the operator release."""
+
+    def held_rows(self):
+        return [r for r in self.rows() if r.get("held") is True]
+
+    def test_the_held_cap_refuses_new_calls_unsent(self):
+        b = fb.FlexBoundary(self.dir, None, None, openai_factory=lambda: self.sdk, sleep=self.sleeps.append,
+                            log=lambda text: None, max_held=2)
+        self.sdk = SDK([TimeoutError("t"), TimeoutError("t"), OK])
+        for request in (REQ, REQ2):
+            with self.assertRaises(cth_flex.UncertainOutcome):
+                self.run_once(b, request)
+        third = {**REQ, "input": "a third request"}
+        with self.assertRaises(ec.OutcomeUnresolved):
+            self.run_once(b, third)
+        self.assertEqual(len(self.sdk.calls), 2)
+        self.assertEqual(self.entry(third)["state"], "not_submitted")  # provably unsent: sendable once released
+        self.assertEqual(len(self.held_rows()), 2)
+
+    def test_a_failed_hold_write_fails_closed(self):
+        b = self.boundary([TimeoutError("t"), OK])
+        save = b.spend._save
+
+        def refuse_held(data):
+            if any(row.get("held") for rows in data.values() for row in rows.values()):
+                raise OSError("disk full")
+            save(data)
+        b.spend._save = refuse_held
+        with self.assertRaises(cth_flex.UncertainOutcome) as caught:
+            self.run_once(b)
+        self.assertFalse(getattr(caught.exception, "held", False))  # the pipeline stops the run on it
+        self.assertEqual(self.states(), ["pending"])
+        with self.assertRaises(ec.OutcomeUnresolved):  # and the pending row blocks every new call
+            self.run_once(b, REQ2)
+        self.assertEqual(len(self.sdk.calls), 1)
+
+    def test_release_keeps_the_booked_bound_and_lets_the_request_be_sent_once_more(self):
+        b = self.boundary([TimeoutError("t"), OK])
+        with self.assertRaises(cth_flex.UncertainOutcome):
+            self.run_once(b)
+        key = fb.FlexBoundary.key(REQ)
+        [(_, held_key, row)] = b.held()
+        self.assertEqual(held_key, key)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(fb.main(["--cache-dir", str(self.dir), "--release", key]), 0)
+        self.assertIn("Released " + key, out.getvalue())
+        self.assertEqual(b.held(), [])
+        released = [r for r in self.rows() if r.get("released_at")]
+        self.assertEqual([(r["cost"], r["held"]) for r in released], [(row["cost"], False)])
+        self.assertEqual(self.entry(), {})  # the indeterminate entry is gone
+        self.assertEqual(self.run_once(b).response, OK)
+        self.assertEqual(len(self.sdk.calls), 2)
+        self.assertEqual(sorted(r["state"] for r in self.rows()), ["returned", "returned"])  # both costs booked
+
+    def test_release_refuses_while_a_run_holds_the_worker_lock_and_unknown_keys(self):
+        with ec.ResponseCache(self.dir / "worker-lock")._lock("worker"), \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(fb.main(["--cache-dir", str(self.dir)]), 1)
+        with self.assertRaises(KeyError):
+            self.boundary([]).release_held("0" * 64)
+
+
 class WireTests(BoundaryCase):
     def test_posted_body_is_the_classification_request_with_cache_options_on_top(self):
         import httpx

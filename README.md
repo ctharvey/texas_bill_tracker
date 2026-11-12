@@ -81,7 +81,11 @@ The authorized hard ceiling is **$1 per `America/Chicago` calendar day** (the le
 zone on every call, so a run spanning midnight books spend to the correct day), with a
 default **$0.10 per run**. A private durable ledger reserves a conservative upper bound before each provider
 call, accounts for cache writes and output, and records actual estimates afterward. Unknown outcomes retain
-their reservation and block new calls until reconciled. A worker lock prevents concurrent spending races.
+their reservation and block new calls until reconciled. Under `--transport flex`, an unknown outcome reported by
+the client (a timeout or a 5xx after sending) is instead **held**: booked at its upper bound, never resent, and only
+its bill waits while the other lanes keep going; three held calls stop every new call until an operator releases
+them (see "Held calls" below). A crash mid-call still leaves a pending row that blocks everything. A worker lock
+prevents concurrent spending races.
 Cache hits make no provider call. When Flex capacity is unavailable (first pass or a review question), the bill
 is set aside until the provider's retry-after (about 300 s in practice) and the run continues immediately with
 other bills, revisiting it once ready. Back-to-back rejections pause the run 30 s, then 60 s at most; the only
@@ -493,6 +497,13 @@ Call reduction and cache rules:
 - OS locks prevent identical concurrent submissions; writes are atomic. A pending crash, timeout or corrupt
   entry blocks resubmission until its outcome is reconciled. Do not delete uncertain entries merely to retry:
   inspect the private request/time and provider logs first. Known capacity rejections have a cooldown.
+- Held calls (flex): the journal prints `<bill> held UncertainOutcome request <key>` and the bill is listed in the
+  queue's `failed` (stage `held`) or keeps a retryable question. Revisits make no call. To reconcile, check the
+  provider usage log for the request time, then, with no run active, as the service user:
+  `python scripts/flex_boundary.py --cache-dir <cache> [--release <key>]` lists held calls or releases one. A release
+  keeps the booked bound in the ledger under a renamed key and drops the cache entry, so the bill's next visit sends
+  the request once more. Do not hand-edit the ledger: settling a row as `returned` keeps the key and the bill is
+  then refused as `AlreadyBilled`.
 
 Shared instructions/schema and vocabulary precede bill-specific content. An explicit 12-hour breakpoint targets
 prompt reuse across bills/hourly runs; the changing full bill has no write breakpoint in this single-call path.
