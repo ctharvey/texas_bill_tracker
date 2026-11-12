@@ -32,7 +32,7 @@ jobs:
   e2e:
     name: e2e (${{ matrix.mode }}, ${{ matrix.viewport }})
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60  # each shard takes ~42 min
     strategy:
       fail-fast: false
       matrix:

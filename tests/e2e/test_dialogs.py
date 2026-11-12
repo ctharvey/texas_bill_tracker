@@ -18,6 +18,8 @@ def test_disclaimer_shows_on_first_visit_and_is_remembered(device_factory):
     assert KEY not in device.storage(), "nothing is stored until it is accepted"
     page.locator("#disclaimer-ok").click()
     expect(dialog).to_be_hidden()
+    # The app stores it in the dialog's 'close' event, which fires a task after the dialog hides.
+    page.wait_for_function(f"localStorage.getItem('{KEY}') !== null")
     stored = device.storage()[KEY]
     assert re.match(r"\d{4}-\d{2}-\d{2}T", stored), "the acceptance is stored as a timestamp"
     page.reload(wait_until="networkidle")
@@ -35,6 +37,7 @@ def test_escape_also_counts_as_seen(device_factory):
     expect(page.locator("#disclaimer")).to_be_visible()
     page.keyboard.press("Escape")
     expect(page.locator("#disclaimer")).to_be_hidden()
+    page.wait_for_function(f"localStorage.getItem('{KEY}') !== null")  # written in the 'close' event, a task later
     assert KEY in device.storage()
 
 

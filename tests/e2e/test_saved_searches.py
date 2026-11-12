@@ -135,6 +135,8 @@ def test_new_actions_count_and_opening_marks_seen(device_factory, site):
     expect(page.locator(".saved-search-new")).to_have_text("1 with new actions")
     page.locator(".saved-search-name").click()
     page.wait_for_function("location.hash.startsWith('#all')")
+    # Wait for the explorer to render: navigating on before the hashchange is handled leaves the app on Following.
+    expect(page.locator("#page-title")).to_contain_text("See what")
     assert stored(d)[0]["seen"] == TODAY
     d.open("#following")
     expect(page.locator(".saved-search-counts")).to_have_text("1 bill · opened Nov 12")
