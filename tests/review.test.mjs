@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {readFileSync} from 'node:fs';
-const source = readFileSync(new URL('../src/review.js',import.meta.url),'utf8');
-const {reviewModel,pageSegments} = await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+import {reviewModel,pageSegments} from '../src/review.js';
 const bundle = () => ({format:'texas-bill-review-v1',bill_id:'HB1',
     document:{bill_id:'HB1',session:'90R',pages:['😀 Board must act.'],version:'introduced'},
     result:{bill_id:'HB1',summary:{text:'A summary.'}},
