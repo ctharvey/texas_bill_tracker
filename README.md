@@ -635,6 +635,21 @@ in code points, paragraph 0 = title), computed identically by `sync_ftp.plain_pa
 text is present. The format spec is in the workspace plan
 `.agent/plans/texas-bill-tracker-bill-text-and-luna-highlights-plan-2026-11-10.md`.
 
+Statutes: `build_feeds.py` (run by the data unit after each sync, so it needs no unit change) parses each bill's
+latest text version and writes `live/statutes/index.json` (`texas-bill-statutes-v1`: `sections` maps a key such as
+`ED 48.160` to its heading and `[[bill, kind]]` with kind `m` amends, `n` adds a new section, `r` repeals; `bills`
+gives each bill's version, section count and unmatched clauses) and `live/statutes/sections/<CODE>-<section>.json`
+with the quoted wording per bill. Each SECTION's opening sentence names what it changes ("Sections 101A.258(a) and
+(b), Human Resources Code, are amended"; "Chapter 2, Code of Criminal Procedure, is amended by adding Article 2.33";
+repealer lists); a new chapter's sections come from its `Sec. N.` headers; Code of Criminal Procedure articles are
+its sections. Vernon's Civil Statutes, session laws and the Constitution are not tracked. Codes use the abbreviations
+of statutes.capitol.texas.gov (each checked against a real section there). In the tracker, the bill drawer lists
+"Laws this bill changes"; `#statute?law=ED&sec=48.160` shows every bill that amends, adds or repeals the section,
+groups identical wording (companions), sorts broad bills (over 25 sections) last, and compares any two versions
+side by side by subsection: current law is rebuilt from a bill's quote (plain and struck words), a proposal from
+plain and added words, and a version that quotes only some subsections shows the rest as "not changed by" it. A
+section number in the explorer search ("48.160", "Penal Code 46.06", "ED 48.160") finds the bills that change it.
+
 `subjects` is the Legislative Council's subject index from the history's `<subjects>` field, without the index
 codes ("Artificial Intelligence (IQ7C5)" becomes "Artificial Intelligence"); it is absent in older snapshots.
 Both searches match it, so bills with vague captions are found before their full-text review.

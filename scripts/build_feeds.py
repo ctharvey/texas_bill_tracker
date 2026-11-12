@@ -1,5 +1,5 @@
 """Build one RSS feed per bill, and one per legislator, from the live snapshot, so people can follow bills and
-legislators without an account.
+legislators without an account. Also builds the statute index (live/statutes) from the bill text.
 
 Stateless: item identity comes from (bill, date, action text), so readers see only new actions. A feed file
 is rewritten only when its content changes. Standard library only (the data unit extracts it via git show).
@@ -217,6 +217,252 @@ def write_feeds(snapshot: dict, out_dir: Path, site: str = SITE, reviews: dict |
     return written, unchanged
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# Statute index: which sections of Texas law each bill amends, adds or repeals, with the text it quotes.
+# It lives here because the data unit fetches only sync_ftp.py and this file from main on every run.
+
+STATUTE_FORMAT = "texas-bill-statutes-v1"
+STATUTE_SECTION_FORMAT = "texas-bill-statute-section-v1"
+KIND_LETTER = {"amend": "m", "add": "n", "repeal": "r"}  # In the index: amends, new section, repeals.
+# Bill-text names -> statutes.capitol.texas.gov abbreviations (each checked against a real section there).
+CODE_ABBR = {
+    "Agriculture Code": "AG", "Alcoholic Beverage Code": "AL", "Business and Commerce Code": "BC",
+    "Business Organizations Code": "BO", "Civil Practice and Remedies Code": "CP", "Code of Criminal Procedure": "CR",
+    "Education Code": "ED", "Election Code": "EL", "Estates Code": "ES", "Family Code": "FA", "Finance Code": "FI",
+    "Government Code": "GV", "Health and Safety Code": "HS", "Human Resources Code": "HR", "Insurance Code": "IN",
+    "Labor Code": "LA", "Local Government Code": "LG", "Natural Resources Code": "NR", "Occupations Code": "OC",
+    "Parks and Wildlife Code": "PW", "Penal Code": "PE", "Property Code": "PR", "Special District Local Laws Code": "SD",
+    "Tax Code": "TX", "Transportation Code": "TN", "Utilities Code": "UT", "Water Code": "WA",
+}
+CODE_NAME = {abbr: name for name, abbr in CODE_ABBR.items()}
+_CODE_RE = re.compile("(" + "|".join(sorted(map(re.escape, CODE_ABBR), key=len, reverse=True)) + ")")
+SECTION_NUM = re.compile(r"\d+[A-Z]?(?:\.\d+[A-Z]?)+")      # 48.160, 42A.054, 2051.151; never a bare "1"
+STATUTE_KEY = re.compile(r"([A-Z]{2}) (" + SECTION_NUM.pattern + r")")
+_SUBSECTION = re.compile(r"\(([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\)")
+# A list after "Section(s)": "123.001(b) and (c) and 126.001(b)", "1.01, 1.02(a), and 1.03".
+_LIST = r" ((?:(?:[0-9A-Z.]+|\([A-Za-z0-9-]+\))(?:\([A-Za-z0-9-]+\))*(?:, and |, | and )?)+)"
+_VERB = re.compile(r",? (?:is|are) (?:hereby )?(amended|repealed|added|reenacted|transferred|redesignated|renumbered)\b")
+_HEADER = re.compile(r"^(?:Sec|Art)\. (" + SECTION_NUM.pattern + r")\.")
+_ONLY_HEADING = re.compile(r"^The headings? (?:to|of) ")
+_OTHER_LAW = re.compile(r"Acts of the|Revised Statutes|Vernon's|Constitution|General Appropriations|\(H\.B\.|\(S\.B\.")
+_REPEALER = re.compile(r"^(?:The following|Effective [^,]+, the following)[^:]*(?:is|are) repealed")
+_TAGS = re.compile(r"</?(?:ins|del)>")
+_HEADING_LINE = re.compile(r"^### ")
+
+
+def plain_text(markdown_line: str) -> str:
+    """The bill text line without ins/del tags or Markdown escapes (both versions merged)."""
+    return re.sub(r"\s+", " ", re.sub(r"\\(.)", r"\1", _TAGS.sub("", markdown_line))).strip()
+
+
+def _numbers(text: str) -> list[str]:
+    """Section numbers in a list such as "21.0031(b), 21.004, and 21.005(a) and (c)"; subsections are dropped."""
+    return [m.group(0) for m in SECTION_NUM.finditer(_SUBSECTION.sub("", text))]
+
+
+def _subsections(text: str) -> list[str]:
+    return [m.group(1) for m in _SUBSECTION.finditer(text)]
+
+
+def parse_clause(clause: str) -> dict:
+    """Classify one SECTION's opening sentence.
+
+    Returns {"kind": amend|add|repeal|chapter|heading|repealer|other_law|none|unparsed, "code": abbr or None,
+    "targets": [section numbers], "subsections": [...], "from_body": bool}. from_body means the section numbers
+    come from the "Sec. N." headers in the body (a chapter or subchapter being added) or, for a repealer, from the
+    listed items."""
+    text = plain_text(clause).replace(" & ", " and ")
+    out = {"kind": "none", "code": None, "targets": [], "subsections": [], "from_body": False}
+    if _REPEALER.match(text):
+        code = _CODE_RE.search(text)
+        return {**out, "kind": "repealer", "code": CODE_ABBR[code.group(1)] if code else None, "from_body": True}
+    verb = _VERB.search(text)
+    if not verb:
+        return out
+    path, rest, action = text[:verb.start()], text[verb.end():].strip(), verb.group(1)
+    codes = list(_CODE_RE.finditer(path))
+    if not codes:
+        return {**out, "kind": "other_law" if _OTHER_LAW.search(text) else "unparsed"}
+    code = CODE_ABBR[codes[-1].group(1)]
+    before = path[:codes[-1].start()]
+    out["code"] = code
+    if _ONLY_HEADING.match(before) and not re.match(r"^The headings? (?:to|of) (?:Section|Article)", before):
+        return {**out, "kind": "heading"}  # Chapter, subchapter or title headings: no section to track.
+    # Code of Criminal Procedure: articles are the sections ("Section 1(c), Article 46.04" keys to Article 46.04).
+    unit = r"Articles?" if code == "CR" else r"Sections?"
+    named = [m for m in re.finditer(r"\b" + unit + _LIST, before)]
+    targets = [n for m in named for n in _numbers(m.group(1))]
+    subs = _subsections(before)
+    if action == "repealed":
+        return {**out, "kind": "repeal" if targets else "chapter", "targets": targets, "subsections": subs}
+    if action == "added":
+        return {**out, "kind": "add" if targets else "chapter", "targets": targets, "from_body": not targets}
+    adding = re.match(r"by (?:amending [^,]*?(?:and )?)?adding (Sections?|Articles?|Subsections?|Subdivisions?|Subchapters?|Chapters?|Subtitles?|Titles?|Parts?) ([^,]*?)(?: to read|,|$)", rest)
+    if targets:
+        amending = re.search(r"by amending ((?:Subsections?|Subdivisions?) [^,]*?)(?: and adding|,| to read|$)", rest)
+        if amending:
+            subs += _subsections(amending.group(1))
+        if adding and adding.group(1)[:6] in ("Subsec", "Subdiv"):
+            subs += _subsections(adding.group(2))
+        return {**out, "kind": "amend", "targets": targets, "subsections": list(dict.fromkeys(subs))}
+    if adding and adding.group(1).startswith(("Section", "Article")):
+        return {**out, "kind": "add", "targets": _numbers(adding.group(2))}
+    if adding:
+        return {**out, "kind": "add", "from_body": True}  # A new chapter or subchapter: its sections are in the body.
+    return {**out, "kind": "chapter"}
+
+
+def _split_body(body: list[str], targets: list[str], from_body: bool) -> dict[str, list[str]]:
+    """Assign body paragraphs to sections by their "Sec. N." / "Art. N." headers."""
+    parts: dict[str, list[str]] = {}
+    current = targets[0] if len(targets) == 1 and not from_body else None
+    for line in body:
+        header = _HEADER.match(plain_text(line))
+        if header and (from_body or header.group(1) in targets):
+            current = header.group(1)
+        if current is not None:
+            parts.setdefault(current, []).append(line)
+    return parts
+
+
+def _repealed_items(body: list[str], code: str | None) -> list[tuple[str, str]]:
+    found = []
+    for line in body:
+        text = plain_text(line).replace(" & ", " and ")
+        named = _CODE_RE.search(text)
+        item_code = CODE_ABBR[named.group(1)] if named else code
+        unit = "Articles?" if item_code == "CR" else "Sections?"
+        for m in re.finditer(r"\b" + unit + _LIST, text):
+            found += [(item_code, n) for n in _numbers(m.group(1)) if item_code]
+    return found
+
+
+def bill_statutes(markdown: str) -> tuple[dict[str, dict], int]:
+    """({key: {kind, subsections, partial, paragraphs}}, unparsed clause count) for one bill text."""
+    lines = [line for line in markdown.split("\n") if line.strip()]
+    sections: dict[str, dict] = {}
+    unparsed = 0
+    rank = {"amend": 3, "add": 2, "repeal": 1}
+
+    def note(code: str, number: str, kind: str, subs: list[str], paragraphs: list[str]):
+        key = f"{code} {number}"
+        if not STATUTE_KEY.fullmatch(key) or len(number) > 16:
+            return
+        entry = sections.setdefault(key, {"kind": kind, "subsections": [], "partial": True, "paragraphs": []})
+        if rank[kind] > rank[entry["kind"]]:
+            entry["kind"] = kind
+        if kind == "amend":
+            entry["partial"] = entry["partial"] and bool(subs)
+            entry["subsections"] = list(dict.fromkeys(entry["subsections"] + subs))
+        elif kind == "add":
+            entry["partial"] = False
+        entry["paragraphs"] += paragraphs
+
+    i = 0
+    while i < len(lines):
+        if not _HEADING_LINE.match(lines[i]) or i + 1 >= len(lines):
+            i += 1
+            continue
+        clause = lines[i + 1]
+        end = i + 2
+        while end < len(lines) and not _HEADING_LINE.match(lines[end]):
+            end += 1
+        body = lines[i + 2:end]
+        parsed = parse_clause(clause)
+        kind = parsed["kind"]
+        if kind == "unparsed":
+            unparsed += 1
+        elif kind == "repealer":
+            for code, number in _repealed_items(body, parsed["code"]):
+                note(code, number, "repeal", [], [])
+        elif kind == "repeal":
+            for number in parsed["targets"]:
+                note(parsed["code"], number, "repeal", parsed["subsections"], [])
+        elif kind in ("amend", "add"):
+            parts = _split_body(body, parsed["targets"], parsed["from_body"])
+            numbers = list(parts) if parsed["from_body"] else parsed["targets"]
+            for number in numbers:
+                note(parsed["code"], number, kind, parsed["subsections"] if kind == "amend" else [], parts.get(number, []))
+        i = end
+    return sections, unparsed
+
+
+def _latest_text(text_dir: Path, bill_id: str) -> tuple[dict, str] | None:
+    try:
+        index = json.loads((text_dir / bill_id / "index.json").read_text("utf-8"))
+        versions = [v for v in index.get("versions", []) if isinstance(v, dict) and re.fullmatch(r"[A-Z0-9]{1,3}", str(v.get("code", "")))]
+        if index.get("bill_id") != bill_id or not versions:
+            return None
+        version = versions[-1]
+        return version, (text_dir / bill_id / f"{version['code']}.md").read_text("utf-8")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def section_heading(paragraphs: list[str]) -> str:
+    """"Sec. 48.160. FUNDING FOR X." -> "Funding for X" style heading as written (proposed wording)."""
+    for line in paragraphs:
+        proposed = plain_text(re.sub(r"\\\[<del>.*?</del>\\\]|<del>.*?</del>", "", line))
+        m = re.match(r"^(?:Sec|Art)\. " + SECTION_NUM.pattern + r"\.\s+([^a-z]{3,200}?)\.(?:\s|$)", proposed)
+        if m:
+            return m.group(1).strip()
+    return ""
+
+
+def build_statutes(snapshot: dict, text_dir: Path) -> tuple[dict, dict[str, dict]]:
+    """(index, {file name: section document}) from every bill's latest text version."""
+    by_key: dict[str, list[dict]] = {}
+    bills_meta: dict[str, dict] = {}
+    for bill in snapshot.get("bills") or []:
+        bill_id = str(bill.get("id", "")) if isinstance(bill, dict) else ""
+        if not BILL_ID.fullmatch(bill_id):
+            continue
+        found = _latest_text(text_dir, bill_id)
+        if not found:
+            continue
+        version, markdown = found
+        sections, unparsed = bill_statutes(markdown)
+        bills_meta[bill_id] = {"v": version["code"], "n": len(sections), "u": unparsed}
+        for key, entry in sections.items():
+            by_key.setdefault(key, []).append({"bill": bill_id, "version": version["code"],
+                                               "version_name": str(version.get("name") or version["code"]), **entry})
+    index = {"format": STATUTE_FORMAT, "codes": {abbr: CODE_NAME[abbr] for abbr in sorted({k[:2] for k in by_key})},
+             "sections": {}, "bills": dict(sorted(bills_meta.items()))}
+    files = {}
+    for key in sorted(by_key):
+        entries = sorted(by_key[key], key=lambda e: (e["bill"][:2] != "HB", int(re.sub(r"\D", "", e["bill"]) or 0), e["bill"]))
+        heading = next((h for e in entries if (h := section_heading(e["paragraphs"]))), "")
+        index["sections"][key] = {"h": heading, "b": [[e["bill"], KIND_LETTER[e["kind"]]] for e in entries]}
+        code, number = key.split(" ")
+        files[f"{code}-{number}.json"] = {"format": STATUTE_SECTION_FORMAT, "key": key, "code": code,
+                                          "code_name": CODE_NAME[code], "section": number, "heading": heading,
+                                          "entries": entries}
+    return index, files
+
+
+def write_statutes(snapshot: dict, text_dir: Path, out_dir: Path) -> tuple[int, int, int]:
+    """Writes out_dir/index.json and out_dir/sections/<CODE>-<section>.json; removes sections no bill touches now.
+    Returns (written, unchanged, removed). Does nothing without a text directory."""
+    if not text_dir.is_dir():
+        return 0, 0, 0
+    index, files = build_statutes(snapshot, text_dir)
+    sections_dir = out_dir / "sections"
+    sections_dir.mkdir(parents=True, exist_ok=True)
+    written = unchanged = removed = 0
+    for name, document in files.items():
+        if write_if_changed(sections_dir / name, json.dumps(document, ensure_ascii=False, separators=(",", ":")) + "\n"):
+            written += 1
+        else:
+            unchanged += 1
+    for stale in sections_dir.glob("*.json"):
+        if stale.name not in files and re.fullmatch(r"[A-Z]{2}-[0-9A-Z.]+\.json", stale.name):
+            stale.unlink()
+            removed += 1
+    # The index goes last, so it never names a section file that is not there yet.
+    write_if_changed(out_dir / "index.json", json.dumps(index, ensure_ascii=False, separators=(",", ":")) + "\n")
+    return written, unchanged, removed
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--snapshot", type=Path, required=True)
@@ -226,6 +472,9 @@ def main() -> int:
                         help="Published Luna tags; defaults to luna/tags.json beside the snapshot when present")
     parser.add_argument("--members", type=Path, default=None,
                         help="Legislator roster for per-member feeds; defaults to members.json beside the snapshot")
+    parser.add_argument("--text", type=Path, default=None, help="Bill text directory; defaults to text/ beside the snapshot")
+    parser.add_argument("--statutes", type=Path, default=None,
+                        help="Statute index output; defaults to statutes/ beside the snapshot")
     args = parser.parse_args()
     tags = args.tags or args.snapshot.parent / "luna" / "tags.json"
     snapshot, reviews = json.loads(args.snapshot.read_text("utf-8")), load_reviews(tags)
@@ -234,6 +483,9 @@ def main() -> int:
     roster = load_roster(args.members or args.snapshot.parent / "members.json")
     written, unchanged = write_member_feeds(snapshot, roster, args.out / "members", args.site, reviews)
     print(f"Member feeds: {written} written, {unchanged} unchanged", flush=True)
+    text_dir = args.text or args.snapshot.parent / "text"
+    written, unchanged, removed = write_statutes(snapshot, text_dir, args.statutes or args.snapshot.parent / "statutes")
+    print(f"Statute sections: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
     return 0
 
 

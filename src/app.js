@@ -1,4 +1,6 @@
-import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal} from './review.js';
+import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal,
+  STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
+  compareLaw, currentLaw, groupStatuteEntries} from './review.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
   cleanSearches, applySearchOps, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
 import {createSyncClient} from './sync.js';
@@ -7,7 +9,7 @@ import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, appl
 
 const $ = (selector, root=document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state = {view:'all',bills:[],watch:new Set(),query:'',topic:'',agency:'',chamber:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30,meta:null,luna:null,related:null,audit:null,roster:null,reviewStatus:null,sharedList:null,sharedMode:null,sharedSyncKey:null,openBill:null,todayTopic:'',todayLimit:100,todayAllTopics:false,near:null,nearGeo:null,nearPick:null,nearBusy:'',nearError:'',nearShow:{members:30,area:30},memberCode:null,memberShow:{},geoTables:null};
+const state = {view:'all',bills:[],watch:new Set(),query:'',topic:'',agency:'',chamber:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30,meta:null,luna:null,related:null,audit:null,roster:null,reviewStatus:null,sharedList:null,sharedMode:null,sharedSyncKey:null,openBill:null,todayTopic:'',todayLimit:100,todayAllTopics:false,near:null,nearGeo:null,nearPick:null,nearBusy:'',nearError:'',nearShow:{members:30,area:30},memberCode:null,memberShow:{},geoTables:null,statutes:null,statutesFailed:false,statuteKey:null,statuteCompare:null,statuteShow:'both'};
 const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last action',actionstage:'Last action stage',number:'Bill number',agencies:'Most agencies',hearing:'Hearing progress',influence:'Author influence'};
 const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
 const reviews = new Map();
@@ -118,6 +120,7 @@ async function init(){
   const syncKey=applyLocation(true);
   setupDisclaimer();
   setupSync(syncKey);
+  if(state.bills.length)loadStatutes();
   // Keep the progress view current while it is open; other views never refetch.
   setInterval(async()=>{
     if(state.view!=='review'||document.visibilityState!=='visible')return;
@@ -200,6 +203,7 @@ function applyLocation(initial){
   else if(!initial&&state.sharedMode==='link'){state.sharedList=null;state.sharedMode=null}
   if(p.member!==state.memberCode)state.memberShow={};
   state.memberCode=p.member;
+  state.statuteKey=p.statute;
   setView(p.view);
   if(p.bill&&state.bills.some(b=>b.id===p.bill))showDrawer(p.bill);
   return p.sync;
@@ -207,13 +211,13 @@ function applyLocation(initial){
 
 function currentHash(){
   return buildHash(state.view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
-    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode});
+    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey});
 }
 
 // Address of this view with `id` open, so a bill title is a real link (new tab, copy link) as well as a click target.
 function billHref(id){
   return buildHash(state.view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:id,
-    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode});
+    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey});
 }
 
 // push=true adds a history entry (opening a bill), so Back closes it instead of leaving the site.
@@ -417,7 +421,7 @@ function setView(view){
   switchFilters(view);
   state.view=view;
   document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===view));
-  const heads={all:['See what’s moving.<br><em>Know what it changes.</em>','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],watchlist:['Your watchlist.<br><em>Keep the signal.</em>','Bills you starred on this device, with a clear view of their movement.'],following:['Following.<br><em>The people behind the bills.</em>','Legislators you follow on this device, and every bill they file or sign onto.'],today:['Today at the Lege.<br><em>What moved, by topic.</em>','Bills with a recorded action today, grouped by type of action. Dates follow Texas time.'],local:['Near you.<br><em>Your legislators, your bills.</em>','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],member:['One legislator.<br><em>Every bill they’re on.</em>','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],agencies:['Follow the agencies.<br><em>Not just the bills.</em>','Explore where legislation might land across Texas government.'],review:['Full-text review.<br><em>Bill by bill.</em>','Which bills Luna has read in full, which it is working on, and what is still waiting.'],method:['The scoring method.<br><em>No black boxes.</em>','Signals and uncertainty are displayed separately from verified legislative actions.'],saving:['Save your work.<br><em>No account needed.</em>','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],data:['Behind the tracker.<br><em>Follow the source.</em>','Understand coverage, refreshes, and how to load or export bill data.']};
+  const heads={all:['See what’s moving.<br><em>Know what it changes.</em>','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],watchlist:['Your watchlist.<br><em>Keep the signal.</em>','Bills you starred on this device, with a clear view of their movement.'],following:['Following.<br><em>The people behind the bills.</em>','Legislators you follow on this device, and every bill they file or sign onto.'],today:['Today at the Lege.<br><em>What moved, by topic.</em>','Bills with a recorded action today, grouped by type of action. Dates follow Texas time.'],local:['Near you.<br><em>Your legislators, your bills.</em>','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],member:['One legislator.<br><em>Every bill they’re on.</em>','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],statute:['One section of law.<br><em>Every bill that changes it.</em>','The bills that would amend, add or repeal this section of Texas law, with their wording side by side.'],agencies:['Follow the agencies.<br><em>Not just the bills.</em>','Explore where legislation might land across Texas government.'],review:['Full-text review.<br><em>Bill by bill.</em>','Which bills Luna has read in full, which it is working on, and what is still waiting.'],method:['The scoring method.<br><em>No black boxes.</em>','Signals and uncertainty are displayed separately from verified legislative actions.'],saving:['Save your work.<br><em>No account needed.</em>','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],data:['Behind the tracker.<br><em>Follow the source.</em>','Understand coverage, refreshes, and how to load or export bill data.']};
   $('#page-title').innerHTML=heads[view][0];$('#page-subtitle').textContent=heads[view][1];
   $('#overview').hidden=!['all','watchlist'].includes(view);
   renderNotice();renderOverview();renderContent();persistState();
@@ -466,6 +470,7 @@ function renderContent(){
   else if(state.view==='today')el.innerHTML=todayMarkup();
   else if(state.view==='local')el.innerHTML=nearMarkup();
   else if(state.view==='member')el.innerHTML=memberMarkup();
+  else if(state.view==='statute')el.innerHTML=statuteMarkup();
   else if(state.view==='agencies')el.innerHTML=agenciesMarkup();
   else if(state.view==='review')el.innerHTML=reviewMarkup();
   else if(state.view==='method')el.innerHTML=methodMarkup();
@@ -534,11 +539,15 @@ function relatedBlock(b){
   return `<section class="drawer-section related-section"><h3>Related bills</h3><div class="review-chips">${ids.map(id=>`<button class="review-chip" data-open="${esc(id)}">${esc(id)}</button>`).join('')}</div><p><small>Similar captions and Luna summaries; computed automatically.</small></p></section>`;
 }
 
+const lawKeysFor=query=>state.statutes?statuteKeysFor(state.statutes,parseStatuteQuery(query,state.statutes.codes)):[];
+
 // The explorer's list for its own filters, or for a saved search's (`f`: the explorer as a plain, unshared view).
 function filteredBills(f=state){
   const own=f===state;
   const shared=own&&state.sharedList?new Set(state.sharedList):null;
   const {q,compact}=searchTerms(f.query||'');
+  // A section number ("48.160", "Penal Code 46.06") also finds the bills that change that section.
+  const lawBills=new Set(lawKeysFor(f.query).flatMap(k=>state.statutes.sections[k].b.map(p=>p[0])));
   let list=state.bills.filter(b=>{
     if(shared&&!shared.has(b.id))return false;
     if(own&&state.view==='watchlist'&&!state.watch.has(b.id))return false;
@@ -549,6 +558,7 @@ function filteredBills(f=state){
     if(f.outlook&&assessHearing(b).label!==f.outlook)return false;
     if(f.action&&lastActionInfo(b).label!==f.action)return false;
     if(f.stage){const st=(b.status||'').toLowerCase();const outlook=assessHearing(b).label.toLowerCase();if(!st.includes(f.stage.toLowerCase())&&outlook!==f.stage.toLowerCase())return false}
+    if(lawBills.has(b.id))return true;
     return !q||b.id.toLowerCase().includes(compact)||[b.id,b.number,b.title,b.caption,b.author,...b.authors,...(b.coauthors||[]),...(b.sponsors||[]),...(b.cosponsors||[]),b.last_action,...b.topics,...(b.subjects||[]),...(b.search_terms||[]),...b.impacts,...b.agencies.map(a=>agencyName(a.id))].join(' ').toLowerCase().includes(q);
   });
   const byNumber=(a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true});
@@ -585,7 +595,7 @@ function renderResults(){
     const relations=[...new Set(g.flatMap(b=>companionsOf(b.id).filter(c=>ids.has(c.id)).map(relationText)))];
     const names=g.map(b=>b.number).join(' + ');
     return `<div class="companion-group" role="group" aria-label="${esc(`${names}: companion bills`)}"><div class="companion-group-head"><span><span aria-hidden="true">⇄</span> Companion bills · ${esc(names)}${relations.length?` · ${esc(relations.join(', '))}`:''}</span>${groupWatchButton(g.map(b=>b.id))}</div>${g.map(card).join('')}</div>`};
-  $('#bill-list').innerHTML=list.length?shown.map(g=>g.length>1?groupMarkup(g):card(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p></div>`;
+  $('#bill-list').innerHTML=statuteHintMarkup(state.sharedList?[]:lawKeysFor(state.query))+(list.length?shown.map(g=>g.length>1?groupMarkup(g):card(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p></div>`);
   $('#results-bottom').innerHTML=`${list.length>shownCount?`<button class="outline-button" id="load-more">Load 30 more · showing ${shownCount} of ${list.length}</button><div style="height:12px"></div>`:''}${esc(state.meta?.coverage_note||'Check the official record for authoritative status.')}`;
   persistState();
 }
@@ -814,6 +824,143 @@ function memberMarkup(){
     ${sections||'<p class="review-empty">No bills by this member in this snapshot yet.</p>'}`;
 }
 
+// ---- Statutes: which sections of Texas law each bill changes, and the versions side by side ----
+// The index (live/statutes/index.json) is optional; without it the drawer list, statute pages and section search hide.
+const BROAD_BILL=25;  // A bill changing more sections than this is "broad"; its versions sort after focused bills.
+let statutesLoad=null,statuteBills=new Map();
+const statuteDocs=new Map();  // key -> section document, 'loading' or 'error'
+function loadStatutes(){
+  return statutesLoad||(statutesLoad=(async()=>{
+    try{
+      const r=await fetch('./live/statutes/index.json',{cache:'no-cache',signal:timeoutSignal(15000)});
+      if(!r.ok)throw Error(`HTTP ${r.status}`);
+      const index=await r.json();
+      if(!validStatuteIndex(index))throw Error('Unrecognized statute index');
+      state.statutes=index;statuteBills=statutesByBill(index);
+    }catch(error){state.statutes=null;state.statutesFailed=true;console.warn('Statute index unavailable',error.message)}
+    // Views drawn before it arrived: section search results, saved-search counts, the statute page, the open drawer.
+    if(state.view==='all'||state.view==='watchlist')renderResults();
+    else if(state.view==='following'||state.view==='statute')renderContent();
+    if(state.openBill)fillDrawerStatutes(state.openBill);
+  })());
+}
+function statuteDoc(key){
+  const have=statuteDocs.get(key);
+  if(have)return have;
+  const file=statuteFile(key);
+  if(!file)return 'error';
+  statuteDocs.set(key,'loading');
+  (async()=>{
+    try{
+      const r=await fetch(`./live/statutes/sections/${file}`,{cache:'no-cache',signal:timeoutSignal(15000)});
+      if(!r.ok)throw Error(`HTTP ${r.status}`);
+      const doc=await r.json();
+      if(!validStatuteSection(doc,key))throw Error('Unrecognized statute section');
+      statuteDocs.set(key,doc);
+    }catch(error){statuteDocs.set(key,'error');console.warn('Statute section unavailable',key,error.message)}
+    if(state.view==='statute'&&state.statuteKey===key)renderContent();
+  })();
+  return 'loading';
+}
+const statuteHref=key=>buildHash('statute',{},{statute:key});
+const billNumber=id=>state.bills.find(b=>b.id===id)?.number||id;
+const SMALL_WORDS=new Set(['a','an','and','as','at','by','for','in','of','on','or','the','to','with','from','under']);
+// "FUNDING FOR CERTAIN SCHOOLS" -> "Funding for Certain Schools"
+const titleCase=text=>String(text||'').toLowerCase().split(' ').map((w,i)=>i&&SMALL_WORDS.has(w)?w:w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+const statuteLink=key=>`<a class="text-link" href="${esc(statuteHref(key))}">${esc(statuteLabel(key,state.statutes?.codes))}</a>`;
+
+function fillDrawerStatutes(id){
+  const el=$('#drawer-statutes');
+  if(!el||state.openBill!==id)return;
+  const rows=(statuteBills.get(id)||[]).slice().sort((a,b)=>b.others-a.others||a.key.localeCompare(b.key,undefined,{numeric:true}));
+  const meta=state.statutes?.bills?.[id];
+  if(!state.statutes||(!rows.length&&!meta?.u)){el.hidden=true;el.innerHTML='';return}
+  const item=r=>{const h=state.statutes.sections[r.key]?.h;
+    return `<li>${statuteLink(r.key)}${h?` <span class="law-heading">${esc(titleCase(h))}</span>`:''} <small>· ${esc(STATUTE_KINDS[r.kind])}${r.others?` · <strong>${r.others} other ${r.others===1?'bill':'bills'}</strong>`:''}</small></li>`};
+  const shown=rows.slice(0,8),rest=rows.slice(8);
+  const contested=rows.filter(r=>r.others&&r.kind==='m').length;
+  el.innerHTML=`<h3>Laws this bill changes${rows.length?` (${rows.length})`:''}</h3>
+    <p>Sections of Texas law named in this bill's latest text${contested?`. ${contested} ${contested===1?'is':'are'} also amended by other bills: open one to compare the versions side by side`:''}.</p>
+    ${rows.length?`<ul class="law-list">${shown.map(item).join('')}</ul>`:''}${rest.length?`<details class="law-more"><summary>Show all ${rows.length}</summary><ul class="law-list">${rest.map(item).join('')}</ul></details>`:''}
+    ${meta?.u?`<p><small>${meta.u} ${meta.u===1?'change':'changes'} in this bill could not be matched to a section; see the bill text.</small></p>`:''}`;
+  el.hidden=false;
+}
+
+// One side of the comparison: Current law, or one version (a group of bills with the same wording).
+function lawOptions(doc,groups){
+  const law=currentLaw(doc.entries),options=[];
+  const names=g=>g.entries.map(e=>billNumber(e.bill)).join(' = ');
+  if(law.units.length)options.push({id:'law',name:'current law',label:`Current law, as quoted in ${law.sources.map(billNumber).join(', ')}`,units:law.units,partial:law.partial});
+  for(const g of groups){
+    if(g.kind==='repeal'||!g.units.length)continue;
+    const e=g.entries[0];
+    options.push({id:e.bill,name:names(g),label:`${names(g)} · ${g.kind==='add'?'new section':'amended'} · ${e.version_name||e.version}${g.broad?' · broad bill':''}`,units:g.units,partial:g.partial});
+  }
+  return options;
+}
+function lawWords(words,cls){
+  return words.map(w=>w.t==='\n'?'<br>':`${w.space?' ':''}${w.changed?`<mark class="${cls}">${esc(w.t)}</mark>`:esc(w.t)}`).join('');
+}
+function lawCompareMarkup(options){
+  if(options.length<2){
+    const only=options[0];
+    return only?`<section class="law-compare-wrap"><h3>${esc(only.label)}</h3><div class="law-single">${only.units.map(u=>`<p>${esc(u.text).replaceAll('\n','<br>')}</p>`).join('')}</div></section>`:'';
+  }
+  const c=state.statuteCompare;
+  const pick=(id,fallback)=>options.find(o=>o.id===id)||fallback;
+  const left=pick(c.left,options[0]),right=pick(c.right,options.find(o=>o!==left));
+  const select=(side,current)=>`<label class="law-pick"><span>${side==='left'?'Left':'Right'}</span><select data-law-side="${side}">${options.map(o=>`<option value="${esc(o.id)}" ${o===current?'selected':''}>${esc(o.label)}</option>`).join('')}</select></label>`;
+  const rows=left===right?[]:compareLaw({name:left.name,units:left.units,partial:left.partial},{name:right.name,units:right.units,partial:right.partial});
+  const label=l=>l==='head'?'Heading':l===''?'Text':`(${l})`;
+  const changed=rows.filter(r=>!r.same).length;
+  // data-name labels each cell when the columns stack on a phone.
+  const cell=(words,note,cls,name)=>words?`<div class="law-cell" data-name="${esc(name)}">${lawWords(words,cls)}</div>`:`<div class="law-cell law-missing" data-name="${esc(name)}">${esc(note)}</div>`;
+  const body=rows.map(r=>`<div class="law-row${r.same?' law-same':''}"><div class="law-label">${esc(label(r.label))}${r.same?' · same':''}</div>${cell(r.left,r.leftNote,'law-out',left.name)}${cell(r.right,r.rightNote,'law-in',right.name)}</div>`).join('');
+  const show=state.statuteShow||'both';
+  return `<section class="law-compare-wrap"><h3>Side by side</h3>
+    <div class="law-picks">${select('left',left)}${select('right',right)}</div>
+    <p class="law-legend"><mark class="law-out">Highlighted on the left</mark> is wording only the left has; <mark class="law-in">highlighted on the right</mark> is wording only the right has. ${left===right?'Pick two different versions.':`${changed} of ${rows.length} ${rows.length===1?'part differs':'parts differ'}.`}${rows.some(r=>r.approximate)?' Some parts are too long to compare word by word and are marked whole.':''}</p>
+    <div class="law-toggle" role="group" aria-label="Columns to show">${[['both','Both'],['left','Left'],['right','Right']].map(([v,t])=>`<button type="button" class="outline-button${show===v?' active':''}" data-law-show="${v}" aria-pressed="${show===v}">${t}</button>`).join('')}</div>
+    <div class="law-compare" data-show="${show}"><div class="law-row law-head"><div class="law-label"></div><div class="law-cell">${esc(left.label)}</div><div class="law-cell">${esc(right.label)}</div></div>${body}</div></section>`;
+}
+
+function statuteMarkup(){
+  const key=state.statuteKey;
+  const head=(title,sub='90th Legislature · every bill that changes it')=>`<div class="section-head"><div><div class="section-overline">TEXAS LAW</div><h2>${title}</h2></div><span class="subtitle">${sub}</span></div>`;
+  if(!key)return `${head('Section not found')}<div class="info-callout">This address does not name a section of Texas law. Open one from a bill's "Laws this bill changes" list, or search the explorer for a section number such as 48.160.</div>`;
+  if(!state.statutes)return state.statutesFailed?`${head(esc(key))}<div class="info-callout">The list of laws each bill changes is not available right now. Try again later.</div>`:`${head(esc(key))}<p class="near-hint">Loading…</p>`;
+  const label=statuteLabel(key,state.statutes.codes),info=state.statutes.sections[key];
+  const official=`<a class="text-link" href="${esc(officialStatuteUrl(key))}" target="_blank" rel="noopener noreferrer">Current law on statutes.capitol.texas.gov ↗</a>`;
+  if(!info)return `${head(esc(label))}<div class="info-callout">No bill in this snapshot changes ${esc(label)}. ${official}</div>`;
+  const doc=statuteDoc(key);
+  const title=head(esc(label),info.h?esc(titleCase(info.h)):undefined);
+  if(doc==='loading')return `${title}<p class="near-hint">Loading the bills' versions…</p>`;
+  if(doc==='error')return `${title}<div class="info-callout">The versions of this section could not be loaded. ${official}</div>`;
+  if(state.statuteCompare?.key!==key)state.statuteCompare={key,left:null,right:null};
+  const groups=groupStatuteEntries(doc.entries,id=>(state.statutes.bills[id]?.n||0)>BROAD_BILL);
+  const options=lawOptions(doc,groups);
+  const row=g=>{
+    const e=g.entries[0];
+    const bills=g.entries.map(x=>{const b=state.bills.find(y=>y.id===x.bill);return b?`${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)} <span class="law-status">${esc(lastActionInfo(b).label)}</span>`:esc(x.bill)}).join('<span class="law-same-text"> = </span>');
+    const parts=g.kind==='amend'&&g.partial&&e.subsections?.length?`subsections ${e.subsections.map(s=>`(${s})`).join(', ')}`:g.kind==='amend'?'whole section':'';
+    const notes=[e.version_name||e.version,parts,g.entries.length>1?'same wording':'',g.broad?`broad bill · changes ${state.statutes.bills[e.bill]?.n} sections`:''].filter(Boolean);
+    const compare=g.kind!=='repeal'&&g.units.length&&options.length>1?`<button type="button" class="outline-button" data-law-compare="${esc(e.bill)}">Compare</button>`:'';
+    return `<li class="law-version${g.broad?' law-broad':''}"><div>${bills}</div><small>${esc(notes.join(' · '))}</small>${compare}</li>`;
+  };
+  const block=(kind,heading,intro)=>{const list=groups.filter(g=>g.kind===kind);return list.length?`<section class="today-group"><h3>${heading} <span>${list.reduce((n,g)=>n+g.entries.length,0)}</span></h3>${intro?`<p class="near-hint">${intro}</p>`:''}<ul class="law-versions">${list.map(row).join('')}</ul></section>`:''};
+  return `${title}<div class="info-callout law-intro"><p>Each bill quotes the wording it would change, so current law below is as those bills quote it. It can trail the official text if a later law changed it. ${official}</p></div>
+    ${lawCompareMarkup(options)}
+    ${block('amend','Bills that amend this section','')}
+    ${block('add','Bills that add a new section with this number','Each of these adds a section numbered '+esc(key.split(' ')[1])+'. Bills drafted separately can pick the same next number for unrelated subjects, so check the wording.')}
+    ${block('repeal','Bills that repeal it','')}`;
+}
+
+// Explorer: a search for a section number lists the bills that change it; this links to their comparison.
+function statuteHintMarkup(keys){
+  if(!keys.length)return '';
+  return `<div class="info-callout statute-hint">Bills that change ${keys.map(statuteLink).join(', ')} are included. Open ${keys.length===1?'it':'one'} to compare their versions side by side.</div>`;
+}
+
 function agenciesMarkup(){
   const counts=new Map();for(const b of state.bills)for(const a of realAgencies(b))counts.set(a.id,(counts.get(a.id)||0)+1);
   const agencies=unique([...AGENCIES.map(a=>a.id),...Object.keys(state.luna?.agencies||{})]).filter(id=>id!==SCOPE_AGENCY_ID).map(id=>({id,name:agencyName(id)})).sort((a,b)=>(counts.get(b.id)||0)-(counts.get(a.id)||0)||a.name.localeCompare(b.name));
@@ -1008,7 +1155,7 @@ function showDrawer(id,push=false){
   const h=assessHearing(b),influence=authorInfluence(b),party=authorshipParty(b),last=lastActionInfo(b);
   const agencyRows=b.agencies.length?b.agencies.map(a=>`<div class="agency-row"><div><strong>${esc(agencyName(a.id))}</strong><p>${esc(a.reason||'Relationship not yet annotated')}</p></div><span class="confidence ${a.relationship==='direct'?'direct':''}">${a.source==='luna'?`Luna · ${a.relationship==='direct'?'direct':'inferred'}`:a.relationship==='direct'?'Direct':'Possible'}</span></div>`).join(''):'<p>No agency has been tagged yet. This does not establish that none are affected.</p>';
   const watched=state.watch.has(b.id);
-  $('#detail-drawer').innerHTML=`<div class="drawer-top"><span class="drawer-number">90R / ${esc(b.number)}</span><button class="drawer-close" id="drawer-close" aria-label="Close bill details">×</button></div><div class="drawer-pills"><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><span class="party-pill party-${party.tint}" title="${esc(party.detail)}">${esc(party.label)}</span></div><h2 style="margin-top:14px">${esc(b.title)}</h2><p class="drawer-caption">${esc(b.caption)}</p>${headlineLine(b,'drawer')}${lunaBlock(b)}<div class="drawer-pills">${b.topics.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div><div class="drawer-meta-grid"><div><small>Filed by</small><strong>${authorHtml(b,b.author)}</strong></div><div><small>Filed on</small><strong>${dateText(b.filed_at)}</strong></div><div><small>Most recent action</small><strong>${esc(last.label)}${last.chamber?` · ${esc(last.chamber)}`:''} · ${esc(dateText(last.date))}</strong><small>${esc(last.text)}</small></div><div><small>Hearing status</small><strong>${esc(h.label)}</strong></div></div>${b.subjects?.length?`<section class="drawer-section"><h3>Official subjects</h3><p>The Legislative Council's subject index for this bill. Search matches these, so a bill with a vague caption is still found by its subject.</p><div class="bill-tags">${b.subjects.map(s=>`<span class="tag subject-tag">${esc(s)}</span>`).join('')}</div></section>`:''}${companionBlock(b)}${relatedBlock(b)}<section class="drawer-section"><h3>Hearing progress & evidence</h3><div class="evidence-card"><strong>${esc(h.label)} · ${h.level===0?'No rating yet':'Verified procedural signal'}</strong><p>${esc(h.detail)}</p><ul>${h.facts.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div></section><section class="drawer-section"><h3>Authors & sponsors</h3><p>Authors and coauthors serve in the originating chamber; sponsors and cosponsors serve in the other chamber. Authors include primary and joint/additional primary authors as listed by TLC. Counts reflect this source snapshot.</p><div class="evidence-card"><strong><span class="party-pill party-${party.tint}">${esc(party.label)}</span></strong><p>${esc(party.detail)}</p><p><small>Party, district and tenure come from the Texas Legislative Reference Library's latest recorded service; for members-elect not yet in its records, party and district come from the Secretary of State's unofficial 2026 general election results. Authorship does not indicate a vote or caucus position.</small></p></div>${[['Authors','authors'],['Coauthors','coauthors'],['Sponsors','sponsors'],['Cosponsors','cosponsors']].map(([label,key])=>{const names=b[key];const people=b.people?.[key];return `<h4>${label}${names===null?'':` (${names.length})`}</h4>${names===null?'<p>Not reported in this dataset</p>':!names.length?'<p>None listed in the source snapshot</p>':people?`<ul class="member-list">${people.map(p=>memberItem(p)).join('')}</ul>`:`<p>${names.map(esc).join(' · ')}</p>`}`}).join('')}</section><section class="drawer-section"><h3>Author prominence</h3><div class="evidence-card"><strong>${esc(influence.label)}</strong><p>${esc(influence.factors.join(' · '))}</p>${safeHref(b.author_profile?.source)?`<p><a class="text-link" href="${esc(safeHref(b.author_profile.source))}" target="_blank" rel="noopener noreferrer">Verified member biography ↗</a></p>`:''}</div></section><section class="drawer-section"><h3>Potentially affected agencies (${realAgencies(b).length})</h3><p>All known tags are listed. Possible links are model/rule inferences, not confirmed legal obligations.</p>${agencyRows}</section><section class="drawer-section"><h3>Types of impact</h3><div class="drawer-pills">${b.impacts.length?b.impacts.map(t=>`<span class="tag related">${esc(t)}</span>`).join(''):'<span class="tag">Pending analysis</span>'}</div></section>${b.constituencies?.length?`<section class="drawer-section"><h3>People and institutions affected</h3><div class="drawer-pills">${b.constituencies.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></section>`:''}<section class="drawer-section"><h3>Source & verification</h3><p>Review the bill history and latest text before relying on any classification. <a class="text-link" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a></p><div class="ai-copy"><button type="button" class="outline-button" data-copy-ai title="Copy a short prompt with links to this bill, for pasting into an AI assistant">Copy for AI</button> <a class="text-link" href="${esc(agentUrl(b))}" target="_blank" rel="noopener noreferrer">AI-readable version ↗</a></div></section><div class="drawer-actions"><a class="primary-button" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Read official bill ↗</a><button class="outline-button" data-watch="${b.id}">${watched?'★ Remove from watchlist':'☆ Follow this bill'}</button><a class="outline-button" href="./live/feeds/${esc(b.id)}.xml" target="_blank" rel="noopener noreferrer" title="Follow this bill's actions in Outlook or a feed reader">RSS feed</a></div>`;
+  $('#detail-drawer').innerHTML=`<div class="drawer-top"><span class="drawer-number">90R / ${esc(b.number)}</span><button class="drawer-close" id="drawer-close" aria-label="Close bill details">×</button></div><div class="drawer-pills"><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><span class="party-pill party-${party.tint}" title="${esc(party.detail)}">${esc(party.label)}</span></div><h2 style="margin-top:14px">${esc(b.title)}</h2><p class="drawer-caption">${esc(b.caption)}</p>${headlineLine(b,'drawer')}${lunaBlock(b)}<div class="drawer-pills">${b.topics.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div><div class="drawer-meta-grid"><div><small>Filed by</small><strong>${authorHtml(b,b.author)}</strong></div><div><small>Filed on</small><strong>${dateText(b.filed_at)}</strong></div><div><small>Most recent action</small><strong>${esc(last.label)}${last.chamber?` · ${esc(last.chamber)}`:''} · ${esc(dateText(last.date))}</strong><small>${esc(last.text)}</small></div><div><small>Hearing status</small><strong>${esc(h.label)}</strong></div></div>${b.subjects?.length?`<section class="drawer-section"><h3>Official subjects</h3><p>The Legislative Council's subject index for this bill. Search matches these, so a bill with a vague caption is still found by its subject.</p><div class="bill-tags">${b.subjects.map(s=>`<span class="tag subject-tag">${esc(s)}</span>`).join('')}</div></section>`:''}${companionBlock(b)}${relatedBlock(b)}<section class="drawer-section law-section" id="drawer-statutes" hidden></section><section class="drawer-section"><h3>Hearing progress & evidence</h3><div class="evidence-card"><strong>${esc(h.label)} · ${h.level===0?'No rating yet':'Verified procedural signal'}</strong><p>${esc(h.detail)}</p><ul>${h.facts.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div></section><section class="drawer-section"><h3>Authors & sponsors</h3><p>Authors and coauthors serve in the originating chamber; sponsors and cosponsors serve in the other chamber. Authors include primary and joint/additional primary authors as listed by TLC. Counts reflect this source snapshot.</p><div class="evidence-card"><strong><span class="party-pill party-${party.tint}">${esc(party.label)}</span></strong><p>${esc(party.detail)}</p><p><small>Party, district and tenure come from the Texas Legislative Reference Library's latest recorded service; for members-elect not yet in its records, party and district come from the Secretary of State's unofficial 2026 general election results. Authorship does not indicate a vote or caucus position.</small></p></div>${[['Authors','authors'],['Coauthors','coauthors'],['Sponsors','sponsors'],['Cosponsors','cosponsors']].map(([label,key])=>{const names=b[key];const people=b.people?.[key];return `<h4>${label}${names===null?'':` (${names.length})`}</h4>${names===null?'<p>Not reported in this dataset</p>':!names.length?'<p>None listed in the source snapshot</p>':people?`<ul class="member-list">${people.map(p=>memberItem(p)).join('')}</ul>`:`<p>${names.map(esc).join(' · ')}</p>`}`}).join('')}</section><section class="drawer-section"><h3>Author prominence</h3><div class="evidence-card"><strong>${esc(influence.label)}</strong><p>${esc(influence.factors.join(' · '))}</p>${safeHref(b.author_profile?.source)?`<p><a class="text-link" href="${esc(safeHref(b.author_profile.source))}" target="_blank" rel="noopener noreferrer">Verified member biography ↗</a></p>`:''}</div></section><section class="drawer-section"><h3>Potentially affected agencies (${realAgencies(b).length})</h3><p>All known tags are listed. Possible links are model/rule inferences, not confirmed legal obligations.</p>${agencyRows}</section><section class="drawer-section"><h3>Types of impact</h3><div class="drawer-pills">${b.impacts.length?b.impacts.map(t=>`<span class="tag related">${esc(t)}</span>`).join(''):'<span class="tag">Pending analysis</span>'}</div></section>${b.constituencies?.length?`<section class="drawer-section"><h3>People and institutions affected</h3><div class="drawer-pills">${b.constituencies.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></section>`:''}<section class="drawer-section"><h3>Source & verification</h3><p>Review the bill history and latest text before relying on any classification. <a class="text-link" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a></p><div class="ai-copy"><button type="button" class="outline-button" data-copy-ai title="Copy a short prompt with links to this bill, for pasting into an AI assistant">Copy for AI</button> <a class="text-link" href="${esc(agentUrl(b))}" target="_blank" rel="noopener noreferrer">AI-readable version ↗</a></div></section><div class="drawer-actions"><a class="primary-button" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Read official bill ↗</a><button class="outline-button" data-watch="${b.id}">${watched?'★ Remove from watchlist':'☆ Follow this bill'}</button><a class="outline-button" href="./live/feeds/${esc(b.id)}.xml" target="_blank" rel="noopener noreferrer" title="Follow this bill's actions in Outlook or a feed reader">RSS feed</a></div>`;
   const reviewSection=document.createElement('section');reviewSection.className='drawer-section';
   const heading=document.createElement('h3');heading.textContent='Full text & highlighted evidence';
   const area=document.createElement('div');
@@ -1021,6 +1168,7 @@ function showDrawer(id,push=false){
   reviewSection.append(heading,load,local,area);$('#detail-drawer').append(reviewSection);draw();
   $('#detail-drawer').hidden=false;$('#drawer-scrim').hidden=false;document.body.style.overflow='hidden';$('#drawer-close').focus();
   state.openBill=b.id;
+  fillDrawerStatutes(b.id);
   if(persistState(push&&!drawerPushed))drawerPushed=true;
 }
 
@@ -1131,6 +1279,10 @@ function handleClick(e){
     const s=state.searches.find(x=>x.id===del.dataset.searchDelete);changeSearch('delete-search',del.dataset.searchDelete);
     renderOverview();renderContent();toast(s?`Deleted “${s.name}”`:'Deleted');return}
   if(e.target.closest('#follow-more')){state.followShow+=30;renderContent();return}
+  const lawCompare=e.target.closest('[data-law-compare]');if(lawCompare){
+    const c=state.statuteCompare;c.right=lawCompare.dataset.lawCompare;if(!c.left||c.left===c.right)c.left='law';
+    renderContent();$('.law-compare-wrap')?.scrollIntoView({behavior:'smooth',block:'start'});return}
+  const lawShow=e.target.closest('[data-law-show]');if(lawShow){state.statuteShow=lawShow.dataset.lawShow;renderContent();return}
   const memberMore=e.target.closest('[data-member-more]');if(memberMore){const role=memberMore.dataset.memberMore;state.memberShow[role]=(state.memberShow[role]||30)+30;renderContent();return}
   const copyPage=e.target.closest('#copy-page-ai');if(copyPage){copyPageForAi(copyPage);return}
   const todayTopic=e.target.closest('[data-today-topic]');if(todayTopic){state.todayTopic=todayTopic.dataset.todayTopic;state.todayLimit=100;renderContent();return}
@@ -1203,6 +1355,8 @@ function handleInput(e){
   }
 }
 function handleChange(e){
+  const side=e.target.dataset?.lawSide;
+  if(side&&state.statuteCompare){state.statuteCompare[side]=e.target.value;renderContent();return}
   if(e.target.id==='near-county'){state.nearPick=e.target.value||null;state.nearError='';renderContent();$('#near-county')?.focus();return}
   const m={'filter-topic':'topic','filter-chamber':'chamber','filter-stage':'stage','filter-outlook':'outlook','filter-action':'action'};
   if(m[e.target.id]){state[m[e.target.id]]=e.target.value;state.visibleCount=30;renderResults();return}

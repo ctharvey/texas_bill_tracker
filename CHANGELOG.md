@@ -1,6 +1,10 @@
 # Changelog
 
 ## 2026-11-12
+- Statute tracking: each bill lists the sections of Texas law it amends, adds or repeals ("Laws this bill changes"),
+  and each section has a page (`#statute?law=LA&sec=62.051`) with every bill that changes it and any two versions
+  side by side, current law included. Searching a section number ("62.051", "Penal Code 46.06") finds the bills.
+  Built hourly from the bill text into `live/statutes/`; about 89% of bills with text name at least one section.
 - Saved searches: "Save search" in the explorer keeps the current filters under a name (up to 20). They are
   listed on the Following page with their bill count and how many bills have new actions since the search was last
   opened, can be renamed or deleted, and go into exported files and sync links (never share or view-only links).

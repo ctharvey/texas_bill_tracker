@@ -1,7 +1,9 @@
 // Saving choices without accounts: URL state, remembered filters, profile and watchlist files, and sync merging.
 export const FILTER_DEFAULTS = {query: '', topic: '', agency: '', chamber: '', stage: '', action: '', outlook: '', sort: 'newest', onlyWatch: false};
 const FILTER_NAMES = Object.keys(FILTER_DEFAULTS);
-export const VIEWS = ['all', 'watchlist', 'following', 'today', 'local', 'member', 'agencies', 'review', 'method', 'saving', 'data'];
+export const VIEWS = ['all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'agencies', 'review', 'method', 'saving', 'data'];
+const LAW_CODE = /^[A-Z]{2}$/;
+const LAW_SECTION = /^\d+[A-Z]?(?:\.\d+[A-Z]?)+$/;  // The statute index's section numbers (build_feeds.SECTION_NUM).
 export const MAX_LIST = 500;
 const BILL_ID = /^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9]\d{0,4}$/;
 const SYNC_KEY = /^[A-Za-z0-9_-]{22}$/;
@@ -41,13 +43,15 @@ export function parseHash(hash) {
   const bill = normalizeId(params.get('bill') || '');
   const sync = params.get('sync') || '';
   const member = String(params.get('code') || '').trim().toUpperCase();
+  const law = String(params.get('law') || '').toUpperCase(), sec = String(params.get('sec') || '').toUpperCase();
   return {view: VIEWS.includes(view) ? view : 'all', filters, hasFilters: Object.keys(filters).length > 0,
     list: list && list.length ? list : null, bill: isBillId(bill) ? bill : null, sync: SYNC_KEY.test(sync) ? sync : null,
-    member: view === 'member' && MEMBER_CODE.test(member) ? member : null};
+    member: view === 'member' && MEMBER_CODE.test(member) ? member : null,
+    statute: view === 'statute' && LAW_CODE.test(law) && LAW_SECTION.test(sec) && sec.length <= 16 ? `${law} ${sec}` : null};
 }
 
 // `sync` is only ever a view-only key; edit keys are never written into the address bar.
-export function buildHash(view, filters, {list = null, bill = null, sync = null, member = null} = {}) {
+export function buildHash(view, filters, {list = null, bill = null, sync = null, member = null, statute = null} = {}) {
   const parts = [];
   if (view === 'all' || view === 'watchlist') {
     for (const name of FILTER_NAMES) {
@@ -57,6 +61,8 @@ export function buildHash(view, filters, {list = null, bill = null, sync = null,
     }
   }
   if (view === 'member' && MEMBER_CODE.test(member || '')) parts.push(`code=${member}`);
+  const [law, sec] = String(statute || '').split(' ');
+  if (view === 'statute' && LAW_CODE.test(law || '') && LAW_SECTION.test(sec || '')) parts.push(`law=${law}`, `sec=${sec}`);
   if (list?.length) parts.push(`list=${list.join(',')}`);
   if (bill) parts.push(`bill=${bill}`);
   if (sync && SYNC_KEY.test(sync)) parts.push(`sync=${sync}`);
