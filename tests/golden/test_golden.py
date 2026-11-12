@@ -45,8 +45,14 @@ def golden(name: str, value):
 
 
 def manifest(root: Path) -> dict:
-    return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+    # Python text-mode writes CRLF on Windows; production (Linux) writes LF, so hash the LF form.
+    return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
             for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def fixture(name: str) -> str:
+    """A tests/fixtures file as committed (LF), whatever line endings this checkout gave it."""
+    return (FIXTURES / name).read_bytes().replace(b"\r\n", b"\n").decode("latin-1")
 
 
 @pytest.fixture(scope="module")
@@ -130,10 +136,10 @@ def test_model_requests_are_byte_identical():
 def test_sync_ftp_parsers():
     xml = (FIXTURES / "89R-HB2.xml").read_bytes()
     record = sync_ftp.parse_bill_xml(xml, "bills/89R/billhistory/house_bills/HB00001_HB00099/HB 2.xml")
-    text = sync_ftp.bill_text_markdown((FIXTURES / "HB01001I.HTM").read_text("latin-1"), "HB 1001", "Introduced")
-    docs = {kind: sync_ftp.document_markdown((FIXTURES / f"89R-HB2-{part}-H.htm").read_text("latin-1"), kind, "HB 2", "House")
+    text = sync_ftp.bill_text_markdown(fixture("HB01001I.HTM"), "HB 1001", "Introduced")
+    docs = {kind: sync_ftp.document_markdown(fixture(f"89R-HB2-{part}-H.htm"), kind, "HB 2", "House")
             for kind, part in (("analysis", "analysis"), ("fiscal_note", "fiscal"))}
-    witnesses = sync_ftp.parse_witness_list((FIXTURES / "89R-HB2-witnesses-H.htm").read_text("latin-1"))
+    witnesses = sync_ftp.parse_witness_list(fixture("89R-HB2-witnesses-H.htm"))
     golden("sync_ftp", {"record": record, "text_sha256": hashlib.sha256(text.encode()).hexdigest(),
                         "text_head": text[:2000], "docs_sha256": {k: hashlib.sha256(v.encode()).hexdigest() for k, v in docs.items()},
                         "witnesses": witnesses})
