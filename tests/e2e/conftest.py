@@ -1,9 +1,17 @@
 """Browser E2E fixtures. Opt in with TBA_E2E=1 (CI sets it); the default test run skips this folder.
 
-Every test runs in both serving modes (raw src/ and the deployer-built bundle) at desktop and phone size, with the
-clock frozen at the capture time, external hosts stubbed, and any page error or console error failing the test.
+Every test runs in both serving modes (raw src/ and the deployer-built bundle) with the clock frozen at the capture
+time, external hosts stubbed, and any page error or console error failing the test.
+
+Viewports: a test runs at desktop and phone size when it takes the `viewport` fixture (it checks phone behavior) or is
+marked `@pytest.mark.layout`; every other test runs at desktop only. CI runs the full matrix in shards:
+TBA_E2E_VIEWPORTS=desktop|phone runs every test at that one size, =all at both; TBA_E2E_MODE=src|bundle picks one mode.
+
+Fast check per move commit (the full matrix runs in CI):
+  TBA_E2E=1 python -m pytest -q tests/e2e/test_smoke.py tests/e2e/test_stored_data.py tests/e2e/test_sync.py       tests/e2e/test_<moved feature>.py
 """
 
+import inspect
 import os
 import sys
 from datetime import datetime
@@ -14,6 +22,24 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 collect_ignore_glob = [] if os.environ.get("TBA_E2E") == "1" else ["test_*.py"]
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "layout: run at phone size too (layout or phone-only behavior)")
+
+
+def pytest_generate_tests(metafunc):
+    if "viewport" not in metafunc.fixturenames:
+        return
+    forced = os.environ.get("TBA_E2E_VIEWPORTS")
+    if forced in ("desktop", "phone"):
+        sizes = [forced]
+    elif (forced == "all" or metafunc.definition.get_closest_marker("layout")
+          or "viewport" in inspect.signature(metafunc.function).parameters):
+        sizes = ["desktop", "phone"]
+    else:
+        sizes = ["desktop"]
+    metafunc.parametrize("viewport", sizes, indirect=True)
 
 if os.environ.get("TBA_E2E") == "1":
     from playwright.sync_api import sync_playwright
@@ -36,13 +62,13 @@ if os.environ.get("TBA_E2E") == "1":
         yield b
         b.close()
 
-    @pytest.fixture(scope="session", params=harness.MODES)
+    @pytest.fixture(scope="session", params=[m for m in harness.MODES if os.environ.get("TBA_E2E_MODE", m) == m])
     def site(request):
         s = harness.Site(request.param)
         yield s
         s.close()
 
-    @pytest.fixture(params=list(VIEWPORTS))
+    @pytest.fixture
     def viewport(request):
         return request.param
 

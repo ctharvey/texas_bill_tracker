@@ -1,0 +1,89 @@
+{
+  "note": "Test data only. Describes what a person's saved state looked like when these fixtures were made.",
+  "captured_at": "2026-11-12T15:49:00Z",
+  "storage_keys": [
+    "texas-bill-atlas-near-you-v1",
+    "tx-bill-atlas-disclaimer-v1",
+    "tx-bill-atlas-follow-90r",
+    "tx-bill-atlas-prefs-v1",
+    "tx-bill-atlas-searches-90r",
+    "tx-bill-atlas-sync-v1",
+    "tx-bill-atlas-watch-90r"
+  ],
+  "watch": [
+    "HB110",
+    "HB1001",
+    "HB239",
+    "HB717",
+    "HB448"
+  ],
+  "follows": [
+    "A4395",
+    "A2150",
+    "A4805"
+  ],
+  "followed_names_shown": [
+    "Rep. Daniel Alders",
+    "Rep. Rafael Anch\u00eda",
+    "Rep. Brad Bailey"
+  ],
+  "searches": [
+    {
+      "id": "66oec3zugd",
+      "name": "House",
+      "filters": {
+        "chamber": "House"
+      },
+      "seen": "2026-11-12"
+    },
+    {
+      "id": "b5y4149og9",
+      "name": "Water bills I track",
+      "filters": {
+        "query": "water",
+        "chamber": "House"
+      },
+      "seen": "2026-11-12"
+    }
+  ],
+  "searches_shown": [
+    {
+      "name": "House",
+      "counts": "1,065 bills \u00b7 opened Nov 12"
+    },
+    {
+      "name": "Water bills I track",
+      "counts": "40 bills \u00b7 opened Nov 12"
+    }
+  ],
+  "remembered_filters": {
+    "query": "school",
+    "topic": "",
+    "agency": "",
+    "chamber": "Senate",
+    "stage": "",
+    "action": "",
+    "outlook": "",
+    "sort": "newest",
+    "onlyWatch": false
+  },
+  "near": {
+    "house": "49",
+    "senate": "14",
+    "county": "Travis",
+    "source": "location",
+    "near": false
+  },
+  "near_summary_text": "House District 49 \u00b7 Senate District 14 \u00b7 Travis County",
+  "nav_counts": {
+    "watch": "5",
+    "follow": "5"
+  },
+  "profile_download_name": "texas-bill-atlas-saved.json",
+  "sync": {
+    "edit_key": "gkybhnx0kTotYduqDhtoDQ",
+    "view_key": "RqH6ZSM07Wl21uDrCB5JDA",
+    "version": 1,
+    "note": "These keys exist only in fixtures/stored/sync.sqlite3, a throwaway test database."
+  }
+}

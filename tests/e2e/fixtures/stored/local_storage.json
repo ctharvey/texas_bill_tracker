@@ -1,0 +1,9 @@
+{
+  "texas-bill-atlas-near-you-v1": "{\"house\":\"49\",\"senate\":\"14\",\"county\":\"Travis\",\"source\":\"location\",\"near\":false}",
+  "tx-bill-atlas-disclaimer-v1": "2026-11-12T15:49:00.000Z",
+  "tx-bill-atlas-follow-90r": "[\"A4395\",\"A2150\",\"A4805\"]",
+  "tx-bill-atlas-prefs-v1": "{\"filters\":{\"query\":\"school\",\"topic\":\"\",\"agency\":\"\",\"chamber\":\"Senate\",\"stage\":\"\",\"action\":\"\",\"outlook\":\"\",\"sort\":\"newest\",\"onlyWatch\":false}}",
+  "tx-bill-atlas-searches-90r": "[{\"id\":\"66oec3zugd\",\"name\":\"House\",\"filters\":{\"chamber\":\"House\"},\"seen\":\"2026-11-12\"},{\"id\":\"b5y4149og9\",\"name\":\"Water bills I track\",\"filters\":{\"query\":\"water\",\"chamber\":\"House\"},\"seen\":\"2026-11-12\"}]",
+  "tx-bill-atlas-sync-v1": "{\"key\":\"gkybhnx0kTotYduqDhtoDQ\",\"mode\":\"edit\",\"viewKey\":\"RqH6ZSM07Wl21uDrCB5JDA\",\"version\":1,\"pending\":[],\"merged\":{\"follows\":true,\"searches\":true}}",
+  "tx-bill-atlas-watch-90r": "[\"HB110\",\"HB1001\",\"HB239\",\"HB717\",\"HB448\"]"
+}

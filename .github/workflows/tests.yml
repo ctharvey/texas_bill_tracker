@@ -30,8 +30,14 @@ jobs:
         run: python -m pytest -q tests
 
   e2e:
+    name: e2e (${{ matrix.mode }}, ${{ matrix.viewport }})
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [src, bundle]
+        viewport: [desktop, phone]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,7 +47,9 @@ jobs:
         run: |
           python -m pip install pytest==9.0.3 playwright==1.58.0
           python -m playwright install --with-deps chromium
-      - name: Browser E2E (src and bundle, desktop and phone)
+      - name: Browser E2E (every test at this mode and size)
         env:
           TBA_E2E: '1'
+          TBA_E2E_MODE: ${{ matrix.mode }}
+          TBA_E2E_VIEWPORTS: ${{ matrix.viewport }}
         run: python -m pytest -q tests/e2e

@@ -1,0 +1,42 @@
+{
+  "format": "texas-bill-atlas-profile-v1",
+  "session": "90R",
+  "exported_at": "2026-11-12T15:49:00.000Z",
+  "lists": [
+    {
+      "id": "main",
+      "name": "Watchlist",
+      "bills": [
+        "HB110",
+        "HB1001",
+        "HB239",
+        "HB717",
+        "HB448"
+      ]
+    }
+  ],
+  "follows": [
+    "A4395",
+    "A2150",
+    "A4805"
+  ],
+  "searches": [
+    {
+      "id": "66oec3zugd",
+      "name": "House",
+      "filters": {
+        "chamber": "House"
+      },
+      "seen": "2026-11-12"
+    },
+    {
+      "id": "b5y4149og9",
+      "name": "Water bills I track",
+      "filters": {
+        "query": "water",
+        "chamber": "House"
+      },
+      "seen": "2026-11-12"
+    }
+  ]
+}

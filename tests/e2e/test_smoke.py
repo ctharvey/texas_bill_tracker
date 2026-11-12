@@ -10,6 +10,7 @@ VIEWS = {"all": "See what’s moving.", "watchlist": "Your watchlist.", "followi
          "data": "Behind the tracker."}
 
 
+@pytest.mark.layout
 @pytest.mark.parametrize("view", list(VIEWS))
 def test_view_renders(device, view):
     page = device.open(f"#{view}")
