@@ -310,7 +310,7 @@ from the page keeps the member in the address (`#member?code=A4875&bill=HB5`).
 
 ### Saving and sharing without accounts
 
-There are no logins. People keep and move their choices in five ways:
+There are no logins. People keep and move their choices in these ways:
 
 - **Links:** the address always reflects the view, filters, sort and open bill (`#all?chamber=Senate&bill=HB5`),
   so any view can be bookmarked or sent. A share link (`#all?list=HB5,SB12`) opens a read-only shared list that
@@ -322,7 +322,14 @@ There are no logins. People keep and move their choices in five ways:
   from the dated actions `sync_ftp.py` now records in `action_dates`. Item ids are stable as the 12-action
   window slides. A published Luna full-text review (`live/luna/tags.json`, read by default from beside the
   snapshot) is also an item, dated by its review, and a re-review is a new item; watchlist feeds pick reviews up as
-  soon as the tags file changes. There is no iCal: the data has no hearing dates or times.
+  soon as the tags file changes. There is no iCal: the data has no hearing dates or times. The same run writes
+  `live/feeds/members/<CODE>.xml` for every coded legislator on `members.json` (beside the snapshot; `--members`
+  overrides): the actions on every bill they author, coauthor, sponsor or cosponsor, matched exactly as the member
+  page matches them, newest 200 items, each captioned with their role. Members with no bills get an empty feed, so a
+  link never breaks. Linked from the member page.
+- **Followed legislators:** **Follow** on a member page or a Near you card keeps the member's code in this browser
+  (`tx-bill-atlas-follow-90r`, at most 200, `cleanFollows`). The Watchlist shows a "Followed legislators" section
+  with their bills, newest first (`followedBills` in `src/geo.js`). Follows are not in share links, files or sync.
 - **Private sync links** (`scripts/sync_service.py`, `src/sync.js`): a random edit key and a derived view key;
   only SHA-256 hashes are stored (SQLite), no email, name or IP. The edit key travels in the URL fragment and
   the `X-Sync-Key` header only and is removed from the address bar once read. Saves are versioned; on a conflict

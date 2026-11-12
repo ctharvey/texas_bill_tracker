@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-12
+- Follow a legislator: a Follow button on member pages and Near you cards, kept in this browser only; their bills
+  appear in a "Followed legislators" section on the Watchlist. Every legislator also has an RSS feed of the actions
+  on their bills (`live/feeds/members/<CODE>.xml`), linked from the member page.
 - Luna review (flex): a call with an unknown outcome (timeout, 5xx after sending) no longer stops every lane. It
   is booked at its upper bound and held: never resent, only its bill (or question, or fiscal check) waits, and the
   other bills keep going. Three held calls stop all new calls until an operator releases them with

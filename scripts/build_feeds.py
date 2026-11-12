@@ -1,4 +1,5 @@
-"""Build one RSS feed per bill from the live snapshot, so people can follow bills without an account.
+"""Build one RSS feed per bill, and one per legislator, from the live snapshot, so people can follow bills and
+legislators without an account.
 
 Stateless: item identity comes from (bill, date, action text), so readers see only new actions. A feed file
 is rewritten only when its content changes. Standard library only (the data unit extracts it via git show).
@@ -103,6 +104,87 @@ def bill_feed(bill: dict, site: str = SITE, review: dict | None = None) -> str:
                       + " Unofficial; confirm on Texas Legislature Online.", all_items(bill, review), site)
 
 
+MEMBER_CODE = re.compile(r"A\d{3,5}")
+# Same join as the site (taxonomy.attachMembers): authors and coauthors serve in the bill's chamber, sponsors and
+# cosponsors in the other one, matched by the roster's "<chamber>|<display name>" key.
+ROLES = (("authors", "Author", "origin"), ("coauthors", "Coauthor", "origin"),
+         ("sponsors", "Sponsor", "other"), ("cosponsors", "Cosponsor", "other"))
+MEMBER_FEED_ITEMS = 200
+
+
+def load_roster(path: Path | None) -> dict:
+    """Roster entries keyed by "<chamber>|<name>"; a missing or malformed file means no member feeds, never an error."""
+    if path is None:
+        return {}
+    try:
+        data = json.loads(path.read_text("utf-8"))
+    except (OSError, ValueError):
+        return {}
+    members = data.get("members") if isinstance(data, dict) else None
+    return {k: v for k, v in members.items() if isinstance(v, dict)} if isinstance(members, dict) else {}
+
+
+def names(value) -> list[str]:
+    if isinstance(value, list):
+        return [v for v in value if isinstance(v, str)]
+    return [s.strip() for s in re.split(r"[;,]", value) if s.strip()] if isinstance(value, str) else []
+
+
+def member_roles(bill: dict, roster: dict) -> dict[str, str]:
+    """Member code -> first role (author before coauthor before sponsor before cosponsor) on this bill."""
+    origin = "house" if str(bill.get("id", "")).upper().startswith("H") else "senate"
+    other = "senate" if origin == "house" else "house"
+    found: dict[str, str] = {}
+    for key, role, side in ROLES:
+        chamber = origin if side == "origin" else other
+        for name in names(bill.get(key)):
+            member = roster.get(f"{chamber}|{name}")
+            code = member.get("code") if member else None
+            if isinstance(code, str) and member.get("chamber") == chamber:
+                found.setdefault(code, role)
+    return found
+
+
+def member_title(member: dict) -> str:
+    return f"{'Rep.' if member.get('chamber') == 'house' else 'Sen.'} {member.get('full_name') or member.get('display_name')}"
+
+
+def member_feed(member: dict, bills: list[tuple[dict, str]], site: str = SITE, reviews: dict | None = None) -> str:
+    """Every action on the bills a legislator filed or signed onto, newest first, capped at MEMBER_FEED_ITEMS."""
+    reviews = reviews or {}
+    title = member_title(member)
+    items = []
+    for bill, role in bills:
+        for item in all_items(bill, reviews.get(bill["id"])):
+            items.append({**item, "caption": f"{title} · {role}. {item['caption']}"})
+    items.sort(key=lambda i: i["date"] or "", reverse=True)
+    return render_rss(f"{title} · Texas Bill Atlas", f"{site}#member?code={member['code']}",
+                      f"Actions on bills {title} filed or signed onto in the 90th Legislature. "
+                      "Unofficial; confirm on Texas Legislature Online.", items[:MEMBER_FEED_ITEMS], site)
+
+
+def write_member_feeds(snapshot: dict, roster: dict, out_dir: Path, site: str = SITE,
+                       reviews: dict | None = None) -> tuple[int, int]:
+    """One feed per coded roster member (empty when they have no bills yet, so a feed link never breaks)."""
+    by_code = {m["code"]: m for m in roster.values() if MEMBER_CODE.fullmatch(str(m.get("code", "")))}
+    if not by_code:
+        return 0, 0
+    bills: dict[str, list] = {code: [] for code in by_code}
+    for bill in snapshot.get("bills") or []:
+        if isinstance(bill, dict) and BILL_ID.fullmatch(str(bill.get("id", ""))):
+            for code, role in member_roles(bill, roster).items():
+                if code in bills:
+                    bills[code].append((bill, role))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written = unchanged = 0
+    for code, member in by_code.items():
+        if write_if_changed(out_dir / f"{code}.xml", member_feed(member, bills[code], site, reviews)):
+            written += 1
+        else:
+            unchanged += 1
+    return written, unchanged
+
+
 def write_if_changed(path: Path, text: str) -> bool:
     try:
         if path.read_text("utf-8") == text:
@@ -142,10 +224,16 @@ def main() -> int:
     parser.add_argument("--site", default=SITE)
     parser.add_argument("--tags", type=Path, default=None,
                         help="Published Luna tags; defaults to luna/tags.json beside the snapshot when present")
+    parser.add_argument("--members", type=Path, default=None,
+                        help="Legislator roster for per-member feeds; defaults to members.json beside the snapshot")
     args = parser.parse_args()
     tags = args.tags or args.snapshot.parent / "luna" / "tags.json"
-    written, unchanged = write_feeds(json.loads(args.snapshot.read_text("utf-8")), args.out, args.site, load_reviews(tags))
+    snapshot, reviews = json.loads(args.snapshot.read_text("utf-8")), load_reviews(tags)
+    written, unchanged = write_feeds(snapshot, args.out, args.site, reviews)
     print(f"Feeds: {written} written, {unchanged} unchanged", flush=True)
+    roster = load_roster(args.members or args.snapshot.parent / "members.json")
+    written, unchanged = write_member_feeds(snapshot, roster, args.out / "members", args.site, reviews)
+    print(f"Member feeds: {written} written, {unchanged} unchanged", flush=True)
     return 0
 
 

@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseHash, buildHash, parseWatchlistFile, watchlistFile, applyOps, cleanFilters, FILTER_DEFAULTS} from '../src/prefs.js';
+import {parseHash, buildHash, parseWatchlistFile, watchlistFile, applyOps, cleanFilters, FILTER_DEFAULTS, cleanFollows, MAX_FOLLOWS} from '../src/prefs.js';
+
+test('followed legislators keep valid member codes only, unique, in order, capped', () => {
+  assert.deepEqual(cleanFollows(['A2345', 'A2345', 'a2345', 'B1234', 7, null, '../x', 'A12', 'A123']), ['A2345', 'A123']);
+  assert.deepEqual(cleanFollows('A2345'), []);
+  assert.deepEqual(cleanFollows(null), []);
+  assert.equal(cleanFollows(Array.from({length: 300}, (_, i) => `A${1000 + i}`)).length, MAX_FOLLOWS);
+});
 import {createSyncClient} from '../src/sync.js';
 
 test('URL state round-trips filters, shared list and open bill, omitting defaults', () => {

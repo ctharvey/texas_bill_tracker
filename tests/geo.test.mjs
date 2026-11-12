@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {areaFor, areaReasons, billsByMember, censusPoint, censusUrl, cleanNear, countyDistricts, gazetteer, locate,
+import {areaFor, areaReasons, billsByMember, followedBills, censusPoint, censusUrl, cleanNear, countyDistricts, gazetteer, locate,
   membersFor, placeFromPoint, resolvePlace} from '../src/geo.js';
 import {attachMembers} from '../src/taxonomy.js';
 
@@ -80,6 +80,21 @@ test('bills by member match the roster entry, by chamber', () => {
     {id: 'HB2', chamber: 'House', authors: ['Other'], coauthors: [name], sponsors: [], cosponsors: []},
   ].map(b => attachMembers(b, roster));
   assert.deepEqual(billsByMember(bills, member).map(x => [x.bill.id, x.role]), [['HB1', 'Author'], ['SB1', 'Sponsor'], ['HB2', 'Coauthor']]);
+});
+
+test('followed bills merge members per bill, skip unknown codes, and follow the given order', () => {
+  const [rep] = membersFor(roster, 'house', '49');
+  const sen = Object.values(roster.members).find(m => m.chamber === 'senate' && m.code && m.display_name !== rep.display_name);
+  const bills = [
+    {id: 'HB1', chamber: 'House', filed: 1, authors: [rep.display_name], coauthors: [], sponsors: [sen.display_name], cosponsors: []},
+    {id: 'SB1', chamber: 'Senate', filed: 3, authors: [sen.display_name], coauthors: [], sponsors: [], cosponsors: []},
+    {id: 'HB2', chamber: 'House', filed: 2, authors: ['Nobody'], coauthors: [], sponsors: [], cosponsors: []},
+  ].map(b => attachMembers(b, roster));
+  const rows = followedBills(bills, roster, [rep.code, sen.code, 'A99999'], (a, b) => b.filed - a.filed);
+  assert.deepEqual(rows.map(r => [r.bill.id, r.notes.map(n => `${n.member.code}:${n.role}`)]),
+    [['SB1', [`${sen.code}:Author`]], ['HB1', [`${rep.code}:Author`, `${sen.code}:Sponsor`]]]);
+  assert.deepEqual(followedBills(bills, roster, []), []);
+  assert.deepEqual(followedBills(bills, null, [rep.code]), []);
 });
 
 test('place names resolve exactly: "Austin" is the city, "Austin County" the county', () => {

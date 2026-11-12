@@ -198,5 +198,11 @@ a.bill-number:hover{text-decoration:underline}
 .near-member strong .text-link{font:inherit}
 .member-profile small{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#8a97a5;font-weight:800}
 .member-profile strong{display:block;font:800 15px Manrope,sans-serif;margin:4px 0}.member-profile p{margin:6px 0 0;font-size:12px;line-height:1.5}
+.member-profile .tools-row{align-self:flex-start;flex-wrap:wrap}
+.follow-button.following{border-color:var(--line)}
+.followed-section{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:0 0 16px}
+.followed-section h3{margin:0 0 8px;font-size:15px}.followed-section h3 span{color:var(--muted);font-weight:600}
+.followed-members{display:flex;flex-wrap:wrap;gap:8px 16px;margin:0 0 6px;font-size:13px}
+.followed-member{display:inline-flex;align-items:center;gap:6px}
 .member-official{font-size:11px;margin-left:4px;white-space:nowrap}
 @media(max-width:760px){.near-ways,.near-members{grid-template-columns:1fr}.near-summary .tools-row{width:100%}}

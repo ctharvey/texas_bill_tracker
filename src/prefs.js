@@ -8,6 +8,10 @@ const SYNC_KEY = /^[A-Za-z0-9_-]{22}$/;
 const MEMBER_CODE = /^A\d{3,5}$/;  // Texas Legislature Online member code
 
 export const isBillId = id => typeof id === 'string' && BILL_ID.test(id);
+export const MAX_FOLLOWS = 200;
+// Followed legislators, as stored in this browser: valid member codes only, in order, no repeats.
+export const cleanFollows = raw => Array.isArray(raw)
+  ? [...new Set(raw.filter(c => typeof c === 'string' && MEMBER_CODE.test(c)))].slice(0, MAX_FOLLOWS) : [];
 const normalizeId = s => String(s).trim().toUpperCase().replace(/\s+/g, '');
 const uniqueIds = ids => [...new Set(ids.map(normalizeId).filter(isBillId))].slice(0, MAX_LIST);
 

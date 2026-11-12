@@ -62,6 +62,58 @@ class FeedTests(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in out.iterdir()), ['HB5.xml', 'SB1.xml'])
 
 
+ROSTER = {
+    'house|Smith': {'code': 'A1001', 'chamber': 'house', 'display_name': 'Smith', 'full_name': 'Ann Smith'},
+    'senate|Smith': {'code': 'A2002', 'chamber': 'senate', 'display_name': 'Smith', 'full_name': 'Bo Smith'},
+    'senate|Jones': {'code': 'A2003', 'chamber': 'senate', 'display_name': 'Jones'},
+    'house|Odd': {'code': '../evil', 'chamber': 'house', 'display_name': 'Odd'},
+}
+
+
+class MemberFeedTests(unittest.TestCase):
+    def test_roles_join_like_the_site_by_chamber(self):
+        # Authors/coauthors serve in the bill's chamber, sponsors/cosponsors in the other: a same-name member
+        # of the other chamber never matches.
+        hb = {'id': 'HB9', 'authors': ['Smith'], 'coauthors': [], 'sponsors': 'Jones; Smith', 'cosponsors': []}
+        sb = {'id': 'SB9', 'authors': ['Smith', 'Jones'], 'coauthors': [], 'sponsors': [], 'cosponsors': ['Smith']}
+        self.assertEqual(build_feeds.member_roles(hb, ROSTER), {'A1001': 'Author', 'A2003': 'Sponsor', 'A2002': 'Sponsor'})
+        self.assertEqual(build_feeds.member_roles(sb, ROSTER), {'A2002': 'Author', 'A2003': 'Author', 'A1001': 'Cosponsor'})
+
+    def test_member_feed_lists_actions_with_the_role_and_links_the_member_page(self):
+        root = ET.fromstring(build_feeds.member_feed(ROSTER['house|Smith'], [(BILL, 'Coauthor')]))
+        self.assertEqual(root.findtext('./channel/title'), 'Rep. Ann Smith · Texas Bill Atlas')
+        self.assertTrue(root.findtext('./channel/link').endswith('#member?code=A1001'))
+        items = root.findall('./channel/item')
+        self.assertEqual([i.findtext('title') for i in items], ['HB5: Referred to Natural Resources', 'HB5: Filed'])
+        self.assertTrue(items[0].findtext('description').startswith('Rep. Ann Smith · Coauthor. Relating to'))
+        self.assertEqual(items[0].findtext('guid'), build_feeds.bill_items(BILL)[0]['guid'])
+
+    def test_write_member_feeds_covers_every_coded_member_and_skips_bad_codes(self):
+        hb = {**BILL, 'authors': ['Smith']}
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp) / 'members'
+            self.assertEqual(build_feeds.write_member_feeds({'bills': [hb]}, ROSTER, out), (3, 0))
+            self.assertEqual(build_feeds.write_member_feeds({'bills': [hb]}, ROSTER, out), (0, 3))
+            self.assertEqual(sorted(p.name for p in out.iterdir()), ['A1001.xml', 'A2002.xml', 'A2003.xml'])
+            self.assertEqual(len(ET.parse(out / 'A1001.xml').findall('./channel/item')), 2)
+            self.assertEqual(ET.parse(out / 'A2002.xml').findall('./channel/item'), [])
+
+    def test_missing_or_malformed_roster_means_no_member_feeds(self):
+        with tempfile.TemporaryDirectory() as temp:
+            bad = Path(temp) / 'members.json'
+            bad.write_text('not json', 'utf-8')
+            self.assertEqual(build_feeds.load_roster(bad), {})
+            self.assertEqual(build_feeds.load_roster(Path(temp) / 'missing.json'), {})
+            self.assertEqual(build_feeds.write_member_feeds({'bills': [BILL]}, {}, Path(temp) / 'm'), (0, 0))
+
+    def test_real_roster_matches_the_member_page_join(self):
+        roster = build_feeds.load_roster(ROOT / 'data' / 'members.json')
+        member = next(m for m in roster.values() if m.get('chamber') == 'house' and m.get('code'))
+        bills = [{'id': 'HB1', 'authors': [member['display_name']]}, {'id': 'SB1', 'sponsors': [member['display_name']]},
+                 {'id': 'SB2', 'authors': [member['display_name']]}]
+        self.assertEqual([build_feeds.member_roles(b, roster).get(member['code']) for b in bills], ['Author', 'Sponsor', None])
+
+
 class Headers(dict):
     def get(self, key, default=None):
         return next((v for k, v in self.items() if k.lower() == key.lower()), default)

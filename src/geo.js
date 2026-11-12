@@ -134,6 +134,22 @@ export function billsByMember(bills, member) {
   return out;
 }
 
+// Bills by the followed legislators (codes), one row per bill naming each followed member and role; newest first
+// under `order`. Codes not in the roster are skipped.
+export function followedBills(bills, roster, codes, order = () => 0) {
+  const byBill = new Map();
+  for (const code of codes || []) {
+    const member = memberByCode(roster, code);
+    if (!member) continue;
+    for (const {bill, role} of billsByMember(bills, member)) {
+      const row = byBill.get(bill.id) || {bill, notes: []};
+      row.notes.push({member, role});
+      byBill.set(bill.id, row);
+    }
+  }
+  return [...byBill.values()].sort((a, b) => order(a.bill, b.bill));
+}
+
 const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const CAPTION_COUNTY = /\b([A-Z][A-Za-z]+(?:[ -][A-Z][A-Za-z]+)?) County\b/g;
 
