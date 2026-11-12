@@ -1,6 +1,14 @@
 # Changelog
 
 ## 2026-11-12
+- Parity suite before reorganizing code into feature folders:
+  - A browser test module per feature, run on raw `src/` and on the deployer-built bundle, plus tests that load saved
+    data written by the current site (browser storage, profile files, a sync database) so no one's saves are lost.
+  - Golden outputs for the feeds, agent pages, search, sync service and model requests.
+  - All of it runs in CI on every push.
+- Deploys copy whole folders: the static deployer publishes everything under `src/`, and the data, members and agent
+  units and the sync service take the whole `scripts/` folder. Code can now move between files without reinstalling
+  anything on the server.
 - Population limits: the bill drawer shows each population test a bill sets ("a county with a population of more
   than four million") and the places that meet it under the 2020 Census (Harris County), including threshold changes
   with the places newly covered, extra conditions flagged, and limits quoted from existing law. Built hourly into
