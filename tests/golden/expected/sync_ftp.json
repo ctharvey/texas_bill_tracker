@@ -1,0 +1,2320 @@
+{
+ "docs_sha256": {
+  "analysis": "f7cf84562db90371d8d2240fd304c27d00e1139e93c3a645a5b187deb1ee7727",
+  "fiscal_note": "5626c16c6addc1c956d91eea9e88b4853d064c6466f6c6b13dd5ad818704bf3d"
+ },
+ "record": {
+  "action_dates": [
+   "2025-05-29",
+   "2025-05-29",
+   "2025-05-29",
+   "2025-05-29",
+   "2025-05-29",
+   "2025-05-29",
+   "2025-05-31",
+   "2025-06-01",
+   "2025-06-01",
+   "2025-06-02",
+   "2025-06-20",
+   "2025-06-20"
+  ],
+  "actions": [
+   "House concurs in Senate amendment(s)",
+   "Record vote",
+   "Statement(s) of vote recorded in Journal",
+   "Reason for vote recorded in Journal",
+   "Text of Senate Amendment(s)",
+   "House concurs in Senate amendment(s)-reported",
+   "Reported enrolled",
+   "Signed in the House",
+   "Signed in the Senate",
+   "Sent to the Governor",
+   "Signed by the Governor",
+   "See remarks for effective date"
+  ],
+  "author": "Buckley | Bernal | Guillen",
+  "authors": [
+   "Buckley",
+   "Bernal",
+   "Guillen"
+  ],
+  "caption": "Relating to public education and public school finance.",
+  "chamber": "House",
+  "coauthors": [
+   "Barry",
+   "Bell, Cecil",
+   "Bell, Keith",
+   "Bhojani",
+   "Bonnen",
+   "Bumgarner",
+   "Button",
+   "Capriglione",
+   "Cook",
+   "Craddick",
+   "Cunningham",
+   "Curry",
+   "Darby",
+   "Dean",
+   "DeAyala",
+   "Dorazio",
+   "Dyson",
+   "Fairly",
+   "Frank",
+   "Gates",
+   "Gerdes",
+   "González, Jessica",
+   "Harris",
+   "Harris Davila",
+   "Hayes",
+   "Hefner",
+   "Hickland",
+   "Holt",
+   "Hull",
+   "Hunter",
+   "Isaac",
+   "Kerwin",
+   "King",
+   "Kitzman",
+   "LaHood",
+   "Lalani",
+   "Lambert",
+   "Landgraf",
+   "Leach",
+   "Leo Wilson",
+   "Lopez, Janie",
+   "Louderback",
+   "Lozano",
+   "Lujan",
+   "Luther",
+   "McLaughlin",
+   "McQueeney",
+   "Metcalf",
+   "Meyer",
+   "Morales, Eddie",
+   "Noble",
+   "Oliverson",
+   "Orr",
+   "Patterson",
+   "Paul",
+   "Perez, Vincent",
+   "Pierson",
+   "Raymond",
+   "Reynolds",
+   "Richardson",
+   "Rodríguez Ramos",
+   "Shaheen",
+   "Shofner",
+   "Slawson",
+   "Smithee",
+   "Spiller",
+   "Swanson",
+   "Tepper",
+   "Toth",
+   "Troxclair",
+   "Vasut",
+   "Villalobos",
+   "Virdell",
+   "Wharton",
+   "Wilson"
+  ],
+  "companions": [],
+  "cosponsors": [
+   "Alvarado",
+   "Bettencourt",
+   "Birdwell",
+   "Blanco",
+   "Campbell",
+   "Flores",
+   "Hagenbuch",
+   "Hall",
+   "Hancock",
+   "Hinojosa, Adam",
+   "Hinojosa, Juan \"Chuy\"",
+   "Huffman",
+   "King",
+   "Menéndez",
+   "Miles",
+   "Parker",
+   "Paxton",
+   "Sparks",
+   "West",
+   "Zaffirini"
+  ],
+  "events": [
+   {
+    "code": "H001",
+    "date": "2025-02-20",
+    "text": "Filed"
+   },
+   {
+    "code": "H005",
+    "date": "2025-02-25",
+    "text": "Read first time"
+   },
+   {
+    "code": "H115",
+    "date": "2025-02-25",
+    "text": "Referred to Public Education"
+   },
+   {
+    "code": "H228",
+    "date": "2025-03-04",
+    "text": "Scheduled for public hearing on . . ."
+   },
+   {
+    "code": "H215",
+    "date": "2025-03-04",
+    "text": "Considered in public hearing"
+   },
+   {
+    "code": "H240",
+    "date": "2025-03-04",
+    "text": "Testimony taken/registration(s) recorded in committee"
+   },
+   {
+    "code": "H245",
+    "date": "2025-03-04",
+    "text": "Left pending in committee"
+   },
+   {
+    "code": "H228",
+    "date": "2025-03-06",
+    "text": "Scheduled for public hearing on . . ."
+   },
+   {
+    "code": "H215",
+    "date": "2025-03-06",
+    "text": "Considered in public hearing"
+   },
+   {
+    "code": "H240",
+    "date": "2025-03-06",
+    "text": "Testimony taken/registration(s) recorded in committee"
+   },
+   {
+    "code": "H245",
+    "date": "2025-03-06",
+    "text": "Left pending in committee"
+   },
+   {
+    "code": "H201",
+    "date": "2025-04-01",
+    "text": "Scheduled for formal meeting on . . ."
+   },
+   {
+    "code": "H205",
+    "date": "2025-04-01",
+    "text": "Meeting cancelled"
+   },
+   {
+    "code": "H201",
+    "date": "2025-04-03",
+    "text": "Scheduled for formal meeting on . . ."
+   },
+   {
+    "code": "H216",
+    "date": "2025-04-03",
+    "text": "Considered in formal meeting"
+   },
+   {
+    "code": "H241",
+    "date": "2025-04-03",
+    "text": "Committee substitute considered in committee"
+   },
+   {
+    "code": "H252",
+    "date": "2025-04-03",
+    "text": "Reported favorably as substituted"
+   },
+   {
+    "code": "H853",
+    "date": "2025-04-10",
+    "text": "Comte report filed with Committee Coordinator"
+   },
+   {
+    "code": "H855",
+    "date": "2025-04-10",
+    "text": "Committee report distributed"
+   },
+   {
+    "code": "H400",
+    "date": "2025-04-11",
+    "text": "Committee report sent to Calendars"
+   },
+   {
+    "code": "H415",
+    "date": "2025-04-14",
+    "text": "Considered in Calendars"
+   },
+   {
+    "code": "H430",
+    "date": "2025-04-16",
+    "text": "Placed on Major State Calendar"
+   },
+   {
+    "code": "H515",
+    "date": "2025-04-16",
+    "text": "Read 2nd time"
+   },
+   {
+    "code": "H525",
+    "date": "2025-04-16",
+    "text": "Amendment(s) offered"
+   },
+   {
+    "code": "H580",
+    "date": "2025-04-16",
+    "text": "Amendment to amendment offered"
+   },
+   {
+    "code": "H592",
+    "date": "2025-04-16",
+    "text": "Substitute amendment to amendment fails"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H633",
+    "date": "2025-04-16",
+    "text": "Statement(s) of vote recorded in Journal"
+   },
+   {
+    "code": "H632",
+    "date": "2025-04-16",
+    "text": "Reason for vote recorded in Journal"
+   },
+   {
+    "code": "H584",
+    "date": "2025-04-16",
+    "text": "Amendment amended"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H633",
+    "date": "2025-04-16",
+    "text": "Statement(s) of vote recorded in Journal"
+   },
+   {
+    "code": "H584",
+    "date": "2025-04-16",
+    "text": "Amendment amended"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H633",
+    "date": "2025-04-16",
+    "text": "Statement(s) of vote recorded in Journal"
+   },
+   {
+    "code": "H531",
+    "date": "2025-04-16",
+    "text": "Amendment adopted as amended"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H633",
+    "date": "2025-04-16",
+    "text": "Statement(s) of vote recorded in Journal"
+   },
+   {
+    "code": "H528",
+    "date": "2025-04-16",
+    "text": "Amendment tabled"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H633",
+    "date": "2025-04-16",
+    "text": "Statement(s) of vote recorded in Journal"
+   },
+   {
+    "code": "H525",
+    "date": "2025-04-16",
+    "text": "Amendment(s) offered"
+   },
+   {
+    "code": "H685",
+    "date": "2025-04-16",
+    "text": "Point of order withdrawn (amendment)"
+   },
+   {
+    "code": "H526",
+    "date": "2025-04-16",
+    "text": "Amendment withdrawn"
+   },
+   {
+    "code": "H529",
+    "date": "2025-04-16",
+    "text": "Amended"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H633",
+    "date": "2025-04-16",
+    "text": "Statement(s) of vote recorded in Journal"
+   },
+   {
+    "code": "H529",
+    "date": "2025-04-16",
+    "text": "Amended"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H529",
+    "date": "2025-04-16",
+    "text": "Amended"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H525",
+    "date": "2025-04-16",
+    "text": "Amendment(s) offered"
+   },
+   {
+    "code": "H685",
+    "date": "2025-04-16",
+    "text": "Point of order withdrawn (amendment)"
+   },
+   {
+    "code": "H526",
+    "date": "2025-04-16",
+    "text": "Amendment withdrawn"
+   },
+   {
+    "code": "H529",
+    "date": "2025-04-16",
+    "text": "Amended"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H633",
+    "date": "2025-04-16",
+    "text": "Statement(s) of vote recorded in Journal"
+   },
+   {
+    "code": "H528",
+    "date": "2025-04-16",
+    "text": "Amendment tabled"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H633",
+    "date": "2025-04-16",
+    "text": "Statement(s) of vote recorded in Journal"
+   },
+   {
+    "code": "H526",
+    "date": "2025-04-16",
+    "text": "Amendment withdrawn"
+   },
+   {
+    "code": "H528",
+    "date": "2025-04-16",
+    "text": "Amendment tabled"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H528",
+    "date": "2025-04-16",
+    "text": "Amendment tabled"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H633",
+    "date": "2025-04-16",
+    "text": "Statement(s) of vote recorded in Journal"
+   },
+   {
+    "code": "H528",
+    "date": "2025-04-16",
+    "text": "Amendment tabled"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H633",
+    "date": "2025-04-16",
+    "text": "Statement(s) of vote recorded in Journal"
+   },
+   {
+    "code": "H528",
+    "date": "2025-04-16",
+    "text": "Amendment tabled"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H633",
+    "date": "2025-04-16",
+    "text": "Statement(s) of vote recorded in Journal"
+   },
+   {
+    "code": "H536",
+    "date": "2025-04-16",
+    "text": "Passed to engrossment as amended"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-16",
+    "text": "Record vote"
+   },
+   {
+    "code": "H632",
+    "date": "2025-04-16",
+    "text": "Reason for vote recorded in Journal"
+   },
+   {
+    "code": "H550",
+    "date": "2025-04-17",
+    "text": "Read 3rd time"
+   },
+   {
+    "code": "H555",
+    "date": "2025-04-17",
+    "text": "Passed"
+   },
+   {
+    "code": "H630",
+    "date": "2025-04-17",
+    "text": "Record vote"
+   },
+   {
+    "code": "H633",
+    "date": "2025-04-17",
+    "text": "Statement(s) of vote recorded in Journal"
+   },
+   {
+    "code": "H632",
+    "date": "2025-04-17",
+    "text": "Reason for vote recorded in Journal"
+   },
+   {
+    "code": "H835",
+    "date": "2025-04-17",
+    "text": "Reported engrossed"
+   },
+   {
+    "code": "S800",
+    "date": "2025-04-22",
+    "text": "Received from the House"
+   },
+   {
+    "code": "S005",
+    "date": "2025-04-23",
+    "text": "Read first time"
+   },
+   {
+    "code": "S047",
+    "date": "2025-04-23",
+    "text": "Referred to Education K-16"
+   },
+   {
+    "code": "S228",
+    "date": "2025-05-15",
+    "text": "Scheduled for public hearing on . . ."
+   },
+   {
+    "code": "S260",
+    "date": "2025-05-15",
+    "text": "Considered in public hearing"
+   },
+   {
+    "code": "S270",
+    "date": "2025-05-15",
+    "text": "Testimony taken in committee"
+   },
+   {
+    "code": "S275",
+    "date": "2025-05-15",
+    "text": "Left pending in committee"
+   },
+   {
+    "code": "S260",
+    "date": "2025-05-19",
+    "text": "Considered in public hearing"
+   },
+   {
+    "code": "S290",
+    "date": "2025-05-19",
+    "text": "Vote taken in committee"
+   },
+   {
+    "code": "S287",
+    "date": "2025-05-20",
+    "text": "Reported favorably as substituted"
+   },
+   {
+    "code": "S855",
+    "date": "2025-05-20",
+    "text": "Committee report printed and distributed"
+   },
+   {
+    "code": "S833",
+    "date": "2025-05-22",
+    "text": "Co-sponsor authorized"
+   },
+   {
+    "code": "S400",
+    "date": "2025-05-22",
+    "text": "Placed on intent calendar"
+   },
+   {
+    "code": "S507",
+    "date": "2025-05-22",
+    "text": "Rules suspended-Regular order of business"
+   },
+   {
+    "code": "S521",
+    "date": "2025-05-22",
+    "text": "Read 2nd time"
+   },
+   {
+    "code": "S540",
+    "date": "2025-05-22",
+    "text": "Amendment(s) offered"
+   },
+   {
+    "code": "S544",
+    "date": "2025-05-22",
+    "text": "Amended"
+   },
+   {
+    "code": "S626",
+    "date": "2025-05-22",
+    "text": "Vote recorded in Journal"
+   },
+   {
+    "code": "S605",
+    "date": "2025-05-22",
+    "text": "Vote reconsidered"
+   },
+   {
+    "code": "S564",
+    "date": "2025-05-22",
+    "text": "Amendment to amendment offered"
+   },
+   {
+    "code": "S568",
+    "date": "2025-05-22",
+    "text": "Amendment amended"
+   },
+   {
+    "code": "S626",
+    "date": "2025-05-22",
+    "text": "Vote recorded in Journal"
+   },
+   {
+    "code": "S546",
+    "date": "2025-05-22",
+    "text": "Amendment adopted as amended"
+   },
+   {
+    "code": "S626",
+    "date": "2025-05-22",
+    "text": "Vote recorded in Journal"
+   },
+   {
+    "code": "S540",
+    "date": "2025-05-22",
+    "text": "Amendment(s) offered"
+   },
+   {
+    "code": "S544",
+    "date": "2025-05-22",
+    "text": "Amended"
+   },
+   {
+    "code": "S626",
+    "date": "2025-05-22",
+    "text": "Vote recorded in Journal"
+   },
+   {
+    "code": "S540",
+    "date": "2025-05-22",
+    "text": "Amendment(s) offered"
+   },
+   {
+    "code": "S544",
+    "date": "2025-05-22",
+    "text": "Amended"
+   },
+   {
+    "code": "S626",
+    "date": "2025-05-22",
+    "text": "Vote recorded in Journal"
+   },
+   {
+    "code": "S540",
+    "date": "2025-05-22",
+    "text": "Amendment(s) offered"
+   },
+   {
+    "code": "S541",
+    "date": "2025-05-22",
+    "text": "Amendment withdrawn"
+   },
+   {
+    "code": "S540",
+    "date": "2025-05-22",
+    "text": "Amendment(s) offered"
+   },
+   {
+    "code": "S541",
+    "date": "2025-05-22",
+    "text": "Amendment withdrawn"
+   },
+   {
+    "code": "S540",
+    "date": "2025-05-22",
+    "text": "Amendment(s) offered"
+   },
+   {
+    "code": "S541",
+    "date": "2025-05-22",
+    "text": "Amendment withdrawn"
+   },
+   {
+    "code": "S540",
+    "date": "2025-05-22",
+    "text": "Amendment(s) offered"
+   },
+   {
+    "code": "S541",
+    "date": "2025-05-22",
+    "text": "Amendment withdrawn"
+   },
+   {
+    "code": "S556",
+    "date": "2025-05-22",
+    "text": "Passed to 3rd reading as amended"
+   },
+   {
+    "code": "S626",
+    "date": "2025-05-22",
+    "text": "Vote recorded in Journal"
+   },
+   {
+    "code": "S833",
+    "date": "2025-05-23",
+    "text": "Co-sponsor authorized"
+   },
+   {
+    "code": "S507",
+    "date": "2025-05-23",
+    "text": "Rules suspended-Regular order of business"
+   },
+   {
+    "code": "S572",
+    "date": "2025-05-23",
+    "text": "Three day rule suspended"
+   },
+   {
+    "code": "S625",
+    "date": "2025-05-23",
+    "text": "Record vote"
+   },
+   {
+    "code": "S575",
+    "date": "2025-05-23",
+    "text": "Read 3rd time"
+   },
+   {
+    "code": "S540",
+    "date": "2025-05-23",
+    "text": "Amendment(s) offered"
+   },
+   {
+    "code": "S544",
+    "date": "2025-05-23",
+    "text": "Amended"
+   },
+   {
+    "code": "S626",
+    "date": "2025-05-23",
+    "text": "Vote recorded in Journal"
+   },
+   {
+    "code": "S540",
+    "date": "2025-05-23",
+    "text": "Amendment(s) offered"
+   },
+   {
+    "code": "S544",
+    "date": "2025-05-23",
+    "text": "Amended"
+   },
+   {
+    "code": "S626",
+    "date": "2025-05-23",
+    "text": "Vote recorded in Journal"
+   },
+   {
+    "code": "S577",
+    "date": "2025-05-23",
+    "text": "Passed as amended"
+   },
+   {
+    "code": "S625",
+    "date": "2025-05-23",
+    "text": "Record vote"
+   },
+   {
+    "code": "S857",
+    "date": "2025-05-23",
+    "text": "Remarks ordered printed"
+   },
+   {
+    "code": "H806",
+    "date": "2025-05-24",
+    "text": "Senate passage as amended reported"
+   },
+   {
+    "code": "H856",
+    "date": "2025-05-24",
+    "text": "Senate Amendments distributed"
+   },
+   {
+    "code": "H861",
+    "date": "2025-05-25",
+    "text": "Senate Amendments Analysis distributed"
+   },
+   {
+    "code": "H862",
+    "date": "2025-05-25",
+    "text": "Corrected Senate Amendments Analysis distributed"
+   },
+   {
+    "code": "H701",
+    "date": "2025-05-29",
+    "text": "House concurs in Senate amendment(s)"
+   },
+   {
+    "code": "H630",
+    "date": "2025-05-29",
+    "text": "Record vote"
+   },
+   {
+    "code": "H633",
+    "date": "2025-05-29",
+    "text": "Statement(s) of vote recorded in Journal"
+   },
+   {
+    "code": "H632",
+    "date": "2025-05-29",
+    "text": "Reason for vote recorded in Journal"
+   },
+   {
+    "code": "H845",
+    "date": "2025-05-29",
+    "text": "Text of Senate Amendment(s)"
+   },
+   {
+    "code": "S707",
+    "date": "2025-05-29",
+    "text": "House concurs in Senate amendment(s)-reported"
+   },
+   {
+    "code": "H840",
+    "date": "2025-05-31",
+    "text": "Reported enrolled"
+   },
+   {
+    "code": "H850",
+    "date": "2025-06-01",
+    "text": "Signed in the House"
+   },
+   {
+    "code": "S850",
+    "date": "2025-06-01",
+    "text": "Signed in the Senate"
+   },
+   {
+    "code": "E015",
+    "date": "2025-06-02",
+    "text": "Sent to the Governor"
+   },
+   {
+    "code": "E020",
+    "date": "2025-06-20",
+    "text": "Signed by the Governor"
+   },
+   {
+    "code": "E085",
+    "date": "2025-06-20",
+    "text": "See remarks for effective date"
+   }
+  ],
+  "filed_at": "2025-02-20",
+  "id": "HB2",
+  "last_action": "06/20/2025 E See remarks for effective date",
+  "last_action_date": "2025-06-20",
+  "number": "HB 2",
+  "source_path": "bills/89R/billhistory/house_bills/HB00001_HB00099/HB 2.xml",
+  "source_record": "Texas Legislative Council bulk FTP bill history",
+  "source_updated": "6/23/2025 2:00:05 AM",
+  "sponsors": [
+   "Creighton"
+  ],
+  "status": "Enacted",
+  "subjects": [
+   "WINDHAM SCHOOL DISTRICT",
+   "Disabilities, Persons with",
+   "Education--Bilingual",
+   "Education--Primary & Secondary--Accountability",
+   "Education--Primary & Secondary--Admission & Attendance",
+   "Education--Primary & Secondary--Charter Schools",
+   "Education--Primary & Secondary--Curriculum",
+   "Education--Primary & Secondary--Finance",
+   "Education--Primary & Secondary--Other School Personnel",
+   "Education--Primary & Secondary--Special",
+   "Education--Primary & Secondary--Teachers",
+   "Education--Primary & Secondary--Vocational",
+   "Electronic Information Systems",
+   "Governor",
+   "Legislature",
+   "Occupational Regulation--Other Trades & Professions",
+   "Salaries & Expenses",
+   "State Finances--Appropriations",
+   "State Finances--Management & Control",
+   "Taxation--School District",
+   "ACADEMIC PERFORMANCE",
+   "AUTISM & PERVASIVE DEVELOPMENTAL DISORDERS",
+   "BONDS",
+   "DYSLEXIA",
+   "FOUNDATION SCHOOL FUND",
+   "INTERNET",
+   "LITERACY",
+   "MEDIATION, DISPUTE RESOLUTION, & ARBITRATION",
+   "PRESCHOOL & PREKINDERGARTEN",
+   "REGIONAL EDUCATION SERVICE CENTERS",
+   "STAFF DEVELOPMENT & TRAINING",
+   "BLIND & VISUALLY IMPAIRED, TEXAS SCHOOL FOR THE",
+   "COMPTROLLER OF PUBLIC ACCOUNTS",
+   "DEAF, TEXAS SCHOOL FOR THE",
+   "EDUCATION AGENCY, TEXAS",
+   "EDUCATION, COMMISSIONER OF",
+   "EDUCATION, STATE BOARD OF",
+   "EDUCATOR CERTIFICATION, STATE BOARD FOR",
+   "FAMILY & PROTECTIVE SERVICES, DEPARTMENT OF",
+   "HEALTH & HUMAN SERVICES COMMISSION"
+  ],
+  "text_versions": [],
+  "title": "Relating to public education and public school finance."
+ },
+ "text_head": "# HB 1001 - Introduced\n\n90R1865 MP-D\n\nBy: Cole H.B. No. 1001\n\nA BILL TO BE ENTITLED\n\nAN ACT\n\nrelating to a mental health leave policy for certain public safety employees.\n\nBE IT ENACTED BY THE LEGISLATURE OF THE STATE OF TEXAS:\n\n### SECTION 1.\n\nSection 614.015, Government Code, is amended to read as follows:\n\nSec. 614.015. MENTAL HEALTH LEAVE FOR <ins>PUBLIC SAFETY EMPLOYEES</ins> \\[<del>PEACE OFFICERS AND TELECOMMUNICATORS</del>\\]. (a) In this section<ins>, \"public safety employee\" means a peace officer, fire fighter, detention officer, county jailer, or emergency medical services employee of this state or a political subdivision of this state. The term includes a person</ins>\\[<del>:</del>\n\n\\[<del>(1) \"Law enforcement agency\" means an agency of the state or of a political subdivision of the state authorized by law to employ peace officers.</del>\n\n\\[<del>(2) \"Telecommunicator\" means a person</del>\\] authorized to act as a telecommunicator under Section 1701.405, Occupations Code<ins>, or a person acting in a similar capacity under Chapter 773, Health and Safety Code</ins>.\n\n(b) Each <ins>entity</ins> \\[<del>law enforcement agency, and each agency</del>\\] of the state or of a political subdivision of the state that employs a <ins>public safety employee</ins> \\[<del>full-time telecommunicator,</del>\\] shall develop and adopt a policy allowing the use of mental health leave by the <ins>public safety employees</ins> \\[<del>peace officers and full-time telecommunicators, as applicable,</del>\\] employed by the <ins>entity</ins> \\[<del>agency</del>\\] who experience a traumatic event in the scope of that employment.\n\n(c) A mental health leave policy adopted under this section must:\n\n(1) provide clear and objective guidelines establishing the circumstances under which a <ins>public safety employee</ins> \\[<del>peace officer or telecommunicator</del>\\] is granted and may use mental health leave;\n\n(2) entitle a <ins>public safety employee</ins> \\[<del>peace officer or telecom",
+ "text_sha256": "8cdc7439ace96edfc6b833a61ba2f6fb03f0626a59c88599cddaac2a42a93993",
+ "witnesses": {
+  "committee": "Public Education",
+  "hearing": "March 4, 2025 - 8:00 AM",
+  "hearings": [
+   "March 4, 2025 - 8:00 AM",
+   "March 6, 2025 - 8:00 AM"
+  ],
+  "witnesses": [
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Aleman, Steven",
+    "organization": "Disability Rights Texas",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Bhatia, Yasmin",
+    "organization": "Uplift Education",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Choudhury, Mohammed",
+    "organization": "Fort Worth Independent School District",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Crawford, Marty",
+    "organization": "Texas School Alliance",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Feinstein, Jonathan",
+    "organization": "EdTrust in Texas",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Gilbert, Greg",
+    "organization": "Texas Assication of Rural Schools",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Kucera, Joe",
+    "organization": "Self; Texas Association of Midsize Schools",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Lara, Billie",
+    "organization": "Self",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Mackey, Ben",
+    "organization": "Texas Impact Network",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "McKenzie, Lauren",
+    "organization": "Texans Care for Children",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "McKinney, Sharon",
+    "organization": "Port Aransas ISD",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Morrison, Heath",
+    "organization": "Teachers of Tomorrow",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Munoz, Joe",
+    "organization": "Texas Music Educators Association and Texas Arts Education Campaign",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "NOLEN, DARLA",
+    "organization": "Academy ISD",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Pruneda, Mary Lynn",
+    "organization": "Texas 2036",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Rasti, Kelly",
+    "organization": "Texas Association of School Boards",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Sanderson, Josh",
+    "organization": "Equity Center",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Sparacello, Leslie",
+    "organization": "Cedars International Academy",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Terry, Justin",
+    "organization": "Self; Fast Growth Schools Coalition",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Villanueva, Chandra",
+    "organization": "Every Texan",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Coffey, Gwen",
+    "organization": "Self; TCASE and Katy ISD",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Craft, John",
+    "organization": "Self; Northside Independent School District",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Doyle, Rebecca",
+    "organization": "Self; Stephenville ISD",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Finger, Kami",
+    "organization": "Self; Lubbock ISD and TCASE",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Lambert, Kailey",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Latham Sikes, Chloe",
+    "organization": "IDRA (Intercultural Development Research Association)",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Segura, Matias",
+    "organization": "Texas Urban Council",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Toscano, Roland",
+    "organization": "Self; East Central Independent School District",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Williams, Paige",
+    "organization": "Texas Classroom Teachers Association",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Beneski, Amy",
+    "organization": "Texas Association of School Administrators",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Brown, Ashlynn",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Cherny, Harriet",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Corte, Frank",
+    "organization": "Self; International Leadership of Texas",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Coy, Cheryl",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Davis, Larry",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Diaz, Stephanie",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Engelking, Luke",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Greer, Kate",
+    "organization": "The Commit Partnership",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Hejny, Barton",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Jacobson",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Jensen, Scott",
+    "organization": "American Federation for Children",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Kokel, Jim",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Kokel, Joyce",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Love, Jarod",
+    "organization": "ExcelinEd in Action",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Love, Jarod",
+    "organization": "The E3Alliance",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Martin, Cathleen",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Mauro, Megan",
+    "organization": "Texas Association of Business",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Murnighan, Erin",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Murphy, Kaitlyn",
+    "organization": "Greater Houston Partnership",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Schuetz, Tim",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Smith, Joseph",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Terrazas, Michelle",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Vierus, Stephanie",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Davis, Marilyn",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Hegman, Christina",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Parker, Karen",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Parkinson, Thomas",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Pruett, Kay",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Scheer, Deborah",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Stewart, Susan",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Aki, Fuat",
+    "organization": "Texas Education Agency",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Alexander, Jennifer",
+    "organization": "Texas Education Agency",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Beadle, Tracey",
+    "organization": "Self",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Byer, Von",
+    "organization": "Texas Education Agency",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Copeland, Amy",
+    "organization": "TEA",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Elford, John",
+    "organization": "Self",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Fisher, Tracy",
+    "organization": "Self",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Hodge, Andrew",
+    "organization": "TEA",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Hoffacker, Daphne",
+    "organization": "Self",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Holzgrafe, Matt",
+    "organization": "TEA",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Marin, Eric",
+    "organization": "TEA",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Martinez, Monica",
+    "organization": "Texas Education Agency",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "McGuire, Kristin",
+    "organization": "Texas Education Agency",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Mckenzie, Al",
+    "organization": "Tea",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Mcloughlin, Jessica",
+    "organization": "TEA",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Murphy, Shannon",
+    "organization": "Comptroller of Public Accounts",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Olofson, Mark",
+    "organization": "Texas Education Agenct",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 4, 2025 - 8:00 AM",
+    "name": "Schutte, Marian",
+    "organization": "TEA",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Adams, Bryce",
+    "organization": "Self; TX Public Charter Schools Association",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Bender, Missy",
+    "organization": "Texas School Coalition",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Bishop-Watt, Trista",
+    "organization": "Good Reason Houston",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Bonilla, Grace",
+    "organization": "Texas Impact",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Chavez, Yulissa",
+    "organization": "Self; The Coalition of Texans with Disabilities",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Combest, Stacey",
+    "organization": "Self",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Cooper, Robbi",
+    "organization": "Self; Decoding Dyslexia Texas",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Easley, Jennifer",
+    "organization": "Texas PTA",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Ellis, Christina",
+    "organization": "Consilium Education Services",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Furlich, Sara",
+    "organization": "Self; Decoding Dyslexia and Texas Dyslexia Coalition",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Gir, Arun",
+    "organization": "IEducate",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Hyland, Jennifer",
+    "organization": "Self",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Leal, Diego",
+    "organization": "Self",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Lee, Christopher",
+    "organization": "North Texas Commission",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "POLLOCK, LINDSEY",
+    "organization": "Self",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Ross, Dixie",
+    "organization": "Self",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Weaver, Staci",
+    "organization": "Self; Legacy Prep",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Yancy, Justin",
+    "organization": "Texas Business Leadership Council",
+    "position": "for",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Carra, Missie",
+    "organization": "Self",
+    "position": "against",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Carriker-Cavin, Taylor",
+    "organization": "Self",
+    "position": "against",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Cole-Ochoa, Darren",
+    "organization": "Self; San Marcos CISD",
+    "position": "against",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Daniels, Margaret",
+    "organization": "Self",
+    "position": "against",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Davenport, Lynn",
+    "organization": "Self",
+    "position": "against",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Joseph, Zenobia",
+    "organization": "Self",
+    "position": "against",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Linahan, Alice",
+    "organization": "Self",
+    "position": "against",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Blanton, DeeAnna",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Boswell, Lynn",
+    "organization": "Self; Austin ISD",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Bustos, Georgiana",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Chevalier, Andrea",
+    "organization": "Texas Council of Administrators of Special Education",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Colbert, Paul",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Crittenden, Justin",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Exter, Monty",
+    "organization": "ATPE",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Gonzalez Saucedo, Sabrina",
+    "organization": "The Arc of Texas",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Gray, JoMeka",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Gregg, Brock",
+    "organization": "Texas retired teachers assn",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Griffith, Carrie",
+    "organization": "On Behalf of the Texas State Teachers Association",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Guevara, Karla",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Guthrie, Brian",
+    "organization": "Teacher Retirement System of Texas",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Halstead, Amity",
+    "organization": "Self; PreK Today/Child Care Associates",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Hoffacker, Daphne",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Holden, Megan",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Hunter, Kevin",
+    "organization": "Self; Burkburnett Independent School District",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Kirksey, Jacob",
+    "organization": "Texas Tech University",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Kosobud, Terry",
+    "organization": "Self; Grandparents for Public Schools",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Kost, Jennifer",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Malfaro, Louis",
+    "organization": "Self; Austin Voices for Education and Youth",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Norris, Robert",
+    "organization": "Self; Grandparents for Public Schools",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Noyola, Alicia",
+    "organization": "Self; South Texas Association of Schools",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Piper, Missy",
+    "organization": "Texas Council of Administrators of Special Education, Brazos River Regional School Program SSA, Parker County Co-op",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Quinzi, Patty",
+    "organization": "TX American Federaion of Teachers",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Salazar, Alejos",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Saxe, Avery",
+    "organization": "Legislative Budget Board",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Selby, Mary",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Sena, Richard",
+    "organization": "Self; Boerne ISD",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Smith, Lauren",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Stephens, Heather",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Stern, Maggie",
+    "organization": "Our Schools Our Democracy",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Stevenson, Sara",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Swanson, Steve",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Tavarez, Lauren",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Vasquez, Megan",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Vinson, Mallory",
+    "organization": "Self",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Volk, Maia",
+    "organization": "Texas Coalition for Healthy Minds",
+    "position": "on",
+    "testified": true
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Allmon, Jennifer",
+    "organization": "The Texas Catholic Conference of Bishops",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Franklin, Ryan",
+    "organization": "Philanthropy Advocates",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Glosser, Cole",
+    "organization": "Self; Coalition of Texans with Disabilities",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Johnson, Tracy",
+    "organization": "DFER TX",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Justice, Shirlene",
+    "organization": "Self",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Landin, Taylor",
+    "organization": "Greater Houston Partnership",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Linn Minnehan, Julie",
+    "organization": "Great Hearts Texas",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Litzler, John",
+    "organization": "Baptist General Convention of Texas Christian Life Commission",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Luftop, Jennifer",
+    "organization": "Texas Academic Language Therapy Association (Texas ALTA)",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Nichols, Colby",
+    "organization": "Texas Association of Community Schools",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Sanders, Jolene",
+    "organization": "Self; The Coalition of Texans with Disabilities",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Warren, Joanna",
+    "organization": "Educate Texas",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Williams-Eugene, Nzingha",
+    "organization": "Texas Cultural Trust",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Willis, Randy",
+    "organization": "Texas Assoication of Rural Schools",
+    "position": "for",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Ackermann, Ryan",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Ahmed-Arroyo, Serena",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Boulton, Leonora",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Briggs, Rachael",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Butcher, Callie",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Camp, J",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Campbell, Craig",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Carranza, Susana",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Crowl, Ian",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Cummings, Sharon",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Domel, Elizabeth",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Fennell, Amy",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Garcia, Jacqueline",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Griffith, Idona",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Hester, TIna",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Hornbuckle, Susan",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Kaplan, Judith",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Laeky, Miriam",
+    "organization": "Equality Texas",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Moyers, Dakota-Lee",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Moyers, Kimberly",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Odom, Glynnis",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Reeves, Sara",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Schindler, Stephanie",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Schmidt, Daniel",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Sotelo, Rosalba",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Stewart, Susan",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Tiernan, Mary",
+    "organization": "Self",
+    "position": "against",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Bellsnyder, Suzanne",
+    "organization": "Self",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Encarnacion Schmidt, Maria",
+    "organization": "Self",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Foster, Linzy",
+    "organization": "Self",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Hall, Leslie",
+    "organization": "Self",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Hejny, Barton",
+    "organization": "Self",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Jebsen, Maggie",
+    "organization": "LBB",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Kling, Kelsey",
+    "organization": "Texas Coalition for Educator Preparation (TCEP)",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Lehman Lopez, Jeanne",
+    "organization": "Self",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Lugo, Noelita",
+    "organization": "Self",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Navarrette, Emily",
+    "organization": "LBB",
+    "position": "on",
+    "testified": false
+   },
+   {
+    "hearing": "March 6, 2025 - 8:00 AM",
+    "name": "Tasneem, Tania",
+    "organization": "Self",
+    "position": "on",
+    "testified": false
+   }
+  ]
+ }
+}

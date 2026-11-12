@@ -1,0 +1,174 @@
+[
+ [
+  "create",
+  201,
+  {
+   "data": {
+    "filters": {},
+    "follows": [
+     "A1234"
+    ],
+    "searches": [
+     {
+      "filters": {
+       "query": "water"
+      },
+      "id": "abcd1234",
+      "name": "Water",
+      "seen": "2026-11-12"
+     }
+    ],
+    "watch": [
+     "HB110",
+     "HB717"
+    ]
+   },
+   "edit_key": "0000000000000000000001",
+   "mode": "edit",
+   "version": 1,
+   "view_key": "lLyVj3lA1GLHdMr4ka8Ce4"
+  }
+ ],
+ [
+  "read edit",
+  200,
+  {
+   "data": {
+    "filters": {},
+    "follows": [
+     "A1234"
+    ],
+    "searches": [
+     {
+      "filters": {
+       "query": "water"
+      },
+      "id": "abcd1234",
+      "name": "Water",
+      "seen": "2026-11-12"
+     }
+    ],
+    "watch": [
+     "HB110",
+     "HB717"
+    ]
+   },
+   "mode": "edit",
+   "version": 1,
+   "view_key": "lLyVj3lA1GLHdMr4ka8Ce4"
+  }
+ ],
+ [
+  "read view",
+  200,
+  {
+   "data": {
+    "filters": {},
+    "watch": [
+     "HB110",
+     "HB717"
+    ]
+   },
+   "mode": "view",
+   "version": 1
+  }
+ ],
+ [
+  "update",
+  200,
+  {
+   "data": {
+    "filters": {},
+    "follows": [
+     "A1234"
+    ],
+    "searches": [
+     {
+      "filters": {
+       "query": "water"
+      },
+      "id": "abcd1234",
+      "name": "Water",
+      "seen": "2026-11-12"
+     }
+    ],
+    "watch": [
+     "HB110"
+    ]
+   },
+   "version": 2
+  }
+ ],
+ [
+  "stale update",
+  409,
+  {
+   "data": {
+    "filters": {},
+    "follows": [
+     "A1234"
+    ],
+    "searches": [
+     {
+      "filters": {
+       "query": "water"
+      },
+      "id": "abcd1234",
+      "name": "Water",
+      "seen": "2026-11-12"
+     }
+    ],
+    "watch": [
+     "HB110"
+    ]
+   },
+   "error": "changed on another device",
+   "version": 2
+  }
+ ],
+ [
+  "view cannot write",
+  403,
+  {
+   "error": "an edit link is required"
+  }
+ ],
+ [
+  "feed",
+  200,
+  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<rss version=\"2.0\">\n<channel>\n<title>Watchlist · Texas Bill Atlas</title>\n<link>https://bills.ctharvey.me/#watchlist</link>\n<description>Latest actions on 1 watched bills. Unofficial; confirm on Texas Legislature Online.</description>\n<language>en-us</language>\n<ttl>60</ttl>\n<lastBuildDate>Mon, 09 Nov 2026 12:00:00 +0000</lastBuildDate>\n<item>\n<title>HB110: Filed</title>\n<link>https://bills.ctharvey.me/#all?bill=HB110</link>\n<description>Relating to the minimum wage.</description>\n<guid isPermaLink=\"false\">HB110-c85504a5cf529031</guid>\n<pubDate>Mon, 09 Nov 2026 12:00:00 +0000</pubDate>\n</item>\n</channel>\n</rss>\n"
+ ],
+ [
+  "edit key is not a feed",
+  404,
+  {
+   "error": "unknown feed"
+  }
+ ],
+ [
+  "bad origin",
+  403,
+  {
+   "error": "origin not allowed"
+  }
+ ],
+ [
+  "health",
+  200,
+  {
+   "ok": true
+  }
+ ],
+ [
+  "delete",
+  204,
+  ""
+ ],
+ [
+  "gone",
+  404,
+  {
+   "error": "unknown sync link"
+  }
+ ]
+]
