@@ -7,6 +7,7 @@ is rewritten only when its content changes. Standard library only (the data unit
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import datetime as dt
 import hashlib
 import json
@@ -463,6 +464,255 @@ def write_statutes(snapshot: dict, text_dir: Path, out_dir: Path) -> tuple[int, 
     return written, unchanged, removed
 
 
+# Population brackets: "a county with a population of more than four million" resolved to the places that meet the
+# population test under the 2020 census. Extra conditions ("adjacent to ...") are flagged, never resolved.
+BRACKET_FORMAT = "texas-bill-brackets-v1"
+POPULATION_FORMAT = "texas-population-2020-v1"
+BRACKET_LIST_MAX = 40   # places listed by name; bigger sets are only counted
+NEAR_SHARE = 0.02       # a place within 2% of a threshold is "close to the line"
+BRACKET_BILL = re.compile(r"(HB|SB|HJR|SJR)[1-9]\d{0,4}")  # laws; resolutions are prose
+_WORD_NUMBER = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+_POP_NUM = (r"(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?: million)?"
+            r"|(?:one|two|three|four|five|six|seven|eight|nine|ten) million)")
+_OP_BEFORE = (r"(?:not more than|not less than|not greater than|at least|more than|greater than|less than|fewer than|"
+              r"in excess of|exceeding|that exceeds|over|under)")
+_OP_AFTER = r"(?:or more|or greater|or less|or fewer)"
+_ONE = rf"(?:{_OP_BEFORE} )?{_POP_NUM}(?: {_OP_AFTER})?"
+_RANGE = rf"(?P<range>{_ONE}(?:,? (?:and|but) {_ONE})?)"
+_ENTITY = r"(?P<entity>municipality|municipalities|city|cities|county|counties)"
+_HAS = r"(?:,? (?:that|which) (?:has|had)|,? having|,? with|,? of|,? has)"
+_BRACKET = re.compile(rf"\b{_ENTITY}{_HAS} a (?:total )?population (?:of |that is )?{_RANGE}", re.I)
+_ITEM = re.compile(rf"^\([0-9A-Za-z-]+\) (?:(?:that|which) (?:has|had) |having |with |has )a (?:total )?population "
+                   rf"(?:of |that is )?{_RANGE}", re.I)
+_LEAD_ENTITY = re.compile(rf"\b{_ENTITY}\b", re.I)
+_POP_MENTION = re.compile(r"population (?:of |in excess |greater |exceeding |that |less |more |not )[^.;]{0,40}?\d")
+_CENSUS_YEAR = re.compile(r"\b(1[89]\d0|20\d0) (?:federal )?(?:decennial )?census", re.I)
+_CENSUS_TAIL = re.compile(r"^,? ?(?:as determined by|according to|under) (?:the )?(?:most recent )?(?:federal )?"
+                          r"(?:decennial )?census,?", re.I)
+_CONDITION = re.compile(r"^,? ?(?:and |or )?(?:that|which|located|is located|bordering|that borders|adjacent|containing|"
+                        r"in which|where|bisected|through which|within|having|in a county|on the|along)\b", re.I)
+
+
+def _population_number(text: str) -> int:
+    m = re.fullmatch(r"([\d,]+(?:\.\d+)?|[a-z]+)( million)?", text.lower())
+    base = float(m.group(1).replace(",", "")) if m.group(1)[0].isdigit() else _WORD_NUMBER[m.group(1)]
+    return int(round(base * (1_000_000 if m.group(2) else 1)))
+
+
+def bracket_bounds(text: str) -> tuple[int | None, int | None] | None:
+    """Inclusive (low, high) for a range such as "more than 2.1 million" or "50,000 or more but less than 250,000".
+    None when a part has no comparison word (a bare number) or the range is empty."""
+    low = high = None
+    for part in re.split(r",? (?:and|but) ", text.strip()):
+        m = re.fullmatch(rf"(?:({_OP_BEFORE}) )?({_POP_NUM})(?: ({_OP_AFTER}))?", part, re.I)
+        op = ((m.group(1) or m.group(3) or "").lower()) if m else ""
+        if not op:
+            return None
+        n = _population_number(m.group(2))
+        if op in ("at least", "not less than", "or more", "or greater"):
+            low = n
+        elif op in ("more than", "greater than", "in excess of", "exceeding", "that exceeds", "over"):
+            low = n + 1
+        elif op in ("not more than", "not greater than", "or less", "or fewer"):
+            high = n
+        else:
+            high = n - 1
+    if low is not None and high is not None and low > high:
+        return None
+    return low, high
+
+
+def _wording(line: str, keep: str) -> str:
+    """One paragraph as current law (keep="del") or as proposed (keep="ins"), in plain text."""
+    drop = "ins" if keep == "del" else "del"
+    text = re.sub(rf"\\?\[?<{drop}>.*?</{drop}>\\?\]?", "", line)
+    text = re.sub(rf"\\?\[<{keep}>(.*?)</{keep}>\\?\]", r"\1", text)
+    return re.sub(r"\s{2,}", " ", plain_text(text)).strip()
+
+
+def _paragraph_brackets(text: str, lead: tuple[str, bool] | None) -> list[dict]:
+    """Brackets in one plain paragraph. `lead` is (entity, joint) from a lead-in line ending in ":" for list items such
+    as "(1) has a population of ..."; joint means the items are conditions together ("a county that:")."""
+    found = [(m, m.group("entity"), False) for m in _BRACKET.finditer(text)]
+    item = _ITEM.match(text)
+    if item and lead:
+        found.append((item, lead[0], lead[1] or bool(re.search(r"\band$", text))))
+    out = []
+    for m, entity, joint in found:
+        tail = re.split(r"(?<=[.;:])(?:\s|$)", text[m.end():m.end() + 240])[0]
+        year = _CENSUS_YEAR.search(tail)
+        out.append({"kind": "county" if entity.lower().startswith("count") else "city", "text": m.group(0)[:200],
+                    "bounds": bracket_bounds(m.group("range")),
+                    "census": int(year.group(1)) if year and year.group(1) != "2020" else None,
+                    "cond": joint or bool(_CONDITION.match(_CENSUS_TAIL.sub("", tail.strip()).strip()))})
+    return out
+
+
+def bill_brackets(markdown: str) -> tuple[list[dict], int]:
+    """(clauses, unparsed) from a bill's text. A clause is new, changed (with "was"), existing or removed: unmarked
+    wording is existing law inside a SECTION that amends a code and new law in any other SECTION."""
+    clauses: list[dict] = []
+    unparsed = 0
+    section, codified, lead, expect_clause = "", False, None, False
+    for line in markdown.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("### "):
+            section, expect_clause, lead = line[4:].strip().rstrip("."), True, None
+            continue
+        if expect_clause:
+            codified, expect_clause = parse_clause(plain_text(line))["kind"] != "none", False
+        cur, new = _wording(line, "del"), _wording(line, "ins")
+        if "population" in line.lower():
+            marked = "<ins>" in line or "<del>" in line
+            now = _paragraph_brackets(new, lead)
+            before = _paragraph_brackets(cur, lead) if marked else []
+            before_texts = {b["text"] for b in before}
+            gone = [b for b in before if b["text"] not in {n["text"] for n in now}]
+            for c in now:
+                if not marked:
+                    c["status"] = "existing" if codified else "new"
+                elif c["text"] in before_texts:
+                    c["status"] = "existing"
+                else:
+                    was = next((g for g in gone if g["kind"] == c["kind"] and g["text"].split(" population")[0]
+                                == c["text"].split(" population")[0]), None)
+                    c["status"] = "changed" if was else "new"
+                    if was:
+                        gone.remove(was)
+                        c["was"] = was
+                clauses.append(c)
+            for g in gone:
+                clauses.append({**g, "status": "removed"})
+            if not now and not before and (_POP_MENTION.search(new) or _POP_MENTION.search(cur)):
+                unparsed += 1
+            unparsed += sum(1 for c in now + before if c["bounds"] is None)
+        if new.endswith(":"):
+            entities = _LEAD_ENTITY.findall(new)
+            lead = (entities[-1], bool(re.search(r"\b(?:that|which)\s*:$", new))) if entities else None
+        elif not re.match(r"^\([0-9A-Za-z-]+\) ", new):
+            lead = None
+    seen, out = set(), []
+    for c in clauses:
+        if c["bounds"] is None:
+            continue
+        key = (c["kind"], c["text"], c["status"], c.get("was", {}).get("text"))
+        if key not in seen:
+            seen.add(key)
+            c["section"] = section
+            out.append(c)
+    return out, unparsed
+
+
+def load_population(path: Path) -> dict | None:
+    """The census table from scripts/census_places.py, or None when it is missing or not that format."""
+    try:
+        table = json.loads(path.read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(table, dict) or table.get("format") != POPULATION_FORMAT:
+        return None
+    counties, places = table.get("counties"), table.get("places")
+    ok = lambda rows, width: isinstance(rows, dict) and rows and all(
+        isinstance(v, list) and len(v) == width and isinstance(v[0], str) and isinstance(v[1], int) for v in rows.values())
+    return table if ok(counties, 2) and ok(places, 3) else None
+
+
+def _resolve(table: dict, kind: str, low: int | None, high: int | None) -> list[str]:
+    rows = table["counties"] if kind == "county" else table["places"]
+    hits = [g for g, v in rows.items() if (low is None or v[1] >= low) and (high is None or v[1] <= high)]
+    return sorted(hits, key=lambda g: (-rows[g][1], g))
+
+
+def _near(table: dict, kind: str, low: int | None, high: int | None) -> list[str]:
+    rows = table["counties"] if kind == "county" else table["places"]
+    near = []
+    for t in (low, high):
+        if t:
+            near += [(abs(v[1] - t), g) for g, v in rows.items() if abs(v[1] - t) <= t * NEAR_SHARE]
+    return [g for _, g in sorted(set(near))][:8]
+
+
+def build_brackets(snapshot: dict, text_dir: Path, table: dict) -> dict:
+    used: set[str] = set()
+    bills: dict[str, dict] = {}
+
+    def listed(geoids: list[str]) -> list[str] | None:
+        if len(geoids) > BRACKET_LIST_MAX:
+            return None
+        used.update(geoids)
+        return geoids
+
+    for bill in snapshot.get("bills") or []:
+        bill_id = str(bill.get("id", "")) if isinstance(bill, dict) else ""
+        if not BRACKET_BILL.fullmatch(bill_id):
+            continue
+        found = _latest_text(text_dir, bill_id)
+        if not found:
+            continue
+        version, markdown = found
+        clauses, unparsed = bill_brackets(markdown)
+        rows = []
+        for c in clauses:
+            low, high = c["bounds"]
+            row = {"s": c["status"], "k": c["kind"], "t": c["text"], "lo": low, "hi": high, "sec": c["section"],
+                   "cond": c["cond"]}
+            if c["census"]:
+                row["census"] = c["census"]       # tied to an older census: not resolved
+            else:
+                hits = _resolve(table, c["kind"], low, high)
+                row["n"], row["p"] = len(hits), listed(hits)
+                near = _near(table, c["kind"], low, high)
+                if near:
+                    used.update(near)
+                    row["near"] = near
+            was = c.get("was")
+            if was:
+                row["was"] = {"t": was["text"], "lo": was["bounds"][0], "hi": was["bounds"][1]}
+                if not c["census"] and not was["census"]:
+                    before = set(_resolve(table, was["kind"], *was["bounds"]))
+                    after = set(row.get("p") or _resolve(table, c["kind"], low, high))
+                    added = sorted(after - before, key=lambda g: (-table["counties" if c["kind"] == "county" else "places"][g][1], g))
+                    dropped = sorted(before - after, key=lambda g: (-table["counties" if c["kind"] == "county" else "places"][g][1], g))
+                    row["was"].update({"n": len(before), "added": len(added), "dropped": len(dropped),
+                                       "added_p": listed(added), "dropped_p": listed(dropped)})
+            rows.append(row)
+        if rows or unparsed:
+            bills[bill_id] = {"v": version["code"], "c": rows, "u": unparsed}
+    counties, places = table["counties"], table["places"]
+    shared = {n for n, k in Counter(v[0] for v in places.values()).items() if k > 1}  # e.g. two Renos
+    names = {}
+    for g in sorted(used):
+        if g in counties:
+            names[g] = counties[g]
+        elif g in places:
+            name, pop, county = places[g]
+            names[g] = [name, pop, counties.get(county, [""])[0] if name in shared else ""]
+    return {"format": BRACKET_FORMAT, "census": table.get("source", ""), "places": names, "bills": bills}
+
+
+def write_brackets(snapshot: dict, text_dir: Path, census: Path, out_dir: Path) -> str:
+    """Writes out_dir/index.json. Skips (and says why) without bill text or a valid census table."""
+    if not text_dir.is_dir():
+        return "skipped (no bill text)"
+    table = load_population(census)
+    if table is None:
+        return f"skipped (no valid census table at {census})"
+    index = build_brackets(snapshot, text_dir, table)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    changed = write_if_changed(out_dir / "index.json", json.dumps(index, ensure_ascii=False, separators=(",", ":")) + "\n")
+    clauses = sum(len(b["c"]) for b in index["bills"].values())
+    return f"{len(index['bills'])} bills, {clauses} clauses, {'written' if changed else 'unchanged'}"
+
+
+def default_census() -> Path:
+    """Beside this script (the data unit copies it there), else the repository's data/census copy."""
+    here = Path(__file__).resolve().parent
+    beside = here / "tx_population_2020.json"
+    return beside if beside.exists() else here.parent / "data" / "census" / "tx_population_2020.json"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--snapshot", type=Path, required=True)
@@ -475,6 +725,10 @@ def main() -> int:
     parser.add_argument("--text", type=Path, default=None, help="Bill text directory; defaults to text/ beside the snapshot")
     parser.add_argument("--statutes", type=Path, default=None,
                         help="Statute index output; defaults to statutes/ beside the snapshot")
+    parser.add_argument("--census", type=Path, default=None,
+                        help="2020 population table (scripts/census_places.py); defaults to one beside this script")
+    parser.add_argument("--brackets", type=Path, default=None,
+                        help="Population bracket output; defaults to brackets/ beside the snapshot")
     args = parser.parse_args()
     tags = args.tags or args.snapshot.parent / "luna" / "tags.json"
     snapshot, reviews = json.loads(args.snapshot.read_text("utf-8")), load_reviews(tags)
@@ -486,6 +740,8 @@ def main() -> int:
     text_dir = args.text or args.snapshot.parent / "text"
     written, unchanged, removed = write_statutes(snapshot, text_dir, args.statutes or args.snapshot.parent / "statutes")
     print(f"Statute sections: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
+    status = write_brackets(snapshot, text_dir, args.census or default_census(), args.brackets or args.snapshot.parent / "brackets")
+    print(f"Population brackets: {status}", flush=True)
     return 0
 
 

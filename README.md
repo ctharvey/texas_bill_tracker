@@ -650,6 +650,17 @@ side by side by subsection: current law is rebuilt from a bill's quote (plain an
 plain and added words, and a version that quotes only some subsections shows the rest as "not changed by" it. A
 section number in the explorer search ("48.160", "Penal Code 46.06", "ED 48.160") finds the bills that change it.
 
+Population brackets: `build_feeds.py` also writes `live/brackets/index.json` (`texas-bill-brackets-v1`) from each
+bill's latest text: every population test on a county or municipality ("a county with a population of more than four
+million", list items under "a county that:"), whether the bill adds it, changes its threshold (with the old test and
+the places that newly meet or no longer meet it), quotes it from existing law or strikes it, and the places that meet
+it under the 2020 Census. Unmarked wording counts as new law outside a SECTION that amends a code. Extra conditions
+("adjacent to ...") are flagged, never resolved; a test tied to an older census is labeled and not resolved; sets of
+more than 40 places are counted, not listed. The counts are `data/census/tx_population_2020.json`, written by
+`scripts/census_places.py` from the Census Bureau's 2020 P.L. 94-171 file for Texas (no key needed): 254 counties
+and the active incorporated places, each with its main county. The data unit copies that file beside `build_feeds.py`;
+without it the bracket step is skipped and the run still succeeds. The bill drawer shows "Population limits".
+
 `subjects` is the Legislative Council's subject index from the history's `<subjects>` field, without the index
 codes ("Artificial Intelligence (IQ7C5)" becomes "Artificial Intelligence"); it is absent in older snapshots.
 Both searches match it, so bills with vague captions are found before their full-text review.

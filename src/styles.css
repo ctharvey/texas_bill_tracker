@@ -219,6 +219,10 @@ a.bill-number:hover{text-decoration:underline}
 .law-list small{color:var(--muted)}.law-list strong{color:var(--ink)}
 .law-heading{color:var(--ink)}
 .law-more summary{cursor:pointer;color:var(--teal);font-size:13px;margin-top:8px}
+.bracket-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:10px}
+.bracket-list li{font-size:13px;line-height:1.45;overflow-wrap:anywhere}
+.bracket-list p{margin:3px 0 0}.bracket-list small{color:var(--muted)}
+.bracket-many{color:var(--muted)}
 .law-intro p{margin:0}
 .statute-hint{margin-bottom:12px}
 .law-versions{list-style:none;margin:0;padding:0;display:grid;gap:8px}
