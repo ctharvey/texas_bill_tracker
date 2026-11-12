@@ -1,12 +1,16 @@
 name: Tests
-# Parity gate for the feature-folders refactor: unit tests, pipeline goldens and the browser E2E suite.
+# Unit tests and pipeline goldens run on every push and pull request. The browser E2E suite (four ~42 min shards)
+# runs only on the nightly schedule, or when started by hand from the Actions tab.
 on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: '0 8 * * *'  # nightly, 08:00 UTC (2-3 am in Texas)
   workflow_dispatch:
 concurrency:
-  group: tests-${{ github.ref }}
+  # The nightly run has its own group so a push to main cannot cancel it.
+  group: tests-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'change' }}
   cancel-in-progress: true
 permissions:
   contents: read
@@ -31,6 +35,7 @@ jobs:
 
   e2e:
     name: e2e (${{ matrix.mode }}, ${{ matrix.viewport }})
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60  # ~42 min serial; tests run on every core (pytest-xdist)
     strategy:
