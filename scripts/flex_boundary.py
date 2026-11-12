@@ -135,10 +135,15 @@ class FlexBoundary:
         """Unresolved rows, in the legacy shape {day: {key: row}}; run_document stops the run on any.
 
         A row another worker of this run still has in flight is not unresolved, so it is left out. Once its send
-        returns, a row still pending is an unknown outcome and is included."""
+        returns, a row still pending is an unknown outcome and is included.
+
+        The rows are read while holding the in-flight lock: `send` adds its key under it before reserving, so a send
+        starting between a snapshot and the read would show as an unknown outcome and stop the run (00:36 13 Nov;
+        test_a_send_starting_during_the_read_is_not_an_unknown_outcome)."""
         with self._lock:
             mine = set(self._inflight)
-        return {"pending": {key: {"state": "pending"} for key in self.spend.pending() if key not in mine}}
+            pending = self.spend.pending()
+        return {"pending": {key: {"state": "pending"} for key in pending if key not in mine}}
 
     def send(self, request: dict) -> dict:
         """Reserve, send and settle. Raises cth.flex errors; call it only inside `execute`."""

@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import time
 import types
 import unittest
@@ -445,6 +446,35 @@ class TranslationTests(unittest.TestCase):
         built = {type(e) for e in instances}
         missing = [c.__name__ for c in classes if c not in built]
         self.assertEqual(missing, [])
+
+
+class LedgerReadRaceTests(BoundaryCase):
+    def test_a_send_starting_during_the_read_is_not_an_unknown_outcome(self):
+        # Worker A reads the ledger after a failed question; worker B starts a send in that window.
+        entered, release = threading.Event(), threading.Event()
+        b = self.boundary([OK], on_create=lambda kw: (entered.set(), release.wait(10)))
+        real, workers = b.spend.pending, []
+
+        def pending_while_another_send_starts():
+            worker = threading.Thread(target=self.run_once, args=(b,))
+            workers.append(worker); worker.start()
+            entered.wait(1)  # old code: B reserves and is sending by now; fixed: B waits for this read
+            return real()
+
+        b.spend.pending = pending_while_another_send_starts
+        try:
+            seen = b.ledger
+        finally:
+            release.set()
+            for worker in workers:
+                worker.join(10)
+        self.assertEqual(seen, {"pending": {}})
+        self.assertEqual(self.states(), ["returned"])
+
+    def test_a_pending_row_no_send_owns_is_still_an_unknown_outcome(self):
+        (self.dir / "budget.json").write_text(json.dumps(
+            {"2026-11-12": {"deadbeef": {"state": "pending", "reserved": 0.01}}}), "utf-8")
+        self.assertEqual(self.boundary().ledger, {"pending": {"deadbeef": {"state": "pending"}}})
 
 
 class LegacyDiskCompatibilityTests(BoundaryCase):
