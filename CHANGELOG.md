@@ -2,7 +2,8 @@
 
 ## 2026-11-11
 - Member pages (`#member?code=A4875`): each legislator's district, counties, tenure, official links and bills by
-  role, for every roster member. Names in the bill drawer and on Near you open them.
+  role, for every roster member. Every legislator name (card "By" line, drawer "Filed by" and author list,
+  companion rows, Near you) links to it when the roster matches the name.
 - Roster: representatives elected to the Senate (Ashby SD 3, Paul SD 11, David Cook SD 22) now get their Senate
   district from the 2026 results file, instead of none; entries from NBC 5 DFW's unofficial results.
 - New "Near you" view (`#local`): your Texas House member and Senator, the bills they filed or signed, and bills
