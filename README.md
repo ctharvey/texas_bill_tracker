@@ -206,7 +206,10 @@ Library for party, district and service history through the 89th. Authors resolv
 and ambiguity leaves a member unmatched. Members-elect without an LRL record take party and district from
 `data/members_elect_2026.json`, the winners in the Secretary of State's unofficial 2026 general election
 results (read in a browser session, since the feed sits behind a bot check), and only when the ballot name
-agrees with the TLO name. The drawer labels that party "2026 ballot, unofficial". Delete the file once LRL
+agrees with the TLO name. Representatives elected to the Senate (Ashby, David Cook, Paul) have LRL records from
+the House, so their Senate district comes from the same file; those rows came from NBC 5 DFW's results page
+(projected winners at 99% of the expected vote) and carry their own source. The party stays the LRL one unless the
+ballot says otherwise. The drawer labels that party "2026 ballot, unofficial". Delete the file once LRL
 adds the 90th Legislature.
 
 Cards are tinted by authorship: blue for a Democratic primary author, red for Republican, purple when the
@@ -277,8 +280,9 @@ To rebuild after a redistricting: download the two plan shapefiles (`planh2316.z
 or `--mapshaper <path>`). Checked on 2026-11-11: 40 random points (half in the five largest counties) matched the
 Census geocoder's 2026 state legislative district layers 40 of 40.
 
-Senate districts with no member who has a known district show "No member listed yet" rather than a guess
-(members-elect cover House races only for now).
+A district with no member who has a known district shows "No member listed yet" rather than a guess. As of
+2026-11-11 that is Senate districts 14 and 16: they were not up in 2026, and Texas Legislature Online lists no 90th
+Legislature member for them.
 
 ### Saving and sharing without accounts
 

@@ -35,13 +35,33 @@ class ElectTests(unittest.TestCase):
     def test_ballot_names_agree_with_tlo_names(self):
         import json
         data = sm.load_elect(ROOT / 'data' / 'members_elect_2026.json')
-        self.assertEqual(len(data['members']), 41)
+        self.assertEqual(sum(k.startswith('house|') for k in data['members']), 41)
+        senate = {k: v for k, v in data['members'].items() if k.startswith('senate|')}
+        self.assertEqual({k: v['district'] for k, v in senate.items()},
+                         {'senate|Ashby': '3', 'senate|Cook, David': '22', 'senate|Paul': '11'})
+        self.assertTrue(all(v.get('source') for v in senate.values()))
+        self.assertTrue(sm.same_person('David Cook', 'Cook, David', senate['senate|Cook, David']['ballot_name']))
+        self.assertFalse(sm.same_person('Molly Cook', 'Cook, Molly', senate['senate|Cook, David']['ballot_name']))
         names = {'Oziel Ochoa, Jr.': 'Ochoa', 'Beth McLaughlin': 'McLaughlin', 'Odus Evbagharu': 'Evbagharu',
                  'Dennis Geesaman': 'Geesaman', 'Tyler Smith': 'Smith'}
         for full, display in names.items():
             self.assertTrue(sm.same_person(full, display, data['members']['house|' + display]['ballot_name']), display)
         self.assertFalse(sm.same_person('Lauren Smith', 'Smith', data['members']['house|Smith']['ballot_name']))
-        self.assertTrue(all(v['party'] in ('Democratic', 'Republican') for v in data['members'].values()))
+        self.assertTrue(all('party' not in v or v['party'] in ('Democratic', 'Republican') for v in data['members'].values()))
+
+    def test_election_result_places_new_and_chamber_changing_members_only(self):
+        elect = {'members': {'senate|Cook, David': {'ballot_name': 'DAVID COOK', 'district': '22', 'party': 'Republican'},
+                             'senate|Cook, Molly': {'ballot_name': 'DAVID COOK', 'district': '22', 'party': 'Republican'}}}
+        david = {'full_name': 'David Cook', 'display_name': 'Cook, David'}
+        house_record = {'stints': [{'chamber': 'house', 'district': '96'}]}
+        # A representative elected to the Senate: LRL's district is a House one, so the election result applies.
+        self.assertEqual(sm.elect_entry(david, 'senate|Cook, David', house_record, False, elect)['district'], '22')
+        # A sitting senator: LRL already places them; the election file is never consulted.
+        self.assertIsNone(sm.elect_entry(david, 'senate|Cook, David', {'stints': [{'chamber': 'senate'}]}, True, elect))
+        # A different person under the same surname gets nothing.
+        molly = {'full_name': 'Molly Cook', 'display_name': 'Cook, Molly'}
+        self.assertIsNone(sm.elect_entry(molly, 'senate|Cook, Molly', None, False, elect))
+        self.assertIsNone(sm.elect_entry(david, 'senate|Cook, David', None, False, {}))
 
 
 class ParseTests(unittest.TestCase):

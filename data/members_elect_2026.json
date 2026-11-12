@@ -3,7 +3,7 @@
  "source": "Texas Secretary of State election night results, 2026 November General Election (election 53815, feed version enr/53815/117), unofficial until canvass",
  "source_url": "https://goelect.txelections.civixapps.com/ivis-enr-ui/races",
  "retrieved_at": "2026-11-10T15:10:00Z",
- "note": "Winning candidate per State Representative race for members-elect with no Legislative Reference Library record. Margin is the winner's lead as a percent of all votes cast in the race.",
+ "note": "Winning candidate per State Representative race for members-elect with no Legislative Reference Library record, and per State Senator race for members-elect whose record is from the House (senate entries, retrieved 2026-11-11, carry their own source; party only where a source states it). Margin is the winner's lead as a percent of all votes cast in the race.",
  "members": {
   "house|Bailey": {"ballot_name": "BRAD BAILEY", "district": "15", "party": "Republican", "margin_pct": 16.9},
   "house|Bord": {"ballot_name": "STEFANIE BORD", "district": "126", "party": "Democratic", "margin_pct": 0.4},
@@ -45,6 +45,9 @@
   "house|Thigpen": {"ballot_name": "ROCKY THIGPEN", "district": "9", "party": "Republican", "margin_pct": 47.9},
   "house|Turner": {"ballot_name": "EBONY M. TURNER", "district": "96", "party": "Democratic", "margin_pct": 5.5},
   "house|Williams": {"ballot_name": "MICHELLE WILLIAMS", "district": "127", "party": "Democratic", "margin_pct": 2.3},
-  "house|Wooten": {"ballot_name": "DENISE WOOTEN", "district": "63", "party": "Democratic", "margin_pct": 2.1}
+  "house|Wooten": {"ballot_name": "DENISE WOOTEN", "district": "63", "party": "Democratic", "margin_pct": 2.1},
+  "senate|Ashby": {"ballot_name": "Trent Ashby", "district": "3", "margin_pct": 38.5, "source": "NBC 5 DFW 2026 Texas Senate results (projected winner, 99% of expected vote), unofficial; https://www.nbcdfw.com/news/politics/lone-star-politics/see-all-texas-senate-races-in-the-2026-midterm/4100047/"},
+  "senate|Cook, David": {"ballot_name": "David Cook", "district": "22", "party": "Republican", "margin_pct": 12.0, "source": "NBC 5 DFW 2026 Texas Senate results (projected winner, 99% of expected vote; party from Wikipedia, 2026 Texas Senate election), unofficial; https://www.nbcdfw.com/news/politics/lone-star-politics/see-all-texas-senate-races-in-the-2026-midterm/4100047/"},
+  "senate|Paul": {"ballot_name": "Dennis Paul", "district": "11", "party": "Republican", "margin_pct": 3.0, "source": "NBC 5 DFW 2026 Texas Senate results (projected winner, 99% of expected vote; party from Wikipedia, 2026 Texas Senate election), unofficial; https://www.nbcdfw.com/news/politics/lone-star-politics/see-all-texas-senate-races-in-the-2026-midterm/4100047/"}
  }
 }

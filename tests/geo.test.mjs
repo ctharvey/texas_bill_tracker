@@ -64,8 +64,9 @@ test('members for a district; a Senate district with no listed member gives none
   const house = membersFor(roster, 'house', '49');
   assert.equal(house.length, 1);
   const known = new Set(Object.values(roster.members).filter(m => m.chamber === 'senate').map(m => m.district));
-  const empty = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'].find(d => !known.has(d));
-  assert.deepEqual(membersFor(roster, 'senate', empty), []);
+  const empty = Array.from({length: 31}, (_, i) => String(i + 1)).find(d => !known.has(d));
+  if (empty) assert.deepEqual(membersFor(roster, 'senate', empty), []);
+  assert.deepEqual(membersFor(roster, 'senate', '32'), []);
   assert.deepEqual(membersFor(roster, 'senate', null), []);
 });
 

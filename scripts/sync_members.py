@@ -2,7 +2,8 @@
 
 Identity and display names come from capitol.texas.gov (the names bill histories use). Party, district and
 service history come from lrl.texas.gov records through the 89th Legislature. Members-elect with no LRL
-record keep party and district unknown; nothing is inferred from names, districts or bill content.
+record, or whose record is from the other chamber, take party and district from the 2026 election results file
+when the ballot name agrees, and otherwise stay unknown; nothing is inferred from names or bill content.
 Standard library only, so the server can run it from the deployer's bare repository.
 """
 from __future__ import annotations
@@ -142,6 +143,20 @@ def load_elect(path: Path | None) -> dict:
     return data
 
 
+def elect_entry(member: dict, key: str, record: dict | None, same_chamber: bool, elect: dict) -> dict | None:
+    """The 2026 election result for a member LRL cannot place in this chamber: no record at all, or a record from
+    the other chamber (a representative elected to the Senate). Used only when the ballot name agrees."""
+    if record is not None and same_chamber:
+        return None
+    won = (elect.get('members') or {}).get(key)
+    if not won:
+        return None
+    if not same_person(member['full_name'], member['display_name'], won.get('ballot_name', '')):
+        print('Members-elect entry ignored, ballot name disagrees:', key, won.get('ballot_name'))
+        return None
+    return won
+
+
 def build(fetch: Fetcher, elect: dict | None = None) -> dict:
     elect = elect or {}
     members = tlo_roster(fetch)
@@ -169,19 +184,18 @@ def build(fetch: Fetcher, elect: dict | None = None) -> dict:
         key = f"{member['chamber']}|{member['display_name']}"
         party = PARTY.get(latest['party'], latest['party']) if latest and latest['party'] else None
         source = 'Texas Legislative Reference Library, latest recorded service' if party else None
+        basis = 'service' if party else None
         district = latest['district'] if same_chamber else None
-        won = (elect.get('members') or {}).get(key) if record is None else None
-        if won and same_person(member['full_name'], member['display_name'], won.get('ballot_name', '')):
-            party, district = won.get('party'), won.get('district')
-            source = elect.get('source')
-        elif won:
-            print('Members-elect entry ignored, ballot name disagrees:', key, won.get('ballot_name'))
-            won = None
+        won = elect_entry(member, key, record, same_chamber, elect)
+        if won:
+            district = won.get('district')
+            if not party or (won.get('party') and won['party'] != party):
+                party, source, basis = won.get('party'), won.get('source') or elect.get('source'), 'election'
         roster[key] = {
             **{k: member[k] for k in ('chamber', 'code', 'display_name', 'full_name')},
             'party': party,
             'party_source': source,
-            'party_basis': 'service' if record and party else 'election' if won else None,
+            'party_basis': basis,
             'district': district,
             'election_margin_pct': won.get('margin_pct') if won else None,
             'service': record['stints'] if record else [],

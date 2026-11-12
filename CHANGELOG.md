@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-11
+- Roster: representatives elected to the Senate (Ashby SD 3, Paul SD 11, David Cook SD 22) now get their Senate
+  district from the 2026 results file, instead of none; entries from NBC 5 DFW's unofficial results.
 - New "Near you" view (`#local`): your Texas House member and Senator, the bills they filed or signed, and bills
   naming your county or city. Set it by browser location, county, district numbers or an optional Census address
   lookup; only district numbers and the county are kept, on this device. District data from TLC plans

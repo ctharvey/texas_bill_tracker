@@ -1,7 +1,7 @@
 {
  "format": "texas-bill-members-v1",
  "session": "90R",
- "generated_at": "2026-11-10T15:07:41.206763Z",
+ "generated_at": "2026-11-11T22:42:55.898604Z",
  "sources": [
   "https://capitol.texas.gov/Members/Members.aspx",
   "https://lrl.texas.gov/legeLeaders/members/lrlhome.cfm",
@@ -4000,8 +4000,8 @@
    "party": "Republican",
    "party_source": "Texas Legislative Reference Library, latest recorded service",
    "party_basis": "service",
-   "district": null,
-   "election_margin_pct": null,
+   "district": "3",
+   "election_margin_pct": 38.5,
    "service": [
     {
      "chamber": "house",
@@ -4119,8 +4119,8 @@
    "party": "Republican",
    "party_source": "Texas Legislative Reference Library, latest recorded service",
    "party_basis": "service",
-   "district": null,
-   "election_margin_pct": null,
+   "district": "22",
+   "election_margin_pct": 12.0,
    "service": [
     {
      "chamber": "house",
@@ -4644,8 +4644,8 @@
    "party": "Republican",
    "party_source": "Texas Legislative Reference Library, latest recorded service",
    "party_basis": "service",
-   "district": null,
-   "election_margin_pct": null,
+   "district": "11",
+   "election_margin_pct": 3.0,
    "service": [
     {
      "chamber": "house",
