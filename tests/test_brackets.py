@@ -6,6 +6,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import build_feeds as b  # noqa: E402
+from atlas.feeds.brackets import index as bracket_index  # noqa: E402
 
 TABLE = {
     "format": b.POPULATION_FORMAT, "source": "test",
@@ -126,7 +127,7 @@ def test_resolution_lists_places_and_changes(tmp_path):
 
 
 def test_places_carry_their_county_and_big_sets_are_only_counted(tmp_path, monkeypatch):
-    monkeypatch.setattr(b, "BRACKET_LIST_MAX", 1)
+    monkeypatch.setattr(bracket_index, "BRACKET_LIST_MAX", 1)
     index = build(tmp_path, section("This Act applies only to a municipality with a population of less than 5,000."))
     [row] = index["bills"]["HB1"]["c"]
     assert row["n"] == 2 and row["p"] is None
