@@ -1181,9 +1181,38 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _second_pass(label: str, jobs, args, deadline: float) -> int:
+class RefusedBills:
+    """Bills a second pass was refused for capacity, kept across runs (cache_dir/second_pass_refused.json) so their
+    jobs go after every other bill's and an earlier refusal never ends the pass for the rest."""
+    FILE = "second_pass_refused.json"
+
+    def __init__(self, cache_dir: Path, label: str):
+        self.path, self.label = cache_dir / self.FILE, label
+        data = _read_json(self.path)
+        self.data = data if isinstance(data, dict) and isinstance(data.get("bills"), dict) else {"bills": {}}
+        bills = self.data["bills"].get(label)
+        self.bills = {b for b in bills if isinstance(b, str)} if isinstance(bills, list) else set()
+
+    def __contains__(self, bill_id: str) -> bool:
+        return bill_id in self.bills
+
+    def _save(self) -> None:
+        self.data["bills"][self.label] = sorted(self.bills)
+        atomic_json(self.path, self.data)
+
+    def add(self, bill_id: str) -> None:
+        if bill_id not in self.bills:
+            self.bills.add(bill_id); self._save()
+
+    def discard(self, bill_id: str) -> None:
+        if bill_id in self.bills:
+            self.bills.discard(bill_id); self._save()
+
+
+def _second_pass(label: str, jobs, args, deadline: float, refused: RefusedBills | None = None) -> int:
     """Run one lowest-priority pass (main thread, after the review queue emptied). `jobs` yields due
-    (bill_id, call, save) items. Capacity skips a bill (three in a row end the pass); an unknown outcome stops the
+    (bill_id, call, save) items. Capacity skips a bill (three in a row end the pass; with `refused`, a bill already
+    refused in an earlier run does not count, and it is recorded until it is answered); an unknown outcome stops the
     worker like any other call; a budget stop, unresolved outcome or dry run ends the pass."""
     done, rejections = set(), 0  # bills, not calls: one bill may take several (scope votes)
     for bill_id, call, save in jobs:
@@ -1194,8 +1223,13 @@ def _second_pass(label: str, jobs, args, deadline: float) -> int:
             report = call()
         except CapacityUnavailable:
             # The cooldown is per request, so other bills may still go; three rejections in a row end the pass.
-            rejections += 1
+            known = refused is not None and bill_id in refused
+            if refused is not None:
+                refused.add(bill_id)
             print(f"{label}: capacity unavailable for", bill_id, flush=True)
+            if known:
+                continue  # refused before: its jobs come last, so it says nothing new about the other bills
+            rejections += 1
             if rejections >= 3:
                 print(f"{label}: capacity unavailable 3 times in a row; the rest wait for a later run", flush=True)
                 break
@@ -1216,6 +1250,8 @@ def _second_pass(label: str, jobs, args, deadline: float) -> int:
                 print(f"{label} stopped:", report.get("reason_type"), flush=True)
             break  # budget, an unresolved outcome, or a dry run: nothing more is sent this run
         save(report)
+        if refused is not None:
+            refused.discard(bill_id)
         done.add(bill_id); rejections = 0
     print(label, "checked for", len(done), "bills", flush=True)
     return len(done)
@@ -1245,9 +1281,17 @@ def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
             if topic_suggestions.BILL_RE.fullmatch(path.stem):
                 yield path.stem, path
 
+    refused = RefusedBills(args.cache_dir, "Topic suggestions")
+
     def jobs():
+        # Bills refused for capacity in an earlier run go after all others, votes included, so they hold up nobody.
+        bills = list(paths())
+        for group in ([b for b in bills if b[0] not in refused], [b for b in bills if b[0] in refused]):
+            yield from group_jobs(group)
+
+    def group_jobs(group):
         # Vote 1 (extras, suggestions, first scope vote) for every due bill first, so headlines are not held back.
-        for bill_id, path in paths():
+        for bill_id, path in group:
             bundle = _read_json(path)
             if not topic_suggestions.due(bundle, _read_json(out / (bill_id + ".json")), topics, retry, key_fn):
                 continue
@@ -1257,7 +1301,7 @@ def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
                    lambda report, b=bundle, i=bill_id: atomic_json(
                        out / (i + ".json"), topic_suggestions.record_for(b, report, _read_json(out / (i + ".json")))))
         # Then the scope votes. The record is re-read after each saved vote, so vote 3 goes only when 1 and 2 split.
-        for bill_id, path in paths():
+        for bill_id, path in group:
             asked = set()  # one try per vote per run, even if its answer did not validate
             while True:
                 bundle, record = _read_json(path), _read_json(out / (bill_id + ".json"))
@@ -1274,7 +1318,7 @@ def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
                 after = _read_json(out / (bill_id + ".json"))
                 if after == record:
                     break  # not saved (capacity, a skip or a per-bill refusal): leave it for a later run
-    return _second_pass("Topic suggestions", jobs(), args, deadline)
+    return _second_pass("Topic suggestions", jobs(), args, deadline, refused)
 
 
 def audit_reviews(args, queue: dict, budget, deadline: float) -> int:
@@ -1588,8 +1632,12 @@ def main():
                     print(bill_id, "not started; the run is stopping", flush=True)
                     return False
                 if kind == "download_failed":
-                    # A failed bill is never marked seen; it keeps a place after new work.
-                    new_failures += bill_id not in queue['failed']
+                    # A failed bill is never marked seen; it keeps a place after new work. A never-reviewed bill with
+                    # no folder under text/ has no posted text yet (the data unit makes none): it waits and does not
+                    # count toward the outage stop. A missing text tree, or a reviewed bill's text vanishing, does.
+                    waiting = (args.input == "markdown" and isinstance(value, FileNotFoundError) and text_dir.is_dir()
+                               and bill_id not in queue["seen"] and not (text_dir / bill_id).exists())
+                    new_failures += bill_id not in queue['failed'] and not waiting
                     record_failure(queue, bill_id, 'download', value)
                     atomic_json(queue_path, queue)
                     print(bill_id, "download_failed", type(value).__name__, flush=True)
