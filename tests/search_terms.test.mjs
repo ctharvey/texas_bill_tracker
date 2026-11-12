@@ -1,8 +1,7 @@
 // Explorer search: how a typed query is read (searchTerms) and how it survives the address bar (buildHash/parseHash).
-// `todo` tests describe behavior the search does not have yet; they run, and a failure does not fail the suite.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {searchTerms} from '../src/taxonomy.js';
+import {searchTerms, foldText, textMatches} from '../src/taxonomy.js';
 import {buildHash, parseHash, cleanFilters} from '../src/prefs.js';
 
 test('an empty or missing query has no terms', () => {
@@ -72,13 +71,82 @@ test('a bare number stays a bare number', () => {
   assert.deepEqual(searchTerms('110'), {q: '110', compact: '110'});
 });
 
-test('a bill number with leading zeros reads as the same bill', {todo: 'hb0110 and HB 00110 currently match nothing'}, () => {
+test('a bill number with leading zeros reads as the same bill', () => {
   assert.equal(searchTerms('hb0110').compact, 'hb110');
   assert.equal(searchTerms('HB 00110').compact, 'hb110');
 });
 
-test('a curly apostrophe reads like a straight one', {todo: 'phones type the curly form; it currently matches nothing'}, () => {
+test('a curly apostrophe reads like a straight one', () => {
   assert.equal(searchTerms('children\u2019s').q, "children's");
+});
+
+// ---- Matching text ----
+
+const found = (text, query) => textMatches(text, searchTerms(query).q);
+
+test('accents are ignored in the query and in the text', () => {
+  assert.equal(foldText('Men\u00e9ndez'), 'menendez');
+  assert.equal(foldText('ANCH\u00cdA'), 'anchia');
+  assert.equal(foldText('Pe\u00f1a'), 'pena');
+  assert.ok(found('Men\u00e9ndez', 'Menendez'));
+  assert.ok(found('Menendez', 'men\u00e9ndez'));
+  assert.ok(found('Mene\u0301ndez', 'Menendez'));  // accent as a separate combining mark
+});
+
+test('curly and straight quotes are the same', () => {
+  assert.ok(found("children's health", 'children\u2019s'));
+  assert.ok(found('children\u2019s health', "children's"));
+  assert.equal(foldText('\u201cquoted\u201d'), '"quoted"');
+});
+
+test('an ampersand matches with or without spaces around it', () => {
+  for (const query of ['A&M', 'A & M', 'a &m', 'A&  M'])
+    for (const text of ['Texas A&M University', 'Texas A & M University'])
+      assert.ok(found(text, query), `${query} in ${text}`);
+});
+
+test('every word must appear, in any order', () => {
+  assert.ok(found('Cook, Molly', 'Molly Cook'));
+  assert.ok(found('Relating to a school district tax', 'district school'));
+  assert.ok(found('Relating to a school district tax', 'tax school'));
+  assert.ok(!found('Relating to a school district tax', 'school water'));
+  assert.ok(!found('Relating to a school district tax', 'water'));
+});
+
+test('double quotes keep words together and in order', () => {
+  assert.ok(found('a school district tax', '"school district"'));
+  assert.ok(!found('a school district tax', '"district school"'));
+  assert.ok(found('a school district tax', '"school district" tax'));
+  assert.ok(!found('a school district tax', '"school district" water'));
+  assert.ok(found('a school district tax', '\u201cschool district\u201d'));  // curly double quotes work too
+});
+
+test('a quote still being typed does not blank the results', () => {
+  assert.ok(found('abc', ''));
+  assert.ok(found('abc', '"'));
+  assert.ok(found('abc', '""'));
+  assert.ok(found('a school district tax', '"school'));
+  assert.ok(found('a school district tax', '"school dist'));
+  assert.ok(!found('a school district tax', '"district sch'));
+  assert.ok(found('a school district tax', 'tax "school dist'));
+});
+
+test('a plural also finds its singular', () => {
+  assert.ok(found('the minimum wage', 'wages'));
+  assert.ok(found('a public school', 'schools'));
+  assert.ok(found('a property tax', 'taxes'));
+  assert.ok(found('one county', 'counties'));
+  assert.ok(found('a church', 'churches'));
+  assert.ok(found('school buses', 'bus'));     // a singular finds its plural because it is inside it
+  assert.ok(!found('a glass door', 'class'));  // "ss" is not a plural ending
+  assert.ok(!found('the state', 'status'));    // nor is "us"
+  assert.ok(!found('gas', 'has'));             // short words are left alone
+});
+
+test('matching is plain text, never a pattern', () => {
+  assert.ok(!found('wage school', 'wage|school'));
+  assert.ok(!found('anything', '.*'));
+  assert.ok(found('Sec. 62.051(a)', '62.051(a)'));
 });
 
 // ---- The query in the address bar ----

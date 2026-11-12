@@ -469,12 +469,32 @@ export function normalizeBill(raw, profiles) {
 // "H.B. No. 267" / "House Bill 267"; both used to match nothing until the number was retyped by hand.
 const BILL_WORDS = {'house bill': 'hb', 'senate bill': 'sb', 'house joint resolution': 'hjr', 'senate joint resolution': 'sjr',
   'house concurrent resolution': 'hcr', 'senate concurrent resolution': 'scr', 'house resolution': 'hr', 'senate resolution': 'sr'};
+// Text as the search compares it: lower case, no accents ("Menendez" finds the accented name), straight quotes for the
+// curly ones phones type, and "A & M" the same as "A&M".
+export function foldText(text) {
+  return String(text || '').normalize('NFKC').replace(/[­᠎​-‏‪-‮⁠-⁤﻿]/g, '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\u2018\u2019\u02bc]/g, "'").replace(/[\u201c\u201d]/g, '"')
+    .replace(/\s*&\s*/g, '&').replace(/\s+/g, ' ').trim().toLowerCase();
+}
 export function searchTerms(query) {
-  const q = String(query || '').normalize('NFKC').replace(/[­᠎​-‏‪-‮⁠-⁤﻿]/g, '')
-    .replace(/\s+/g, ' ').trim().toLowerCase();
+  const q = foldText(query);
   const ref = q.replace(/^(house|senate) (joint resolution|concurrent resolution|bill|resolution)\b/, m => BILL_WORDS[m] || m)
-    .replace(/\bno\.?\s*(?=\d)/, '').replace(/[.\s]/g, '');
+    .replace(/\bno\.?\s*(?=\d)/, '').replace(/[.\s]/g, '').replace(/^([a-z]+)0+(?=\d)/, '$1');  // "HB 0110" is HB 110
   return {q, compact: /^(hb|sb|hjr|sjr|hcr|scr|hr|sr)\d{1,5}$/.test(ref) ? ref : q.replace(/\s+/g, '')};
+}
+
+// Does `text` match the folded query `q`? Every word has to appear, in any order ("Molly Cook" finds "Cook, Molly");
+// words inside "double quotes" must appear together (a quote still being typed runs to the end); a plural also finds
+// its singular ("wages" finds "wage").
+const singular = w => w.length > 4 && w.endsWith('ies') ? w.slice(0, -3) + 'y'
+  : w.length > 4 && /(s|x|z|ch|sh)es$/.test(w) ? w.slice(0, -2)
+  : w.length > 3 && /[^su]s$/.test(w) ? w.slice(0, -1) : '';
+export function textMatches(text, q) {
+  const hay = foldText(text);
+  return (q.match(/"[^"]*"?|\S+/g) || []).every(term => {
+    const w = term.replace(/^"|"$/g, '').trim();
+    return !w || hay.includes(w) || (singular(w) && hay.includes(singular(w)));
+  });
 }
 
 // Same-day order for "newest": bill type A-Z (HB, HCR, HJR, HR, SB, ...), then the higher number first, since
