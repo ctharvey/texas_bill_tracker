@@ -290,3 +290,9 @@ mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;
 .home-searches{margin:10px 0 0;padding-left:18px;line-height:1.7}
 @media(max-width:900px){.home-grid{grid-template-columns:1fr}}
 @media(max-width:480px){.home-search-row{flex-direction:column}}
+
+/* Search: what it looks at, and why each result matched */
+.search-help{margin-top:10px;font-size:13px;color:var(--muted)}.search-help summary{cursor:pointer;font-weight:700;color:var(--ink);width:max-content;max-width:100%}
+.search-help p{margin:8px 0 0;line-height:1.55;max-width:75ch}.search-examples{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.match-reason{margin:4px 0 6px;font-size:12px;color:var(--muted)}.match-reason>span:first-child{font-weight:700}
+.match-reason mark{background:color-mix(in srgb,var(--accent) 16%,var(--surface));color:var(--ink);border-radius:calc(4px*var(--rs));padding:0 3px}
