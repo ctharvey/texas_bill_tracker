@@ -138,8 +138,18 @@ h1{font-family:var(--font-head);font-weight:var(--head-weight);font-size:var(--h
 .meta{grid-column:1;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted);margin-top:2px}
 .star{grid-column:2;grid-row:1 / span 2;align-self:start;width:36px;height:36px;border:1px solid var(--line);border-radius:var(--radius-s);background:var(--surface);font-size:17px;line-height:1}
 .star[aria-pressed="true"]{color:var(--mark);border-color:var(--mark)}
-.group{border:1px dashed var(--line);border-radius:var(--radius);padding:8px 10px 0;margin-bottom:10px}
-.group > p{margin:0 0 8px;font-size:13px;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+/* Companion bills: one joined block, so same-text bills read as a single item */
+.group{border:2px solid var(--accent);border-radius:var(--radius);margin-bottom:14px;overflow:hidden;background:var(--surface)}
+.grouphead{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 12px;background:var(--accent-soft)}
+.grouphead .label{font-weight:700;font-size:14px}
+.grouphead .why{font-size:13px;color:var(--muted)}
+.grouphead .btn{height:30px;padding:0 10px;margin-left:auto;font-size:13px}
+.group .card{margin:0;border:0;border-left:4px solid var(--party,var(--line));border-top:1px solid var(--line);border-radius:0}
+.group .card[aria-selected="true"]{box-shadow:inset 0 0 0 2px var(--accent)}
+.group .card + .card::before{content:"same text";position:absolute;top:-9px;left:14px;font-size:11px;line-height:16px;padding:0 6px;
+  background:var(--surface);border:1px solid var(--line);border-radius:99px;color:var(--muted)}
+.groupmore{border-top:1px solid var(--line);padding:8px 12px;font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.groupmore a{font-weight:600;color:var(--accent)}
 
 .preview{position:sticky;top:58px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
 .preview h2{font-family:var(--font-title);font-weight:var(--title-weight);font-size:18px;line-height:1.3;margin:6px 0 10px}
@@ -276,7 +286,7 @@ h1{font-family:var(--font-head);font-weight:var(--head-weight);font-size:var(--h
           </div>
 
           <div class="group">
-            <p><span>5 companion bills with the same text</span><button class="btn quiet" style="height:26px;padding:0 8px">Watch all 5</button></p>
+            <div class="grouphead"><span class="label">5 companion bills</span><span class="why">Same text filed in the House and Senate</span><button class="btn">Watch all 5</button></div>
             <article class="card" data-party="D" aria-selected="true" data-card>
               <div class="headrow"><a class="num" href="#" data-open>HB 1051</a><span class="pill">House</span><span class="pill stage">Filed</span><span class="pill">Democrat</span></div>
               <button class="star" aria-pressed="true" aria-label="Stop watching HB 1051">&#9733;</button>
@@ -290,6 +300,7 @@ h1{font-family:var(--font-head);font-weight:var(--head-weight);font-size:var(--h
               <h3 class="title"><a href="#" data-open>Relating to the minimum wage.</a></h3>
               <div class="meta"><span>Filed Nov 9</span><span>1 author</span></div>
             </article>
+            <div class="groupmore"><span>Also the same text:</span><a href="#" data-open>HB 1102</a><a href="#" data-open>HB 1340</a><a href="#" data-open>SB 377</a></div>
           </div>
 
           <article class="card" data-party="R" data-card>
