@@ -226,6 +226,19 @@ body[data-sel="flag"] .card[aria-selected="true"]::after{content:"\2605";positio
 @keyframes bob{50%{translate:0 -1.5px;rotate:-6deg}}
 @media (prefers-reduced-motion:reduce){body:not([data-motion="on"])[data-sel="flag"] .card[aria-selected="true"]::before,
   body:not([data-motion="on"])[data-sel="flag"] .card[aria-selected="true"]::after{animation:none}}
+/* First load only: the Star hoist starts as a Texas flag (same 28px band, so the text never moves), ripples once,
+   then fades to the plain Star band underneath. The script adds .flag-intro on load and removes it after. */
+.flag-intro{position:absolute;left:-28px;top:0;bottom:0;width:28px;z-index:1;pointer-events:none;
+  border-radius:calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px);
+  background:
+    repeating-linear-gradient(100deg,#0000 0 6px,#00000038 13px,#0000 20px,#ffffff40 27px,#0000 34px) 0 0/68px 100%,
+    linear-gradient(#002868,#002868) 0 0/17px 100% no-repeat,
+    linear-gradient(#fff 50%,#bf0a30 50%) 17px 0/11px 100% no-repeat;
+  animation:band-in .3s ease-out backwards,ripple-intro 2.8s .3s ease-in-out 1;transition:opacity .7s ease}
+.flag-intro::after{content:"\2605";position:absolute;left:0;top:0;bottom:0;width:17px;display:grid;place-items:center;
+  font-size:14px;line-height:1;color:#fff;animation:bob 2.8s .3s ease-in-out 1}
+.flag-intro.out{opacity:0}
+@keyframes ripple-intro{to{background-position:68px 0,0 0,17px 0}}
 /* Lift: the card rises with a soft shadow; the rest of the list steps back slightly */
 body[data-sel~="lift"] .card{transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s,opacity .2s}
 body[data-sel="lift"] .list:has(.card[aria-selected="true"]) .card:not([aria-selected="true"]){opacity:.62}
@@ -338,7 +351,7 @@ body[data-sel~="lift"] .card[aria-selected="true"]{z-index:2;transform:translate
 }
 </style>
 </head>
-<body data-dir="a" data-sel="fill">
+<body data-dir="a" data-sel="star">
 
 <div class="controls" role="region" aria-label="Mock-up controls">
   <div class="grp"><span class="lbl">Direction</span>
@@ -350,11 +363,11 @@ body[data-sel~="lift"] .card[aria-selected="true"]{z-index:2;transform:translate
     <button data-setdir="f" aria-pressed="false"><i class="sw" style="background:#8c3b1f"></i>F Ranch</button>
   </div>
   <div class="grp"><span class="lbl">Active bill</span>
-    <button data-setsel="fill" aria-pressed="true">Fill</button>
+    <button data-setsel="fill" aria-pressed="false">Fill</button>
     <button data-setsel="pointer" aria-pressed="false">Pointer</button>
     <button data-setsel="lift" aria-pressed="false">Lift</button>
     <button data-setsel="fill lift" aria-pressed="false">Fill + Lift</button>
-    <button data-setsel="star" aria-pressed="false">&#9733; Star</button>
+    <button data-setsel="star" aria-pressed="true">&#9733; Star</button>
     <button data-setsel="flag" aria-pressed="false">Flag</button>
   </div>
   <div class="grp" id="motion-grp" hidden><span class="lbl" style="color:#f0b45a">Your system asks for reduced motion</span>
@@ -571,6 +584,14 @@ body[data-sel~="lift"] .card[aria-selected="true"]{z-index:2;transform:translate
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');
 const showMotion=()=>{document.getElementById('motion-grp').hidden=!reduced.matches};
 showMotion();reduced.addEventListener?.('change',showMotion);
+// First load: flag on the selected card, then the standard Star band. Skipped under reduced motion; any click ends it.
+const endIntro=()=>document.querySelectorAll('.flag-intro').forEach(f=>f.remove());
+if(!reduced.matches&&document.body.dataset.sel==='star'){
+  const card=document.querySelector('.card[aria-selected="true"]');
+  if(card){const f=document.createElement('span');f.className='flag-intro';f.setAttribute('aria-hidden','true');card.append(f);
+    setTimeout(()=>f.classList.add('out'),3300);setTimeout(()=>f.remove(),4100)}
+}
+document.addEventListener('click',endIntro,true);
 const press=(sel,attr,val)=>document.querySelectorAll(sel).forEach(b=>b.setAttribute('aria-pressed',String(b.getAttribute(attr)===val)));
 function setScreen(s){
   document.getElementById('screen-explorer').hidden=s!=='explorer';
