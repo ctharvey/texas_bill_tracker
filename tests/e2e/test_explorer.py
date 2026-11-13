@@ -1,9 +1,11 @@
-"""Bill explorer (#all): search, filters, sorting, paging, URL hash and remembered filters, watched-only, drawer."""
+"""Bill explorer (#all): search, filters, sorting, paging, URL hash and remembered filters, watched-only, opening a bill."""
 
 import json
 from urllib.parse import parse_qs, unquote
 
 from playwright.sync_api import expect
+
+from harness import click, reveal
 
 TOTAL = "1384 bills"
 PREFS_KEY = "tx-bill-atlas-prefs-v1"
@@ -29,6 +31,7 @@ def count(page):
 
 
 def pick(page, selector, label):
+    reveal(page, selector)
     page.select_option(selector, label=label)
 
 
@@ -41,7 +44,7 @@ def test_search_filters_results_and_count(device):
     assert hash_params(page) == {"query": ["HB110"]}
     page.fill("#bill-search", "school")
     expect(page.locator("#result-count")).not_to_have_text(TOTAL)
-    expect(page.locator("#result-count")).to_have_text("195 bills")
+    expect(page.locator("#result-count")).to_have_text("219 bills")
     page.fill("#bill-search", "")
     expect(page.locator("#result-count")).to_have_text(TOTAL)
     assert hash_of(page) == "#all"
@@ -173,7 +176,9 @@ def test_every_sort_option_is_selectable_and_recorded(device):
     # Most agencies really is ordered by agency links: the top card has the most, and later ones never have more
     pick(page, "#sort-order", "Most agencies")
     expect(page.locator(".bill-card .bill-number").first).to_have_text("HB 805")
-    links = [int(t.split()[0]) for t in page.locator(".bill-card .bill-meta span:last-child").all_inner_texts()]
+    # A card with no agency link shows no count (D5), which reads as 0.
+    links = [int(c.locator(".bill-links").inner_text().split()[0]) if c.locator(".bill-links").count() else 0
+             for c in page.locator(".bill-card").all()]
     # Only the head is checked: companion bills are pulled next to each other, which reorders later rows.
     assert links[0] == 7 and links[:10] == sorted(links[:10], reverse=True)
 
@@ -272,47 +277,47 @@ def test_only_watched_toggle(device):
     expect(page.locator('[data-watch="HB110"]')).to_have_attribute("aria-pressed", "true")
     page.fill("#bill-search", "")
     expect(page.locator("#result-count")).to_have_text(TOTAL)
-    page.click("#watch-filter")
+    click(page, "#watch-filter")
     expect(page.locator("#result-count")).to_have_text("1 bill")
     assert numbers(page) == ["HB 110"]
     assert hash_params(page) == {"onlyWatch": ["1"]}
-    page.click("#watch-filter")
+    click(page, "#watch-filter")
     expect(page.locator("#result-count")).to_have_text(TOTAL)
     assert hash_of(page) == "#all"
 
 
 def test_only_watched_with_nothing_watched_is_empty(device):
     page = device.open("#all")
-    page.click("#watch-filter")
+    click(page, "#watch-filter")
     expect(page.locator("#result-count")).to_have_text("0 bills")
     expect(page.locator("#bill-list")).to_contain_text("Nothing matches yet")
 
 
-def test_clicking_a_card_opens_the_drawer_and_records_the_bill(device):
+def test_clicking_a_card_title_opens_the_bill_page_and_back_keeps_the_search(device):
     page = device.open("#all?query=HB110")
     expect(page.locator("#result-count")).to_have_text("1 bill")
-    page.locator('.bill-card[data-bill-id="HB110"] .bill-description').click()
-    expect(page.locator("#detail-drawer")).to_be_visible()
-    expect(page.locator("#detail-drawer")).to_contain_text("HB 110")
-    expect(page.locator("#detail-drawer")).to_contain_text("minimum wage")
-    assert hash_params(page) == {"query": ["HB110"], "bill": ["HB110"]}
-    page.click("#drawer-close")
-    expect(page.locator("#detail-drawer")).to_be_hidden()
-    page.wait_for_function("!location.hash.includes('bill=')")  # closing steps back over the entry the bill added
+    page.locator('.bill-card[data-bill-id="HB110"] .bill-title-link').click()
+    expect(page.locator("#bill-page")).to_be_visible()
+    expect(page.locator("#bill-page")).to_contain_text("HB 110")
+    expect(page.locator("#bill-page")).to_contain_text("minimum wage")
+    assert page.url.endswith("#bill?id=HB110")
+    page.click("#bill-back")
+    expect(page.locator("#bill-page")).to_have_count(0)
+    page.wait_for_function("location.hash.startsWith('#all')")
     assert hash_params(page) == {"query": ["HB110"]}
 
 
-def test_bill_details_button_opens_the_drawer(device):
+def test_bill_details_button_opens_the_bill_page(device):
     page = device.open("#all?query=HB110")
     page.locator('.bill-card[data-bill-id="HB110"] .bill-open').click()
-    expect(page.locator("#detail-drawer")).to_be_visible()
-    assert hash_params(page)["bill"] == ["HB110"]
+    expect(page.locator("#bill-page")).to_be_visible()
+    assert page.url.endswith("#bill?id=HB110")
 
 
-def test_bill_in_the_hash_opens_the_drawer_on_load(device):
-    page = device.open("#all?bill=HB110")
-    expect(page.locator("#detail-drawer")).to_be_visible()
-    expect(page.locator("#detail-drawer")).to_contain_text("minimum wage")
+def test_bill_address_opens_the_bill_page_on_load(device):
+    page = device.open("#bill?id=HB110")
+    expect(page.locator("#bill-page")).to_be_visible()
+    expect(page.locator("#bill-page")).to_contain_text("minimum wage")
 
 
 def test_remembered_filters_come_back_on_reload(device):

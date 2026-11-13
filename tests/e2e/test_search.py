@@ -97,9 +97,9 @@ def test_a_plural_finds_the_same_bills_as_its_singular(device):
     search(page, "wages")
     expect_count(page, "17 bills")
     search(page, "school")
-    expect_count(page, "195 bills")
+    expect_count(page, "219 bills")
     search(page, "schools")
-    expect_count(page, "195 bills")
+    expect_count(page, "219 bills")
 
 
 def test_double_quotes_keep_words_together_and_in_order(device):
@@ -109,12 +109,12 @@ def test_double_quotes_keep_words_together_and_in_order(device):
     search(page, '"minimum wage."')
     expect_count(page, "8 bills")
     search(page, '"school district"')
-    expect_count(page, "75 bills")
+    expect_count(page, "148 bills")
     search(page, '"district school"')
     expect_count(page, "0 bills")
     search(page, '"school district" tax')
     expect(page.locator("#result-count")).not_to_have_text("0 bills")
-    assert 0 < count(page) < 75
+    assert 0 < count(page) < 148
 
 
 def test_an_ampersand_matches_with_or_without_spaces(device):
@@ -145,7 +145,7 @@ def test_a_longer_query_never_finds_more(device):
         now = count(page)
         assert previous is None or now <= previous, typed
         previous = now
-    assert previous == 82
+    assert previous == 150
 
 
 def test_search_finds_a_bill_by_its_author(device):
@@ -189,7 +189,7 @@ def test_search_finds_the_same_bills_whatever_the_word_order(device):
 def test_search_finds_a_bill_by_agency_and_topic_names(device):
     page = device.open("#all")
     search(page, "Texas Education Agency")
-    expect_count(page, "81 bills")
+    expect_count(page, "82 bills")
     search(page, '"Texas Education Agency"')
     expect_count(page, "72 bills")
     search(page, "Data centers")
@@ -250,8 +250,9 @@ def test_an_apostrophe_and_a_hyphen_are_searched_as_typed(device):
     search(page, "children's")
     expect_count(page, "7 bills")
     search(page, "work-related")
-    expect_count(page, "1 bill")
-    assert numbers(page) == ["HB 497"]
+    expect_count(page, "2 bills")
+    # HB 297 matches on its affected group "Purchasers of qualifying tools and work-related items".
+    assert sorted(numbers(page)) == ["HB 297", "HB 497"]
 
 
 def test_a_curly_apostrophe_matches_like_a_straight_one(device):
@@ -275,7 +276,7 @@ def test_a_query_is_plain_text_not_a_pattern(device):
     search(page, ".*")
     expect_count(page, "0 bills")
     search(page, "(")
-    expect_count(page, "14 bills")
+    expect_count(page, "28 bills")
     search(page, "wage|school")
     expect_count(page, "0 bills")
 
@@ -336,7 +337,7 @@ def test_pressing_enter_keeps_the_results(device):
     page.locator("#bill-search").press("Enter")
     expect_count(page, "9 bills")
     expect(page.locator("#bill-search")).to_have_value("minimum wage")
-    expect(page.locator("#detail-drawer")).to_be_hidden()
+    expect(page.locator("#bill-page")).to_be_hidden()
 
 
 # ---- Address bar and memory ----
@@ -384,14 +385,14 @@ def test_the_last_query_is_remembered_on_the_next_visit(device):
 def test_search_and_chamber_filter_split_the_results_exactly(device):
     page = device.open("#all")
     search(page, "school")
-    expect_count(page, "195 bills")
+    expect_count(page, "219 bills")
     page.select_option("#filter-chamber", label="House")
-    expect(page.locator("#result-count")).not_to_have_text("195 bills")
+    expect(page.locator("#result-count")).not_to_have_text("219 bills")
     house = count(page)
     page.select_option("#filter-chamber", label="Senate")
     expect(page.locator("#result-count")).not_to_have_text(f"{house} bills")
     senate = count(page)
-    assert house > 0 and senate > 0 and house + senate == 195
+    assert house > 0 and senate > 0 and house + senate == 219
     expect(page.locator("#bill-search")).to_have_value("school")
 
 
@@ -422,15 +423,15 @@ def test_search_results_page_thirty_at_a_time(device):
     page = device.open("#all")
     search(page, "school")
     more = page.locator("#load-more")
-    expect(more).to_contain_text("of 195")
+    expect(more).to_contain_text("of 219")
     first = page.locator(".bill-card").count()
     assert 30 <= first <= 40
     more.click()
-    expect(page.locator("#load-more")).not_to_have_text(f"Load 30 more \u00b7 showing {first} of 195")
+    expect(page.locator("#load-more")).not_to_have_text(f"Load 30 more \u00b7 showing {first} of 219")
     assert page.locator(".bill-card").count() > first
     # A new query starts the paging over.
     search(page, "school district")
-    expect_count(page, "82 bills")
+    expect_count(page, "150 bills")
     assert page.locator(".bill-card").count() <= 40
     search(page, "minimum wage")
     expect_count(page, "9 bills")
@@ -441,11 +442,11 @@ def test_opening_and_closing_a_bill_keeps_the_search(device):
     page = device.open("#all")
     search(page, "minimum wage")
     page.locator('.bill-card[data-bill-id="HB110"] .bill-number').click()
-    expect(page.locator("#detail-drawer")).to_be_visible()
+    expect(page.locator("#bill-page")).to_be_visible()
+    assert page.evaluate("location.hash") == "#bill?id=HB110"
+    page.locator("#bill-back").click()
+    expect(page.locator("#bill-page")).to_have_count(0)
     assert "query=minimum%20wage" in page.evaluate("location.hash")
-    assert "bill=HB110" in page.evaluate("location.hash")
-    page.keyboard.press("Escape")
-    expect(page.locator("#detail-drawer")).to_be_hidden()
     expect(page.locator("#bill-search")).to_have_value("minimum wage")
     expect_count(page, "9 bills")
 

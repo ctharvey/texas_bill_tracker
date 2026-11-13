@@ -13,6 +13,8 @@ import time
 
 from playwright.sync_api import expect
 
+from harness import click, reveal
+
 WATCH = ["HB110", "HB239"]
 MEMBER = "A4395"
 SYNC_KEY = "tx-bill-atlas-sync-v1"
@@ -24,8 +26,8 @@ def grant_clipboard(device):
 
 
 def star(device, bill):
-    page = device.open(f"#all?bill={bill}")
-    page.locator(f"#detail-drawer [data-watch='{bill}']").first.click()
+    page = device.open(f"#bill?id={bill}")
+    page.locator(f"#bill-page [data-watch='{bill}']").first.click()
     page.wait_for_function(f"JSON.parse(localStorage.getItem('tx-bill-atlas-watch-90r')||'[]').includes('{bill}')")
 
 
@@ -38,7 +40,7 @@ def follow(device, code):
 def save_search(device, chamber="House"):
     page = device.open("#all")
     page.select_option("#filter-chamber", label=chamber)
-    page.click("#save-search")
+    click(page, "#save-search")
     page.wait_for_function("JSON.parse(localStorage.getItem('tx-bill-atlas-searches-90r')||'[]').length>=1")
 
 
@@ -52,8 +54,10 @@ def owner_with_link(device_factory):
     follow(a, MEMBER)
     save_search(a)
     page = a.open("#watchlist")
+    reveal(page, "#sync-create")
     page.click("#sync-create")
     expect(page.locator("#toast")).to_have_text("Sync link created. Copy the edit link to your other devices.")
+    reveal(page, "#sync-copy-edit")
     expect(page.locator("#sync-copy-edit")).to_be_visible()
     texts = {}
     for name, button in (("edit", "#sync-copy-edit"), ("view", "#sync-copy-view")):
@@ -124,6 +128,7 @@ def test_second_device_opens_the_edit_link_and_gets_everything(device_factory, f
     for bill in WATCH:
         expect(page.locator(f"#bill-list [data-watch='{bill}']")).to_have_attribute("aria-pressed", "true")
     assert key_of(edit) not in page.url and "sync=" not in page.url  # edit key never in the address bar
+    reveal(page, "#sync-copy-edit")
     expect(page.locator("#sync-copy-edit")).to_be_visible()
     page = b.open("#following")
     expect(page.locator(".followed-member")).to_have_count(1)
@@ -164,10 +169,10 @@ def test_conflicting_edits_both_survive(device_factory, fresh_sync):
     star(a, "HB381")  # A's write lands first.
     wait_server(a, key_of(edit), lambda d: "HB381" in d["watch"], "A's edit reaches the server")
     # B has not pulled since joining; it still holds the version from before A's write.
-    page = b.open("#all?bill=HB1003")
+    page = b.open("#bill?id=HB1003")
     is_put_ok = lambda r: r.url.endswith("/api/sync") and r.request.method == "PUT" and r.status == 200
     with page.expect_response(is_put_ok, timeout=15000):
-        page.locator("#detail-drawer [data-watch='HB1003']").first.click()
+        page.locator("#bill-page [data-watch='HB1003']").first.click()
     assert 409 in puts, puts  # B wrote from a stale version: the conflict happened, and the retry then succeeded
     wait_server(b, key_of(edit), lambda d: "HB1003" in d["watch"] and "HB381" in d["watch"], "both edits on the server")
     assert server_data(b, key_of(edit))["data"]["watch"] == [*WATCH, "HB381", "HB1003"]
@@ -243,11 +248,15 @@ def test_deleting_the_link_keeps_the_list_on_the_device(device_factory, fresh_sy
     b.open(hash_of(edit))
     expect(b.page.locator("#toast")).to_have_text("This device is now synced")
     page = a.open("#watchlist")
+    reveal(page, "#sync-delete")
     page.click("#sync-delete")
+    reveal(page, "#sync-delete")
     expect(page.locator("#sync-delete")).to_have_text("Click again to delete for every device")  # arms; nothing deleted yet
     assert server_data(a, key_of(edit))["data"]["watch"] == WATCH
+    reveal(page, "#sync-delete")
     page.click("#sync-delete")
     expect(page.locator("#toast")).to_have_text("Sync link deleted; your list stays on this device")
+    reveal(page, "#sync-create")
     expect(page.locator("#sync-create")).to_be_visible()  # offers a new link; no longer synced
     expect(page.locator("#nav-watch")).to_have_text(str(len(WATCH)))
     for bill in WATCH:
@@ -271,6 +280,7 @@ def test_deleting_the_link_keeps_the_list_on_the_device(device_factory, fresh_sy
 def test_stop_syncing_keeps_the_list_and_leaves_the_link_alive(device_factory, fresh_sync):
     a, edit, _ = owner_with_link(device_factory)
     page = a.open("#watchlist")
+    reveal(page, "#sync-forget")
     page.click("#sync-forget")
     expect(page.locator("#toast")).to_have_text("This device stopped syncing; your list stays here")
     assert SYNC_KEY not in a.storage()

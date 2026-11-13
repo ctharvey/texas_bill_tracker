@@ -8,7 +8,11 @@
   <title>Texas Bill Atlas · 90th Legislature</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Every theme's faces in one request; browsers download only the faces the active theme uses. -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Public+Sans:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Libre+Franklin:wght@600;800&family=Zilla+Slab:wght@600&display=swap" rel="stylesheet">
+  <!-- The saved colour theme and light or dark, set before first paint (src/features/theme/model.js lists the same ids).
+       Light unless the reader chose Dark, or Match device on a dark device. -->
+  <script>(function(){var d=document.documentElement,p={};try{p=JSON.parse(localStorage.getItem('tx-bill-atlas-prefs-v1')||'null')||{}}catch(e){}var t=p.theme;if(['granite','lone-star','bluebonnet','ranch'].indexOf(t)>=0)d.dataset.palette=t;var m=p.mode;if(m==='system')try{m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}catch(e){m='light'}d.dataset.mode=m==='dark'?'dark':'light'})()</script>
   <link rel="alternate" type="text/markdown" href="https://agent.bills.ctharvey.me/index.md" title="Texas Bill Atlas for AI agents (Markdown and JSON, no JavaScript)">
   <link rel="stylesheet" href="./src/styles.css">
   <script type="module" src="./src/app.js"></script>
@@ -17,29 +21,33 @@
   <p class="agent-hint" aria-hidden="true">Reading this as an AI agent or script? This page is drawn with JavaScript. The same bills, tags and members are at <a href="https://agent.bills.ctharvey.me/llms.txt">agent.bills.ctharvey.me</a> as Markdown and JSON, with keyword search and no JavaScript needed.</p>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Main navigation">
-      <a class="brand" href="#all" aria-label="Texas Bill Atlas home">
+      <a class="brand" href="#home" aria-label="Texas Bill Atlas home">
         <span class="brand-mark" aria-hidden="true">✳</span>
         <span class="brand-text">TEXAS<span>BILL ATLAS</span></span>
       </a>
       <div class="session-badge"><span class="badge-dot"></span> 90th Legislature <span class="tiny">2027</span></div>
-      <div class="nav-label">WORKSPACE</div>
-      <nav class="main-nav" id="main-nav">
-        <button class="nav-item active" data-view="all"><span class="nav-icon">▦</span> Bill explorer <span class="nav-count" id="nav-all">—</span></button>
-        <button class="nav-item" data-view="watchlist"><span class="nav-icon">☆</span> Watchlist <span class="nav-count" id="nav-watch">0</span></button>
-        <button class="nav-item" data-view="following"><span class="nav-icon">♢</span> Following <span class="nav-count" id="nav-follow">0</span></button>
-        <button class="nav-item" data-view="today"><span class="nav-icon">◷</span> Today</button>
+      <!-- Items marked data-bar make the phone's bottom bar; More opens the whole menu there. -->
+      <div class="nav-label">BROWSE</div>
+      <nav class="main-nav" id="main-nav" aria-label="Browse">
+        <button class="nav-item" data-view="home" data-bar><span class="nav-icon">⌂</span> Home</button>
+        <button class="nav-item" data-view="all" data-bar><span class="nav-icon">▦</span> Bill explorer <span class="nav-count" id="nav-all">—</span></button>
         <button class="nav-item" data-view="local"><span class="nav-icon">⌖</span> Near you</button>
         <button class="nav-item" data-view="agencies"><span class="nav-icon">▤</span> Agency index</button>
-        <button class="nav-item" data-view="review"><span class="nav-icon">◎</span> Review progress <span class="nav-count" id="nav-review">—</span></button>
       </nav>
-      <div class="nav-label nav-label-second">REFERENCE</div>
-      <nav class="main-nav">
+      <div class="nav-label nav-label-second">YOURS</div>
+      <nav class="main-nav" aria-label="Yours">
+        <button class="nav-item" data-view="watchlist" data-bar><span class="nav-icon">☆</span> Watchlist <span class="nav-count" id="nav-watch">0</span></button>
+        <button class="nav-item" data-view="following"><span class="nav-icon">♢</span> Following <span class="nav-count" id="nav-follow">0</span></button>
+      </nav>
+      <div class="nav-label nav-label-second">ABOUT</div>
+      <nav class="main-nav" aria-label="About">
         <button class="nav-item" data-view="method"><span class="nav-icon">◈</span> Scoring method</button>
         <button class="nav-item" data-view="saving"><span class="nav-icon">⇩</span> Saving your info</button>
         <button class="nav-item" data-view="data"><span class="nav-icon">⇄</span> Data & imports</button>
+        <button class="nav-item" data-view="review"><span class="nav-icon">◎</span> Review progress <span class="nav-count" id="nav-review">—</span></button>
       </nav>
+      <button type="button" class="nav-item nav-more" id="nav-more" aria-expanded="false"><span class="nav-icon">☰</span> <span class="nav-more-label">More</span></button>
       <div class="sidebar-bottom">
-        <div class="calendar-mini"><div class="calendar-eyebrow">UPCOMING MILESTONE</div><div class="calendar-date">JAN 12 <span>2027</span></div><div class="calendar-desc">90th regular session convenes</div><div class="calendar-progress"><span></span></div></div>
         <a class="official-link" href="https://capitol.texas.gov/" target="_blank" rel="noopener noreferrer">Official Texas Legislature Online <span>↗</span></a>
         <div class="sidebar-credit">Independent research tool · Not an official state website</div>
       </div>
@@ -47,16 +55,14 @@
     <div class="main-column">
       <header class="topbar"><div class="topbar-left"><span class="mobile-logo">✳ <b>TEXAS BILL ATLAS</b></span><span class="topbar-crumb">Legislative intelligence <span>/</span> 90R</span></div><div class="topbar-right"><button type="button" class="ai-top-button" id="copy-page-ai" title="Copy this page (or the open bill) as text with links, to paste into an AI assistant">Copy page for AI</button><span class="topbar-date">SESSION 2027</span><a href="https://github.com/ctharvey/texas_bill_tracker" target="_blank" rel="noopener noreferrer" class="github-link">View project ↗</a></div></header>
       <main id="main-content">
-        <div class="page-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> TEXAS LEGISLATIVE MONITOR</div><h1 id="page-title">See what’s moving.<br><em>Know what it changes.</em></h1><p id="page-subtitle">Track legislation by policy, affected agency, author influence, and its path through the Capitol.</p></div><div class="heading-date"><span class="day-box">09</span><div><strong>NOV 2026</strong><small>PREFILING OPEN</small></div></div></div>
+        <div class="page-heading"><div><h1 id="page-title">See what’s moving.</h1><p id="page-subtitle">Track legislation by policy, affected agency, author influence, and its path through the Capitol.</p></div><div class="heading-date"><span class="day-box">09</span><div><strong>NOV 2026</strong><small>PREFILING OPEN</small></div></div></div>
         <div id="source-notice" class="source-notice" role="status"></div>
-        <section id="overview" class="overview-grid" aria-label="At a glance"></section>
+        <p id="overview" class="overview-line" aria-label="At a glance"></p>
         <section id="dynamic-content" class="dynamic-content"></section>
       </main>
-      <footer class="site-footer">Built for public scrutiny. <span>Official filings remain the authoritative record.</span> <button type="button" class="footer-link" id="disclaimer-open">Disclaimer</button> <button type="button" class="footer-link" id="privacy-open">Privacy</button><a class="footer-link" href="https://agent.bills.ctharvey.me/">For AI agents</a><noscript><p>This tracker needs JavaScript. The same information is available without it, as Markdown and JSON, at <a href="https://agent.bills.ctharvey.me/">agent.bills.ctharvey.me</a>.</p></noscript><span class="footer-right" id="footer-timestamp"></span></footer>
+      <footer class="site-footer">Built for public scrutiny. <span>Official filings remain the authoritative record.</span> <button type="button" class="footer-link" id="disclaimer-open">Disclaimer</button> <button type="button" class="footer-link" id="privacy-open">Privacy</button><a class="footer-link" href="https://agent.bills.ctharvey.me/">For AI agents</a> <label class="theme-pick">Colours <select id="theme-select"></select></label> <label class="theme-pick">Light or dark <select id="mode-select"></select></label><noscript><p>This tracker needs JavaScript. The same information is available without it, as Markdown and JSON, at <a href="https://agent.bills.ctharvey.me/">agent.bills.ctharvey.me</a>.</p></noscript><span class="footer-right" id="footer-timestamp"></span></footer>
     </div>
   </div>
-  <div class="drawer-scrim" id="drawer-scrim" hidden></div>
-  <aside class="detail-drawer" id="detail-drawer" aria-label="Bill details" aria-modal="true" role="dialog" hidden></aside>
   <div id="toast" role="status" aria-live="polite"></div>
   <dialog class="disclaimer" id="disclaimer" aria-labelledby="disclaimer-title" aria-describedby="disclaimer-body">
     <div class="disclaimer-overline">PLEASE READ</div>

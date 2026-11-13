@@ -1,4 +1,5 @@
-"""Review progress page: Luna's full-text review counts, groups, the live worker list, and the 60 second refresh."""
+"""Review progress page: the run card and passes, Luna's full-text review counts, the live worker list, the
+one-bill lookup, recent reviews, the problem groups, and the 60 second refresh."""
 
 import json
 import re
@@ -58,16 +59,19 @@ def test_progress_page_shows_counts_and_groups(device):
     # The bar says the same thing to a screen reader.
     label = page.locator(".review-bar").get_attribute("aria-label")
     assert f"{c['Reviewed']} reviewed" in label and f"of {total}" in label
-    # Groups: only Reviewed starts open; its count matches the legend.
+    # Only the problem groups are listed, all closed: no wall of reviewed or not-started bills.
     groups = page.locator(".review-group")
     titles = [g.locator("summary strong").inner_text() for g in groups.all()]
-    assert titles == ["Reviewed", "Follow-up questions queued", "Waiting for bill text", "Not started"]
-    opened = [g.evaluate("d=>d.open") for g in groups.all()]
-    assert opened == [True, False, False, False]
-    expect(groups.first.locator("summary span")).to_have_text(f"{c['Reviewed']:,}")
-    expect(groups.first.locator(".review-chip")).to_have_count(c["Reviewed"])
+    assert titles == ["Follow-up questions queued", "Waiting for bill text"]
+    assert [g.evaluate("d=>d.open") for g in groups.all()] == [False, False]
     expect(page.locator("details.review-group", has_text="Waiting for bill text").locator("summary span")).to_have_text(
         f"{c['Waiting for bill text']:,}")
+    # Idle: the run card says when the next run starts; the full review pass counts bills not started.
+    run = page.locator(".review-run")
+    expect(run.locator(".review-run-state strong")).to_have_text("Idle")
+    expect(run.locator(".review-run-state div > span")).to_contain_text("Next run about")
+    expect(run.locator(".review-pass")).to_have_count(4)
+    expect(run.locator(".review-pass").first.locator(".pass-count strong")).to_have_text(f"{c['Not started']:,}")
 
 
 def test_nav_count_matches_reviewed(device):
@@ -85,18 +89,25 @@ def test_audit_spot_check_line(device):
         "Spot check: 23 reviews re-checked independently · 14 agreed · 7 with minor issues · 2 with major issues")
 
 
-def test_chips_open_the_bill_and_tagged_chips_are_marked(device):
+def test_lookup_says_one_bills_state_and_opens_it(device):
     page = device.open("#review")
-    chip = page.locator(".review-group").first.locator('.review-chip[data-open="HB1011"]')
-    expect(chip).to_have_count(1)
-    chip.click()
-    expect(page.locator("#detail-drawer .drawer-number")).to_have_text("90R / HB 1011")
-    page.keyboard.press("Escape")
-    tagged = page.locator(".review-group").first.locator(".review-chip.tagged")
-    untagged = page.locator(".review-group").first.locator(".review-chip:not(.tagged)")
-    assert tagged.count() > 0 and untagged.count() > 0
-    expect(tagged.first).to_have_attribute("title", re.compile("Luna tags published"))
-    expect(untagged.first).to_have_attribute("title", re.compile("no verified tags published"))
+    result = page.locator("#review-lookup-result")
+    page.fill("#review-lookup", "water")
+    expect(result).to_contain_text("Type a bill number")
+    page.fill("#review-lookup", "hb 99999")
+    expect(result).to_contain_text("HB99999: Not a bill in this session")
+    page.fill("#review-lookup", "h.b. 1011")
+    expect(result.locator('.review-chip[data-open="HB1011"]')).to_have_count(1)
+    expect(result.locator(".review-lookup-state")).to_contain_text("Reviewed")
+    page.press("#review-lookup", "Enter")
+    expect(page.locator("#bill-page .drawer-number")).to_have_text("90R / HB 1011")
+
+
+def test_recent_reviews_are_newest_first(device):
+    page = device.open("#review")
+    rows = page.locator(".review-recent .today-row")
+    assert 0 < rows.count() <= 20
+    expect(rows.first).to_contain_text("Reviewed")
 
 
 def test_workers_in_progress_failures_and_follow_ups(device):
@@ -119,13 +130,35 @@ def test_workers_in_progress_failures_and_follow_ups(device):
     expect(now.locator("small").first).to_have_text("Reviewing now")
     expect(now.locator("small").nth(1)).to_have_text("Up next")
     # A bill held by a worker is not also counted as reviewed.
-    expect(page.locator(".review-group").first.locator('[data-open="HB1021"]')).to_have_count(0)
+    page.fill("#review-lookup", "HB1021")
+    expect(page.locator("#review-lookup-result .review-lookup-state")).to_have_text("Being reviewed now")
     # Failures list the stage; a retry bill counts as reviewed but is queued for follow-up questions.
     failed = page.locator(".review-group", has_text="Failed").first
     expect(failed.locator('[data-open="HB1031"]')).to_have_attribute("title", re.compile("extract failed"))
     expect(page.locator(".review-headline")).to_contain_text("1 of them have follow-up questions queued")
     expect(page.locator(".review-group", has_text="Follow-up questions queued").locator("summary span")).to_have_text("1")
     expect(page.locator("#nav-review")).to_have_text(str(c["Reviewed"]))
+
+
+def test_run_card_names_the_pass_and_counts_each(device):
+    def make(base, _n):
+        base.update(running=True, updated_at="2026-11-12T15:48:00Z", run_started_at="2026-11-12T15:35:00Z",
+                    **{"pass": "topics", "passes": {"entities": {"due": 0, "checked": 212},
+                                                    "topics": {"due": 506, "checked": 40}}})
+        return base
+    serve_status(device, make)
+    device.context.clock.install(time="2026-11-12T15:49:00Z")
+    page = device.open("#review")
+    run = page.locator(".review-run")
+    expect(run.locator(".review-run-state strong")).to_have_text("Working on: Topics and scope votes")
+    expect(run.locator(".review-run-state div > span")).to_contain_text("14 of 55 minutes used")
+    now = run.locator(".review-pass.now")
+    expect(now).to_have_count(1)
+    expect(now).to_have_attribute("aria-current", "step")
+    expect(now.locator(".pass-count")).to_contain_text("506")
+    expect(now.locator(".pass-checked")).to_have_text("40 done this run")
+    expect(run.locator(".review-pass.clear", has_text="Agencies")).to_have_count(1)  # nothing left
+    expect(run.locator(".review-pass").last.locator(".pass-count")).to_contain_text("counted after the next run")
 
 
 def test_stale_worker_is_flagged(device):
@@ -154,7 +187,7 @@ def run_clock(device, page_url_hash="#review"):
     return device.open(page_url_hash)
 
 
-def test_refresh_every_minute_keeps_open_groups_open(device):
+def test_refresh_every_minute_keeps_open_groups_and_the_lookup(device):
     def make(base, n):
         if n > 1:
             base.update(updated_at="2026-11-12T15:50:00Z", running=True, in_progress=["HB1021"], current="HB1021")
@@ -164,11 +197,11 @@ def test_refresh_every_minute_keeps_open_groups_open(device):
     page = run_clock(device)
     before = len(calls)
     before_counts = counts(page)
-    # The reader opens one group and closes another.
+    # The reader opens one group and is typing a bill number.
     page.locator(".review-group", has_text="Waiting for bill text").locator("summary").click()
-    page.locator(".review-group", has_text="Reviewed").first.locator("summary").click()
     state = [g.evaluate("d=>d.open") for g in page.locator(".review-group").all()]
-    assert state == [False, False, True, False]
+    assert state == [False, True]
+    page.fill("#review-lookup", "HB1021")
     with page.expect_request(re.compile(r"/live/luna/status\.json")):
         page.clock.run_for(61000)
     expect(page.locator(".section-head .subtitle")).to_contain_text("Reviewing now")
@@ -176,6 +209,9 @@ def test_refresh_every_minute_keeps_open_groups_open(device):
     assert counts(page)["Reviewing now"] == 1
     assert counts(page)["Reviewed"] == before_counts["Reviewed"] - 1
     assert [g.evaluate("d=>d.open") for g in page.locator(".review-group").all()] == state
+    expect(page.locator("#review-lookup")).to_have_value("HB1021")
+    expect(page.locator("#review-lookup")).to_be_focused()
+    expect(page.locator("#review-lookup-result .review-lookup-state")).to_have_text("Being reviewed now")
 
 
 def test_refresh_without_news_does_not_redraw(device):

@@ -67,8 +67,8 @@ def main() -> int:
 
         # Watchlist: star bills from their drawers, in order.
         for bill in WATCH:
-            go(f"#all?bill={bill}")
-            page.locator(f"#detail-drawer [data-watch='{bill}']").first.click()
+            go(f"#bill?id={bill}")
+            page.locator(f"#bill-page [data-watch='{bill}']").first.click()
             page.wait_for_function(f"JSON.parse(localStorage.getItem('tx-bill-atlas-watch-90r')||'[]').includes('{bill}')")
 
         # Follows: from each legislator's own page.
@@ -80,9 +80,9 @@ def main() -> int:
         # Saved searches: one plain, one renamed.
         go("#all")
         page.select_option("#filter-chamber", label="House")
-        page.click("#save-search")
+        harness.click(page, "#save-search")
         page.fill("#bill-search", "water")
-        page.click("#save-search")
+        harness.click(page, "#save-search")
         page.wait_for_function("JSON.parse(localStorage.getItem('tx-bill-atlas-searches-90r')||'[]').length===2")
         go("#following")
         page.locator("[data-search-rename]").nth(1).click()
@@ -94,7 +94,7 @@ def main() -> int:
         go("#all")
         page.select_option("#filter-chamber", label="Senate")
         page.fill("#bill-search", "school")
-        page.click("#copy-view-link")  # persistState writes the remembered filters.
+        harness.click(page, "#copy-view-link")  # persistState writes the remembered filters.
         page.wait_for_function("localStorage.getItem('tx-bill-atlas-prefs-v1')")
 
         # Near you: "Use my location" with a mocked position.
@@ -104,12 +104,15 @@ def main() -> int:
 
         # Sync link, created last so the server holds everything above.
         go("#watchlist")
+        harness.reveal(page, "#sync-create")
         page.click("#sync-create")
+        harness.reveal(page, "#sync-copy-edit")
         expect(page.locator("#sync-copy-edit")).to_be_visible()
         page.wait_for_function("localStorage.getItem('tx-bill-atlas-sync-v1')")
 
         # The profile file, exactly as the UI downloads it.
         with page.expect_download() as dl:
+            harness.reveal(page, "#export-watch")
             page.click("#export-watch")
         profile_name = dl.value.suggested_filename
         dl.value.save_as(OUT / "profile-file.json")

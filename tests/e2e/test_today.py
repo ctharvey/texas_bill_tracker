@@ -89,24 +89,24 @@ def test_small_day_has_no_paging_or_overflow_controls(device):
     expect(page.locator("#today-topics-toggle")).to_have_count(0)
 
 
-def test_row_links_open_the_bill_drawer(device):
+def test_row_links_open_the_bill_page(device):
     page = device.open("#today")
     page.locator(".today-row .bill-number", has_text="HB 1083").click()
-    drawer = page.locator("#detail-drawer")
-    expect(drawer).to_be_visible()
-    expect(drawer.locator(".drawer-number")).to_have_text("90R / HB 1083")
-    assert page.url.endswith("#today?bill=HB1083")
-    page.keyboard.press("Escape")
-    expect(drawer).to_be_hidden()
+    bill = page.locator("#bill-page")
+    expect(bill).to_be_visible()
+    expect(bill.locator(".drawer-number")).to_have_text("90R / HB 1083")
+    assert page.url.endswith("#bill?id=HB1083")
+    page.locator("#bill-back").click()
+    expect(bill).to_have_count(0)
     assert page.url.endswith("#today")
     page.locator(".today-row .bill-title-link", has_text="wrongfully imprisoned").click()
-    expect(drawer.locator(".drawer-number")).to_have_text("90R / HB 1083")
+    expect(bill.locator(".drawer-number")).to_have_text("90R / HB 1083")
 
 
-def test_clicking_a_row_body_opens_its_drawer(device):
+def test_clicking_a_row_body_opens_its_bill_page(device):
     page = device.open("#today")
     page.locator(".today-row", has_text="HB 1085").locator(".today-action").click()
-    expect(page.locator("#detail-drawer .drawer-number")).to_have_text("90R / HB 1085")
+    expect(page.locator("#bill-page .drawer-number")).to_have_text("90R / HB 1085")
 
 
 def test_quiet_day_falls_back_to_the_most_recent_activity(device):

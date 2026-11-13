@@ -39,7 +39,8 @@ MEMBER_CODE = re.compile(r"A\d{3,5}")
 MAX_SEARCHES = 20
 SEARCH_ID = re.compile(r"[a-z0-9]{8,16}")
 DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
-OPTIONAL_SECTIONS = ("follows", "searches")
+OPTIONAL_SECTIONS = ("follows", "searches", "theme")
+THEME_ID = re.compile(r"[a-z][a-z-]{0,23}")
 MAX_LISTS = 100_000
 RETENTION_SECONDS = 365 * 86400
 FEED_ITEMS = 300
@@ -107,6 +108,10 @@ def clean_data(data) -> dict:
             ids.add(item["id"])
             kept.append({"id": item["id"], "name": item["name"].strip(), "filters": filters, "seen": item.get("seen")})
         cleaned["searches"] = kept
+    if "theme" in data:  # The site's colour theme id; one value, last write wins.
+        if not isinstance(data["theme"], str) or not THEME_ID.fullmatch(data["theme"]):
+            raise Rejected(400, "theme must be a theme id")
+        cleaned["theme"] = data["theme"]
     return cleaned
 
 

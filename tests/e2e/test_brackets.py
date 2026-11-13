@@ -1,4 +1,4 @@
-"""Population limits in the bill drawer: which places meet each population test, what changed, and no index."""
+"""Population limits on the bill page: which places meet each population test, what changed, and no index."""
 
 import re
 
@@ -6,7 +6,7 @@ from playwright.sync_api import expect
 
 
 def brackets(device, bill):
-    page = device.open(f"#all?bill={bill}")
+    page = device.open(f"#bill?id={bill}")
     box = page.locator("#drawer-brackets")
     expect(box).to_be_visible()
     expect(box.locator("h3")).to_have_text("Population limits")
@@ -107,20 +107,20 @@ def test_unreadable_limits_are_counted_in_plural(device):
 
 
 def test_bill_without_population_limits_has_no_section(device):
-    page = device.open("#all?bill=HB110")
-    expect(page.locator("#detail-drawer")).to_be_visible()
-    expect(page.locator("#drawer-statutes")).to_be_visible()  # the drawer finished loading its optional sections
+    page = device.open("#bill?id=HB110")
+    expect(page.locator("#bill-page")).to_be_visible()
+    expect(page.locator("#drawer-statutes")).to_be_visible()  # the page finished loading its optional sections
     expect(page.locator("#drawer-brackets")).to_be_hidden()
 
 
 def test_without_the_index_the_section_is_hidden_and_nothing_errors(device):
     device.context.route("**/live/brackets/index.json", lambda r: r.fulfill(status=404, body=""))
-    page = device.open("#all?bill=HB717")
+    page = device.open("#bill?id=HB717")
     expect(page.locator("#drawer-statutes")).to_be_visible()
-    expect(page.locator("#detail-drawer")).to_be_visible()
+    expect(page.locator("#bill-page")).to_be_visible()
     expect(page.locator("#drawer-brackets")).to_be_hidden()
     assert page.locator("#drawer-brackets").inner_text().strip() == ""
-    # The rest of the drawer still works.
-    expect(page.locator("#detail-drawer h2")).to_be_visible()
-    page.keyboard.press("Escape")
-    expect(page.locator("#detail-drawer")).to_be_hidden()
+    # The rest of the page still works.
+    expect(page.locator("#bill-page-title")).to_be_visible()
+    page.locator("#bill-back").click()
+    expect(page.locator("#bill-page")).to_have_count(0)

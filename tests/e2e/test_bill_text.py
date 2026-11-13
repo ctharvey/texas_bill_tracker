@@ -8,7 +8,7 @@ import pytest
 from playwright.sync_api import expect
 
 LIVE = Path(__file__).resolve().parent / "fixtures" / "live"
-DRAWER = "#detail-drawer"
+DRAWER = "#bill-page"
 SHOW = "Show bill text"
 NOTE_MISMATCH = "Luna highlights do not match this version of the text."
 NOTE_NONE = "Luna highlights appear after the full-text review."
@@ -23,14 +23,14 @@ def source_marks(bill_id, tag):
 
 
 def show_text(device, bill_id):
-    page = device.open(f"#all?bill={bill_id}")
+    page = device.open(f"#bill?id={bill_id}")
     page.locator(f"{DRAWER} button", has_text=SHOW).click()
     expect(page.locator(f"{DRAWER} .bill-text")).to_be_visible()
     return page
 
 
 def test_before_clicking_nothing_is_loaded_and_the_official_link_is_hidden(device):
-    page = device.open("#all?bill=HB717")
+    page = device.open("#bill?id=HB717")
     section = page.locator(f"{DRAWER} .bill-text-section")
     expect(section.locator("h3")).to_have_text("Bill text")
     expect(section.get_by_role("button", name=SHOW)).to_be_visible()
@@ -40,7 +40,7 @@ def test_before_clicking_nothing_is_loaded_and_the_official_link_is_hidden(devic
 
 
 def test_show_bill_text_requests_the_index_then_the_latest_version(device):
-    page = device.open("#all?bill=HB717")
+    page = device.open("#bill?id=HB717")
     seen = []
     page.on("request", lambda r: seen.append(r.url.split("/live/", 1)[-1]) if "/live/text/" in r.url else None)
     page.locator(f"{DRAWER} button", has_text=SHOW).click()
@@ -175,7 +175,7 @@ def test_highlights_with_a_range_outside_the_text_do_not_crash_the_text(device):
 
 def test_text_not_on_the_site_yet_points_to_the_official_page(device):
     device.context.route("**/live/text/HB717/index.json", lambda route: route.fulfill(status=404, body=""))
-    page = device.open("#all?bill=HB717")
+    page = device.open("#bill?id=HB717")
     page.locator(f"{DRAWER} button", has_text=SHOW).click()
     section = page.locator(f"{DRAWER} .bill-text-section")
     expect(section).to_contain_text("The bill text is not on this site yet; it is added within a few hours of filing.")
@@ -187,7 +187,7 @@ def test_a_bad_text_index_reports_it_and_lets_the_reader_retry(device):
     device.context.route("**/live/text/HB717/index.json",
                          lambda route: route.fulfill(status=200, content_type="application/json",
                                                      body=json.dumps({"format": "wrong", "bill_id": "HB717", "versions": []})))
-    page = device.open("#all?bill=HB717")
+    page = device.open("#bill?id=HB717")
     button = page.locator(f"{DRAWER} button", has_text=SHOW)
     button.click()
     expect(page.locator(f"{DRAWER} .bill-text-section")).to_contain_text(

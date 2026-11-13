@@ -27,7 +27,7 @@ def section_titles(page):
 def test_house_member_profile(device):
     page = device.open(f"#member?code={LANDGRAF}")
     expect(page.locator("#dynamic-content h2")).to_have_text("Rep. Brooks Landgraf")
-    expect(page.locator("#page-title")).to_contain_text("Every bill they")
+    expect(page.locator("#page-title")).to_contain_text("One legislator.")
     profile = page.locator(".member-profile")
     expect(profile).to_contain_text("Texas House · District 81")
     expect(profile).to_contain_text("Republican · HD 81 · 12 years served · since 2015")
@@ -96,10 +96,11 @@ def test_new_member_shows_newcomer_tag(device):
 
 
 def test_drawer_author_links_to_member_page(device):
-    page = device.open("#all?bill=HB717")
-    link = page.locator("#detail-drawer a.member-name", has_text="Landgraf")
+    page = device.open("#bill?id=HB717")
+    link = page.locator("#bill-page a.member-name", has_text="Landgraf")
     expect(link).to_have_attribute("href", f"#member?code={LANDGRAF}")
     link.click()
+    expect(page.locator("#bill-page")).to_have_count(0)
     expect(page.locator("#dynamic-content h2")).to_have_text("Rep. Brooks Landgraf")
     assert page.evaluate("location.hash") == f"#member?code={LANDGRAF}"
     expect(page.locator("#dynamic-content .today-row").first).to_be_visible()

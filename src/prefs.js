@@ -4,7 +4,7 @@ const FILTER_NAMES = Object.keys(FILTER_DEFAULTS);
 // Renamed filter values, so old links, saved searches and remembered filters keep working (taxonomy.NO_HEARING).
 const RENAMED = {outlook: {'Not rated': 'No hearing yet'}};
 const current = (name, value) => RENAMED[name]?.[value] ?? value;
-export const VIEWS = ['all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'agencies', 'review', 'method', 'saving', 'data'];
+export const VIEWS = ['home', 'all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'bill', 'agencies', 'review', 'method', 'saving', 'data'];
 const LAW_CODE = /^[A-Z]{2}$/;
 const LAW_SECTION = /^\d+[A-Z]?(?:\.\d+[A-Z]?)+$/;  // The statute index's section numbers (build_feeds.SECTION_NUM).
 export const MAX_LIST = 500;
@@ -47,11 +47,13 @@ export function parseHash(hash) {
     filters[name] = name === 'onlyWatch' ? params.get(name) === '1' : current(name, params.get(name).slice(0, 200));
   }
   const list = params.has('list') ? uniqueIds(params.get('list').split(',')) : null;
-  const bill = normalizeId(params.get('bill') || '');
+  // A bill page is `#bill?id=HB1`; `bill=` on any view is the older address (RSS items, agent docs, saved links).
+  const bill = normalizeId((view === 'bill' ? params.get('id') : null) || params.get('bill') || '');
   const sync = params.get('sync') || '';
   const member = String(params.get('code') || '').trim().toUpperCase();
   const law = String(params.get('law') || '').toUpperCase(), sec = String(params.get('sec') || '').toUpperCase();
-  return {view: VIEWS.includes(view) ? view : 'all', filters, hasFilters: Object.keys(filters).length > 0,
+  // A bare address is the dashboard; an unknown view (or `#?query=` and the like) is the explorer.
+  return {view: raw === '' ? 'home' : VIEWS.includes(view) ? view : 'all', filters, hasFilters: Object.keys(filters).length > 0,
     list: list && list.length ? list : null, bill: isBillId(bill) ? bill : null, sync: SYNC_KEY.test(sync) ? sync : null,
     member: view === 'member' && MEMBER_CODE.test(member) ? member : null,
     statute: view === 'statute' && LAW_CODE.test(law) && LAW_SECTION.test(sec) && sec.length <= 16 ? `${law} ${sec}` : null};
@@ -67,11 +69,12 @@ export function buildHash(view, filters, {list = null, bill = null, sync = null,
       parts.push(`${name}=${name === 'onlyWatch' ? (value ? '1' : '0') : encodeURIComponent(value)}`);
     }
   }
+  if (view === 'bill' && isBillId(bill)) parts.push(`id=${bill}`);
   if (view === 'member' && MEMBER_CODE.test(member || '')) parts.push(`code=${member}`);
   const [law, sec] = String(statute || '').split(' ');
   if (view === 'statute' && LAW_CODE.test(law || '') && LAW_SECTION.test(sec || '')) parts.push(`law=${law}`, `sec=${sec}`);
   if (list?.length) parts.push(`list=${list.join(',')}`);
-  if (bill) parts.push(`bill=${bill}`);
+  if (bill && view !== 'bill') parts.push(`bill=${bill}`);
   if (sync && SYNC_KEY.test(sync)) parts.push(`sync=${sync}`);
   return `#${VIEWS.includes(view) ? view : 'all'}${parts.length ? `?${parts.join('&')}` : ''}`;
 }
@@ -151,17 +154,18 @@ export function searchName(filters, agencyName = id => id) {
   return (parts.join(' · ') || 'All bills').slice(0, 80);
 }
 
-// One file for everything saved: the watchlist (as the first of `lists`, ready for named lists), follows and saved
-// searches. Device-only things (Near you districts, remembered filters, the sync link) are never in it.
+// One file for everything saved: the watchlist (as the first of `lists`, ready for named lists), follows, saved
+// searches and the colour theme. Device-only things (Near you districts, remembered filters, the sync link) are never in it.
+const THEME_ID = /^[a-z][a-z-]{0,23}$/;
 export const PROFILE_FORMAT = 'texas-bill-atlas-profile-v1';
-export function profileFile({watch = [], follows = [], searches = []} = {}, now = new Date()) {
+export function profileFile({watch = [], follows = [], searches = [], theme = null} = {}, now = new Date()) {
   return JSON.stringify({format: PROFILE_FORMAT, session: '90R', exported_at: now.toISOString(),
     lists: [{id: 'main', name: 'Watchlist', bills: [...watch]}], follows: cleanFollows([...follows]),
-    searches: cleanSearches(searches)}, null, 2);
+    searches: cleanSearches(searches), ...(typeof theme === 'string' && THEME_ID.test(theme) ? {theme} : {})}, null, 2);
 }
 
 // A profile file, or anything parseWatchlistFile reads (older watchlist exports, arrays, pasted text).
-// Returns {bills, follows, searches}; importing only adds.
+// Returns {bills, follows, searches} plus theme when the file has valid colours; importing only adds.
 export function parseProfileFile(text) {
   let data = null;
   try { data = JSON.parse(text); } catch {}
@@ -170,5 +174,5 @@ export function parseProfileFile(text) {
   const bills = uniqueIds(lists.flatMap(l => Array.isArray(l?.bills) ? l.bills.filter(x => typeof x === 'string') : []));
   const follows = cleanFollows(data.follows), searches = cleanSearches(data.searches);
   if (!bills.length && !follows.length && !searches.length) throw Error('This file has no bills or legislators (or saved searches)');
-  return {bills, follows, searches};
+  return {bills, follows, searches, ...(typeof data.theme === 'string' && THEME_ID.test(data.theme) ? {theme: data.theme} : {})};
 }

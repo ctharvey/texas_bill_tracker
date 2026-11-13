@@ -4,6 +4,8 @@ import json
 
 from playwright.sync_api import expect
 
+from harness import click, reveal
+
 WATCH_KEY = "tx-bill-atlas-watch-90r"
 FOLLOW_KEY = "tx-bill-atlas-follow-90r"
 SEARCHES_KEY = "tx-bill-atlas-searches-90r"
@@ -22,7 +24,7 @@ def build_rich_profile(device):
     page.locator("button.follow-button").click()
     expect(page.locator("#toast")).to_contain_text("Following")
     device.open("#all?query=HB717&chamber=House")
-    page.locator("#save-search").click()
+    click(page, "#save-search")
     expect(page.locator("#toast")).to_contain_text("Saved ")
     return page
 
@@ -30,6 +32,7 @@ def build_rich_profile(device):
 def export_profile(device):
     page = device.open("#watchlist")
     with page.expect_download() as dl:
+        reveal(page, "#export-watch")
         page.locator("#export-watch").click()
     download = dl.value
     assert download.suggested_filename == "texas-bill-atlas-saved.json"
@@ -71,7 +74,9 @@ def test_export_with_only_follows_is_allowed(device):
     page.locator("button.follow-button").click()
     expect(page.locator("#toast")).to_contain_text("Following")
     page = device.open("#watchlist")
+    reveal(page, "#export-watch")
     expect(page.locator("#export-watch")).to_be_enabled()
+    reveal(page, "#share-watch")
     expect(page.locator("#share-watch")).to_be_disabled()
     data = export_profile(device)
     assert data["lists"][0]["bills"] == [] and data["follows"] == ["A2150"] and data["searches"] == []

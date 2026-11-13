@@ -5,6 +5,8 @@ import re
 
 from playwright.sync_api import expect
 
+from harness import click, reveal
+
 WATCH_KEY = "tx-bill-atlas-watch-90r"
 
 
@@ -30,7 +32,7 @@ def build_rich_profile(device):
     page.locator("button.follow-button").click()
     expect(page.locator("#toast")).to_contain_text("Following")
     device.open("#all?query=HB717")
-    page.locator("#save-search").click()
+    click(page, "#save-search")
     expect(page.locator("#toast")).to_contain_text("Saved ")
     return page
 
@@ -39,6 +41,7 @@ def test_copy_share_link_text_and_toast(device):
     allow_clipboard(device)
     page = build_rich_profile(device)
     device.open("#watchlist")
+    reveal(page, "#share-watch")
     page.locator("#share-watch").click()
     expect(page.locator("#toast")).to_have_text("Share link copied")
     link = clipboard(page)
@@ -49,18 +52,23 @@ def test_share_link_never_carries_follows_searches_or_sync_keys(device, fresh_sy
     allow_clipboard(device)
     page = build_rich_profile(device)
     device.open("#watchlist")
+    reveal(page, "#sync-create")
     expect(page.locator("#sync-create")).to_be_enabled()
+    reveal(page, "#sync-create")
     page.locator("#sync-create").click()
     expect(page.locator("#toast")).to_have_text("Sync link created. Copy the edit link to your other devices.")
+    reveal(page, "#sync-copy-edit")
     page.locator("#sync-copy-edit").click()
     expect(page.locator("#toast")).to_have_text("Edit link copied")
     edit_link = clipboard(page)
     edit_key = re.search(r"sync=([A-Za-z0-9_-]{22})$", edit_link).group(1)
+    reveal(page, "#sync-copy-view")
     page.locator("#sync-copy-view").click()
     expect(page.locator("#toast")).to_have_text("View-only link copied")
     view_key = re.search(r"sync=([A-Za-z0-9_-]{22})$", clipboard(page)).group(1)
     assert view_key != edit_key
 
+    reveal(page, "#share-watch")
     page.locator("#share-watch").click()
     expect(page.locator("#toast")).to_have_text("Share link copied")
     link = clipboard(page)
@@ -131,7 +139,7 @@ def test_show_all_bills_leaves_the_shared_list(device_factory):
 def test_copy_view_link_copies_current_url_with_filters(device):
     allow_clipboard(device)
     page = device.open("#all?query=HB110&chamber=House")
-    page.locator("#copy-view-link").click()
+    click(page, "#copy-view-link")
     expect(page.locator("#toast")).to_have_text("Link to this view copied")
     assert clipboard(page) == device.site.base + "#all?query=HB110&chamber=House"
 
@@ -142,5 +150,6 @@ def test_clipboard_blocked_falls_back_to_showing_the_link(device):
     star(page, "HB110").click()
     device.open("#watchlist")
     page.evaluate("Object.defineProperty(navigator, 'clipboard', {value: {writeText: () => Promise.reject(new Error('no'))}})")
+    reveal(page, "#share-watch")
     page.locator("#share-watch").click()
     expect(page.locator("#toast")).to_have_text(f"Copy failed. Share link: {device.site.base}#all?list=HB110")

@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Texas Bill Atlas mock-ups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Manrope:wght@600;800&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&family=Libre+Franklin:wght@600;800&family=Zilla+Slab:wght@600&display=swap" rel="stylesheet">
+<style>
+/* Static mock-up. Sample data. Not wired to the app.
+   Layout: sidebar (or top bar in C) + list with a sticky preview; bill page with a sticky header and a fact rail.
+   Each direction is one light palette; everything below reads only these tokens. */
+
+/* ---------- Direction A: current identity, refined ---------- */
+body[data-dir="a"]{
+  --bg:#f5f7fa;--surface:#fff;--ink:#14243a;--muted:#55657a;--line:#dbe2ea;
+  --accent:#087d7a;--accent-ink:#fff;--accent-soft:#e2f2f1;
+  --nav-bg:#14243a;--nav-ink:#e8eef5;--nav-muted:#93a4b8;--nav-active:#22395a;
+  --mark:#b8862b;--radius:10px;--radius-s:6px;
+  --font-ui:"DM Sans",system-ui,sans-serif;--font-head:"Manrope",system-ui,sans-serif;--font-title:"Manrope",system-ui,sans-serif;
+  --head-weight:800;--title-weight:600;--title-size:16px;--h1-size:26px;
+}
+/* ---------- Direction B: Capitol granite and live oak ---------- */
+body[data-dir="b"]{
+  --bg:#eceeed;--surface:#fbfbfa;--ink:#1c2422;--muted:#56625f;--line:#cfd5d2;
+  --accent:#2b5c4c;--accent-ink:#fff;--accent-soft:#dfe9e4;
+  --nav-bg:#5e3a40;--nav-ink:#f4ecec;--nav-muted:#cdb3b6;--nav-active:#7a4c53;
+  --mark:#5e3a40;--radius:3px;--radius-s:2px;
+  --font-ui:"Public Sans",system-ui,sans-serif;--font-head:"Newsreader",Georgia,serif;--font-title:"Newsreader",Georgia,serif;
+  --head-weight:600;--title-weight:500;--title-size:19px;--h1-size:32px;
+}
+/* ---------- Direction C: docket, top navigation ---------- */
+body[data-dir="c"]{
+  --bg:#fff;--surface:#fff;--ink:#16191f;--muted:#5a6270;--line:#d9dde4;
+  --accent:#2447c8;--accent-ink:#fff;--accent-soft:#e7ecfb;
+  --nav-bg:#fff;--nav-ink:#16191f;--nav-muted:#5a6270;--nav-active:#e7ecfb;
+  --mark:#16191f;--radius:4px;--radius-s:4px;
+  --font-ui:"IBM Plex Sans",system-ui,sans-serif;--font-head:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;--font-title:"IBM Plex Sans",system-ui,sans-serif;
+  --head-weight:600;--title-weight:500;--title-size:16px;--h1-size:26px;
+}
+/* ---------- Direction D: Lone Star flag (navy leads; red stays small so it never reads as a party colour) ---------- */
+body[data-dir="d"]{
+  --bg:#f5f6f8;--surface:#fff;--ink:#0f1c33;--muted:#4f5b6e;--line:#d6dbe3;
+  --accent:#002868;--accent-ink:#fff;--accent-soft:#e3e9f5;
+  --nav-bg:#002868;--nav-ink:#fff;--nav-muted:#a9b8dc;--nav-active:#1b3f86;
+  --mark:#bf0a30;--radius:6px;--radius-s:4px;
+  --font-ui:"Public Sans",system-ui,sans-serif;--font-head:"Libre Franklin","Public Sans",sans-serif;--font-title:"Libre Franklin","Public Sans",sans-serif;
+  --head-weight:800;--title-weight:600;--title-size:16px;--h1-size:28px;
+}
+body[data-dir="d"] .side{box-shadow:inset -5px 0 0 #bf0a30}
+/* ---------- Direction E: bluebonnet and limestone ---------- */
+body[data-dir="e"]{
+  --bg:#f4efe4;--surface:#fffdf8;--ink:#1f2a3a;--muted:#5c6472;--line:#ddd4c3;
+  --accent:#2f55a4;--accent-ink:#fff;--accent-soft:#e3eaf7;
+  --nav-bg:#e9e1d0;--nav-ink:#1f2a3a;--nav-muted:#6b6556;--nav-active:#d9cdb4;
+  --mark:#b3282d;--radius:8px;--radius-s:5px;
+  --font-ui:"Public Sans",system-ui,sans-serif;--font-head:"Newsreader",Georgia,serif;--font-title:"Newsreader",Georgia,serif;
+  --head-weight:600;--title-weight:600;--title-size:18px;--h1-size:30px;
+}
+/* ---------- Direction F: ranch, saddle leather and brass ---------- */
+body[data-dir="f"]{
+  --bg:#f5f1ea;--surface:#fffcf7;--ink:#2a211b;--muted:#665a4f;--line:#e0d6c8;
+  --accent:#8c3b1f;--accent-ink:#fff;--accent-soft:#f3e3da;
+  --nav-bg:#3b2a1f;--nav-ink:#f6eee4;--nav-muted:#c4ae97;--nav-active:#5a4232;
+  --mark:#a8781f;--radius:4px;--radius-s:3px;
+  --font-ui:"Public Sans",system-ui,sans-serif;--font-head:"Zilla Slab",Georgia,serif;--font-title:"Zilla Slab",Georgia,serif;
+  --head-weight:600;--title-weight:600;--title-size:18px;--h1-size:30px;
+}
+:root{--dem:#3d6fb8;--rep:#c0463c;--bip:#7a4fb0;--bar:44px}
+body{
+  --hover:color-mix(in srgb,var(--accent) 6%,var(--surface));
+  --line-strong:color-mix(in srgb,var(--ink) 22%,var(--line));
+  margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--font-ui);-webkit-font-smoothing:antialiased;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:inherit}
+h1,h2,h3{text-wrap:balance}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+/* Reduced motion drops animations, unless the mock-up's "Play motion" switch overrides it for review */
+@media (prefers-reduced-motion:reduce){body:not([data-motion="on"]) *{transition:none!important}}
+
+/* ---------- Mock-up controls (not part of the design) ---------- */
+.controls{position:sticky;top:0;z-index:30;height:var(--bar);display:flex;gap:16px;align-items:center;overflow-x:auto;
+  padding:0 16px;background:#1d1d1f;color:#ddd;font:12.5px/1 system-ui,sans-serif;white-space:nowrap}
+.controls .grp{display:flex;gap:2px;align-items:center;background:#2c2c2f;border-radius:7px;padding:3px}
+.controls .lbl{color:#999;margin:0 6px 0 4px}
+.controls button{background:none;border:0;color:#ccc;border-radius:5px;padding:6px 10px;display:flex;align-items:center;gap:6px}
+.controls button:hover{color:#fff}
+.controls button[aria-pressed="true"]{background:#f2f2f2;color:#111}
+.controls .sw{width:10px;height:10px;border-radius:50%;box-shadow:inset 0 0 0 1px #0003}
+.controls .note{margin-left:auto;color:#888}
+
+/* ---------- Shell ---------- */
+.shell{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:calc(100vh - var(--bar))}
+.side{position:sticky;top:var(--bar);height:calc(100vh - var(--bar));overflow:auto;background:var(--nav-bg);color:var(--nav-ink);
+  padding:22px 14px;display:flex;flex-direction:column;gap:22px}
+.brand{font-family:var(--font-head);font-weight:var(--head-weight);font-size:19px;padding:0 10px;line-height:1.15}
+.brand small{display:block;font:400 12px/1.3 var(--font-ui);color:var(--nav-muted);margin-top:4px}
+.navgroup{display:grid;gap:1px}
+.navgroup h2{margin:0 0 4px;padding:0 10px;font:600 11px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--nav-muted)}
+.navgroup a{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--radius-s);text-decoration:none;font-size:14px}
+.navgroup a:hover{background:color-mix(in srgb,var(--nav-active) 60%,transparent)}
+.navgroup a[aria-current]{background:var(--nav-active);font-weight:600}
+.navgroup a span{color:var(--nav-muted);font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:500}
+.main{min-width:0;width:100%;padding:28px clamp(20px,2.5vw,40px) 96px}
+
+/* Direction C turns the sidebar into a top bar */
+body[data-dir="c"] .shell{grid-template-columns:minmax(0,1fr)}
+body[data-dir="c"] .side{position:sticky;height:auto;flex-direction:row;align-items:center;gap:24px;padding:10px 32px;border-bottom:1px solid var(--line);z-index:6}
+body[data-dir="c"] .brand small,body[data-dir="c"] .navgroup h2{display:none}
+body[data-dir="c"] .navgroup{display:flex;gap:2px}
+body[data-dir="c"] .navgroup + .navgroup{padding-left:20px;border-left:1px solid var(--line)}
+body[data-dir="c"] .navgroup a{padding:6px 10px}
+body[data-dir="c"] .navgroup a[aria-current]{color:var(--accent)}
+
+/* ---------- Shared bits ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:0 14px;border:1px solid var(--line);
+  border-radius:var(--radius-s);background:var(--surface);font-size:14px;font-weight:500;text-decoration:none;white-space:nowrap;transition:background .15s,border-color .15s}
+.btn:hover{border-color:var(--line-strong)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.primary:hover{background:color-mix(in srgb,var(--accent) 88%,#000)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.ghost:hover{background:var(--hover);color:var(--ink)}
+.btn.sm{height:30px;padding:0 10px;font-size:13px}
+.num{font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.01em;text-decoration:none;white-space:nowrap}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:99px;font-size:12px;font-weight:600;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.party{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--muted)}
+.party::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--p,var(--line))}
+.party.D{--p:var(--dem)} .party.R{--p:var(--rep)}
+.sep{display:flex;flex-wrap:wrap;align-items:center;gap:2px 0;font-size:13px;color:var(--muted)}
+.sep > *:not(:last-child)::after{content:"·";margin:0 7px;color:var(--line-strong)}
+.eyebrow{font:600 11px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+/* ---------- Page top ---------- */
+.pagetop{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 20px;margin-bottom:18px}
+h1{font-family:var(--font-head);font-weight:var(--head-weight);font-size:var(--h1-size);line-height:1.1;margin:0;letter-spacing:-.015em}
+.counts{margin:6px 0 0;color:var(--muted);font-size:14px}
+.counts b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.source{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:13px;margin:0}
+.source::before{content:"";width:7px;height:7px;border-radius:50%;background:#2c8a4b;box-shadow:0 0 0 3px #2c8a4b26}
+
+/* ---------- Filters ---------- */
+.filterbar{display:grid;gap:12px;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:22px}
+.filters{display:flex;flex-wrap:wrap;gap:8px}
+.search{position:relative;flex:1 1 280px;min-width:0}
+.search svg{position:absolute;left:12px;top:50%;translate:0 -50%;color:var(--muted)}
+.search input{width:100%;height:40px;padding:0 12px 0 36px;border:1px solid var(--line);border-radius:var(--radius-s);background:var(--bg);font:inherit;color:inherit}
+.search input:focus{outline:2px solid var(--accent);outline-offset:-1px;background:var(--surface)}
+.select{position:relative;display:inline-flex}
+.select select{appearance:none;height:40px;padding:0 32px 0 12px;border:1px solid var(--line);border-radius:var(--radius-s);background:var(--surface);font:inherit;font-size:14px;color:inherit}
+.select::after{content:"";position:absolute;right:13px;top:50%;width:6px;height:6px;border:solid var(--muted);border-width:0 1.5px 1.5px 0;rotate:45deg;translate:0 -70%;pointer-events:none}
+.select.on select{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.filters .btn{height:40px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 6px 0 11px;border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));
+  border-radius:99px;background:var(--accent-soft);font-size:13px;font-weight:500}
+.chip span{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;color:var(--muted);font-size:14px;line-height:1}
+.chip:hover span{background:var(--surface);color:var(--ink)}
+.linkbtn{border:0;background:none;padding:4px 6px;font-size:13px;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+
+/* ---------- Results + preview ---------- */
+.results{display:grid;grid-template-columns:minmax(0,1fr) clamp(340px,30vw,520px);gap:24px;align-items:start}
+.list{display:grid;gap:10px;min-width:0}
+.listhead{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px;color:var(--muted)}
+.listhead .select select{height:32px;font-size:13px}
+
+/* Party edge as in the original app: a 4px bar in the party colour, washing out to the card colour by 45% */
+.card{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:14px 14px 14px 16px;
+  border:1px solid var(--line);border-left:4px solid var(--p,var(--line));border-radius:var(--radius);cursor:pointer;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--p,var(--surface)) 9%,var(--surface)),var(--surface) 45%);transition:border-color .15s,box-shadow .15s}
+.card[data-party="D"]{--p:var(--dem)} .card[data-party="R"]{--p:var(--rep)} .card[data-party="B"]{--p:var(--bip)}
+.card:hover{border-top-color:var(--line-strong);border-right-color:var(--line-strong);border-bottom-color:var(--line-strong)}
+/* The previewed bill, three ways to compare (mock-up switch "Active bill"); none adds a border */
+/* Fill: the card takes the accent tint, the party wash stays on its left */
+body[data-sel~="fill"] .card[aria-selected="true"]{background:linear-gradient(90deg,color-mix(in srgb,var(--p,var(--accent)) 14%,var(--accent-soft)),var(--accent-soft) 45%)}
+body[data-sel~="fill"] .card[aria-selected="true"] .title a{color:var(--accent)}
+/* Pointer: an accent tab on the card's right edge points at the preview, which carries the same accent */
+body[data-sel="pointer"] .card[aria-selected="true"]::after{content:"";position:absolute;top:50%;right:-13px;translate:0 -50%;
+  border:9px solid transparent;border-left:12px solid var(--accent);border-right:0}
+body[data-sel="pointer"] .card[aria-selected="true"] .num{color:var(--accent)}
+body[data-sel="pointer"] .preview{box-shadow:inset 0 3px 0 var(--accent)}
+/* Star: the selected card's left edge becomes a flag hoist, a 28px band in the accent with a white star centred in it,
+   in place of the party bar. Text starts 36px in on every card in this style (4 + 32 unselected, 28 + 8 selected), so
+   selecting a card does not shift it. */
+body[data-sel="star"] .card{padding-left:32px}
+/* The band is drawn over the card, not made of a thick left border: a 28px border rounds the light area's inner
+   corner and leaves a scoop where the band meets the top and bottom border. */
+body[data-sel="star"] .card[aria-selected="true"]{z-index:2;border:2px solid var(--accent);padding:13px 13px 13px 34px}
+body[data-sel="star"] .card[aria-selected="true"]::after{content:"\2605";position:absolute;left:-2px;top:0;bottom:0;width:28px;
+  display:grid;place-items:center;font-size:19px;line-height:1;color:#fff;pointer-events:none;
+  animation:star-in .65s .12s cubic-bezier(.3,1.5,.5,1) backwards}
+/* One-time entrance on select, then still: the band sweeps in, a shine crosses it once, the star spins in and settles.
+   The band and shine are a ::before over the border area, so the card's own border stays the resting state. */
+/* Inside the border (left/top/bottom 0), not over it: at fractional screen scaling the browser snaps the 2px border to
+   device pixels but not an overlay, so an overlay stepped about 1px above the top border. 2px border + 26px = 28px band. */
+body[data-sel="star"] .card[aria-selected="true"]::before{content:"";position:absolute;left:0;top:0;bottom:0;width:26px;
+  border-radius:calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px);pointer-events:none;
+  background:linear-gradient(100deg,transparent 30%,#ffffff8c 50%,transparent 70%) -40px 0/40px 100% no-repeat,var(--accent);
+  animation:band-in .3s ease-out backwards,shine .7s .25s ease-in-out forwards}
+@keyframes band-in{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes shine{to{background-position:40px 0,0 0}}
+@keyframes star-in{from{opacity:0;scale:.2;rotate:-144deg}to{opacity:1;scale:1;rotate:0deg}}
+@media (prefers-reduced-motion:reduce){body:not([data-motion="on"])[data-sel="star"] .card[aria-selected="true"]::before,
+  body:not([data-motion="on"])[data-sel="star"] .card[aria-selected="true"]::after{animation:none}}
+body[data-sel="star"] .card[aria-selected="true"] .title a{color:var(--accent)}
+/* Flag: the hoist band becomes a small Texas flag (blue hoist with the white star, white over red), with fabric folds
+   rippling slowly from hoist to fly once (about 3s) after it sweeps in, then resting. Flag colours whatever the direction.
+   Text starts 48px in on every card in this style (4 + 44 unselected, 40 + 8 selected), so selecting does not shift it. */
+body[data-sel="flag"] .card{padding-left:44px}
+body[data-sel="flag"] .card[aria-selected="true"]{z-index:2;border:2px solid var(--accent);padding:13px 13px 13px 46px}
+body[data-sel="flag"] .card[aria-selected="true"] .title a{color:var(--accent)}
+/* top/bottom 0: the 2px selection border runs along the flag's top and bottom edges too */
+body[data-sel="flag"] .card[aria-selected="true"]::before{content:"";position:absolute;left:-2px;top:0;bottom:0;width:40px;
+  border-radius:calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px);pointer-events:none;
+  background:
+    repeating-linear-gradient(100deg,#0000 0 6px,#00000038 13px,#0000 20px,#ffffff40 27px,#0000 34px) 0 0/68px 100%,
+    linear-gradient(#002868,#002868) 0 0/24px 100% no-repeat,
+    linear-gradient(#fff 50%,#bf0a30 50%) 24px 0/16px 100% no-repeat;
+  box-shadow:inset -1px 0 0 #0000001f;
+  animation:band-in .3s ease-out backwards,ripple 2.8s .3s ease-in-out 1}
+body[data-sel="flag"] .card[aria-selected="true"]::after{content:"\2605";position:absolute;left:-2px;top:0;bottom:0;width:24px;
+  display:grid;place-items:center;font-size:17px;line-height:1;color:#fff;pointer-events:none;
+  animation:star-in .65s .12s cubic-bezier(.3,1.5,.5,1) backwards,bob 2.8s .3s ease-in-out 1}
+@keyframes ripple{to{background-position:68px 0,0 0,24px 0}}
+@keyframes bob{50%{translate:0 -1.5px;rotate:-6deg}}
+@media (prefers-reduced-motion:reduce){body:not([data-motion="on"])[data-sel="flag"] .card[aria-selected="true"]::before,
+  body:not([data-motion="on"])[data-sel="flag"] .card[aria-selected="true"]::after{animation:none}}
+/* First load only: the Star hoist starts as a Texas flag (same 28px band, so the text never moves), ripples once,
+   then fades to the plain Star band underneath. The script adds .flag-intro on load and removes it after. */
+.flag-intro{position:absolute;left:-2px;top:0;bottom:0;width:28px;z-index:1;pointer-events:none;
+  border-radius:calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px);
+  background:
+    repeating-linear-gradient(100deg,#0000 0 6px,#00000038 13px,#0000 20px,#ffffff40 27px,#0000 34px) 0 0/68px 100%,
+    linear-gradient(#002868,#002868) 0 0/17px 100% no-repeat,
+    linear-gradient(#fff 50%,#bf0a30 50%) 17px 0/11px 100% no-repeat;
+  animation:band-in .3s ease-out backwards,ripple-intro 2.8s .3s ease-in-out 1;transition:opacity .7s ease}
+.flag-intro::after{content:"\2605";position:absolute;left:0;top:0;bottom:0;width:17px;display:grid;place-items:center;
+  font-size:14px;line-height:1;color:#fff;animation:bob 2.8s .3s ease-in-out 1}
+.flag-intro.out{opacity:0}
+/* While the flag shows, the card's border is flag navy too, then fades back to the accent with the flag */
+body[data-sel="star"] .card[aria-selected="true"]{transition:border-color .7s ease}
+body[data-sel="star"] .card.intro[aria-selected="true"]{border-color:#002868}
+@keyframes ripple-intro{to{background-position:68px 0,0 0,17px 0}}
+/* Lift: the card rises with a soft shadow; the rest of the list steps back slightly */
+body[data-sel~="lift"] .card{transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s,opacity .2s}
+body[data-sel="lift"] .list:has(.card[aria-selected="true"]) .card:not([aria-selected="true"]){opacity:.62}
+/* Fill + lift: the tint already marks the card, so the rest of the list only steps back a little */
+body[data-sel="fill lift"] .list:has(.card[aria-selected="true"]) .card:not([aria-selected="true"]){opacity:.82}
+/* z-index: later cards are positioned too and would paint over the shadow. The raise stays under reduced motion;
+   only its animation is dropped (by the global transition rule). */
+body[data-sel~="lift"] .card[aria-selected="true"]{z-index:2;transform:translateY(-4px);
+  box-shadow:0 14px 30px -10px color-mix(in srgb,var(--ink) 45%,transparent),0 3px 8px -2px color-mix(in srgb,var(--ink) 22%,transparent)}
+.headrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.title{grid-column:1;margin:0;font-family:var(--font-title);font-weight:var(--title-weight);font-size:var(--title-size);line-height:1.3}
+.title a{text-decoration:none} .title a:hover{text-decoration:underline;text-underline-offset:3px}
+.brief{grid-column:1;margin:0;font-size:14px;color:var(--muted);max-width:72ch}
+.brief .eyebrow{margin-right:6px;font-size:10px}
+.card .sep{grid-column:1;margin-top:2px}
+.star{grid-column:2;grid-row:1 / span 2;align-self:start;display:grid;place-items:center;width:34px;height:34px;margin:-6px -4px 0 0;
+  border:0;border-radius:50%;background:none;color:var(--muted);font-size:19px;line-height:1}
+.star:hover{background:var(--hover);color:var(--ink)}
+.star[aria-pressed="true"]{color:var(--mark)}
+
+/* Companion bills: one joined block, so same-text bills read as one item */
+.group{display:grid;gap:8px;padding:0 8px 8px;border:1.5px solid var(--accent);border-radius:calc(var(--radius) + 4px);background:var(--accent-soft)}
+.grouphead{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:10px 4px 2px 8px}
+.grouphead .label{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;color:var(--accent)}
+.grouphead .label svg{flex:none}
+.grouphead .why{font-size:13px;color:var(--muted)}
+.grouphead .btn{margin-left:auto;background:var(--surface)}
+.groupmore{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:2px 8px 4px;font-size:13px;color:var(--muted)}
+.groupmore a{font-weight:700;color:var(--accent);text-decoration:none;font-variant-numeric:tabular-nums}
+.groupmore a:hover{text-decoration:underline}
+
+.preview{position:sticky;top:calc(var(--bar) + 20px);display:grid;gap:14px;padding:18px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.preview h2{margin:0;font-family:var(--font-title);font-weight:var(--title-weight);font-size:19px;line-height:1.3}
+.preview p{margin:0;font-size:14px;color:var(--muted)}
+.facts{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:14px}
+.facts dt{color:var(--muted)} .facts dd{margin:0}
+.preview .actions{display:grid;grid-template-columns:1fr auto;gap:8px}
+.preview .hint{font-size:12px;border-top:1px solid var(--line);padding-top:12px}
+
+/* ---------- Bill page ---------- */
+.back{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--muted);text-decoration:none;margin-bottom:14px}
+.back:hover{color:var(--ink)}
+.billhead{position:sticky;top:var(--bar);z-index:5;background:var(--bg);padding:12px 0 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 24px;align-items:start}
+.billhead h1{font-family:var(--font-title);font-weight:var(--title-weight);font-size:calc(var(--h1-size) - 2px);line-height:1.2;max-width:34ch;margin-top:6px}
+.billhead .actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.track{grid-column:1 / -1;list-style:none;display:grid;grid-template-columns:repeat(5,1fr);margin:14px 0 0;padding:0;font-size:13px}
+.track li{position:relative;padding:18px 8px 0 0;color:var(--muted)}
+.track li::before{content:"";position:absolute;left:0;right:0;top:5px;height:2px;background:var(--line)}
+.track li::after{content:"";position:absolute;left:0;top:0;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--line)}
+.track li.done::before,.track li.now::before{background:linear-gradient(90deg,var(--accent) 12px,var(--line) 12px)}
+.track li.done::after{background:var(--accent);border-color:var(--accent)}
+.track li.now{color:var(--ink);font-weight:600}
+.track li.now::after{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.track li small{display:block;font-weight:400;color:var(--muted)}
+.sectionnav{grid-column:1 / -1;display:flex;gap:2px;overflow-x:auto;margin-top:14px;border-bottom:1px solid var(--line)}
+.sectionnav a{padding:10px 12px;text-decoration:none;font-size:14px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.sectionnav a:hover{color:var(--ink)}
+.sectionnav a[aria-current]{color:var(--ink);border-color:var(--accent);font-weight:600}
+.billbody{display:grid;grid-template-columns:minmax(0,1fr) clamp(300px,26vw,440px);gap:40px;align-items:start;padding-top:26px}
+.billbody section{display:grid;gap:12px;margin-bottom:34px;min-width:0}
+.billbody h2{margin:0;font-family:var(--font-head);font-weight:var(--head-weight);font-size:20px}
+.billbody p{max-width:66ch;margin:0}
+.ai{display:grid;gap:8px;padding:16px 18px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.ai .eyebrow{color:var(--accent)}
+.ai p:first-of-type{font-size:17px;line-height:1.5}
+.ai .by{font-size:13px;color:var(--muted)}
+.law{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px;padding:12px 16px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);font-size:14px}
+.law a{font-weight:600;color:var(--accent)}
+/* Bill text set the way the Legislature prints it: numbered lines, underlined additions, struck deletions */
+.billtext{counter-reset:ln;padding:18px 22px 18px 0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  font:15px/1.75 Georgia,"Times New Roman",serif}
+.billtext div{counter-increment:ln;display:grid;grid-template-columns:52px 1fr}
+.billtext div::before{content:counter(ln);font:12px/2.2 var(--font-ui);color:var(--muted);text-align:right;padding-right:16px;font-variant-numeric:tabular-nums;user-select:none}
+.billtext ins{text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px}
+.billtext del{color:var(--muted)}
+.legend{font-size:13px;color:var(--muted)}
+.how{font-size:14px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+.how summary{cursor:pointer;font-weight:500;color:var(--ink)}
+.how p{margin-top:8px}
+.rail{position:sticky;top:calc(var(--bar) + 250px);display:grid;gap:12px}
+.fact{display:grid;gap:10px;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.fact h3{margin:0}
+.fact ul{margin:0;padding:0;list-style:none;display:grid;gap:8px;font-size:14px}
+.fact li{display:flex;justify-content:space-between;gap:8px}
+.fact li a{font-weight:700;color:var(--accent);text-decoration:none;font-variant-numeric:tabular-nums}
+.fact li span{color:var(--muted)}
+.fact.companions{border-color:var(--accent);background:linear-gradient(var(--accent-soft),var(--accent-soft)) top/100% 42px no-repeat,var(--surface)}
+.fact.companions .eyebrow{color:var(--accent)}
+
+.bottombar{display:none}
+
+@media (max-width:1100px){
+  .results{grid-template-columns:minmax(0,1fr)} .preview{display:none}
+  .billbody{grid-template-columns:minmax(0,1fr)} .rail{position:static}
+}
+@media (max-width:760px){
+  .side,body[data-dir="c"] .side{display:none}
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .main{padding:20px 16px 96px}
+  .billhead{grid-template-columns:minmax(0,1fr);position:static}
+  .billhead .actions{justify-content:flex-start}
+  .track li small{display:none}
+  .filters .btn{flex:1}
+  .controls .note{display:none}
+  .bottombar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;z-index:15;
+    padding-bottom:env(safe-area-inset-bottom,0px);background:var(--surface);border-top:1px solid var(--line)}
+  .bottombar a{padding:13px 4px;text-align:center;text-decoration:none;font-size:13px;color:var(--muted)}
+  .bottombar a[aria-current]{color:var(--accent);font-weight:700}
+}
+</style>
+</head>
+<body data-dir="a" data-sel="star">
+
+<div class="controls" role="region" aria-label="Mock-up controls">
+  <div class="grp"><span class="lbl">Direction</span>
+    <button data-setdir="a" aria-pressed="true"><i class="sw" style="background:#087d7a"></i>A Current</button>
+    <button data-setdir="b" aria-pressed="false"><i class="sw" style="background:#5e3a40"></i>B Granite</button>
+    <button data-setdir="c" aria-pressed="false"><i class="sw" style="background:#2447c8"></i>C Docket</button>
+    <button data-setdir="d" aria-pressed="false"><i class="sw" style="background:#002868"></i>D Lone Star</button>
+    <button data-setdir="e" aria-pressed="false"><i class="sw" style="background:#2f55a4"></i>E Bluebonnet</button>
+    <button data-setdir="f" aria-pressed="false"><i class="sw" style="background:#8c3b1f"></i>F Ranch</button>
+  </div>
+  <div class="grp"><span class="lbl">Active bill</span>
+    <button data-setsel="fill" aria-pressed="false">Fill</button>
+    <button data-setsel="pointer" aria-pressed="false">Pointer</button>
+    <button data-setsel="lift" aria-pressed="false">Lift</button>
+    <button data-setsel="fill lift" aria-pressed="false">Fill + Lift</button>
+    <button data-setsel="star" aria-pressed="true">&#9733; Star</button>
+    <button data-setsel="flag" aria-pressed="false">Flag</button>
+  </div>
+  <div class="grp" id="motion-grp" hidden><span class="lbl" style="color:#f0b45a">Your system asks for reduced motion</span>
+    <button id="motion-toggle" aria-pressed="false">Play motion anyway</button>
+  </div>
+  <div class="grp"><span class="lbl">Screen</span>
+    <button data-setscreen="explorer" aria-pressed="true">Bills list</button>
+    <button data-setscreen="bill" aria-pressed="false">Bill page</button>
+  </div>
+  <span class="note">Static mock-up, sample data. Narrow the window for the phone layout.</span>
+</div>
+
+<div class="shell">
+  <nav class="side" aria-label="Main">
+    <div class="brand">Texas Bill Atlas<small>90th Legislature, 2027</small></div>
+    <div class="navgroup"><h2>Browse</h2>
+      <a href="#" aria-current="page">Bills <span>1,441</span></a>
+      <a href="#">Today <span>63</span></a>
+      <a href="#">Near you</a>
+      <a href="#">Agencies</a>
+    </div>
+    <div class="navgroup"><h2>Yours</h2>
+      <a href="#">Watchlist <span>12</span></a>
+      <a href="#">Following <span>4</span></a>
+    </div>
+    <div class="navgroup"><h2>About</h2>
+      <a href="#">How this works</a>
+      <a href="#">Saving and sync</a>
+      <a href="#">Data and review status</a>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <!-- ================= Bills list ================= -->
+    <section id="screen-explorer">
+      <div class="pagetop">
+        <div>
+          <h1>Bills</h1>
+          <p class="counts"><b>214</b> of 1,441 match · <b>9</b> filed today · no hearings scheduled yet</p>
+        </div>
+        <p class="source">Texas Legislature data, updated today 6:10 am</p>
+      </div>
+
+      <div class="filterbar">
+        <div class="filters">
+          <label class="search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5"/></svg>
+            <input id="q" type="search" value="wage" aria-label="Search bills" placeholder="Bill number, author, subject or keyword"></label>
+          <span class="select on"><select id="f-topic" aria-label="Policy area"><option>Labor and employment</option></select></span>
+          <span class="select"><select id="f-chamber" aria-label="Chamber"><option>Either chamber</option></select></span>
+          <span class="select"><select id="f-stage" aria-label="Stage"><option>Any stage</option></select></span>
+          <button class="btn">More filters</button>
+          <button class="btn">Share or save</button>
+        </div>
+        <div class="chips"><span class="eyebrow" style="margin-right:4px">Filtering by</span>
+          <button class="chip">“wage”<span aria-label="Remove">×</span></button>
+          <button class="chip">Labor and employment<span aria-label="Remove">×</span></button>
+          <button class="linkbtn">Clear all</button>
+        </div>
+      </div>
+
+      <div class="results">
+        <div class="list">
+          <div class="listhead"><span>Showing 30 of 214</span>
+            <span class="select"><select id="sort" aria-label="Sort"><option>Newest action first</option></select></span>
+          </div>
+
+          <div class="group">
+            <div class="grouphead">
+              <span class="label"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="1.5" y="4.5" width="8" height="10" rx="1.5"/><path d="M5.5 4.5v-2a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-4"/></svg>5 companion bills</span>
+              <span class="why">Same text filed in the House and Senate</span>
+              <button class="btn sm">Watch all 5</button>
+            </div>
+            <article class="card" data-party="D" aria-selected="true" data-card>
+              <div class="headrow"><a class="num" href="#" data-open>HB 1051</a><span class="tag">Filed</span><span class="sep"><span>House</span><span class="party D">Democrat</span></span></div>
+              <button class="star" aria-pressed="true" aria-label="Stop watching HB 1051">&#9733;</button>
+              <h3 class="title"><a href="#" data-open>Relating to the minimum wage.</a></h3>
+              <p class="brief"><span class="eyebrow">AI summary</span>Would raise the state minimum wage to $15 an hour.</p>
+              <div class="sep"><span>Filed Nov 9</span><span>1 author</span><span>Changes Labor Code 62.051</span></div>
+            </article>
+            <article class="card" data-party="D" data-card>
+              <div class="headrow"><a class="num" href="#" data-open>SB 212</a><span class="tag">Filed</span><span class="sep"><span>Senate</span><span class="party D">Democrat</span></span></div>
+              <button class="star" aria-pressed="false" aria-label="Watch SB 212">&#9734;</button>
+              <h3 class="title"><a href="#" data-open>Relating to the minimum wage.</a></h3>
+              <div class="sep"><span>Filed Nov 9</span><span>1 author</span></div>
+            </article>
+            <div class="groupmore"><span>Also the same text</span><a href="#" data-open>HB 1102</a><a href="#" data-open>HB 1340</a><a href="#" data-open>SB 377</a></div>
+          </div>
+
+          <article class="card" data-party="R" data-card>
+            <div class="headrow"><a class="num" href="#" data-open>HB 733</a><span class="tag">Filed</span><span class="sep"><span>House</span><span class="party R">Republican</span></span></div>
+            <button class="star" aria-pressed="false" aria-label="Watch HB 733">&#9734;</button>
+            <h3 class="title"><a href="#" data-open>Relating to the authority of a municipality or county to regulate wages and employment benefits.</a></h3>
+            <p class="brief"><span class="eyebrow">AI summary</span>Would bar cities and counties from setting their own wage or benefit rules.</p>
+            <div class="sep"><span>Filed Nov 9</span><span>1 author, 3 coauthors</span><span>2 agencies</span></div>
+          </article>
+
+          <article class="card" data-party="B" data-card>
+            <div class="headrow"><a class="num" href="#" data-open>HB 902</a><span class="tag">Referred</span><span class="sep"><span>House</span><span class="party" style="--p:var(--bip)">Bipartisan</span></span></div>
+            <button class="star" aria-pressed="false" aria-label="Watch HB 902">&#9734;</button>
+            <h3 class="title"><a href="#" data-open>Relating to wage theft complaints filed with the Texas Workforce Commission.</a></h3>
+            <p class="brief"><span class="eyebrow">AI summary</span>Would give workers more time to file an unpaid-wage claim and raise penalties for repeat violations.</p>
+            <div class="sep"><span>Referred to Business &amp; Industry, Nov 10</span><span>2 authors, 6 coauthors</span><span>Texas Workforce Commission</span></div>
+          </article>
+
+          <article class="card" data-party="D" data-card>
+            <div class="headrow"><a class="num" href="#" data-open>HB 418</a><span class="tag">Filed</span><span class="sep"><span>House</span><span class="party D">Democrat</span></span></div>
+            <button class="star" aria-pressed="false" aria-label="Watch HB 418">&#9734;</button>
+            <h3 class="title"><a href="#" data-open>Relating to payment of wages to tipped employees.</a></h3>
+            <div class="sep"><span>Filed Nov 9</span><span>1 author</span><span>Texas Workforce Commission</span></div>
+          </article>
+        </div>
+
+        <aside class="preview" aria-label="Preview">
+          <div class="headrow"><span class="num">HB 1051</span><span class="tag">Filed</span><span class="sep"><span>House</span><span class="party D">Democrat</span></span></div>
+          <h2>Relating to the minimum wage.</h2>
+          <p>Would raise the state minimum wage to $15 an hour.</p>
+          <dl class="facts">
+            <dt>Last action</dt><dd>Filed, Nov 9</dd>
+            <dt>Author</dt><dd>Rep. Sample Author</dd>
+            <dt>Hearing</dt><dd>None scheduled</dd>
+            <dt>Companions</dt><dd>4 bills, same text</dd>
+          </dl>
+          <div class="actions"><button class="btn primary" data-open>Open bill</button><button class="btn" aria-label="Stop watching">&#9733; Watching</button></div>
+          <p class="hint">Click a card to preview it here. Click the number or title to open the bill.</p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ================= Bill page ================= -->
+    <section id="screen-bill" hidden>
+      <a class="back" href="#" data-back>&larr; Back to 214 bills for “wage”</a>
+      <header class="billhead">
+        <div>
+          <div class="headrow"><span class="num" style="font-size:17px">HB 1051</span><span class="tag">Filed</span><span class="sep"><span>House</span><span class="party D">Democrat</span><span>Rep. Sample Author</span></span></div>
+          <h1>Relating to the minimum wage.</h1>
+        </div>
+        <div class="actions">
+          <button class="btn primary">&#9733; Watching</button>
+          <button class="btn">Official bill</button>
+          <button class="btn ghost">RSS</button>
+          <button class="btn ghost">Copy for AI</button>
+        </div>
+        <ol class="track" aria-label="Progress">
+          <li class="now">Filed<small>Nov 9</small></li>
+          <li>House committee</li>
+          <li>House floor</li>
+          <li>Senate</li>
+          <li>Governor</li>
+        </ol>
+        <nav class="sectionnav" aria-label="Bill sections">
+          <a href="#" aria-current="true">Overview</a><a href="#">Text</a><a href="#">Changes to law</a><a href="#">People</a><a href="#">Agencies and impact</a><a href="#">History</a><a href="#">Sources</a>
+        </nav>
+      </header>
+
+      <div class="billbody">
+        <div>
+          <section>
+            <h2>What it would do</h2>
+            <div class="ai">
+              <span class="eyebrow">AI summary</span>
+              <p>Would raise the Texas minimum wage from the federal rate to $15 an hour, or the federal rate if that is ever higher.</p>
+              <p class="by">From a full-text review by Luna. Check it against the bill text below.</p>
+            </div>
+          </section>
+
+          <section>
+            <h2>Law it changes</h2>
+            <div class="law"><span><b>Labor Code §62.051</b> · Minimum wage</span><a href="#">Compare old and new</a></div>
+          </section>
+
+          <section>
+            <h2>Bill text</h2>
+            <div class="billtext">
+              <div><span>SECTION 1. Section 62.051, Labor Code, is amended to read as follows:</span></div>
+              <div><span>Sec. 62.051. MINIMUM WAGE. Except as provided by Section 62.057,</span></div>
+              <div><span>an employer shall pay to each employee <ins>not less than the greater of:</ins></span></div>
+              <div><span><ins>(1) $15 an hour; or</ins></span></div>
+              <div><span><ins>(2)</ins> the federal minimum wage under Section 6, Fair Labor</span></div>
+              <div><span>Standards Act of 1938 (29 U.S.C. Section 206).</span></div>
+              <div><span>SECTION 2. This Act takes effect September 1, 2027.</span></div>
+            </div>
+            <p class="legend">Underlined text is added. Struck text is removed. Sample text for layout, not the filed bill.</p>
+          </section>
+
+          <section>
+            <h2>Who it may affect</h2>
+            <p>Employers and hourly workers statewide. The Texas Workforce Commission would possibly enforce it.</p>
+            <details class="how"><summary>How we know</summary><p>Agencies are matched from the bill text and official subjects. A match means the bill may involve the agency, not that it does.</p></details>
+          </section>
+        </div>
+
+        <aside class="rail">
+          <div class="fact companions"><span class="eyebrow">Same text in 4 other bills</span>
+            <ul><li><a href="#">SB 212</a><span>Senate · Filed</span></li><li><a href="#">HB 1102</a><span>House · Filed</span></li><li><a href="#">HB 1340</a><span>House · Filed</span></li><li><a href="#">SB 377</a><span>Senate · Filed</span></li></ul>
+          </div>
+          <div class="fact"><span class="eyebrow">Status</span>
+            <dl class="facts"><dt>Stage</dt><dd>Filed</dd><dt>Last action</dt><dd>Nov 9, filed</dd><dt>Hearing</dt><dd>None scheduled</dd><dt>Takes effect</dt><dd>Sept 1, 2027</dd></dl>
+          </div>
+          <div class="fact"><span class="eyebrow">People</span>
+            <dl class="facts"><dt>Author</dt><dd><a href="#">Rep. Sample Author</a></dd></dl>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+</div>
+
+<nav class="bottombar" aria-label="Main, phone">
+  <a href="#" aria-current="page">Bills</a><a href="#">Today</a><a href="#">Watchlist</a><a href="#">More</a>
+</nav>
+
+<script>
+const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+const showMotion=()=>{document.getElementById('motion-grp').hidden=!reduced.matches};
+showMotion();reduced.addEventListener?.('change',showMotion);
+// First load: flag on the selected card, then the standard Star band. Skipped under reduced motion; any click ends it.
+const endIntro=()=>{document.querySelectorAll('.flag-intro').forEach(f=>f.remove());document.querySelectorAll('.card.intro').forEach(c=>c.classList.remove('intro'))};
+if(!reduced.matches&&document.body.dataset.sel==='star'){
+  const card=document.querySelector('.card[aria-selected="true"]');
+  if(card){const f=document.createElement('span');f.className='flag-intro';f.setAttribute('aria-hidden','true');card.append(f);card.classList.add('intro');
+    setTimeout(()=>{f.classList.add('out');card.classList.remove('intro')},3300);setTimeout(()=>f.remove(),4100)}
+}
+document.addEventListener('click',endIntro,true);
+const press=(sel,attr,val)=>document.querySelectorAll(sel).forEach(b=>b.setAttribute('aria-pressed',String(b.getAttribute(attr)===val)));
+function setScreen(s){
+  document.getElementById('screen-explorer').hidden=s!=='explorer';
+  document.getElementById('screen-bill').hidden=s!=='bill';
+  press('[data-setscreen]','data-setscreen',s);window.scrollTo(0,0);
+}
+document.addEventListener('click',e=>{
+  const t=e.target;
+  const d=t.closest('[data-setdir]');if(d){document.body.dataset.dir=d.dataset.setdir;press('[data-setdir]','data-setdir',d.dataset.setdir);return}
+  if(t.closest('#motion-toggle')){const on=document.body.dataset.motion!=='on';document.body.dataset.motion=on?'on':'';
+    document.getElementById('motion-toggle').setAttribute('aria-pressed',String(on));return}
+  const v=t.closest('[data-setsel]');if(v){document.body.dataset.sel=v.dataset.setsel;press('[data-setsel]','data-setsel',v.dataset.setsel);return}
+  const s=t.closest('[data-setscreen]');if(s){setScreen(s.dataset.setscreen);return}
+  if(t.closest('[data-open]')){e.preventDefault();setScreen('bill');return}
+  if(t.closest('[data-back]')){e.preventDefault();setScreen('explorer');return}
+  const star=t.closest('.star');if(star){const on=star.getAttribute('aria-pressed')!=='true';star.setAttribute('aria-pressed',String(on));star.innerHTML=on?'&#9733;':'&#9734;';return}
+  const c=t.closest('[data-card]');if(c){document.querySelectorAll('[data-card]').forEach(x=>x.removeAttribute('aria-selected'));c.setAttribute('aria-selected','true')}
+  if(t.closest('a[href="#"]'))e.preventDefault();
+});
+</script>
+</body>
+</html>

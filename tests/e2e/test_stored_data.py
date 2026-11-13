@@ -24,6 +24,8 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import expect
 
+from harness import reveal
+
 STORED = Path(__file__).resolve().parent / "fixtures" / "stored"
 STATE = json.loads((STORED / "stored.json").read_text("utf-8"))
 LOCAL = json.loads((STORED / "local_storage.json").read_text("utf-8"))
@@ -111,6 +113,7 @@ def test_disclaimer_is_not_shown_again(saved_device):
 
 def test_stored_sync_link_is_recognized(saved_device):
     page = saved_device.open("#watchlist")
+    reveal(page, "#sync-copy-edit")
     expect(page.locator("#sync-copy-edit")).to_be_visible()
     expect(page.locator("#sync-create")).to_have_count(0)
     expect(page.get_by_text("This device is synced; changes save automatically.")).to_be_visible()
@@ -162,6 +165,7 @@ def test_lists_load_from_this_browsers_own_storage_alone(device_factory, fresh_s
     expect(page.locator("#nav-watch")).to_have_text(str(len(STATE["watch"])))
     for bill in STATE["watch"]:
         expect(page.locator(f"#bill-list [data-watch='{bill}']")).to_have_attribute("aria-pressed", "true")
+    reveal(page, "#sync-create")
     expect(page.locator("#sync-create")).to_be_visible()  # no link: offers to create one
     page = device.open("#following")
     expect(page.locator(".followed-member")).to_have_count(len(STATE["follows"]))
@@ -218,6 +222,7 @@ def test_exporting_the_imported_profile_gives_the_same_file(device):
     page = import_file(device, STORED / "profile-file.json")
     expect(page.locator("#nav-watch")).to_have_text(str(len(STATE["watch"])))
     with page.expect_download() as download:
+        reveal(page, "#export-watch")
         page.click("#export-watch")
     assert download.value.suggested_filename == STATE["profile_download_name"]
     out = json.loads(Path(download.value.path()).read_text("utf-8"))

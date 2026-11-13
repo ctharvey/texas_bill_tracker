@@ -318,6 +318,40 @@ test('profile files carry saved searches', () => {
   assert.deepEqual(parseProfileFile(profileFile({searches: [search('abcd1234', 'Taxes')]})).searches.length, 1);
 });
 
+test('profile files carry the colour theme when it is a theme id', () => {
+  assert.equal(parseProfileFile(profileFile({watch: ['HB5'], theme: 'ranch'})).theme, 'ranch');
+  assert.equal('theme' in JSON.parse(profileFile({watch: ['HB5'], theme: '../x'})), false);
+  assert.equal('theme' in parseProfileFile(profileFile({watch: ['HB5']})), false);
+  const forged = JSON.stringify({...JSON.parse(profileFile({watch: ['HB5']})), theme: '<b>'});
+  assert.equal('theme' in parseProfileFile(forged), false);
+});
+
+test('the colour theme syncs last write wins; a device that never changed it does not overwrite it', async () => {
+  const server = sectionsServer(['follows', 'searches', 'theme']);
+  const phone = createSyncClient({fetchImpl: server.fetch, storage: memoryStorage(), getWatch: () => [], getTheme: () => 'bluebonnet', debounceMs: 0});
+  const {editKey} = await phone.create([]);
+  assert.equal(phone.theme, 'bluebonnet');
+  const laptop = createSyncClient({fetchImpl: server.fetch, storage: memoryStorage(), getWatch: () => ['HB5'], getTheme: () => 'granite', debounceMs: 0});
+  laptop.connect(editKey);
+  assert.equal((await laptop.pull()).theme, 'bluebonnet');  // Joining takes the link's theme, not this device's.
+  laptop.record('add', 'HB5'); await laptop.flush();        // A write without a theme change keeps the link's.
+  assert.equal((await phone.pull()).theme, 'bluebonnet');
+  laptop.record('theme', 'ranch'); await laptop.flush();
+  assert.equal((await phone.pull()).theme, 'ranch');
+  phone.record('theme', 'lone-star'); phone.record('theme', 'granite'); await phone.flush();
+  assert.equal((await laptop.pull()).theme, 'granite');
+});
+
+test('a server that predates the theme drops it harmlessly', async () => {
+  const server = sectionsServer(['follows', 'searches']);
+  const phone = createSyncClient({fetchImpl: server.fetch, storage: memoryStorage(), getWatch: () => ['HB5'], getTheme: () => 'ranch', debounceMs: 0});
+  await phone.create(['HB5']);
+  assert.equal(phone.theme, null);
+  phone.record('theme', 'bluebonnet'); await phone.flush();
+  const pulled = await phone.pull();
+  assert.deepEqual([pulled.watch, pulled.theme, phone.linked.pending], [['HB5'], null, 0]);
+});
+
 test('a server that keeps follows but not searches never clears saved searches and is not rewritten every pull', async () => {
   const server = sectionsServer(['follows']);  // The release before saved searches.
   let mine = [search('aaaa1111', 'Mine')];

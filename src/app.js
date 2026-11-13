@@ -1,14 +1,18 @@
+import {SEARCH_FIELDS, searchFields, searchText, matchReasons} from './features/search/model.js';
+import {nextVisit, changedSince, newestReviewed} from './features/home/model.js';
+import {runState, passRows, lookup, RUN_LIMIT_MINUTES} from './features/review/model.js';
 import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal,
   STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
 import {fillDrawerBrackets} from './features/brackets/view.js';
+import {setupThemePicker, setupModePicker, setTheme, savedTheme} from './features/theme/view.js';
 import {state} from './core/state.js';
 import {$, esc, toast} from './core/dom.js';
 import {timeoutSignal} from './core/net.js';
 import {registerHooks} from './core/hooks.js';
 import {registerView, setFallbackView, viewHeading, renderView} from './core/router.js';
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
-import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
+import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, visitKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
   cleanSearches, applySearchOps, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
 import {createSyncClient} from './sync.js';
@@ -19,6 +23,13 @@ const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last ac
 const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
 const reviews = new Map();
 loadSaved();
+// The dashboard visit before this one: read, and today stamped, the first time the dashboard is drawn in this page
+// load, so other pages never add the key. null on a first visit or without storage.
+let visit=null;
+function previousVisit(){
+  if(!visit){visit=nextVisit(readJson(visitKey),chicagoDate(new Date()));if(STORAGE_OK)writeJson(visitKey,visit.store)}
+  return visit.prev;
+}
 
 const shortDate = iso => iso ? new Date(`${String(iso).slice(0,10)}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}) : '';
 const dateText = iso => iso ? new Date(`${String(iso).slice(0,10)}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}) : 'Not available';
@@ -32,7 +43,7 @@ const NAME_TO_AGENCY_ID = new Map(AGENCIES.flatMap(a=>[[a.name.toLowerCase(),a.i
 const normalized=normalizeBill;
 
 async function init(){
-  registerHooks({renderContent, renderOverview, showDrawer, toast});
+  registerHooks({renderContent, renderOverview, openBillPage, toast});
   registerViews();
   registerClicks();
   const now=new Date();
@@ -100,22 +111,28 @@ async function init(){
   document.addEventListener('change',handleChange);
   document.addEventListener('input',handleInput);
   document.addEventListener('submit',e=>{if(e.target.id==='near-address-form'){e.preventDefault();nearAddress($('#near-address')?.value)}
+    if(e.target.id==='home-search-form'){e.preventDefault();location.hash=buildHash('all',{query:$('#home-search').value.trim()})}
+    if(e.target.id==='review-lookup-form'){e.preventDefault();const id=$('#review-lookup-result [data-open]')?.dataset.open;if(id)openBillPage(id,true)}
     const form=e.target.closest?.('[data-search-rename-form]');
     if(form){e.preventDefault();const s=state.searches.find(x=>x.id===form.dataset.searchRenameForm),name=form.elements.name.value.trim().slice(0,80);
       if(s&&name&&name!==s.name)changeSearch('save-search',{...s,name});state.renamingSearch=null;renderContent()}});
   document.addEventListener('focusin',event=>{
     if(event.target.id==='filter-agency')showAgencyChoices('');
   });
+  document.addEventListener('toggle',e=>{if(e.target.id==='more-filters')state.moreFiltersOpen=e.target.open;if(e.target.id==='watch-save')state.watchSaveOpen=e.target.open},true);
+  document.addEventListener('click',e=>{const m=$('#share-menu');if(m?.open&&(!m.contains(e.target)||e.target.closest('.share-panel button')))setTimeout(()=>{m.open=false})});
   document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&preview.id&&!$('#bill-preview')?.hidden){closePreview();return}
+    if(event.key==='Escape'&&$('.sidebar').classList.contains('nav-open')){setNavOpen(false);$('#nav-more').focus()}
     if(event.target.id==='filter-agency'&&handleAgencyKeydown(event))return;
-    if(event.key==='Escape')closeDrawer();
   });
-  $('#drawer-scrim').addEventListener('click',closeDrawer);
   // A sync link pasted into an open tab arrives as a hash change, not a page load.
   window.addEventListener('hashchange',()=>{const key=applyLocation(false);if(key)openSyncLink(key)});
   state.near=cleanNear(readJson(NEAR_KEY),null);
   const syncKey=applyLocation(true);
   setupDisclaimer();
+  setupThemePicker(id=>{if(sync.linked?.mode==='edit')sync.record('theme',id)});
+  setupModePicker();
   setupSync(syncKey);
   if(state.bills.length)loadStatutes();
   // Keep the progress view current while it is open; other views never refetch.
@@ -124,8 +141,12 @@ async function init(){
     const before=state.reviewStatus?.updated_at;await loadReviewStatus();
     if(state.view==='review'&&state.reviewStatus?.updated_at!==before){
       const open=[...document.querySelectorAll('.review-group')].map(d=>d.open);
+      const box=$('#review-lookup'),typed=box?.value||'',focused=document.activeElement===box,caret=box?.selectionStart??null;
       renderOverview();renderContent();
       document.querySelectorAll('.review-group').forEach((d,i)=>{if(i<open.length)d.open=open[i]});
+      const again=$('#review-lookup');
+      if(again&&typed){again.value=typed;$('#review-lookup-result').innerHTML=reviewLookupHtml(typed)}
+      if(again&&focused){again.focus();if(caret!==null)again.setSelectionRange(caret,caret)}
     }
   },60000);
 }
@@ -143,7 +164,7 @@ function setupDisclaimer(){
 }
 
 // ---- Saving choices without accounts: URL state, remembered filters, files and private sync links ----
-const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>[...state.watch],getFollows:()=>[...state.follow],getSearches:()=>state.searches});
+const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>[...state.watch],getFollows:()=>[...state.follow],getSearches:()=>state.searches,getTheme:savedTheme});
 let syncAvailable=null,lastPull=0;
 const siteBase=()=>location.href.split('#')[0];
 
@@ -165,26 +186,25 @@ function switchFilters(view){
   filtersFor=view;
 }
 
-// Returns a sync key from the URL, if any, for setupSync to resolve.
-// The address without its open bill; when only the bill differs, Back/Forward just open or close the drawer.
+// The address without its bill: where an old `#all?…&bill=HB1` link's Back to results goes.
 const withoutBill=hash=>String(hash||'').replace(/([?&])bill=[^&]*&?/,'$1').replace(/[?&]$/,'');
-let drawerPushed=false;  // The open bill added a history entry, so closing it steps back over that entry.
+// The page a bill was opened from: its address, how many results were showing and the scroll position. Back to
+// results (or the browser's Back) to that address restores them; on a cold load there is only an address.
+let billReturn=null;
 
+// Returns a sync key from the URL, if any, for setupSync to resolve.
 function applyLocation(initial){
   const p=parseHash(location.hash);
-  if(!initial&&withoutBill(location.hash)===withoutBill(currentHash())){
-    // Forward onto a bill entry: the entry below it is the same page without the bill, so closing steps back.
-    if(p.bill&&p.bill!==state.openBill&&state.bills.some(b=>b.id===p.bill)){showDrawer(p.bill);drawerPushed=true}
-    else if(!p.bill&&state.openBill){drawerPushed=false;closeDrawer()}
-    return p.sync;
-  }
-  if(!p.bill&&state.openBill){drawerPushed=false;closeDrawer()}
+  // An old link with `bill=` on another view opens the bill page; setView's persistState replaces the address.
+  const legacy=Boolean(p.bill)&&p.view!=='bill';
+  if(legacy)billReturn={hash:withoutBill(location.hash)};
+  const view=p.bill?'bill':p.view==='bill'?'all':p.view;
   // Filters in the address belong to the view it names; otherwise each view gets its own remembered set.
   let urlFilters=true;
   if(!initial&&(p.hasFilters||p.list)&&FILTERED_VIEWS.has(p.view)&&filtersFor!==p.view)viewFilters[filtersFor]=pickFilters(state);
   if(p.hasFilters)applyFilters(p.filters);
   else if(p.list)applyFilters({});  // A share link shows its whole list, even in a tab with filters set.
-  else if(initial&&!p.bill&&!p.sync){
+  else if(initial&&!legacy&&!p.sync){
     // Remembered filters are the explorer's; a Watchlist opened directly starts unfiltered.
     if(p.view==='watchlist'){viewFilters.all=readJson(prefsKey)?.filters||{};applyFilters({})}
     else applyFilters(readJson(prefsKey)?.filters);
@@ -196,8 +216,12 @@ function applyLocation(initial){
   if(p.member!==state.memberCode)state.memberShow={};
   state.memberCode=p.member;
   state.statuteKey=p.statute;
-  setView(p.view);
-  if(p.bill&&state.bills.some(b=>b.id===p.bill))showDrawer(p.bill);
+  state.openBill=view==='bill'?p.bill:null;
+  // Arriving back at the page a bill was opened from: show as many results as before, then return to the same place.
+  const back=view!=='bill'&&billReturn?.scrollY!==undefined&&location.hash===billReturn.hash?billReturn:null;
+  if(back){state.visibleCount=Math.max(state.visibleCount,back.visibleCount);billReturn=null}
+  setView(view);
+  if(back)window.scrollTo({top:back.scrollY,behavior:'instant'});
   return p.sync;
 }
 
@@ -206,18 +230,31 @@ function currentHash(){
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey});
 }
 
-// Address of this view with `id` open, so a bill title is a real link (new tab, copy link) as well as a click target.
+// A bill's page address, so a bill title is a real link (new tab, copy link) as well as a click target.
 function billHref(id){
-  return buildHash(state.view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:id,
-    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey});
+  return buildHash('bill',{},{list:state.sharedMode==='link'?state.sharedList:null,bill:id,
+    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null});
 }
 
+// Opens a bill's page with a history entry, remembering where it was opened from (not when moving bill to bill).
+function openBillPage(id,push=false){
+  if(state.view!=='bill')billReturn={hash:currentHash(),visibleCount:state.visibleCount,scrollY:window.scrollY};
+  state.openBill=id;
+  setView('bill',push);
+  window.scrollTo({top:0,behavior:'instant'});
+}
+
+// Back to results: the page the bill was opened from, or the explorer when the bill page was the first page loaded.
+function leaveBillPage(){location.hash=billReturn?.hash||'#all'}
+
+// prefs-v1 fields other than the filters (the colour theme) survive a filter save.
+const keptPrefs=()=>{const p=readJson(prefsKey);return p&&typeof p==='object'&&!Array.isArray(p)?p:{}};
 // push=true adds a history entry (opening a bill), so Back closes it instead of leaving the site.
 function persistState(push=false){
   const hash=currentHash();
   let pushed=false;
   if(location.hash!==hash)try{if(push){history.pushState(null,'',hash);pushed=true}else history.replaceState(null,'',hash)}catch{}
-  if(state.view==='all'&&filtersFor==='all'&&!state.sharedList&&!(readJson(prefsKey)?.filters&&sameFilters(readJson(prefsKey).filters,state)))writeJson(prefsKey,{filters:pickFilters(state)});
+  if(state.view==='all'&&filtersFor==='all'&&!state.sharedList&&!(readJson(prefsKey)?.filters&&sameFilters(readJson(prefsKey).filters,state)))writeJson(prefsKey,{...keptPrefs(),filters:pickFilters(state)});
   return pushed;
 }
 
@@ -301,10 +338,10 @@ function followedMarkup(){
 }
 function setWatch(ids){state.watch=new Set(ids);saveWatchLocal()}
 const FOLLOW_VIEWS=new Set(['following','member','local']);
-function refreshWatch(){renderOverview();if(state.view==='all'||state.view==='watchlist'||FOLLOW_VIEWS.has(state.view))renderContent()}
+function refreshWatch(){renderOverview();if(state.view==='home')refreshHome();else if(state.view==='all'||state.view==='watchlist'||FOLLOW_VIEWS.has(state.view))renderContent()}
 // `sections` from sync: {follows, searches}, each the link's copy or null when the server did not say.
 const onSynced=(watch,error,sections)=>{if(error){toast(`Sync: ${error.message}`);return}setWatch(watch);const moved=adoptFollows(sections?.follows)|adoptSearches(sections?.searches);renderOverview();
-  if(state.view==='all'||state.view==='watchlist')renderResults();else if(moved&&FOLLOW_VIEWS.has(state.view))renderContent()};
+  if(state.view==='all'||state.view==='watchlist')renderResults();else if(state.view==='home')refreshHome();else if(moved&&FOLLOW_VIEWS.has(state.view))renderContent()};
 function changeWatch(op,ids){
   for(const id of ids){if(op==='add'?state.watch.has(id):!state.watch.has(id))continue;op==='add'?state.watch.add(id):state.watch.delete(id);sync.record(op,id,onSynced)}
   saveWatchLocal();
@@ -316,7 +353,7 @@ async function setupSync(key){
   else if(sync.linked)await pullSync(false);
   window.addEventListener('focus',()=>{if(Date.now()-lastPull>30000)pullSync(false)});
   persistState();
-  if(state.view==='watchlist'||state.view==='saving')renderContent();
+  if(state.view==='home')refreshHome();else if(state.view==='watchlist'||state.view==='saving')renderContent();
 }
 
 async function openSyncLink(key){
@@ -338,7 +375,8 @@ async function pullSync(mergeLocal){
   if(!syncAvailable||!sync.linked)return;
   lastPull=Date.now();
   try{
-    const {watch,follows,searches}=await sync.pull();  // The client already merged this device's follows and searches.
+    const {watch,follows,searches,theme}=await sync.pull();  // The client already merged this device's follows and searches.
+    if(theme)setTheme(theme);
     const local=[...state.watch];
     setWatch(watch);adoptFollows(follows);adoptSearches(searches);
     if(mergeLocal)changeWatch('add',local.filter(id=>!watch.includes(id)));  // Joining keeps this device's bills.
@@ -365,14 +403,16 @@ function watchTools(){
   const syncPart=syncAvailable===false?'<p class="tools-note">Private sync links aren’t switched on for this site yet. Use a share link or a file to move your list for now.</p>'
     :linked?.editKey?`<p class="tools-note">This device is synced; changes save automatically.</p><div class="tools-row"><button class="outline-button" id="sync-copy-edit">Copy edit link</button><button class="outline-button" id="sync-copy-view">Copy view-only link</button><a class="outline-button" href="./api/sync/feed/${esc(linked.viewKey||'')}.xml" target="_blank" rel="noopener noreferrer">Watchlist RSS</a></div><p class="tools-note">Open the <strong>edit link</strong> on your other devices. Anyone who has it can change this list, so keep it private, like a password. The <strong>view-only link</strong> is safe to share.</p><div class="tools-row"><button class="text-button" id="sync-forget">Stop syncing on this device</button><button class="text-button danger" id="sync-delete">Delete sync link</button></div>`
     :`<p class="tools-note">Get a private link that keeps this watchlist the same on your phone, laptop and work computer. No account, email or name.</p><div class="tools-row"><button class="primary-button" id="sync-create" ${syncAvailable?'':'disabled'}>Create sync link</button></div><p class="tools-note">Already have one? Open it on this device.</p>`;
-  return `<div class="watch-tools"><section><h3>Save and share</h3><p class="tools-note">Your watchlist is kept in this browser. To move it to another device or person:</p><div class="tools-row"><button class="outline-button" id="share-watch" ${none}>Copy share link</button><button class="outline-button" id="export-watch" ${n||state.follow.length||state.searches.length?'':'disabled'} title="Your watchlist, followed legislators and saved searches, in one file">Export file</button><button class="outline-button" id="import-watch">Import file</button><input type="file" id="import-watch-file" accept=".json,.txt,.csv,application/json,text/plain,text/csv" hidden></div><p class="tools-note">Each bill also has an RSS feed in its details, for following it in Outlook or a feed reader. <a href="#saving" data-view="saving">How saving works →</a></p></section><section><h3>Sync across devices</h3>${syncPart}</section></div>`;
+  const synced=Boolean(linked?.editKey);
+  const syncState=synced?'Synced across your devices':'This device only';
+  return `<details class="watch-save" id="watch-save"${state.watchSaveOpen?' open':''}><summary><span>Save, share and sync</span><span class="watch-sync-state${synced?' synced':''}">${syncState}</span></summary><div class="watch-tools"><section><h3>Save and share</h3><p class="tools-note">Your watchlist is kept in this browser. To move it to another device or person:</p><div class="tools-row"><button class="outline-button" id="share-watch" ${none}>Copy share link</button><button class="outline-button" id="export-watch" ${n||state.follow.length||state.searches.length?'':'disabled'} title="Your watchlist, followed legislators and saved searches, in one file">Export file</button><button class="outline-button" id="import-watch">Import file</button><input type="file" id="import-watch-file" accept=".json,.txt,.csv,application/json,text/plain,text/csv" hidden></div><p class="tools-note">Each bill also has an RSS feed in its details, for following it in Outlook or a feed reader. <a href="#saving" data-view="saving">How saving works →</a></p></section><section><h3>Sync across devices</h3>${syncPart}</section></div></details>`;
 }
 
 async function handleSaveClick(target){
   const hit=sel=>target.closest(sel);
   if(hit('#copy-view-link')){persistState();return copyText(location.href,'Link to this view')}
   if(hit('#share-watch'))return copyText(siteBase()+buildHash('all',{},{list:[...state.watch]}),'Share link');
-  if(hit('#export-watch')){download('texas-bill-atlas-saved.json',profileFile({watch:state.watch,follows:state.follow,searches:state.searches}),'application/json');return toast('Watchlist, followed legislators and saved searches exported')}
+  if(hit('#export-watch')){download('texas-bill-atlas-saved.json',profileFile({watch:state.watch,follows:state.follow,searches:state.searches,theme:savedTheme()}),'application/json');return toast('Watchlist, followed legislators and saved searches exported')}
   if(hit('#import-watch')){$('#import-watch-file').click();return}
   if(hit('#shared-add')){const before=state.watch.size;changeWatch('add',state.sharedList);refreshWatch();return toast(`Added ${state.watch.size-before} bills to your watchlist`)}
   if(hit('#shared-close')){Object.assign(state,{sharedList:null,sharedMode:null,sharedSyncKey:null,visibleCount:30});return renderContent()}
@@ -390,7 +430,8 @@ async function handleSaveClick(target){
 async function importWatchlist(file){
   try{
     if(file.size>1024*1024)throw Error('Select a file smaller than 1 MB');
-    const {bills,follows,searches}=parseProfileFile(await file.text()),before=state.watch.size,followed=state.follow.length;
+    const {bills,follows,searches,theme}=parseProfileFile(await file.text()),before=state.watch.size,followed=state.follow.length;
+    if(theme){const id=setTheme(theme);if(sync.linked?.mode==='edit')sync.record('theme',id)}  // Like the bills below, a linked device syncs it.
     changeWatch('add',bills);changeFollow('follow',follows);
     const known=new Set(state.searches.map(s=>s.id)),added=searches.filter(s=>!known.has(s.id)).slice(0,Math.max(0,MAX_SEARCHES-state.searches.length));
     for(const s of added)changeSearch('save-search',s);
@@ -409,14 +450,24 @@ async function loadReviewStatus(){
   }catch(error){console.warn('Review status unavailable',error.message)}
 }
 
-function setView(view){
+function setNavOpen(open){
+  $('.sidebar').classList.toggle('nav-open',open);
+  const more=$('#nav-more');more.setAttribute('aria-expanded',String(open));more.querySelector('.nav-more-label').textContent=open?'Close':'More';
+}
+// push=true adds a history entry (opening a bill page), so the browser's Back returns to the page before it.
+function setView(view,push=false){
   switchFilters(view);
   state.view=view;
+  if(view!=='bill')state.openBill=null;
+  setNavOpen(false);
+  preview.id=null;
   document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===view));
   const [title,subtitle]=viewHeading(view);
   $('#page-title').innerHTML=title;$('#page-subtitle').textContent=subtitle;
+  // A bill page has its own header in place of the page heading.
+  $('.page-heading').hidden=view==='bill';
   $('#overview').hidden=!['all','watchlist'].includes(view);
-  renderNotice();renderOverview();renderContent();persistState();
+  renderNotice();renderOverview();renderContent();persistState(push);
 }
 
 function renderNotice(){
@@ -431,23 +482,21 @@ function renderNotice(){
   const fileName=state.meta?.source_file||String(state.meta?.coverage_note||'').replace(/^Local file:\s*/,'').replace(/\.\s*Imported rows.*$/,'');
   const copy=unavailable?'<strong>Dataset unavailable.</strong> '+esc(state.meta.coverage_note):curated?'<strong>Curated opening-day snapshot.</strong> This is a selection of confirmed filings, not the full 90R docket. Automated official bulk-feed sync is prepared but not yet verified.':imported?`<strong>Local file, not official data.</strong> Showing rows imported from ${esc(fileName)}; they have not been verified against the legislature’s published files.`:fallback?`<strong>Showing the bundled copy.</strong> The live dataset could not be loaded, so this is the bundled snapshot generated ${esc(stampText(state.meta.generated_at))}; it may be out of date.${staleCopy}`:stale?`<strong>Bulk-data snapshot may be out of date.</strong> Generated ${esc(stampText(state.meta.generated_at))}.${staleCopy}`:'<strong>Bulk-data snapshot.</strong> Derived from the legislature’s published files; changes may lag the official record.';
   const warn=unavailable||imported||fallback||stale;
-  $('#source-notice').className=`source-notice${warn?' warn':''}`;
-  $('#source-notice').innerHTML=`<span class="notice-icon">${curated?'◷':warn?'!':'✓'}</span><div>${copy} <a href="#data" data-view="data">Coverage & sources →</a></div>`;
+  // A healthy live snapshot gets one slim line; anything to be careful about keeps the full box.
+  const slim=!warn&&!curated;
+  $('#source-notice').className=`source-notice${warn?' warn':''}${slim?' slim':''}`;
+  $('#source-notice').innerHTML=`<span class="notice-icon">${curated?'◷':warn?'!':'✓'}</span><div>${slim?'<strong>Bulk-data snapshot</strong> from the legislature’s published files; it may lag the official record.':copy} <a href="#data" data-view="data">Coverage & sources →</a></div>`;
   $('#footer-timestamp').textContent=`${imported?'Imported':'Snapshot'}: ${stampText(state.meta?.generated_at)}`;
 }
 
 function renderOverview(){
   const bills=state.view==='watchlist'?state.bills.filter(b=>state.watch.has(b.id)):state.bills;
-  const agencies=unique(bills.flatMap(b=>b.agencies.map(a=>a.id))).filter(id=>id!=='all-state-agencies').length;
   const scheduled=bills.filter(b=>assessHearing(b).level===3).length;
   const today=bills.filter(b=>b.filed_at===new Date().toLocaleDateString('sv-SE',{timeZone:'America/Chicago'})).length;
-  const cards=[
-    ['Bills in view',bills.length,'▦',state.meta?.data_mode==='curated'?'Curated sample, not session total':'Imported dataset'],
-    ['Agencies connected',agencies,'◈','Explicit + possible impact tags','accent'],
-    ['Filed today',today,'↗','According to imported filing dates','gold'],
-    ['Hearings scheduled',scheduled,'◷','Confirmed by recorded actions','violet']
-  ];
-  $('#overview').innerHTML=cards.map(([label,count,icon,foot,accent])=>`<div class="stat-card"><div class="stat-top"><span>${label}</span><span class="stat-icon">${icon}</span></div><div class="stat-value ${accent||''}">${count.toLocaleString()}</div><div class="stat-foot">${foot}</div></div>`).join('');
+  const part=(n,one,many,title)=>`<span title="${title}"><strong>${n.toLocaleString()}</strong> ${n===1?one:many}</span>`;
+  $('#overview').innerHTML=[part(bills.length,'bill in view','bills in view',state.meta?.data_mode==='curated'?'Curated sample, not the session total':'Bills in this snapshot'),
+    part(today,'filed today','filed today','According to the filing dates in the data'),
+    part(scheduled,'hearing scheduled','hearings scheduled','Confirmed by recorded actions')].join('<span aria-hidden="true">·</span>');
   $('#nav-all').textContent=state.bills.length;
   $('#nav-watch').textContent=state.watch.size;
   $('#nav-follow').textContent=state.follow.length+state.searches.length;
@@ -459,18 +508,20 @@ function renderContent(){renderView(state.view,$('#dynamic-content'))}
 
 // Each view's heading and content. Features take theirs over as they move into src/features/.
 function registerViews(){
-  registerView('all',{heading:['See what’s moving.<br><em>Know what it changes.</em>','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:explorerMarkup,after:renderResults});
-  registerView('watchlist',{heading:['Your watchlist.<br><em>Keep the signal.</em>','Bills you starred on this device, with a clear view of their movement.'],render:explorerMarkup,after:renderResults});
-  registerView('following',{heading:['Following.<br><em>The people behind the bills.</em>','Legislators you follow on this device, and every bill they file or sign onto.'],render:followingMarkup});
-  registerView('today',{heading:['Today at the Lege.<br><em>What moved, by topic.</em>','Bills with a recorded action today, grouped by type of action. Dates follow Texas time.'],render:todayMarkup});
-  registerView('local',{heading:['Near you.<br><em>Your legislators, your bills.</em>','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],render:nearMarkup});
-  registerView('member',{heading:['One legislator.<br><em>Every bill they’re on.</em>','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],render:memberMarkup});
-  registerView('statute',{heading:['One section of law.<br><em>Every bill that changes it.</em>','The bills that would amend, add or repeal this section of Texas law, with their wording side by side.'],render:statuteMarkup});
-  registerView('agencies',{heading:['Follow the agencies.<br><em>Not just the bills.</em>','Explore where legislation might land across Texas government.'],render:agenciesMarkup});
-  registerView('review',{heading:['Full-text review.<br><em>Bill by bill.</em>','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:reviewMarkup});
-  registerView('method',{heading:['The scoring method.<br><em>No black boxes.</em>','Signals and uncertainty are displayed separately from verified legislative actions.'],render:methodMarkup});
-  registerView('saving',{heading:['Save your work.<br><em>No account needed.</em>','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],render:savingMarkup});
-  registerView('data',{heading:['Behind the tracker.<br><em>Follow the source.</em>','Understand coverage, refreshes, and how to load or export bill data.'],render:dataMarkup});
+  registerView('home',{heading:['This session, at a glance.','What changed on your bills, what moved today, upcoming hearings and Luna’s newest reviews.'],render:homeMarkup});
+  registerView('all',{heading:['See what’s moving.','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:explorerMarkup,after:renderResults});
+  registerView('watchlist',{heading:['Your watchlist.','Bills you starred on this device, with a clear view of their movement.'],render:explorerMarkup,after:renderResults});
+  registerView('following',{heading:['Following.','Legislators you follow on this device, and every bill they file or sign onto.'],render:followingMarkup});
+  registerView('today',{heading:['Today at the Lege.','Bills with a recorded action today, grouped by type of action. Dates follow Texas time.'],render:todayMarkup});
+  registerView('local',{heading:['Near you.','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],render:nearMarkup});
+  registerView('member',{heading:['One legislator.','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],render:memberMarkup});
+  registerView('statute',{heading:['One section of law.','The bills that would amend, add or repeal this section of Texas law, with their wording side by side.'],render:statuteMarkup});
+  registerView('bill',{heading:['One bill.','Its summary, text, changes to law, people, agencies and sources.'],render:()=>'<article class="bill-page" id="bill-page" aria-label="Bill details"></article>',after:fillBillPage});
+  registerView('agencies',{heading:['Follow the agencies.','Explore where legislation might land across Texas government.'],render:agenciesMarkup});
+  registerView('review',{heading:['Full-text review.','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:reviewMarkup});
+  registerView('method',{heading:['The scoring method.','Signals and uncertainty are displayed separately from verified legislative actions.'],render:methodMarkup});
+  registerView('saving',{heading:['Save your work.','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],render:savingMarkup});
+  registerView('data',{heading:['Behind the tracker.','Understand coverage, refreshes, and how to load or export bill data.'],render:dataMarkup});
   setFallbackView('data');
 }
 
@@ -494,15 +545,37 @@ function agencySortButtons(){
   return [['name','A–Z'],['count','Most bills']].map(([value,label])=>`<button type="button" data-agency-sort="${value}" aria-pressed="${mode===value}">${label}</button>`).join('');
 }
 
+const SEARCH_EXAMPLES=[...SEARCH_FIELDS.filter(f=>f.example).map(f=>f.example),'"minimum wage"'];
+// ---- Filters (D6) ----
+const MORE_FILTERS=['agency','party','outlook','action','onlyWatch'];
+const moreActive=()=>MORE_FILTERS.filter(k=>Boolean(state[k])).length;
+// Open when the reader opened it, or when one of its filters is set (an address can set them).
+const moreFiltersOpen=()=>Boolean(state.moreFiltersOpen)||moreActive()>0;
+const moreCountText=()=>moreActive()?` · ${moreActive()}`:'';
+// Each set filter as [key, label]; a chip's × clears that one key.
+function activeFilters(){
+  return [['query',state.query&&`Search “${state.query}”`],['topic',state.topic&&`Policy area: ${state.topic}`],['chamber',state.chamber],
+    ['stage',state.stage&&`Stage: ${state.stage}`],['agency',state.agency&&`Agency: ${agencyName(state.agency)}`],['party',state.party&&`Party: ${state.party}`],
+    ['outlook',state.outlook&&`Hearing: ${state.outlook}`],['action',state.action&&`Last action: ${state.action}`],['onlyWatch',state.onlyWatch&&'Watched only']].filter(([,label])=>label);
+}
+function activeFiltersMarkup(){
+  const set=activeFilters();
+  if(!set.length)return '';
+  return `${set.map(([key,label])=>`<button type="button" class="filter-chip" data-clear-filter="${key}" aria-label="Remove filter: ${esc(label)}">${esc(label)} <span aria-hidden="true">×</span></button>`).join('')}<button type="button" class="text-button" id="clear-filters">Clear all</button>`;
+}
+function clearFilter(key){
+  state[key]=key==='onlyWatch'?false:'';
+  state.visibleCount=30;renderContent();
+}
+
 function explorerMarkup(){
   const topics=unique([...POLICY_AREAS.map(t=>t.name),...state.bills.flatMap(b=>b.topics)]).sort();
   const popular=['Education','Healthcare','Elections','Taxes','Immigration','Data centers','Local government','Energy & utilities'];
-  return `<div class="section-head"><div><div class="section-overline">EXPLORE LEGISLATION</div><h2>${state.view==='watchlist'?'Watched bills':'Bill explorer'}</h2></div><span class="subtitle">90R · House & Senate · All bill types</span></div>
-    ${sharedBanner()}${state.view==='watchlist'?watchTools():''}
-    <div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" maxlength="200" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><button class="outline-button" id="clear-filters">Clear filters</button><button class="outline-button" id="copy-view-link" title="Copy a link to this view, with its filters">Copy link</button>${state.view==='all'&&!state.sharedList?'<button class="outline-button" id="save-search" title="Keep this search and its filters under Following">Save search</button>':''}<button class="primary-button" id="export-csv">↓ Export results</button></div>
-    <div class="filter-row"><select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><div class="agency-combobox" id="agency-combobox"><input aria-label="Affected agency" aria-controls="agency-options" aria-expanded="false" aria-autocomplete="list" role="combobox" id="filter-agency" placeholder="All affected agencies" value="${esc(state.agency?agencyName(state.agency):'')}" autocomplete="off"><span class="agency-chevron" aria-hidden="true">⌄</span><div class="agency-panel" id="agency-panel" hidden><div class="agency-sort" role="group" aria-label="Sort agencies">${agencySortButtons()}</div><div class="agency-options" id="agency-options" role="listbox" hidden>${agencyOptionsMarkup()}</div></div></div><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Author party" id="filter-party" title="Republican or Democratic: the primary author's party, with no author or coauthor from the other party. Bipartisan: authors or coauthors from both parties.">${options(Object.keys(PARTY_FILTERS),state.party,'Any party')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted'],state.stage,'Any stage')}</select><select aria-label="Hearing status" id="filter-outlook">${options([NO_HEARING,'Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><select aria-label="Last action" id="filter-action">${options(unique([...LAST_ACTION_TYPES.map(t=>t.label),'Other action']).filter(l=>l===state.action||state.bills.some(b=>lastActionInfo(b).label===l)),state.action,'Any last action')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></div>
+  return `${sharedBanner()}${state.view==='watchlist'?watchTools():''}
+    <div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" maxlength="200" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><details class="share-menu" id="share-menu"><summary class="outline-button">Share / save</summary><div class="share-panel"><button type="button" id="copy-view-link" title="Copy a link to this view, with its filters">Copy link</button>${state.view==='all'&&!state.sharedList?'<button type="button" id="save-search" title="Keep this search and its filters under Following">Save search</button>':''}<button type="button" id="export-csv">↓ Export results (CSV)</button></div></details></div><details class="search-help"><summary>What search looks at</summary><p>Every word you type has to appear somewhere in the bill, in any order. It looks in: ${SEARCH_FIELDS.map(f=>esc(f.label)).join(', ')}. Luna's search terms are words it added to help find a bill; they are not shown on the card, so each result says which field matched.</p><p>Put words in "double quotes" to keep them together. A plural also finds the singular ("wages" finds "wage"). A section number such as <em>Penal Code 46.06</em> finds the bills that change it.</p><p class="search-examples">Try: ${SEARCH_EXAMPLES.map(x=>`<button type="button" class="search-example" data-search-example="${esc(x)}">${esc(x)}</button>`).join('')}</p></details>
+    <div class="filter-row"><select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted'],state.stage,'Any stage')}</select><details class="more-filters" id="more-filters"${moreFiltersOpen()?' open':''}><summary class="outline-button">More filters<span id="more-count">${moreCountText()}</span></summary><div class="filter-row more-row"><div class="agency-combobox" id="agency-combobox"><input aria-label="Affected agency" aria-controls="agency-options" aria-expanded="false" aria-autocomplete="list" role="combobox" id="filter-agency" placeholder="All affected agencies" value="${esc(state.agency?agencyName(state.agency):'')}" autocomplete="off"><span class="agency-chevron" aria-hidden="true">⌄</span><div class="agency-panel" id="agency-panel" hidden><div class="agency-sort" role="group" aria-label="Sort agencies">${agencySortButtons()}</div><div class="agency-options" id="agency-options" role="listbox" hidden>${agencyOptionsMarkup()}</div></div></div><select aria-label="Author party" id="filter-party" title="Republican or Democratic: the primary author's party, with no author or coauthor from the other party. Bipartisan: authors or coauthors from both parties.">${options(Object.keys(PARTY_FILTERS),state.party,'Any party')}</select><select aria-label="Hearing status" id="filter-outlook">${options([NO_HEARING,'Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><select aria-label="Last action" id="filter-action">${options(unique([...LAST_ACTION_TYPES.map(t=>t.label),'Other action']).filter(l=>l===state.action||state.bills.some(b=>lastActionInfo(b).label===l)),state.action,'Any last action')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></details></div></div>
     <div class="topic-strip" aria-label="Quick topic filters"><button class="topic-chip ${state.topic===''?'selected':''}" data-topic="">All topics</button>${popular.map(t=>`<button class="topic-chip ${state.topic===t?'selected':''}" data-topic="${esc(t)}">${esc(t)}</button>`).join('')}</div>
-    <div class="results-header"><div><strong id="result-count">—</strong><span id="result-note"></span></div><select id="sort-order" aria-label="Sort bills">${options(Object.values(SORTS),SORTS[state.sort],'Sort by')}</select></div><div class="bill-list" id="bill-list"></div><div class="explorer-bottom" id="results-bottom"></div>`;
+    <div class="active-filters" id="active-filters" aria-label="Active filters"></div><div class="results-header"><div><strong id="result-count">—</strong><span id="result-note"></span></div><select id="sort-order" aria-label="Sort bills">${options(Object.values(SORTS),SORTS[state.sort],'Sort by')}</select></div><div class="explorer-results" id="explorer-results"><div class="bill-list" id="bill-list"></div><aside class="bill-preview" id="bill-preview" aria-labelledby="preview-title" hidden></aside></div><div class="explorer-bottom" id="results-bottom"></div>`;
 }
 
 const companionCache={bills:null,index:new Map()};
@@ -553,6 +626,16 @@ const lawKeysFor=query=>state.statutes?statuteKeysFor(state.statutes,parseStatut
 // What a card shows about its authors' parties ("Republican author"), so a search can find it.
 const partyWords=b=>{if(!b.people)return[];const p=authorshipParty(b);return[p.label,p.detail]};
 
+const billSearchFields=b=>searchFields(b,{agencyName,partyWords,shortDate});
+// Why a shown result matched the explorer's search words, in the same order of checks as filteredBills.
+function reasonFor(){
+  const {q,compact}=searchTerms(state.query||'');
+  if(!q)return ()=>null;
+  const lawBills=new Set(lawKeysFor(state.query).flatMap(k=>state.statutes.sections[k].b.map(p=>p[0])));
+  return b=>matchReasons(billSearchFields(b),q,lawBills.has(b.id)?'law':b.id.toLowerCase().includes(compact)?'number':'');
+}
+const reasonLine=reasons=>reasons?.length?`<p class="match-reason"><span>Matched:</span> ${reasons.map(r=>`<span${r.label==='Luna search term'?' title="Words Luna added to help search find this bill; they are not shown on the card"':''}>${esc(r.label)}${r.term?` <mark>${esc(r.term)}</mark>`:''}</span>`).join(' · ')}</p>`:'';
+
 // The explorer's list for its own filters, or for a saved search's (`f`: the explorer as a plain, unshared view).
 function filteredBills(f=state){
   const own=f===state;
@@ -572,7 +655,7 @@ function filteredBills(f=state){
     if(f.action&&lastActionInfo(b).label!==f.action)return false;
     if(f.stage){const st=(b.status||'').toLowerCase();const outlook=assessHearing(b).label.toLowerCase();if(!st.includes(f.stage.toLowerCase())&&outlook!==f.stage.toLowerCase())return false}
     if(lawBills.has(b.id))return true;
-    return !q||b.id.toLowerCase().includes(compact)||textMatches([b.id,b.number,b.title,b.caption,b.author,...b.authors,...(b.coauthors||[]),...(b.sponsors||[]),...(b.cosponsors||[]),b.last_action,...b.topics,...(b.subjects||[]),...(b.search_terms||[]),...b.impacts,...(b.constituencies||[]),...b.agencies.map(a=>agencyName(a.id)),...partyWords(b),shortDate(b.filed_at),shortDate(b.last_action_date)].join(' '),q);
+    return !q||b.id.toLowerCase().includes(compact)||textMatches(searchText(billSearchFields(b)),q);
   });
   const byNumber=(a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true});
   const newerNumber=(a,b)=>newestFirst(a.id,b.id);
@@ -602,7 +685,8 @@ function renderResults(){
   }
   const shown=[];let shownCount=0;
   for(const g of companionGroups([...list,...extras.values()],companionCache.index)){if(shownCount>=state.visibleCount)break;shown.push(g);shownCount+=g.filter(b=>!extras.has(b.id)).length}
-  const card=b=>billCard(b,extras.has(b.id));
+  const why=reasonFor();
+  const card=b=>billCard(b,extras.has(b.id),extras.has(b.id)?null:why(b));
   const groupMarkup=g=>{
     const ids=new Set(g.map(b=>b.id));
     const relations=[...new Set(g.flatMap(b=>companionsOf(b.id).filter(c=>ids.has(c.id)).map(relationText)))];
@@ -611,9 +695,62 @@ function renderResults(){
   $('#bill-list').innerHTML=statuteHintMarkup(state.sharedList?[]:lawKeysFor(state.query))+(list.length?shown.map(g=>g.length>1?groupMarkup(g):card(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p></div>`);
   $('#results-bottom').innerHTML=`${list.length>shownCount?`<button class="outline-button" id="load-more">Load 30 more · showing ${shownCount} of ${list.length}</button><div style="height:12px"></div>`:''}${esc(state.meta?.coverage_note||'Check the official record for authoritative status.')}`;
   persistState();
+  syncPreview();
+  const chips=$('#active-filters');if(chips)chips.innerHTML=activeFiltersMarkup();
+  const more=$('#more-count');if(more)more.textContent=moreCountText();
 }
 
-function billCard(b,unwatchedCompanion=false){
+// ---- Preview (D2-B): a short look at one bill beside the results, for triage. Wide screens only; it holds no
+// sections and no text, and every link in it still goes to the bill page.
+const PREVIEW_WIDE=typeof matchMedia==='function'?matchMedia('(min-width: 1200px)'):{matches:false,addEventListener(){}};
+const preview={id:null};
+const previewing=()=>Boolean(preview.id)&&PREVIEW_WIDE.matches&&Boolean($('#bill-preview'));
+function previewMarkup(b){
+  const h=assessHearing(b),last=lastActionInfo(b),watched=state.watch.has(b.id),real=realAgencies(b);
+  const cards=[...document.querySelectorAll('#bill-list .bill-card')],at=cards.findIndex(c=>c.dataset.billId===b.id);
+  const summary=b.luna?.summary?{label:'Luna summary',text:b.luna.summary}:sameText(b.caption,b.title)?null:{label:'Caption',text:b.caption};
+  return `<div class="preview-head">${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><button type="button" class="preview-close" id="preview-close" aria-label="Close preview">×</button></div>
+    <h2 class="preview-title" id="preview-title" tabindex="-1">${esc(b.title)}</h2>
+    ${headlineLine(b,'drawer')}
+    ${summary?`<section class="preview-summary"><h3>${summary.label}</h3><p>${esc(summary.text)}</p></section>`:''}
+    <dl class="preview-facts">
+      <div><dt>Last action</dt><dd>${esc(last.label)}${last.chamber?` · ${esc(last.chamber)}`:''}${last.date?` · ${esc(dateText(last.date))}`:''}<small>${esc(last.text)}</small></dd></div>
+      <div><dt>Hearing progress</dt><dd>${esc(h.label)}</dd></div>
+      <div><dt>Filed by</dt><dd>${authorHtml(b,b.author)}</dd></div>
+      ${real.length?`<div><dt>Agencies</dt><dd>${real.slice(0,3).map(a=>esc(agencyName(a.id))).join(' · ')}${real.length>3?` · +${real.length-3} more`:''}</dd></div>`:''}
+    </dl>
+    ${b.topics.length?`<div class="bill-tags">${b.topics.slice(0,4).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`:''}
+    <div class="preview-actions"><button type="button" class="primary-button" data-open="${esc(b.id)}">Open bill →</button><button type="button" class="outline-button" data-watch="${esc(b.id)}" aria-pressed="${watched}">${watched?'★ Watching':'☆ Watch'}</button></div>
+    <div class="preview-step"><button type="button" class="outline-button" data-preview-step="-1"${at<=0?' disabled':''}>← Previous</button><span>${at>=0?`${at+1} of ${cards.length} shown`:'Not in the list now'}</span><button type="button" class="outline-button" data-preview-step="1"${at<0||at>=cards.length-1?' disabled':''}>Next →</button></div>`;
+}
+// Draws the preview for preview.id, or hides it; marks the previewed card.
+function syncPreview(){
+  const aside=$('#bill-preview');
+  if(!aside)return;
+  const b=previewing()?state.bills.find(x=>x.id===preview.id):null;
+  document.querySelectorAll('#bill-list .bill-card.previewed').forEach(c=>{c.classList.remove('previewed');c.removeAttribute('aria-current')});
+  $('#explorer-results')?.classList.toggle('previewing',Boolean(b));
+  if(!b){aside.hidden=true;aside.innerHTML='';return}
+  const card=$(`#bill-list .bill-card[data-bill-id="${CSS.escape(b.id)}"]`);if(card){card.classList.add('previewed');card.setAttribute('aria-current','true')}
+  aside.innerHTML=previewMarkup(b);aside.hidden=false;
+}
+function showPreview(id){preview.id=id;syncPreview();$('#preview-title')?.focus({preventScroll:true})}
+function closePreview(){
+  const id=preview.id;preview.id=null;syncPreview();
+  if(id)$(`#bill-list .bill-card[data-bill-id="${CSS.escape(id)}"] .bill-title-link`)?.focus({preventScroll:true});
+}
+function stepPreview(by){
+  const cards=[...document.querySelectorAll('#bill-list .bill-card')],at=cards.findIndex(c=>c.dataset.billId===preview.id);
+  const next=cards[at+by];
+  if(at<0||!next)return;
+  next.scrollIntoView({block:'nearest'});showPreview(next.dataset.billId);
+}
+PREVIEW_WIDE.addEventListener('change',()=>syncPreview());
+
+// D5: a card shows the caption only when it says more than the title, and a count only when it is above zero.
+const sameText=(a,b)=>{const n=x=>String(x||'').toLowerCase().replace(/[.\s]+$/,'').replace(/\s+/g,' ').trim();return n(a)===n(b)};
+const countSpan=(n,word)=>n>0?`<span>${n} ${word}${n===1?'':'s'}</span>`:'';
+function billCard(b,unwatchedCompanion=false,reasons=null){
   const h=assessHearing(b);const watched=state.watch.has(b.id);const influence=authorInfluence(b);
   const real=realAgencies(b);
   const scopeTag=b.agencies.length>real.length?'<span class="tag" title="Cross-cutting scope marker, not an agency">Statewide scope</span>':'';
@@ -623,7 +760,44 @@ function billCard(b,unwatchedCompanion=false){
   const via=agencyVia().get(b.id);
   const viaTag=via?`<span class="tag agency via-companion" title="${esc(`Not tagged with ${agencyName(state.agency)} itself; listed because its companion ${via.map(id=>companionLabel({id})).join(', ')} is.`)}">via companion ${esc(via.map(id=>companionLabel({id})).join(', '))}</span>`:'';
   const actionTag=`<span class="tag action-tag action-${esc(last.key)}" title="${esc(`Last action${last.chamber?` (${last.chamber})`:''}: ${last.text}`)}">${esc(last.label)}${last.chamber&&last.key!=='filed'?` · ${esc(last.chamber)}`:''}${last.date?` · ${esc(shortDate(last.date))}`:''}</span>`;
-  return `<article class="bill-card party-${party.tint}${unwatchedCompanion?' unwatched-companion':''}" data-bill-id="${esc(b.id)}"><div class="bill-left"><div class="bill-head">${unwatchedCompanion?'<span class="unwatched-pill">Companion · not watched</span>':''}${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><span class="party-pill party-${party.tint}" title="${esc(party.detail)}">${esc(party.label)}</span>${influencePill(influence)}${b.luna?`<span class="luna-pill" title="Tags from the bill's full text, reviewed ${esc(dateText(b.luna.reviewed_at))}">Luna · full text</span>`:''}</div><h3 class="bill-title">${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</h3><p class="bill-description">${esc(b.caption)}</p>${headlineLine(b,'card')}<div class="bill-tags">${actionTag}${viaTag}${companionTags}${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${agencyTags}${real.length>2?`<span class="tag agency">+${real.length-2} agencies</span>`:''}</div><div class="bill-meta"><span>By <b>${authorHtml(b,b.authors[0]||b.author)}</b></span><span>${b.authors.length?`${b.authors.length} ${b.authors.length===1?'author':'authors'}`:'Authors not reported'}</span><span>${b.coauthors===null?'Coauthors not reported':`${b.coauthors.length} ${b.coauthors.length===1?'coauthor':'coauthors'}`}</span><span>${b.cosponsors===null?'Cosponsors not reported':`${b.cosponsors.length} ${b.cosponsors.length===1?'cosponsor':'cosponsors'}`}</span><span>Filed ${dateText(b.filed_at)}</span><span>${real.length} agency ${real.length===1?'link':'links'}</span></div></div><div class="bill-right"><button class="watch-button" data-watch="${b.id}" aria-label="${watched?'Remove from':'Add to'} watchlist" aria-pressed="${watched}">${watched?'★':'☆'}</button><div><div class="outlook-label">Hearing progress</div><div class="outlook-value">${esc(h.label)}</div><button class="bill-open" data-open="${b.id}">Bill details →</button></div></div></article>`;
+  return `<article class="bill-card party-${party.tint}${unwatchedCompanion?' unwatched-companion':''}" data-bill-id="${esc(b.id)}"><div class="bill-left"><div class="bill-head">${unwatchedCompanion?'<span class="unwatched-pill">Companion · not watched</span>':''}${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><span class="party-pill party-${party.tint}" title="${esc(party.detail)}">${esc(party.label)}</span>${influence.level>=4?influencePill(influence):''}</div><h3 class="bill-title">${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</h3>${headlineLine(b,'card')}${reasonLine(reasons)}${sameText(b.caption,b.title)?'':`<p class="bill-description">${esc(b.caption)}</p>`}<div class="bill-tags">${actionTag}${viaTag}${companionTags}${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${agencyTags}${real.length>2?`<span class="tag agency">+${real.length-2} agencies</span>`:''}</div><div class="bill-meta"><span>By <b>${authorHtml(b,b.authors[0]||b.author)}</b></span>${countSpan(b.authors.length>1?b.authors.length:0,'author')}${countSpan(b.coauthors?.length,'coauthor')}${countSpan(b.cosponsors?.length,'cosponsor')}<span class="bill-filed">Filed ${dateText(b.filed_at)}</span>${real.length?`<span class="bill-links">${real.length} agency ${real.length===1?'link':'links'}</span>`:''}</div></div><div class="bill-right"><button class="watch-button" data-watch="${b.id}" aria-label="${watched?'Remove from':'Add to'} watchlist" aria-pressed="${watched}">${watched?'★':'☆'}</button><div>${h.level>0?`<div class="outlook-label">Hearing progress</div><div class="outlook-value">${esc(h.label)}</div>`:''}<button class="bill-open" data-open="${b.id}">Bill details →</button></div></div></article>`;
+}
+
+// ---- Home: the dashboard. Search first, then what changed on your bills, the latest day's actions, hearings and reviews.
+const HOME_ROWS=5;
+function homeMarkup(){
+  return `<form class="home-search" id="home-search-form" role="search"><label for="home-search">Search every bill</label><div class="home-search-row"><input id="home-search" name="query" maxlength="200" placeholder="Bill number, author, subject, agency or keyword…" autocomplete="off"><button class="primary-button" type="submit">Search</button></div><p class="tools-note">Or <a class="text-link" href="#all" data-view="all">browse all ${state.bills.length.toLocaleString()} bills</a>.</p></form>
+    <div class="calendar-mini home-milestone"><div class="calendar-eyebrow">UPCOMING MILESTONE</div><div class="calendar-date">JAN 12 <span>2027</span></div><div class="calendar-desc">90th regular session convenes</div><div class="calendar-progress"><span></span></div></div>
+    <div class="home-grid">${homeCards()}</div>`;
+}
+// Redraws the dashboard's cards only, so a sync or watch change never clears what is typed in its search box.
+function refreshHome(){const grid=$('.home-grid');if(grid)grid.innerHTML=homeCards();else renderContent()}
+function homeCards(){
+  const today=todayDay(),prev=previousVisit();
+  const more=(href,view,label)=>`<a class="text-link home-more" href="${esc(href)}"${view?` data-view="${view}"`:''}>${label} →</a>`;
+  const card=(title,count,body)=>`<section class="home-card"><h2>${title}${count?` <span>${count.toLocaleString()}</span>`:''}</h2>${body}</section>`;
+  const datedRow=({bill,day})=>todayRow({bill,actions:(activityOn([bill],day)[0]?.actions||[lastActionInfo(bill).text]).map(t=>`${shortDate(day)} · ${t}`)});
+  // Your bills: watched, and those of legislators you follow.
+  const followed=state.roster&&state.follow.length?followedBills(state.bills,state.roster,state.follow).map(r=>r.bill):[];
+  const mine=[...new Map([...state.bills.filter(b=>state.watch.has(b.id)),...followed].map(b=>[b.id,b])).values()];
+  const changed=changedSince(mine,prev,today);
+  const searches=state.searches.map(s=>({s,...searchCounts(s)})).filter(x=>x.fresh);
+  const searchList=searches.length?`<ul class="home-searches">${searches.map(({s,fresh})=>`<li><a class="text-link" href="${esc(buildHash('all',s.filters))}" data-search-open="${esc(s.id)}">${esc(s.name)}</a> · ${fresh.toLocaleString()} with new actions</li>`).join('')}</ul>`:'';
+  const yours=!mine.length&&!state.searches.length
+    ?`<p class="tools-note">Star bills, follow legislators or save a search, and what changes for them shows up here.</p>`
+    :`${changed.length?changed.slice(0,HOME_ROWS).map(datedRow).join(''):`<p class="tools-note">No new actions on your ${mine.length.toLocaleString()} ${mine.length===1?'bill':'bills'}${prev?` since ${esc(dateText(prev))}`:''}.</p>`}${changed.length>HOME_ROWS?`<p class="tools-note">And ${(changed.length-HOME_ROWS).toLocaleString()} more on your <a class="text-link" href="#watchlist" data-view="watchlist">watchlist</a> and under <a class="text-link" href="#following" data-view="following">Following</a>.</p>`:''}${searchList}`;
+  const yoursTitle=prev?`Since your last visit, ${esc(shortDate(prev))}`:'Latest on your bills';
+  // The latest day with activity, as on the Today page (unfiltered by its topic chips).
+  const {day,rows}=todayData();
+  const counts=groupByActionType(rows).map(g=>`<span><strong>${g.rows.length.toLocaleString()}</strong> ${esc(g.label.toLowerCase())}</span>`).join('');
+  const dayBody=rows.length?`<p class="home-counts">${counts}</p>${rows.slice(0,HOME_ROWS).map(todayRow).join('')}${more('#today','today','The whole day, by topic')}`:'<p class="tools-note">No recorded activity yet.</p>';
+  const hearings=state.bills.filter(b=>assessHearing(b).level===3);
+  const hearingBody=hearings.length?hearings.slice(0,HOME_ROWS).map(b=>todayRow({bill:b,actions:[lastActionInfo(b).text]})).join('')+(hearings.length>HOME_ROWS?more(buildHash('all',{outlook:'Scheduled'}),'','All scheduled hearings'):'')
+    :'<p class="tools-note">No hearings are scheduled yet. Committees post them once the session is under way.</p>';
+  const reviewed=newestReviewed(state.bills);
+  const reviewBody=reviewed.length?reviewed.slice(0,HOME_ROWS).map(b=>todayRow({bill:b,actions:[`Reviewed ${dateText(b.luna.reviewed_at)}`]})).join('')+more('#review','review','Review progress')
+    :'<p class="tools-note">Luna has not reviewed any bills yet.</p>';
+  return `${card(yoursTitle,changed.length,yours)}${card(day===today?'Today at the Lege':`Most recent activity, ${esc(shortDate(day))}`,rows.length,dayBody)}${card('Upcoming hearings',hearings.length,hearingBody)}${card('Newly reviewed by Luna',0,reviewBody)}`;
 }
 
 // Remove this line once the Legislature is in session and the view has real floor and hearing content.
@@ -985,39 +1159,64 @@ function agenciesMarkup(){
   return `<div class="section-head"><div><div class="section-overline">IMPACT DIRECTORY</div><h2>Texas state agencies</h2></div><span class="subtitle">${counts.size} with possible links in this snapshot</span></div><div class="info-callout"><strong>Why an agency index?</strong> One bill can change the work of several state agencies. “Direct” means the supplied material names an agency; “possible” means an inferred policy connection. An agency absent from a caption is not proof it is unaffected—full bill text review is needed for comprehensive coverage.</div><div class="agency-grid" style="margin-top:18px">${agencies.map(a=>`<button class="agency-card" data-agency-pick="${esc(a.id)}"><span class="agency-code">${esc(a.id.toUpperCase())}</span><strong>${esc(a.name)}</strong><span class="hits">${counts.get(a.id)||0} ${counts.get(a.id)===1?'bill':'bills'} in snapshot →</span></button>`).join('')}</div>`;
 }
 
-function reviewMarkup(){
+const clockText=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/Chicago'})+' CT';
+function reviewParts(){
   const ids=state.bills.map(b=>b.id),status=state.reviewStatus,tagged=state.luna?.bills||{};
-  const s=reviewSummary(reviewProgress(ids,status,Object.keys(tagged)));
+  return {ids,status,tagged,summary:reviewSummary(reviewProgress(ids,status,Object.keys(tagged))),run:runState(status,Date.now())};
+}
+// One bill's state, for the lookup box: a chip that opens the bill, and what is happening to it.
+function reviewLookupHtml(text){
+  const {ids,summary,tagged}=reviewParts(),found=lookup(text,summary,ids);
+  if(!found)return String(text||'').trim()?'<span class="review-lookup-hint">Type a bill number, such as HB 474 or SJR 9.</span>':'';
+  if(found.state==='unknown')return `<span class="review-lookup-hint">${esc(found.id)}: ${esc(found.label)}.</span>`;
+  const reviewedAt=tagged[found.id]&&state.bills.find(b=>b.id===found.id)?.luna?.reviewed_at;
+  const extra=found.state==='reviewed'||found.state==='questions'?(tagged[found.id]?` · tags published${reviewedAt?` ${esc(dateText(reviewedAt))}`:''}`:' · no verified tags published yet'):'';
+  return `<button class="review-chip${tagged[found.id]?' tagged':''}" data-open="${esc(found.id)}">${esc(found.id)}</button> <span class="review-lookup-state ${found.state}">${esc(found.label)}${extra}</span>`;
+}
+function reviewMarkup(){
+  const {ids,status,tagged,summary:s,run}=reviewParts();
   const total=ids.length||1,pct=n=>Math.round(n/total*1000)/10;
-  const minutes=status?.updated_at?(Date.now()-Date.parse(status.updated_at))/60000:null;
-  const stale=Boolean(status?.running)&&minutes>90;
-  const quiet=Boolean(status)&&!status.running&&minutes>75;  // runs are hourly; each one rewrites the status
-  const waiting=Boolean(status?.running)&&!stale&&Date.parse(status.waiting_until)>Date.now();
-  const line=!status?'Live worker status is unavailable, so bills with published Luna tags are counted as reviewed.'
-    :stale?`The worker last reported ${esc(stampText(status.updated_at))} and may have stopped.`
-    :quiet?`No hourly run has reported since ${esc(stampText(status.updated_at))}; the worker may be stopped.`
-    :waiting?`Waiting for Luna capacity · ${status.current?`retrying ${esc(status.current)}`:'resuming'} at ${esc(stampText(status.waiting_until))}`
-    :status.running?`Reviewing now · updated ${esc(stampText(status.updated_at))}`
+  const line=run.kind==='unavailable'?'Live worker status is unavailable, so bills with published Luna tags are counted as reviewed.'
+    :run.kind==='stale'?`The worker last reported ${esc(stampText(status.updated_at))} and may have stopped.`
+    :run.kind==='quiet'?`No hourly run has reported since ${esc(stampText(status.updated_at))}; the worker may be stopped.`
+    :run.kind==='waiting'?`Waiting for Luna capacity · ${status.current?`retrying ${esc(status.current)}`:'resuming'} at ${esc(stampText(status.waiting_until))}`
+    :run.kind==='running'?`Reviewing now · updated ${esc(stampText(status.updated_at))}`
     :`Idle until the next hourly run · last update ${esc(stampText(status.updated_at))}`;
   const chip=(id,note='')=>`<button class="review-chip${tagged[id]?' tagged':''}" data-open="${esc(id)}" title="${tagged[id]?'Luna tags published':'Reviewed; no verified tags published'}${note?' · '+esc(note):''}">${esc(id)}</button>`;
-  const group=(title,list,empty,open=true)=>`<details class="review-group"${open?' open':''}><summary><strong>${title}</strong> <span>${list.length.toLocaleString()}</span></summary>${list.length?`<div class="review-chips">${list.join('')}</div>`:`<p class="review-empty">${empty}</p>`}</details>`;
+  const group=(title,list,empty,open=false)=>`<details class="review-group"${open?' open':''}><summary><strong>${title}</strong> <span>${list.length.toLocaleString()}</span></summary>${list.length?`<div class="review-chips">${list.join('')}</div>`:`<p class="review-empty">${empty}</p>`}</details>`;
   const counts=[['Reviewed',s.reviewed.length,'done'],...(s.active.length?[['Reviewing now',s.active.length,'progress']]:[]),
     ['Waiting for bill text',s.noText.length,'notext'],...(s.failed.length?[['Failed',s.failed.length,'failed']]:[]),
     ['Not started',s.notStarted.length,'waiting']];
-  const now=s.active.length&&!stale?`<div class="review-now"><span class="review-pulse" aria-hidden="true"></span><div><small>${waiting?'Waiting to retry':'Reviewing now'}</small>${s.active.map(id=>chip(id)).join('')}</div>${s.upcoming.length?`<div><small>Up next</small>${s.upcoming.map(id=>chip(id)).join('')}</div>`:''}</div>`:'';
+  const live=run.kind==='running'||run.kind==='waiting';
+  const rows=passRows(status,s,run);
+  const current=rows.find(r=>r.now);
+  const runTitle={running:current?`Working on: ${current.label}`:'Reviewing now',waiting:'Waiting for Luna capacity',idle:'Idle',
+    quiet:'No recent run',stale:'May have stopped',unavailable:'Status unavailable'}[run.kind];
+  const runDetail=live?[run.startedAt?`Started ${clockText(run.startedAt)}`:'',run.minutesUsed!==null?`${Math.min(run.minutesUsed,RUN_LIMIT_MINUTES)} of ${RUN_LIMIT_MINUTES} minutes used`:'',
+      run.waitingUntil?`retrying at ${clockText(run.waitingUntil)}`:''].filter(Boolean).join(' · ')
+    :`Next run about ${clockText(run.nextRun)}`;
+  const passes=`<ol class="review-passes" aria-label="Review passes, in run order">${rows.map((r,i)=>`<li class="review-pass${r.now?' now':''}${r.known&&r.due===0?' clear':''}"${r.now?' aria-current="step"':''}><span class="pass-step" aria-hidden="true">${i+1}</span><div class="pass-name"><strong>${r.label}</strong><small>${r.note}</small></div><div class="pass-count">${r.known?`<strong>${r.due.toLocaleString()}</strong><span>${r.key==='review'?'not started':'bills left'}</span>`:'<strong>—</strong><span>counted after the next run</span>'}${r.checked?`<span class="pass-checked">${r.checked.toLocaleString()} done this run</span>`:''}</div></li>`).join('')}</ol>`;
+  const runCard=`<section class="review-run ${run.kind}" aria-label="Review worker"><div class="review-run-state">${live?'<span class="review-pulse" aria-hidden="true"></span>':'<span class="review-run-dot" aria-hidden="true"></span>'}<div><strong>${esc(runTitle)}</strong><span>${esc(runDetail)}</span></div></div>${passes}</section>`;
+  const now=s.active.length&&run.kind!=='stale'?`<div class="review-now"><span class="review-pulse" aria-hidden="true"></span><div><small>${run.kind==='waiting'?'Waiting to retry':'Reviewing now'}</small>${s.active.map(id=>chip(id)).join('')}</div>${s.upcoming.length?`<div><small>Up next</small>${s.upcoming.map(id=>chip(id)).join('')}</div>`:''}</div>`:'';
   const auditText=auditLine(state.audit);
   const headline=`<p class="review-headline"><strong>${s.reviewed.length.toLocaleString()} of ${ids.length.toLocaleString()} bills reviewed</strong> (${pct(s.reviewed.length)}%)${s.questionsQueued.length?` · ${s.questionsQueued.length.toLocaleString()} of them have follow-up questions queued`:''}</p>`;
+  const recent=newestReviewed(state.bills).slice(0,20);
   return `<div class="section-head"><div><div class="section-overline">LUNA FULL-TEXT REVIEW</div><h2>Review progress</h2></div><span class="subtitle">${line}</span></div>
+  ${runCard}
   ${headline}
   <div class="review-bar" role="img" aria-label="${counts.map(([label,n])=>`${n} ${label.toLowerCase()}`).join(', ')} of ${ids.length}">${counts.map(([,n,cls])=>`<span class="seg ${cls}" style="width:${pct(n)}%"></span>`).join('')}</div>
   <div class="review-counts">${counts.map(([label,n,cls])=>`<div class="review-count ${cls}"><span class="dot"></span><strong>${n.toLocaleString()}</strong><span>${label} · ${pct(n)}%</span></div>`).join('')}</div>
   ${now}
-  ${group('Reviewed',s.reviewed.map(id=>chip(id,s.questionsQueued.includes(id)?'follow-up questions queued':'')),'No bills reviewed yet.')}
-  ${group('Follow-up questions queued',s.questionsQueued.map(id=>chip(id,'first-pass review published; follow-up questions run on a later visit')),'No follow-up questions waiting.',false)}
-  ${group('Waiting for bill text',s.noText.map(id=>chip(id,'the legislature has not posted text yet')),'Every bill has text.',false)}
-  ${s.failed.length?group('Failed',s.failed.map(f=>chip(f.id,f.stage?`${f.stage} failed`:'failed')),'No failures.'):''}
-  ${group('Not started',s.notStarted.map(id=>chip(id)),'Every bill has been picked up.',false)}
-  ${auditText?`<p class="review-audit">${esc(auditText)}</p>`:''}
+  <div class="review-columns">
+    <section class="review-recent" aria-labelledby="review-recent-title"><h3 id="review-recent-title">Recently reviewed</h3>${recent.length?`<div class="today-list">${recent.map(b=>todayRow({bill:b,actions:[`Reviewed ${dateText(b.luna.reviewed_at)}`]})).join('')}</div>`:'<p class="review-empty">No reviews published yet.</p>'}</section>
+    <div class="review-side">
+      <form class="review-lookup" id="review-lookup-form" role="search"><label for="review-lookup">Check one bill</label><input id="review-lookup" maxlength="20" placeholder="Bill number, such as HB 474" autocomplete="off"><p class="review-lookup-result" id="review-lookup-result" aria-live="polite"></p></form>
+      ${group('Follow-up questions queued',s.questionsQueued.map(id=>chip(id,'first-pass review published; follow-up questions run on a later visit')),'No follow-up questions waiting.')}
+      ${group('Waiting for bill text',s.noText.map(id=>chip(id,'the legislature has not posted text yet')),'Every bill has text.')}
+      ${s.failed.length?group('Failed',s.failed.map(f=>chip(f.id,f.stage?`${f.stage} failed`:'failed')),'No failures.'):''}
+      ${auditText?`<p class="review-audit">${esc(auditText)}</p>`:''}
+    </div>
+  </div>
   <p class="review-legend"><span class="review-chip tagged">HB1</span> verified Luna tags published · <span class="review-chip">HB1</span> reviewed, no claims verified against the text yet. Bills waiting for text are retried automatically once the legislature posts it. Follow-up questions refine a review that is already published.</p>`;
 }
 
@@ -1042,17 +1241,17 @@ function savingMarkup(){
     ['02','Remembered filters','Your last filters and sort order are remembered on this device and come back the next time you visit.'],
     ['03','Links to any view','The address bar always describes what you are looking at: the page, filters, sort and any open bill. Use <strong>Copy link</strong> above the results, or bookmark the page, to return to it or send it to someone.'],
     ['04','Share links','On the Watchlist, <strong>Copy share link</strong> makes a link to your bills. Whoever opens it sees a read-only list and can add those bills to their own watchlist. It is a snapshot: later changes to your list are not included.'],
-    ['05','Export and import a file','<strong>Export file</strong> saves your watchlist, followed legislators and saved searches as one small file you can keep or email. <strong>Import file</strong> adds them from that file (or an older watchlist export), or from any text or spreadsheet export that mentions bill numbers such as “HB 5” or “SJR 9”. Importing only adds; it never removes bills.'],
-    ['06','Private sync links','<strong>Create sync link</strong> on the Watchlist keeps your watchlist, followed legislators and saved searches the same on your phone, laptop and work computer, with no account. Open the <strong>edit link</strong> on each device; treat it like a password, because anyone with it can change the list. The <strong>view-only link</strong> is safe to share: it shows your watchlist’s bills only, never who you follow or what you saved, and stays current as you edit. You can stop syncing one device, or delete the link for every device.'],
+    ['05','Export and import a file','<strong>Export file</strong> saves your watchlist, followed legislators, saved searches and colour theme as one small file you can keep or email. <strong>Import file</strong> adds them from that file (or an older watchlist export), or from any text or spreadsheet export that mentions bill numbers such as “HB 5” or “SJR 9”. Importing only adds; it never removes bills.'],
+    ['06','Private sync links','<strong>Create sync link</strong> on the Watchlist keeps your watchlist, followed legislators, saved searches and colour theme the same on your phone, laptop and work computer, with no account. Light or dark stays a choice for each device. Open the <strong>edit link</strong> on each device; treat it like a password, because anyone with it can change the list. The <strong>view-only link</strong> is safe to share: it shows your watchlist’s bills only, never who you follow or what you saved, and stays current as you edit. You can stop syncing one device, or delete the link for every device.'],
     ['07','RSS feeds','Each bill’s details include an <strong>RSS feed</strong> of its recorded actions, for Outlook or any feed reader. A synced watchlist also has one feed for all of its bills, linked from the Watchlist. Each legislator has a feed too, linked from their member page.'],
     ['08','Followed legislators','<strong>Follow</strong> a legislator on their member page or in Near you, and their bills appear under <strong>Following</strong>. Follows are kept in this browser like the watchlist, and go into exported files and sync links. Share links and view-only links never include them.'],
     ['09','Saved searches','On the Bill explorer, <strong>Save search</strong> keeps the current search words and filters under <strong>Following</strong>, with how many bills have new actions since you last opened it. Saved searches go into exported files and sync links like follows; share and view-only links never include them.']
   ];
-  return `<div class="section-head"><div><div class="section-overline">NO ACCOUNT NEEDED</div><h2>Saving and sharing your info</h2></div><button class="outline-button" data-view="watchlist">Open your watchlist →</button></div><div class="info-callout"><strong>There are no logins on this site.</strong> Everything below works without an account, email address or name. Pick whichever fits: keep things on one device, carry them in a link or file, or sync a private link across devices.</div><div class="method-grid">${parts.map(([n,title,body])=>`<article class="method-card"><span class="n">${n}</span><h3>${title}</h3><p>${body}</p></article>`).join('')}</div><div class="section-head"><div><div class="section-overline">PRIVACY</div><h2>What is stored, and where</h2></div></div><div class="subpage-card"><div class="data-field long"><span class="data-label">On this device</span><span class="data-value">Watchlist, followed legislators, saved searches, last filters, that you saw the disclaimer, and your sync link if you made one</span></div><div class="data-field long"><span class="data-label">On the server (sync links only)</span><span class="data-value">The watched bill numbers, the member codes of legislators you follow, your saved searches (their names, search words and filters), a version number and dates. Links are stored only as one-way fingerprints, so the database cannot be used to open a list.</span></div><div class="data-field long"><span class="data-label">Never collected</span><span class="data-value">Names, email addresses, accounts, tracking cookies or analytics</span></div><div class="data-field long"><span class="data-label">Abuse limits</span><span class="data-value">The sync service counts requests per address in memory for up to an hour, and never writes addresses down</span></div><div class="data-field long"><span class="data-label">Retention</span><span class="data-value">A sync link unused for a year is deleted. Deleting it yourself removes it at once; each device keeps its own copy of the list.</span></div><div class="data-field"><span class="data-label">Sync on this site</span><span class="data-value">${esc(syncState)}</span></div><div class="data-field"><span class="data-label">This device</span><span class="data-value">${esc(deviceState)} · ${state.watch.size} ${state.watch.size===1?'bill':'bills'} watched</span></div><p style="font-size:11px;color:#91a0ad;margin:14px 0 0">Limits: up to 500 bills per synced list. Lost your edit link? Your list is still on each device that had it; create a new sync link from any of them.</p></div>`;
+  return `<div class="section-head"><div><div class="section-overline">NO ACCOUNT NEEDED</div><h2>Saving and sharing your info</h2></div><button class="outline-button" data-view="watchlist">Open your watchlist →</button></div><div class="info-callout"><strong>There are no logins on this site.</strong> Everything below works without an account, email address or name. Pick whichever fits: keep things on one device, carry them in a link or file, or sync a private link across devices.</div><div class="method-grid">${parts.map(([n,title,body])=>`<article class="method-card"><span class="n">${n}</span><h3>${title}</h3><p>${body}</p></article>`).join('')}</div><div class="section-head"><div><div class="section-overline">PRIVACY</div><h2>What is stored, and where</h2></div></div><div class="subpage-card"><div class="data-field long"><span class="data-label">On this device</span><span class="data-value">Watchlist, followed legislators, saved searches, last filters, that you saw the disclaimer, and your sync link if you made one</span></div><div class="data-field long"><span class="data-label">On the server (sync links only)</span><span class="data-value">The watched bill numbers, the member codes of legislators you follow, your saved searches (their names, search words and filters), a version number and dates. Links are stored only as one-way fingerprints, so the database cannot be used to open a list.</span></div><div class="data-field long"><span class="data-label">Never collected</span><span class="data-value">Names, email addresses, accounts, tracking cookies or analytics</span></div><div class="data-field long"><span class="data-label">Abuse limits</span><span class="data-value">The sync service counts requests per address in memory for up to an hour, and never writes addresses down</span></div><div class="data-field long"><span class="data-label">Retention</span><span class="data-value">A sync link unused for a year is deleted. Deleting it yourself removes it at once; each device keeps its own copy of the list.</span></div><div class="data-field"><span class="data-label">Sync on this site</span><span class="data-value">${esc(syncState)}</span></div><div class="data-field"><span class="data-label">This device</span><span class="data-value">${esc(deviceState)} · ${state.watch.size} ${state.watch.size===1?'bill':'bills'} watched</span></div><p style="font-size:var(--fs-xs);color:color-mix(in srgb,var(--ink) 45%,var(--surface));margin:14px 0 0">Limits: up to 500 bills per synced list. Lost your edit link? Your list is still on each device that had it; create a new sync link from any of them.</p></div>`;
 }
 
 function dataMarkup(){
-  return `<div class="section-head"><div><div class="section-overline">DATA PROVENANCE</div><h2>Source, coverage & export</h2></div></div><div class="subpage-card"><div class="data-field"><span class="data-label">Legislative session</span><span class="data-value">90R · 2027</span></div><div class="data-field"><span class="data-label">Loaded records</span><span class="data-value">${state.bills.length}</span></div><div class="data-field"><span class="data-label">Snapshot mode</span><span class="data-value">${esc(state.meta?.data_mode||'Unknown')}</span></div><div class="data-field"><span class="data-label">Read from</span><span class="data-value">${esc(state.meta?.loaded_from||'User import')}</span></div><div class="data-field"><span class="data-label">Last generated</span><span class="data-value">${stampText(state.meta?.generated_at)}</span></div><div class="data-field"><span class="data-label">Luna reviews</span><span class="data-value">${state.luna?`${Object.keys(state.luna.bills).length} bills · updated ${esc(stampText(state.luna.generated_at))}`:'not available'}</span></div><div class="data-field"><span class="data-label">Member roster</span><span class="data-value">${state.roster?`${state.roster.counts?.house??'?'} House · ${state.roster.counts?.senate??'?'} Senate · updated ${esc(stampText(state.roster.generated_at))}`:'not available'}</span></div><p style="font-size:12px;color:#748697;line-height:1.65;margin:18px 0">${esc(state.meta?.coverage_note||'Coverage is not guaranteed complete.')}</p><div class="info-callout"><strong>Official source policy:</strong> The Texas Legislative Council publishes bulk material through anonymous FTP and discourages data mining the public Legislature Online pages. The project includes an updater for the official bulk files, with snapshot validation so a failed import cannot silently replace data with an empty result. <a class="text-link" href="https://capitol.texas.gov/billlookup/filedownloads.aspx" target="_blank" rel="noopener noreferrer">Read the source policy ↗</a></div><div class="data-actions"><button class="primary-button" id="import-trigger">↑ Import CSV or JSON</button><button class="outline-button" id="export-csv">↓ Export current results</button><a class="outline-button" href="https://github.com/ctharvey/texas_bill_tracker" target="_blank" rel="noopener noreferrer">Source code ↗</a><input type="file" id="import-file" accept=".csv,.json,text/csv,application/json" hidden></div><p style="font-size:11px;color:#91a0ad;margin:14px 0 0">Imports are temporary to this browser session; they do not alter the public dataset. Watchlist stars are stored on this device.</p></div>`;
+  return `<div class="section-head"><div><div class="section-overline">DATA PROVENANCE</div><h2>Source, coverage & export</h2></div></div><div class="subpage-card"><div class="data-field"><span class="data-label">Legislative session</span><span class="data-value">90R · 2027</span></div><div class="data-field"><span class="data-label">Loaded records</span><span class="data-value">${state.bills.length}</span></div><div class="data-field"><span class="data-label">Snapshot mode</span><span class="data-value">${esc(state.meta?.data_mode||'Unknown')}</span></div><div class="data-field"><span class="data-label">Read from</span><span class="data-value">${esc(state.meta?.loaded_from||'User import')}</span></div><div class="data-field"><span class="data-label">Last generated</span><span class="data-value">${stampText(state.meta?.generated_at)}</span></div><div class="data-field"><span class="data-label">Luna reviews</span><span class="data-value">${state.luna?`${Object.keys(state.luna.bills).length} bills · updated ${esc(stampText(state.luna.generated_at))}`:'not available'}</span></div><div class="data-field"><span class="data-label">Member roster</span><span class="data-value">${state.roster?`${state.roster.counts?.house??'?'} House · ${state.roster.counts?.senate??'?'} Senate · updated ${esc(stampText(state.roster.generated_at))}`:'not available'}</span></div><p style="font-size:12px;color:color-mix(in srgb,var(--ink) 57%,var(--surface));line-height:1.65;margin:18px 0">${esc(state.meta?.coverage_note||'Coverage is not guaranteed complete.')}</p><div class="info-callout"><strong>Official source policy:</strong> The Texas Legislative Council publishes bulk material through anonymous FTP and discourages data mining the public Legislature Online pages. The project includes an updater for the official bulk files, with snapshot validation so a failed import cannot silently replace data with an empty result. <a class="text-link" href="https://capitol.texas.gov/billlookup/filedownloads.aspx" target="_blank" rel="noopener noreferrer">Read the source policy ↗</a></div><div class="data-actions"><button class="primary-button" id="import-trigger">↑ Import CSV or JSON</button><button class="outline-button" id="export-csv">↓ Export current results</button><a class="outline-button" href="https://github.com/ctharvey/texas_bill_tracker" target="_blank" rel="noopener noreferrer">Source code ↗</a><input type="file" id="import-file" accept=".csv,.json,text/csv,application/json" hidden></div><p style="font-size:var(--fs-xs);color:color-mix(in srgb,var(--ink) 45%,var(--surface));margin:14px 0 0">Imports are temporary to this browser session; they do not alter the public dataset. Watchlist stars are stored on this device.</p></div>`;
 }
 
 function lunaBlock(b){
@@ -1168,12 +1367,18 @@ function stageSections(b){
   return holder;
 }
 
-function showDrawer(id,push=false){
-  const b=state.bills.find(b=>b.id===id);if(!b)return;
+// The bill page's section groups, in page order; the header's section menu jumps to each.
+const BILL_GROUPS=[['overview','Overview'],['text','Text'],['law','Changes to law'],['people','People'],['impact','Agencies and impact'],['history','History'],['sources','Sources']];
+// The bill view's content: every section of one bill, drawn into the page after the router renders its container.
+function fillBillPage(){
+  const page=$('#bill-page');if(!page)return;
+  const b=state.bills.find(b=>b.id===state.openBill);
+  if(!b){page.innerHTML=`<div class="drawer-top"><button type="button" class="outline-button bill-back" id="bill-back">← Back to results</button></div><div class="empty-state"><h3>${esc(state.openBill||'This bill')} is not in this snapshot</h3><p>It may not be filed yet, or the bill list could not be loaded.</p></div>`;return}
   const h=assessHearing(b),influence=authorInfluence(b),party=authorshipParty(b),last=lastActionInfo(b);
   const agencyRows=b.agencies.length?b.agencies.map(a=>`<div class="agency-row"><div><strong>${esc(agencyName(a.id))}</strong><p>${esc(a.reason||'Relationship not yet annotated')}</p></div><span class="confidence ${a.relationship==='direct'?'direct':''}">${a.source==='luna'?`Luna · ${a.relationship==='direct'?'direct':'inferred'}`:a.relationship==='direct'?'Direct':'Possible'}</span></div>`).join(''):'<p>No agency has been tagged yet. This does not establish that none are affected.</p>';
   const watched=state.watch.has(b.id);
-  $('#detail-drawer').innerHTML=`<div class="drawer-top"><span class="drawer-number">90R / ${esc(b.number)}</span><button class="drawer-close" id="drawer-close" aria-label="Close bill details">×</button></div><div class="drawer-pills"><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><span class="party-pill party-${party.tint}" title="${esc(party.detail)}">${esc(party.label)}</span></div><h2 style="margin-top:14px">${esc(b.title)}</h2><p class="drawer-caption">${esc(b.caption)}</p>${headlineLine(b,'drawer')}${lunaBlock(b)}<div class="drawer-pills">${b.topics.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div><div class="drawer-meta-grid"><div><small>Filed by</small><strong>${authorHtml(b,b.author)}</strong></div><div><small>Filed on</small><strong>${dateText(b.filed_at)}</strong></div><div><small>Most recent action</small><strong>${esc(last.label)}${last.chamber?` · ${esc(last.chamber)}`:''} · ${esc(dateText(last.date))}</strong><small>${esc(last.text)}</small></div><div><small>Hearing status</small><strong>${esc(h.label)}</strong></div></div>${b.subjects?.length?`<section class="drawer-section"><h3>Official subjects</h3><p>The Legislative Council's subject index for this bill. Search matches these, so a bill with a vague caption is still found by its subject.</p><div class="bill-tags">${b.subjects.map(s=>`<span class="tag subject-tag">${esc(s)}</span>`).join('')}</div></section>`:''}${companionBlock(b)}${relatedBlock(b)}<section class="drawer-section law-section" id="drawer-statutes" hidden></section><section class="drawer-section bracket-section" id="drawer-brackets" hidden></section><section class="drawer-section"><h3>Hearing progress & evidence</h3><div class="evidence-card"><strong>${esc(h.label)} · ${h.level===0?'No rating yet':'Verified procedural signal'}</strong><p>${esc(h.detail)}</p><ul>${h.facts.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div></section><section class="drawer-section"><h3>Authors & sponsors</h3><p>Authors and coauthors serve in the originating chamber; sponsors and cosponsors serve in the other chamber. Authors include primary and joint/additional primary authors as listed by TLC. Counts reflect this source snapshot.</p><div class="evidence-card"><strong><span class="party-pill party-${party.tint}">${esc(party.label)}</span></strong><p>${esc(party.detail)}</p><p><small>Party, district and tenure come from the Texas Legislative Reference Library's latest recorded service; for members-elect not yet in its records, party and district come from the Secretary of State's unofficial 2026 general election results. Authorship does not indicate a vote or caucus position.</small></p></div>${[['Authors','authors'],['Coauthors','coauthors'],['Sponsors','sponsors'],['Cosponsors','cosponsors']].map(([label,key])=>{const names=b[key];const people=b.people?.[key];return `<h4>${label}${names===null?'':` (${names.length})`}</h4>${names===null?'<p>Not reported in this dataset</p>':!names.length?'<p>None listed in the source snapshot</p>':people?`<ul class="member-list">${people.map(p=>memberItem(p)).join('')}</ul>`:`<p>${names.map(esc).join(' · ')}</p>`}`}).join('')}</section><section class="drawer-section"><h3>Author prominence</h3><div class="evidence-card"><strong>${esc(influence.label)}</strong><p>${esc(influence.factors.join(' · '))}</p>${safeHref(b.author_profile?.source)?`<p><a class="text-link" href="${esc(safeHref(b.author_profile.source))}" target="_blank" rel="noopener noreferrer">Verified member biography ↗</a></p>`:''}</div></section><section class="drawer-section"><h3>Potentially affected agencies (${realAgencies(b).length})</h3><p>All known tags are listed. Possible links are model/rule inferences, not confirmed legal obligations.</p>${agencyRows}</section><section class="drawer-section"><h3>Types of impact</h3><div class="drawer-pills">${b.impacts.length?b.impacts.map(t=>`<span class="tag related">${esc(t)}</span>`).join(''):'<span class="tag">Pending analysis</span>'}</div></section>${b.constituencies?.length?`<section class="drawer-section"><h3>People and institutions affected</h3><div class="drawer-pills">${b.constituencies.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></section>`:''}<section class="drawer-section"><h3>Source & verification</h3><p>Review the bill history and latest text before relying on any classification. <a class="text-link" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a></p><div class="ai-copy"><button type="button" class="outline-button" data-copy-ai title="Copy a short prompt with links to this bill, for pasting into an AI assistant">Copy for AI</button> <a class="text-link" href="${esc(agentUrl(b))}" target="_blank" rel="noopener noreferrer">AI-readable version ↗</a></div></section><div class="drawer-actions"><a class="primary-button" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Read official bill ↗</a><button class="outline-button" data-watch="${b.id}">${watched?'★ Remove from watchlist':'☆ Follow this bill'}</button><a class="outline-button" href="./live/feeds/${esc(b.id)}.xml" target="_blank" rel="noopener noreferrer" title="Follow this bill's actions in Outlook or a feed reader">RSS feed</a></div>`;
+  page.innerHTML=`<header class="bill-head"><div class="bill-bar"><button type="button" class="outline-button bill-back" id="bill-back">← Back to results</button><span class="drawer-number">90R / ${esc(b.number)}</span><div class="drawer-actions"><a class="primary-button" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Read official bill ↗</a><button class="outline-button" data-watch="${b.id}">${watched?'★ Remove from watchlist':'☆ Follow this bill'}</button><a class="outline-button" href="./live/feeds/${esc(b.id)}.xml" target="_blank" rel="noopener noreferrer" title="Follow this bill's actions in Outlook or a feed reader">RSS feed</a><button type="button" class="outline-button" data-copy-ai title="Copy a short prompt with links to this bill, for pasting into an AI assistant">Copy for AI</button></div></div><nav class="bill-menu" aria-label="Sections of this bill">${BILL_GROUPS.map(([id,label])=>`<button type="button" data-bill-jump="${id}">${label}</button>`).join('')}</nav></header><div class="bill-intro"><div class="drawer-pills"><span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><span class="party-pill party-${party.tint}" title="${esc(party.detail)}">${esc(party.label)}</span></div><h1 id="bill-page-title" tabindex="-1">${esc(b.title)}</h1><p class="drawer-caption">${esc(b.caption)}</p></div><div class="bill-layout"><div class="bill-main"><section class="bill-group" id="bill-g-overview" aria-labelledby="bill-h-overview"><h2 class="bill-group-title" tabindex="-1" id="bill-h-overview">Overview</h2>${headlineLine(b,'drawer')}${lunaBlock(b)}<div class="drawer-pills">${b.topics.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>${b.subjects?.length?`<section class="drawer-section"><h3>Official subjects</h3><p>The Legislative Council's subject index for this bill. Search matches these, so a bill with a vague caption is still found by its subject.</p><div class="bill-tags">${b.subjects.map(s=>`<span class="tag subject-tag">${esc(s)}</span>`).join('')}</div></section>`:''}${companionBlock(b)}${relatedBlock(b)}</section><section class="bill-group" id="bill-g-text" aria-labelledby="bill-h-text"><h2 class="bill-group-title" tabindex="-1" id="bill-h-text">Text</h2></section><section class="bill-group" id="bill-g-law" aria-labelledby="bill-h-law"><h2 class="bill-group-title" tabindex="-1" id="bill-h-law">Changes to law</h2><section class="drawer-section law-section" id="drawer-statutes" hidden></section><section class="drawer-section bracket-section" id="drawer-brackets" hidden></section></section><section class="bill-group" id="bill-g-people" aria-labelledby="bill-h-people"><h2 class="bill-group-title" tabindex="-1" id="bill-h-people">People</h2><section class="drawer-section"><h3>Authors & sponsors</h3><p>Authors and coauthors serve in the originating chamber; sponsors and cosponsors serve in the other chamber. Authors include primary and joint/additional primary authors as listed by TLC. Counts reflect this source snapshot.</p><div class="evidence-card"><strong><span class="party-pill party-${party.tint}">${esc(party.label)}</span></strong><p>${esc(party.detail)}</p><p><small>Party, district and tenure come from the Texas Legislative Reference Library's latest recorded service; for members-elect not yet in its records, party and district come from the Secretary of State's unofficial 2026 general election results. Authorship does not indicate a vote or caucus position.</small></p></div>${[['Authors','authors'],['Coauthors','coauthors'],['Sponsors','sponsors'],['Cosponsors','cosponsors']].map(([label,key])=>{const names=b[key];const people=b.people?.[key];return `<h4>${label}${names===null?'':` (${names.length})`}</h4>${names===null?'<p>Not reported in this dataset</p>':!names.length?'<p>None listed in the source snapshot</p>':people?`<ul class="member-list">${people.map(p=>memberItem(p)).join('')}</ul>`:`<p>${names.map(esc).join(' · ')}</p>`}`}).join('')}</section><section class="drawer-section"><h3>Author prominence</h3><div class="evidence-card"><strong>${esc(influence.label)}</strong><p>${esc(influence.factors.join(' · '))}</p>${safeHref(b.author_profile?.source)?`<p><a class="text-link" href="${esc(safeHref(b.author_profile.source))}" target="_blank" rel="noopener noreferrer">Verified member biography ↗</a></p>`:''}</div></section></section><section class="bill-group" id="bill-g-impact" aria-labelledby="bill-h-impact"><h2 class="bill-group-title" tabindex="-1" id="bill-h-impact">Agencies and impact</h2><section class="drawer-section"><h3>Potentially affected agencies (${realAgencies(b).length})</h3><p>All known tags are listed. Possible links are model/rule inferences, not confirmed legal obligations.</p>${agencyRows}</section><section class="drawer-section"><h3>Types of impact</h3><div class="drawer-pills">${b.impacts.length?b.impacts.map(t=>`<span class="tag related">${esc(t)}</span>`).join(''):'<span class="tag">Pending analysis</span>'}</div></section>${b.constituencies?.length?`<section class="drawer-section"><h3>People and institutions affected</h3><div class="drawer-pills">${b.constituencies.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></section>`:''}</section><section class="bill-group" id="bill-g-history" aria-labelledby="bill-h-history"><h2 class="bill-group-title" tabindex="-1" id="bill-h-history">History</h2><section class="drawer-section"><h3>Hearing progress & evidence</h3><div class="evidence-card"><strong>${esc(h.label)} · ${h.level===0?'No rating yet':'Verified procedural signal'}</strong><p>${esc(h.detail)}</p><ul>${h.facts.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div></section></section><section class="bill-group" id="bill-g-sources" aria-labelledby="bill-h-sources"><h2 class="bill-group-title" tabindex="-1" id="bill-h-sources">Sources</h2><section class="drawer-section"><h3>Source & verification</h3><p>Review the bill history and latest text before relying on any classification. <a class="text-link" href="${officialUrl(b)}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a></p><div class="ai-copy"><a class="text-link" href="${esc(agentUrl(b))}" target="_blank" rel="noopener noreferrer">AI-readable version ↗</a></div></section></section></div><aside class="bill-rail" aria-label="Key facts"><div class="drawer-meta-grid"><div><small>Filed by</small><strong>${authorHtml(b,b.author)}</strong></div><div><small>Filed on</small><strong>${dateText(b.filed_at)}</strong></div><div><small>Most recent action</small><strong>${esc(last.label)}${last.chamber?` · ${esc(last.chamber)}`:''} · ${esc(dateText(last.date))}</strong><small>${esc(last.text)}</small></div><div><small>Hearing status</small><strong>${esc(h.label)}</strong></div></div></aside></div>`;
+
   const reviewSection=document.createElement('section');reviewSection.className='drawer-section';
   const heading=document.createElement('h3');heading.textContent='Full text & highlighted evidence';
   const area=document.createElement('div');
@@ -1182,22 +1387,14 @@ function showDrawer(id,push=false){
   load.addEventListener('click',()=>local.click());
   const draw=()=>{if(reviews.has(b.id))renderReview(area,reviews.get(b.id),true);else area.textContent='A reviewed full-text analysis is not yet available. Review files open only in this browser session.';};
   local.addEventListener('change',async()=>{try{const file=local.files[0];if(!file)return;if(file.size>15*1024*1024)throw Error('Select a file smaller than 15 MB');const bundle=JSON.parse(await file.text());reviewModel(bundle);if(bundle.bill_id!==b.id)throw Error('This review belongs to '+bundle.bill_id);reviews.set(b.id,bundle);draw();toast('Private review opened');}catch(error){toast('Review could not be opened: '+error.message)}});
-  $('#detail-drawer').append(billTextSection(b),stageSections(b));
-  reviewSection.append(heading,load,local,area);$('#detail-drawer').append(reviewSection);draw();
-  $('#detail-drawer').hidden=false;$('#drawer-scrim').hidden=false;document.body.style.overflow='hidden';$('#drawer-close').focus();
-  state.openBill=b.id;
+  reviewSection.append(heading,load,local,area);
+  $('#bill-g-text').append(billTextSection(b),reviewSection);draw();
+  $('#bill-g-history').append(stageSections(b));
+  $('#bill-page-title').focus({preventScroll:true});
   fillDrawerStatutes(b.id);
   fillDrawerBrackets(b.id);
-  if(persistState(push&&!drawerPushed))drawerPushed=true;
 }
 
-function closeDrawer(){
-  $('#detail-drawer').hidden=true;$('#drawer-scrim').hidden=true;document.body.style.overflow='';
-  if(!state.openBill)return;
-  state.openBill=null;
-  // Step back over the entry the bill added, so a later Back does not land on the same page again.
-  if(drawerPushed){drawerPushed=false;history.back()}else persistState();
-}
 
 function showAgencyChoices(query=''){
   const input=$('#filter-agency'),popup=$('#agency-options');
@@ -1288,7 +1485,7 @@ function registerClicks(){
   clickOn('nav','[data-view]',(nav,e)=>{e.preventDefault();location.hash=nav.dataset.view;setView(nav.dataset.view)});
   clickOn('open-bill','[data-open]',(open,e)=>{
     // A modified or non-primary click on a link keeps the browser's own behavior (new tab, new window).
-    if(open.tagName!=='A'||cardClickOpens({button:e.button,metaKey:e.metaKey,ctrlKey:e.ctrlKey,shiftKey:e.shiftKey,altKey:e.altKey})){e.preventDefault();showDrawer(open.dataset.open,true)}
+    if(open.tagName!=='A'||cardClickOpens({button:e.button,metaKey:e.metaKey,ctrlKey:e.ctrlKey,shiftKey:e.shiftKey,altKey:e.altKey})){e.preventDefault();openBillPage(open.dataset.open,true)}
   });
   clickOn('copy-ai','[data-copy-ai]',copyAi=>copyForAi(copyAi));
   clickOn('near-locate','#near-locate',()=>nearLocate());
@@ -1325,22 +1522,32 @@ function registerClicks(){
     const known=new Set(state.bills.map(b=>b.id));const ids=group.dataset.watchGroup.split(',').filter(id=>known.has(id));
     if(!ids.length)return;
     const op=ids.every(id=>state.watch.has(id))?'remove':'add';changeWatch(op,ids);
-    renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(!$('#detail-drawer').hidden&&state.openBill)showDrawer(state.openBill);
+    renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(state.view==='bill')renderContent();
     const names=ids.map(id=>state.bills.find(b=>b.id===id)?.number||id).join(', ');
     toast(op==='add'?`Watching ${names}`:`Removed ${names} from your watchlist`)});
-  clickOn('watch','[data-watch]',star=>{const id=star.dataset.watch;changeWatch(state.watch.has(id)?'remove':'add',[id]);renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(!$('#detail-drawer').hidden)showDrawer(id);toast(state.watch.has(id)?`${id} added to your watchlist`:`${id} removed from your watchlist`)});
+  clickOn('watch','[data-watch]',star=>{const id=star.dataset.watch;changeWatch(state.watch.has(id)?'remove':'add',[id]);renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(state.view==='bill')renderContent();toast(state.watch.has(id)?`${id} added to your watchlist`:`${id} removed from your watchlist`)});
+  clickOn('search-example','[data-search-example]',x=>{state.query=x.dataset.searchExample;state.visibleCount=30;renderContent();$('#bill-search')?.focus()});
   clickOn('topic','[data-topic]',topic=>{state.topic=topic.dataset.topic;state.visibleCount=30;renderContent()});
   clickOn('agency-pick','[data-agency-pick]',pick=>{switchFilters('all');state.agency=pick.dataset.agencyPick;state.visibleCount=30;state.view='all';location.hash='all';setView('all')});
+  clickOn('clear-filter','[data-clear-filter]',chip=>clearFilter(chip.dataset.clearFilter));
   clickOn('clear-filters','#clear-filters',()=>{Object.assign(state,{query:'',topic:'',agency:'',chamber:'',party:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30});renderContent()});
   clickOn('watch-filter','#watch-filter',()=>{state.onlyWatch=!state.onlyWatch;state.visibleCount=30;renderContent()});
   clickOn('load-more','#load-more',()=>{state.visibleCount+=30;renderResults()});
   clickOn('export-csv','#export-csv',()=>exportCsv());
   clickOn('import-trigger','#import-trigger',()=>$('#import-file').click());
-  clickOn('drawer-close','#drawer-close',()=>closeDrawer());
-  // Empty space on a card opens its drawer, unless the click was on a control or the reader is selecting text.
+  clickOn('nav-more','#nav-more',()=>setNavOpen(!$('.sidebar').classList.contains('nav-open')));
+  clickOn('bill-back','#bill-back',()=>leaveBillPage());
+  clickOn('preview-close','#preview-close',()=>closePreview());
+  clickOn('preview-step','[data-preview-step]',step=>stepPreview(Number(step.dataset.previewStep)));
+  clickOn('bill-jump','[data-bill-jump]',jump=>{const group=$(`#bill-g-${jump.dataset.billJump}`);if(group){group.scrollIntoView({block:'start'});group.querySelector('h2')?.focus?.({preventScroll:true})}});
+  // Empty space on a card opens its bill page, unless the click was on a control or the reader is selecting text.
+  // In the explorer on a wide screen it opens the preview instead; links and buttons still go to the page.
   onClick('card',e=>{
     const card=e.target.closest('[data-bill-id]');
-    if(card&&cardClickOpens({interactive:Boolean(e.target.closest(CARD_CONTROLS)),selection:window.getSelection?.().toString()||'',button:e.button,metaKey:e.metaKey,ctrlKey:e.ctrlKey,shiftKey:e.shiftKey,altKey:e.altKey}))showDrawer(card.dataset.billId,true);
+    if(card&&cardClickOpens({interactive:Boolean(e.target.closest(CARD_CONTROLS)),selection:window.getSelection?.().toString()||'',button:e.button,metaKey:e.metaKey,ctrlKey:e.ctrlKey,shiftKey:e.shiftKey,altKey:e.altKey})){
+      if(card.matches('#bill-list .bill-card')&&PREVIEW_WIDE.matches)showPreview(card.dataset.billId);
+      else openBillPage(card.dataset.billId,true);
+    }
     return true;
   });
 }
@@ -1357,7 +1564,7 @@ async function copyToClipboard(text){
 async function copyPageForAi(button){
   const bill=state.openBill?state.bills.find(x=>x.id===state.openBill):null;
   const member=state.view==='member'?memberByCode(state.roster,state.memberCode):null;
-  const labels={all:'Bill explorer',watchlist:'Watchlist',following:'Following',today:'Today',local:'Near you',member:member?`Bills by ${memberTitle(member)}`:'Member'};
+  const labels={home:'Home',all:'Bill explorer',watchlist:'Watchlist',following:'Following',today:'Today',local:'Near you',member:member?`Bills by ${memberTitle(member)}`:'Member'};
   const today=state.view==='today'?todayData():null;
   const text=pageAiText({view:state.view,label:labels[state.view]||state.view,pageUrl:location.href,bill,agencyName,
     companions:companionsOf,via:state.view==='today'||state.view==='member'?null:agencyVia(),
@@ -1377,12 +1584,13 @@ async function copyForAi(button){
   }else{
     // Last resort: show the text, selected, so it can be copied by hand.
     let box=$('#ai-fallback');
-    if(!box){box=document.createElement('textarea');box.id='ai-fallback';box.className='ai-fallback';box.readOnly=true;box.rows=6;button.closest('.ai-copy').append(box)}
+    if(!box){box=document.createElement('textarea');box.id='ai-fallback';box.className='ai-fallback';box.readOnly=true;box.rows=6;(button.closest('.ai-copy')||button.closest('.bill-head')||button.parentElement).append(box)}
     box.value=text;box.focus();box.select();toast('Press Ctrl+C to copy');
   }
 }
 
 function handleInput(e){
+  if(e.target.id==='review-lookup'){$('#review-lookup-result').innerHTML=reviewLookupHtml(e.target.value);return}
   if(e.target.id==='bill-search'){state.query=e.target.value.slice(0,200);state.visibleCount=30;renderResults()}
   if(e.target.id==='filter-agency'){
     if(state.agency){state.agency='';state.visibleCount=30;renderResults()}
