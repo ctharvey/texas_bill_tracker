@@ -157,7 +157,7 @@ def test_run_card_names_the_pass_and_counts_each(device):
     expect(now).to_have_attribute("aria-current", "step")
     expect(now.locator(".pass-count")).to_contain_text("506")
     expect(now.locator(".pass-checked")).to_have_text("40 done this run")
-    expect(run.locator(".review-pass.clear")).to_contain_text("Agencies")  # nothing left
+    expect(run.locator(".review-pass.clear", has_text="Agencies")).to_have_count(1)  # nothing left
     expect(run.locator(".review-pass").last.locator(".pass-count")).to_contain_text("counted after the next run")
 
 

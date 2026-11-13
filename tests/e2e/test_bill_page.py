@@ -39,6 +39,10 @@ def test_bill_number_link_is_the_bill_address(device):
 def test_opens_from_empty_space_on_a_card(device):
     page = open_from_list(device)
     card(page, "HB110").click(position={"x": 3, "y": 3})
+    if page.viewport_size["width"] >= 1200:
+        # Wide screens preview first (test_bill_preview.py); Open bill goes on to the page.
+        expect(page.locator("#bill-preview .bill-number")).to_have_text("HB 110")
+        page.locator("#bill-preview .preview-actions [data-open]").click()
     expect(page.locator(".drawer-number")).to_have_text("90R / HB 110")
 
 
