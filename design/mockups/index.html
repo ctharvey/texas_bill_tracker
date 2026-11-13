@@ -174,7 +174,20 @@ h1{font-family:var(--font-head);font-weight:var(--head-weight);font-size:var(--h
   background:linear-gradient(90deg,color-mix(in srgb,var(--p,var(--surface)) 9%,var(--surface)),var(--surface) 45%);transition:border-color .15s,box-shadow .15s}
 .card[data-party="D"]{--p:var(--dem)} .card[data-party="R"]{--p:var(--rep)} .card[data-party="B"]{--p:var(--bip)}
 .card:hover{border-top-color:var(--line-strong);border-right-color:var(--line-strong);border-bottom-color:var(--line-strong)}
-.card[aria-selected="true"]{box-shadow:0 0 0 2px var(--accent)}
+/* The previewed bill, three ways to compare (mock-up switch "Active bill"); none adds a border */
+/* Fill: the card takes the accent tint, the party wash stays on its left */
+body[data-sel="fill"] .card[aria-selected="true"]{background:linear-gradient(90deg,color-mix(in srgb,var(--p,var(--accent)) 14%,var(--accent-soft)),var(--accent-soft) 45%)}
+body[data-sel="fill"] .card[aria-selected="true"] .title a{color:var(--accent)}
+/* Pointer: an accent tab on the card's right edge points at the preview, which carries the same accent */
+body[data-sel="pointer"] .card[aria-selected="true"]::after{content:"";position:absolute;top:50%;right:-13px;translate:0 -50%;
+  border:9px solid transparent;border-left:12px solid var(--accent);border-right:0}
+body[data-sel="pointer"] .card[aria-selected="true"] .num{color:var(--accent)}
+body[data-sel="pointer"] .preview{box-shadow:inset 0 3px 0 var(--accent)}
+/* Lift: the card rises with a soft shadow; the rest of the list steps back slightly */
+body[data-sel="lift"] .card{transition:transform .15s,box-shadow .15s,opacity .15s}
+body[data-sel="lift"] .list:has(.card[aria-selected="true"]) .card:not([aria-selected="true"]){opacity:.62}
+body[data-sel="lift"] .card[aria-selected="true"]{transform:translateY(-2px);box-shadow:0 10px 28px -8px color-mix(in srgb,var(--ink) 35%,transparent),0 2px 6px -2px color-mix(in srgb,var(--ink) 20%,transparent)}
+@media (prefers-reduced-motion:reduce){body[data-sel="lift"] .card[aria-selected="true"]{transform:none}}
 .headrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
 .title{grid-column:1;margin:0;font-family:var(--font-title);font-weight:var(--title-weight);font-size:var(--title-size);line-height:1.3}
 .title a{text-decoration:none} .title a:hover{text-decoration:underline;text-underline-offset:3px}
@@ -278,7 +291,7 @@ h1{font-family:var(--font-head);font-weight:var(--head-weight);font-size:var(--h
 }
 </style>
 </head>
-<body data-dir="a">
+<body data-dir="a" data-sel="fill">
 
 <div class="controls" role="region" aria-label="Mock-up controls">
   <div class="grp"><span class="lbl">Direction</span>
@@ -288,6 +301,11 @@ h1{font-family:var(--font-head);font-weight:var(--head-weight);font-size:var(--h
     <button data-setdir="d" aria-pressed="false"><i class="sw" style="background:#002868"></i>D Lone Star</button>
     <button data-setdir="e" aria-pressed="false"><i class="sw" style="background:#2f55a4"></i>E Bluebonnet</button>
     <button data-setdir="f" aria-pressed="false"><i class="sw" style="background:#8c3b1f"></i>F Ranch</button>
+  </div>
+  <div class="grp"><span class="lbl">Active bill</span>
+    <button data-setsel="fill" aria-pressed="true">Fill</button>
+    <button data-setsel="pointer" aria-pressed="false">Pointer</button>
+    <button data-setsel="lift" aria-pressed="false">Lift</button>
   </div>
   <div class="grp"><span class="lbl">Screen</span>
     <button data-setscreen="explorer" aria-pressed="true">Bills list</button>
@@ -506,6 +524,7 @@ function setScreen(s){
 document.addEventListener('click',e=>{
   const t=e.target;
   const d=t.closest('[data-setdir]');if(d){document.body.dataset.dir=d.dataset.setdir;press('[data-setdir]','data-setdir',d.dataset.setdir);return}
+  const v=t.closest('[data-setsel]');if(v){document.body.dataset.sel=v.dataset.setsel;press('[data-setsel]','data-setsel',v.dataset.setsel);return}
   const s=t.closest('[data-setscreen]');if(s){setScreen(s.dataset.setscreen);return}
   if(t.closest('[data-open]')){e.preventDefault();setScreen('bill');return}
   if(t.closest('[data-back]')){e.preventDefault();setScreen('explorer');return}
