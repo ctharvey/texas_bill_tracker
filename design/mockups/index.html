@@ -188,13 +188,15 @@ body[data-sel="pointer"] .preview{box-shadow:inset 0 3px 0 var(--accent)}
    in place of the party bar. Text starts 36px in on every card in this style (4 + 32 unselected, 28 + 8 selected), so
    selecting a card does not shift it. */
 body[data-sel="star"] .card{padding-left:32px}
-body[data-sel="star"] .card[aria-selected="true"]{z-index:2;border:2px solid var(--accent);border-left-width:28px;padding:13px 13px 13px 8px}
-body[data-sel="star"] .card[aria-selected="true"]::after{content:"\2605";position:absolute;left:-28px;top:0;bottom:0;width:28px;
+/* The band is drawn over the card, not made of a thick left border: a 28px border rounds the light area's inner
+   corner and leaves a scoop where the band meets the top and bottom border. */
+body[data-sel="star"] .card[aria-selected="true"]{z-index:2;border:2px solid var(--accent);padding:13px 13px 13px 34px}
+body[data-sel="star"] .card[aria-selected="true"]::after{content:"\2605";position:absolute;left:-2px;top:0;bottom:0;width:28px;
   display:grid;place-items:center;font-size:19px;line-height:1;color:#fff;pointer-events:none;
   animation:star-in .65s .12s cubic-bezier(.3,1.5,.5,1) backwards}
 /* One-time entrance on select, then still: the band sweeps in, a shine crosses it once, the star spins in and settles.
    The band and shine are a ::before over the border area, so the card's own border stays the resting state. */
-body[data-sel="star"] .card[aria-selected="true"]::before{content:"";position:absolute;left:-28px;top:-2px;bottom:-2px;width:28px;
+body[data-sel="star"] .card[aria-selected="true"]::before{content:"";position:absolute;left:-2px;top:-2px;bottom:-2px;width:28px;
   border-radius:var(--radius) 0 0 var(--radius);pointer-events:none;
   background:linear-gradient(100deg,transparent 30%,#ffffff8c 50%,transparent 70%) -40px 0/40px 100% no-repeat,var(--accent);
   animation:band-in .3s ease-out backwards,shine .7s .25s ease-in-out forwards}
@@ -208,10 +210,10 @@ body[data-sel="star"] .card[aria-selected="true"] .title a{color:var(--accent)}
    rippling slowly from hoist to fly once (about 3s) after it sweeps in, then resting. Flag colours whatever the direction.
    Text starts 48px in on every card in this style (4 + 44 unselected, 40 + 8 selected), so selecting does not shift it. */
 body[data-sel="flag"] .card{padding-left:44px}
-body[data-sel="flag"] .card[aria-selected="true"]{z-index:2;border:2px solid var(--accent);border-left-width:40px;padding:13px 13px 13px 8px}
+body[data-sel="flag"] .card[aria-selected="true"]{z-index:2;border:2px solid var(--accent);padding:13px 13px 13px 46px}
 body[data-sel="flag"] .card[aria-selected="true"] .title a{color:var(--accent)}
 /* top/bottom 0: the 2px selection border runs along the flag's top and bottom edges too */
-body[data-sel="flag"] .card[aria-selected="true"]::before{content:"";position:absolute;left:-40px;top:0;bottom:0;width:40px;
+body[data-sel="flag"] .card[aria-selected="true"]::before{content:"";position:absolute;left:-2px;top:0;bottom:0;width:40px;
   border-radius:calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px);pointer-events:none;
   background:
     repeating-linear-gradient(100deg,#0000 0 6px,#00000038 13px,#0000 20px,#ffffff40 27px,#0000 34px) 0 0/68px 100%,
@@ -219,7 +221,7 @@ body[data-sel="flag"] .card[aria-selected="true"]::before{content:"";position:ab
     linear-gradient(#fff 50%,#bf0a30 50%) 24px 0/16px 100% no-repeat;
   box-shadow:inset -1px 0 0 #0000001f;
   animation:band-in .3s ease-out backwards,ripple 2.8s .3s ease-in-out 1}
-body[data-sel="flag"] .card[aria-selected="true"]::after{content:"\2605";position:absolute;left:-40px;top:0;bottom:0;width:24px;
+body[data-sel="flag"] .card[aria-selected="true"]::after{content:"\2605";position:absolute;left:-2px;top:0;bottom:0;width:24px;
   display:grid;place-items:center;font-size:17px;line-height:1;color:#fff;pointer-events:none;
   animation:star-in .65s .12s cubic-bezier(.3,1.5,.5,1) backwards,bob 2.8s .3s ease-in-out 1}
 @keyframes ripple{to{background-position:68px 0,0 0,24px 0}}
@@ -228,7 +230,7 @@ body[data-sel="flag"] .card[aria-selected="true"]::after{content:"\2605";positio
   body:not([data-motion="on"])[data-sel="flag"] .card[aria-selected="true"]::after{animation:none}}
 /* First load only: the Star hoist starts as a Texas flag (same 28px band, so the text never moves), ripples once,
    then fades to the plain Star band underneath. The script adds .flag-intro on load and removes it after. */
-.flag-intro{position:absolute;left:-28px;top:0;bottom:0;width:28px;z-index:1;pointer-events:none;
+.flag-intro{position:absolute;left:-2px;top:0;bottom:0;width:28px;z-index:1;pointer-events:none;
   border-radius:calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px);
   background:
     repeating-linear-gradient(100deg,#0000 0 6px,#00000038 13px,#0000 20px,#ffffff40 27px,#0000 34px) 0 0/68px 100%,
