@@ -118,13 +118,20 @@ def test_modified_click_on_a_card_does_not_open_the_bill_page(device):
 
 # ---- nav ----
 
+def open_more(page):
+    """On a phone the pages outside the bottom bar are behind More."""
+    more = page.locator("#nav-more")
+    if more.is_visible():
+        more.click()
+
+
 def test_view_nav_button_switches_view(device):
     page = device.open("#all")
-    nav = page.locator('[data-view="today"]').first
-    nav.click()
-    expect(page.locator("#page-title")).to_contain_text("Today at the Lege.")
-    assert page.url.endswith("#today")
-    expect(page.locator('[data-view="today"].active').first).to_be_visible()
+    open_more(page)
+    page.locator('[data-view="agencies"]').first.click()
+    expect(page.locator("#page-title")).to_contain_text("Follow the agencies.")
+    assert page.url.endswith("#agencies")
+    expect(page.locator('.sidebar [data-view="agencies"].active')).to_have_count(1)
     page.locator('[data-view="all"]').first.click()
     expect(page.locator("#page-title")).to_contain_text("See what’s moving.")
 
@@ -132,6 +139,7 @@ def test_view_nav_button_switches_view(device):
 def test_nav_leaves_the_bill_page(device):
     page = device.open("#bill?id=HB110")
     expect(page.locator("#bill-page")).to_be_visible()
+    open_more(page)
     page.locator('[data-view="review"]').first.click()
     expect(page.locator("#page-title")).to_contain_text("Full-text review.")
     expect(page.locator("#bill-page")).to_be_hidden()
@@ -176,6 +184,7 @@ def test_unfollow_on_the_following_page_does_not_follow_the_neighbouring_links(d
     code = member_code(page)
     page.goto(device.site.base + f"#member?code={code}")
     page.locator(".member-profile [data-follow]").click()
+    open_more(page)
     page.locator('[data-view="following"]').first.click()
     chip = page.locator(".followed-member")
     expect(chip).to_have_count(1)

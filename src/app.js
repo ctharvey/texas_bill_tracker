@@ -114,6 +114,7 @@ async function init(){
     if(event.target.id==='filter-agency')showAgencyChoices('');
   });
   document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&$('.sidebar').classList.contains('nav-open')){setNavOpen(false);$('#nav-more').focus()}
     if(event.target.id==='filter-agency'&&handleAgencyKeydown(event))return;
   });
   // A sync link pasted into an open tab arrives as a hash change, not a page load.
@@ -431,11 +432,16 @@ async function loadReviewStatus(){
   }catch(error){console.warn('Review status unavailable',error.message)}
 }
 
+function setNavOpen(open){
+  $('.sidebar').classList.toggle('nav-open',open);
+  const more=$('#nav-more');more.setAttribute('aria-expanded',String(open));more.querySelector('.nav-more-label').textContent=open?'Close':'More';
+}
 // push=true adds a history entry (opening a bill page), so the browser's Back returns to the page before it.
 function setView(view,push=false){
   switchFilters(view);
   state.view=view;
   if(view!=='bill')state.openBill=null;
+  setNavOpen(false);
   document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===view));
   const [title,subtitle]=viewHeading(view);
   $('#page-title').innerHTML=title;$('#page-subtitle').textContent=subtitle;
@@ -691,6 +697,7 @@ function homeMarkup(){
   const reviewBody=reviewed.length?reviewed.slice(0,HOME_ROWS).map(b=>todayRow({bill:b,actions:[`Reviewed ${dateText(b.luna.reviewed_at)}`]})).join('')+more('#review','review','Review progress')
     :'<p class="tools-note">Luna has not reviewed any bills yet.</p>';
   return `<form class="home-search" id="home-search-form" role="search"><label for="home-search">Search every bill</label><div class="home-search-row"><input id="home-search" name="query" maxlength="200" placeholder="Bill number, author, subject, agency or keyword…" autocomplete="off"><button class="primary-button" type="submit">Search</button></div><p class="tools-note">Or <a class="text-link" href="#all" data-view="all">browse all ${state.bills.length.toLocaleString()} bills</a>.</p></form>
+    <div class="calendar-mini home-milestone"><div class="calendar-eyebrow">UPCOMING MILESTONE</div><div class="calendar-date">JAN 12 <span>2027</span></div><div class="calendar-desc">90th regular session convenes</div><div class="calendar-progress"><span></span></div></div>
     <div class="home-grid">${card(yoursTitle,changed.length,yours)}${card(day===today?'Today at the Lege':`Most recent activity, ${esc(shortDate(day))}`,rows.length,dayBody)}${card('Upcoming hearings',hearings.length,hearingBody)}${card('Newly reviewed by Luna',0,reviewBody)}</div>`;
 }
 
@@ -1403,6 +1410,7 @@ function registerClicks(){
   clickOn('load-more','#load-more',()=>{state.visibleCount+=30;renderResults()});
   clickOn('export-csv','#export-csv',()=>exportCsv());
   clickOn('import-trigger','#import-trigger',()=>$('#import-file').click());
+  clickOn('nav-more','#nav-more',()=>setNavOpen(!$('.sidebar').classList.contains('nav-open')));
   clickOn('bill-back','#bill-back',()=>leaveBillPage());
   clickOn('bill-jump','[data-bill-jump]',jump=>{const group=$(`#bill-g-${jump.dataset.billJump}`);if(group){group.scrollIntoView({block:'start'});group.querySelector('h2')?.focus?.({preventScroll:true})}});
   // Empty space on a card opens its bill page, unless the click was on a control or the reader is selecting text.

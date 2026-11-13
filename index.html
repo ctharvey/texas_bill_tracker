@@ -25,25 +25,28 @@
         <span class="brand-text">TEXAS<span>BILL ATLAS</span></span>
       </a>
       <div class="session-badge"><span class="badge-dot"></span> 90th Legislature <span class="tiny">2027</span></div>
-      <div class="nav-label">WORKSPACE</div>
-      <nav class="main-nav" id="main-nav">
-        <button class="nav-item" data-view="home"><span class="nav-icon">⌂</span> Home</button>
-        <button class="nav-item" data-view="all"><span class="nav-icon">▦</span> Bill explorer <span class="nav-count" id="nav-all">—</span></button>
-        <button class="nav-item" data-view="watchlist"><span class="nav-icon">☆</span> Watchlist <span class="nav-count" id="nav-watch">0</span></button>
-        <button class="nav-item" data-view="following"><span class="nav-icon">♢</span> Following <span class="nav-count" id="nav-follow">0</span></button>
-        <button class="nav-item" data-view="today"><span class="nav-icon">◷</span> Today</button>
+      <!-- Items marked data-bar make the phone's bottom bar; More opens the whole menu there. -->
+      <div class="nav-label">BROWSE</div>
+      <nav class="main-nav" id="main-nav" aria-label="Browse">
+        <button class="nav-item" data-view="home" data-bar><span class="nav-icon">⌂</span> Home</button>
+        <button class="nav-item" data-view="all" data-bar><span class="nav-icon">▦</span> Bill search <span class="nav-count" id="nav-all">—</span></button>
         <button class="nav-item" data-view="local"><span class="nav-icon">⌖</span> Near you</button>
         <button class="nav-item" data-view="agencies"><span class="nav-icon">▤</span> Agency index</button>
-        <button class="nav-item" data-view="review"><span class="nav-icon">◎</span> Review progress <span class="nav-count" id="nav-review">—</span></button>
       </nav>
-      <div class="nav-label nav-label-second">REFERENCE</div>
-      <nav class="main-nav">
+      <div class="nav-label nav-label-second">YOURS</div>
+      <nav class="main-nav" aria-label="Yours">
+        <button class="nav-item" data-view="watchlist" data-bar><span class="nav-icon">☆</span> Watchlist <span class="nav-count" id="nav-watch">0</span></button>
+        <button class="nav-item" data-view="following"><span class="nav-icon">♢</span> Following <span class="nav-count" id="nav-follow">0</span></button>
+      </nav>
+      <div class="nav-label nav-label-second">ABOUT</div>
+      <nav class="main-nav" aria-label="About">
         <button class="nav-item" data-view="method"><span class="nav-icon">◈</span> Scoring method</button>
         <button class="nav-item" data-view="saving"><span class="nav-icon">⇩</span> Saving your info</button>
         <button class="nav-item" data-view="data"><span class="nav-icon">⇄</span> Data & imports</button>
+        <button class="nav-item" data-view="review"><span class="nav-icon">◎</span> Review progress <span class="nav-count" id="nav-review">—</span></button>
       </nav>
+      <button type="button" class="nav-item nav-more" id="nav-more" aria-expanded="false"><span class="nav-icon">☰</span> <span class="nav-more-label">More</span></button>
       <div class="sidebar-bottom">
-        <div class="calendar-mini"><div class="calendar-eyebrow">UPCOMING MILESTONE</div><div class="calendar-date">JAN 12 <span>2027</span></div><div class="calendar-desc">90th regular session convenes</div><div class="calendar-progress"><span></span></div></div>
         <a class="official-link" href="https://capitol.texas.gov/" target="_blank" rel="noopener noreferrer">Official Texas Legislature Online <span>↗</span></a>
         <div class="sidebar-credit">Independent research tool · Not an official state website</div>
       </div>
