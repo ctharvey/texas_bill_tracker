@@ -1,6 +1,14 @@
 # Changelog
 
 ## 2026-11-12
+- Tags made consistent:
+  - Bill cards no longer show "Tenure documented" (it only said a service record existed). The author pill now uses
+    the same tenure tag as member lists, by time in the current chamber: "Senior author" or "First-term author",
+    nothing for mid-tenure; a verified leadership role or committee chair shows as a ◆ pill.
+  - Tenure tags read First term / Mid-tenure / Senior (was Newcomer / Average tenure / Senior).
+  - Hearing progress "Not rated" is now "No hearing yet"; old links, saved searches and remembered filters map to it.
+    Agent pages `hearing/not-rated*.md` are now `hearing/no-hearing-yet*.md`.
+- Party filter in the bill explorer: Republican, Democratic or Bipartisan authors.
 - Parity suite before reorganizing code into feature folders:
   - A browser test module per feature, run on raw `src/` and on the deployer-built bundle, plus tests that load saved
     data written by the current site (browser storage, profile files, a sync database) so no one's saves are lost.

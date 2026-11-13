@@ -87,7 +87,7 @@ def test_new_member_shows_newcomer_tag(device):
     page = device.open(f"#member?code={GARIBAY}")
     profile = page.locator(".member-profile")
     expect(page.locator("#dynamic-content h2")).to_have_text("Rep. Montserrat Garibay")
-    expect(profile.locator(".tenure-pill")).to_have_text("Newcomer")
+    expect(profile.locator(".tenure-pill")).to_have_text("First term")
     expect(profile).to_contain_text("Democratic (2026 ballot, unofficial) · HD 49 · member-elect; no prior service on record")
     expect(profile).to_contain_text("New to the House")
     expect(profile).to_contain_text("Texas House · District 49")

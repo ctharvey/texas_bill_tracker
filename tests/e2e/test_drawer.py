@@ -59,7 +59,7 @@ def test_header_pills_title_and_caption(device):
     expect(drawer.locator(".drawer-caption")).to_have_text("Relating to the minimum wage.")
     meta = drawer.locator(".drawer-meta-grid")
     expect(meta).to_contain_text("Nov 9, 2026")  # filed on
-    expect(meta).to_contain_text("Not rated")  # hearing status
+    expect(meta).to_contain_text("No hearing yet")  # hearing status
 
 
 def test_luna_block_for_a_reviewed_bill(device):

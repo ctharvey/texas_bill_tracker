@@ -14,7 +14,7 @@ test('tags all relevant detected agencies instead of picking one',()=>{
 test('names explicitly cited agencies direct, does not invent a numeric probability',()=>{
   const b=autoTagBill({title:'Texas Education Agency rulemaking',caption:'The Texas Education Agency may adopt rules'});
   assert.equal(b.agencies.find(a=>a.id==='tea').relationship,'direct');
-  assert.equal(assessHearing({status:'Filed'}).label,'Not rated');
+  assert.equal(assessHearing({status:'Filed'}).label,'No hearing yet');
   assert.equal(assessHearing({status:'Filed'}).level,0);
 });
 
@@ -26,7 +26,10 @@ test('committee referral and scheduled hearing are distinguished',()=>{
 
 test('author prominence is unassessed without verified role evidence',()=>{
   assert.equal(authorInfluence({author:'Unknown'}).label,'Unassessed');
-  assert.equal(authorInfluence({author_profile:{committee_chair:true}}).label,'High institutional access');
+  assert.equal(authorInfluence({author_profile:{committee_chair:true}}).label,'Committee chair');
+  assert.equal(authorInfluence({author_profile:{leadership_position:'Speaker',committee_chair:true}}).key,'leadership');
+  assert.equal(authorInfluence({author_profile:{seniority_years:14}}).label,'Senior author');  // curated, no roster match
+  assert.equal(authorInfluence({author_profile:{seniority_years:7}}).key,'unknown');
 });
 
 test('official link points to regular 90th session',()=>{

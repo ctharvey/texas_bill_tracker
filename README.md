@@ -300,12 +300,14 @@ beside the name), companion rows ("by …", in the companion's chamber), Near yo
 the roster has that exact (chamber, name), the same match bills use (`attachMembers`); otherwise it stays plain text.
 
 Tenure tags (`tenureTag` in `src/taxonomy.js`) count term years in the member's current chamber, from the Legislative
-Reference Library service record up to the 2027 session start: **Newcomer** in a first term (House under 2 years,
-Senate under 4), **Senior** at 12+ years (the House's top quarter, close to the Senate's, and the line
-`authorInfluence` already uses for "Established member"), **Average tenure** in between. Service in the other chamber
-is shown beside the tag ("New to the Senate · 14 years in the House") but never counted, so a representative newly in
-the Senate is a Senate newcomer. No tag when a record's years cannot be read. On the 2026-11-11 roster: House 41
-newcomers, 69 average, 40 senior; Senate 8, 10, 11. Shown on member pages, Near you cards and the drawer's author list. An unknown code says so. A bill opened
+Reference Library service record up to the 2027 session start: **First term** (House under 2 years, Senate under
+4), **Senior** at 12+ years (the House's top quarter, close to the Senate's), **Mid-tenure** in between. Service in the
+other chamber is shown beside the tag ("New to the Senate · 14 years in the House") but never counted, so a
+representative newly in the Senate is in a first Senate term. No tag when a record's years cannot be read. On the
+2026-11-11 roster: House 41 first term, 69 mid-tenure, 40 senior; Senate 8, 10, 11. Shown on member pages, Near you
+cards and the drawer's author list. Bill cards use the same tag for the primary author (`authorInfluence`): a verified
+leadership role or committee chair shows as a ◆ pill, else "Senior author" or "First-term author"; mid-tenure and
+unknown authors show no pill. An unknown code says so. A bill opened
 from the page keeps the member in the address (`#member?code=A4875&bill=HB5`).
 
 ### Saving and sharing without accounts

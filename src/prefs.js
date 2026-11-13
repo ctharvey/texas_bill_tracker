@@ -1,6 +1,9 @@
 // Saving choices without accounts: URL state, remembered filters, profile and watchlist files, and sync merging.
 export const FILTER_DEFAULTS = {query: '', topic: '', agency: '', chamber: '', party: '', stage: '', action: '', outlook: '', sort: 'newest', onlyWatch: false};
 const FILTER_NAMES = Object.keys(FILTER_DEFAULTS);
+// Renamed filter values, so old links, saved searches and remembered filters keep working (taxonomy.NO_HEARING).
+const RENAMED = {outlook: {'Not rated': 'No hearing yet'}};
+const current = (name, value) => RENAMED[name]?.[value] ?? value;
 export const VIEWS = ['all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'agencies', 'review', 'method', 'saving', 'data'];
 const LAW_CODE = /^[A-Z]{2}$/;
 const LAW_SECTION = /^\d+[A-Z]?(?:\.\d+[A-Z]?)+$/;  // The statute index's section numbers (build_feeds.SECTION_NUM).
@@ -22,7 +25,7 @@ export function cleanFilters(raw) {
   if (!raw || typeof raw !== 'object') return out;
   for (const name of FILTER_NAMES) {
     const value = raw[name];
-    if (name === 'onlyWatch' ? typeof value === 'boolean' : typeof value === 'string' && value.length <= 200) out[name] = value;
+    if (name === 'onlyWatch' ? typeof value === 'boolean' : typeof value === 'string' && value.length <= 200) out[name] = current(name, value);
   }
   return out;
 }
@@ -37,7 +40,7 @@ export function parseHash(hash) {
   const filters = {};
   for (const name of FILTER_NAMES) {
     if (!params.has(name)) continue;
-    filters[name] = name === 'onlyWatch' ? params.get(name) === '1' : params.get(name).slice(0, 200);
+    filters[name] = name === 'onlyWatch' ? params.get(name) === '1' : current(name, params.get(name).slice(0, 200));
   }
   const list = params.has('list') ? uniqueIds(params.get('list').split(',')) : null;
   const bill = normalizeId(params.get('bill') || '');

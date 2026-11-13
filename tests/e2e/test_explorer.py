@@ -109,9 +109,9 @@ def test_hearing_status_filter(device):
     page = device.open("#all")
     pick(page, "#filter-outlook", "Heard")
     expect(page.locator("#result-count")).to_have_text("0 bills")
-    pick(page, "#filter-outlook", "Not rated")
+    pick(page, "#filter-outlook", "No hearing yet")
     expect(page.locator("#result-count")).to_have_text(TOTAL)
-    assert hash_params(page) == {"outlook": ["Not rated"]}
+    assert hash_params(page) == {"outlook": ["No hearing yet"]}
 
 
 def test_last_action_filter(device):
@@ -158,7 +158,7 @@ def test_every_sort_option_is_selectable_and_recorded(device):
             "Last action stage": "actionstage", "Bill number": "number", "Most agencies": "agencies",
             "Hearing progress": "hearing", "Author influence": "influence"}
     # First cards under each sort in the frozen data. "Oldest last action" and "Hearing progress" tie everywhere
-    # in this snapshot (all bills are Filed, Not rated, same dates) and fall back to bill number, so they equal "Bill number".
+    # in this snapshot (all bills are Filed, No hearing yet, same dates) and fall back to bill number, so they equal "Bill number".
     first = {"Newest filed": ["HB 1087", "HB 1086", "HB 1085"], "Latest action": ["HB 1082", "HB 1083", "HB 1084"],
              "Oldest last action": ["HB 101", "HB 855", "SB 31"], "Last action stage": ["HB 1082", "HB 1083", "HB 1084"],
              "Bill number": ["HB 101", "HB 855", "SB 31"], "Most agencies": ["HB 805", "HB 352", "HB 1018"],

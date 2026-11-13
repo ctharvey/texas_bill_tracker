@@ -70,7 +70,7 @@ def test_export_of_a_search_has_the_one_matching_row(device):
     assert len(rows) == 1
     assert rows[0]["id"] == "HB110" and rows[0]["title"] == "Relating to the minimum wage."
     assert rows[0]["policy_areas"] == "Labor & workforce"
-    assert rows[0]["hearing_progress"] == "Not rated" and rows[0]["status"] == "Filed"
+    assert rows[0]["hearing_progress"] == "No hearing yet" and rows[0]["status"] == "Filed"
 
 
 def test_export_with_no_matches_is_just_the_header(device):

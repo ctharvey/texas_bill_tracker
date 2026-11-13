@@ -47,10 +47,25 @@ test('sponsors use the other chamber and do not affect the authorship tint', () 
 });
 
 test('roster tenure feeds author influence only when no curated profile exists', () => {
-  assert.equal(authorInfluence(bill('HB8', ['Bucy'])).label, 'Established member');
+  assert.equal(authorInfluence(bill('HB8', ['Bucy'])).label, 'Senior author');
   const curated = attachMembers({id: 'HB9', authors: ['Bucy'], author_profile: {seniority_years: 3}}, roster);
   assert.equal(curated.author_profile.seniority_years, 3);
-  assert.equal(authorInfluence(bill('HB10', ['Bailey'])).level, 0);
+  assert.equal(authorInfluence(bill('HB10', ['Bailey'])).key, 'newcomer');  // member-elect with no record: a first term
+});
+
+test('author influence and the member tenure tag use one measure: time in the current chamber', () => {
+  // 14 House years, now a first-term senator: all-service counting called this an established member.
+  const moved = {senate: member('senate', 'Hall', 'Republican', {service: [{chamber: 'house', years: '2013 - 2027'}], years_served: 14})};
+  const b = attachMembers({id: 'SB20', authors: ['Hall'], coauthors: [], sponsors: [], cosponsors: null},
+    {format: 'texas-bill-members-v1', members: {'senate|Hall': moved.senate}});
+  const i = authorInfluence(b);
+  assert.deepEqual([i.key, i.label], ['newcomer', 'First-term author']);
+  assert.match(i.factors.join(' | '), /New to the Senate · 14 years in the House/);
+  assert.ok(!i.factors.some(f => /Approximately/.test(f)));  // the all-service figure is not shown beside it
+  const order = ['leadership', 'chair', 'senior', 'average', 'newcomer', 'unknown'];
+  const levels = order.map(k => authorInfluence({author_profile: {leadership_position: k === 'leadership' ? 'Speaker' : '',
+    committee_chair: k === 'chair', seniority_years: {senior: 20}[k] || 0}}).level);
+  assert.deepEqual([levels[0], levels[1], levels[2]], [5, 4, 3]);
 });
 
 test('election-based party is labelled as the unofficial 2026 ballot', () => {
@@ -68,6 +83,8 @@ test('tenure tags count time in the current chamber: first term, 12+ years, othe
   const {tenureTag} = await import('../src/taxonomy.js');
   const m = (chamber, ...spans) => ({chamber, service: spans.map(([c, years]) => ({chamber: c, years}))});
   assert.equal(tenureTag(m('house')).key, 'newcomer');                                   // member-elect, no record
+  assert.deepEqual([m('house'), m('house', ['house', '2025 - 2027']), m('house', ['house', '2015 - 2027'])]
+    .map(x => tenureTag(x).label), ['First term', 'Mid-tenure', 'Senior']);
   assert.equal(tenureTag(m('house', ['house', '2025 - 2027'])).key, 'average');            // second term starts
   assert.equal(tenureTag(m('senate', ['senate', '2025 - 2029'])).key, 'newcomer');         // still in a first 4-year term
   assert.equal(tenureTag(m('senate', ['senate', '2023 - 2027'])).key, 'average');

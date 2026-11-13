@@ -5,7 +5,7 @@
 import {mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync, chmodSync} from 'node:fs';
 import {dirname, join, relative, sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {AGENCY_NAME, LAST_ACTION_TYPES, applyLunaTags, assessHearing, attachMembers, authorInfluence, authorshipParty,
+import {AGENCY_NAME, LAST_ACTION_TYPES, NO_HEARING, applyLunaTags, assessHearing, attachMembers, authorInfluence, authorshipParty,
   companionIndex, lastActionInfo, memberSummary, normalizeBill, officialUrl, reviewProgress} from '../src/taxonomy.js';
 import {buildHash} from '../src/prefs.js';
 
@@ -16,7 +16,7 @@ export const DISCLAIMER = 'Unofficial, independent open-source project; not a st
   + '(caption rules or the Luna model reading the full text) and can be wrong. Not legal advice. Confirm on Texas '
   + 'Legislature Online before relying on anything here.';
 const OWNED = /\.(md|json|txt)$/;
-const HEARING_ORDER = ['Heard', 'Scheduled', 'Referred', 'Not rated'];
+const HEARING_ORDER = ['Heard', 'Scheduled', 'Referred', NO_HEARING];
 const HEARD = new Set(['Heard', 'Scheduled']);
 const PAGE = 150;
 const FILED_NOTE = '"Filed" is the filing date in the Legislative Council data. Bills filed before the session opens in '

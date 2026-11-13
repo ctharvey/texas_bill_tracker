@@ -313,8 +313,8 @@ export function memberSummary(member) {
 }
 
 // Tenure tag from time in the member's current chamber, counted like the roster's years_served (term years from the
-// Legislative Reference Library, up to the 2027 session start). Newcomer = first term (House under 2 years, Senate
-// under 4); Senior = 12+ years (the chamber's top quarter, and authorInfluence's "Established member" line).
+// Legislative Reference Library, up to the 2027 session start). First term = House under 2 years, Senate under 4;
+// Senior = 12+ years (the chamber's top quarter); Mid-tenure in between. authorInfluence uses the same tag.
 // Service in the other chamber is reported, never counted. Null when the record's years cannot be read.
 export const TENURE_SESSION_START = 2027;
 export const TENURE_SENIOR_YEARS = 12;
@@ -331,7 +331,7 @@ export function tenureTag(member) {
   const chamber = member.chamber, other = chamber === 'house' ? 'senate' : 'house', here = years[chamber];
   const key = here < TERM_YEARS[chamber] ? 'newcomer' : here >= TENURE_SENIOR_YEARS ? 'senior' : 'average';
   const name = {house: 'House', senate: 'Senate'};
-  const label = {newcomer: 'Newcomer', average: 'Average tenure', senior: 'Senior'}[key];
+  const label = {newcomer: 'First term', average: 'Mid-tenure', senior: 'Senior'}[key];
   const detail = `${here ? `${here} ${here === 1 ? 'year' : 'years'} in the ${name[chamber]}` : `New to the ${name[chamber]}`}`
     + `${years[other] ? ` · ${years[other]} ${years[other] === 1 ? 'year' : 'years'} in the ${name[other]}` : ''}`;
   return {key, label, years: here, otherYears: years[other], detail};
@@ -400,7 +400,9 @@ export function lastActionInfo(bill) {
   return {key:type.key, label:type.label, rank:type.rank, chamber:m ? ACTION_CHAMBER[m[4]] || null : null, date, text};
 }
 
-// Evidence-based procedural outlook, not a probability of enactment.
+// Evidence-based procedural outlook, not a probability of enactment. NO_HEARING was "Not rated" before 13 Nov 2026;
+// prefs.js maps the old value in links and saved searches.
+export const NO_HEARING = 'No hearing yet';
 export function assessHearing(bill) {
   const a = toArray(bill.actions).filter(a => a != null).map(a => typeof a === 'string' ? a : a.description || '').join(' ').toLowerCase();
   const committee = bill.committee || (bill.status || '').match(/referred to (.+)/i)?.[1];
@@ -409,21 +411,33 @@ export function assessHearing(bill) {
   if (held) return {label:'Heard', level:4, detail:'A committee hearing is recorded in the supplied action history.', facts:['Hearing recorded']};
   if (hearing) return {label:'Scheduled', level:3, detail:'A hearing date or scheduled-hearing action is recorded.', facts:['Hearing scheduled']};
   if (committee) return {label:'Referred', level:2, detail:'Committee referral is confirmed; no hearing date is in the supplied data.', facts:['Committee referral']};
-  return {label:'Not rated', level:0, detail:'No committee referral or hearing has been verified. A likelihood estimate would be premature.', facts:['Prefiling stage','Committee leadership not yet established']};
+  return {label:NO_HEARING, level:0, detail:'No committee referral or hearing has been verified. A likelihood estimate would be premature.', facts:['Prefiling stage','Committee leadership not yet established']};
 }
 
+// The primary author's standing: a verified role first, else their tenure tag (the same roster measure as member
+// lists, so cards and member pages never disagree). `key` drives the card pill: roles and the two tenure ends show,
+// mid-tenure and unknown do not. `level` orders the "Author influence" sort.
+const INFLUENCE = {
+  leadership: {label: 'Leadership', level: 5}, chair: {label: 'Committee chair', level: 4},
+  senior: {label: 'Senior author', level: 3}, average: {label: 'Mid-tenure author', level: 2},
+  newcomer: {label: 'First-term author', level: 1}, unknown: {label: 'Unassessed', level: 0}};
 export function authorInfluence(bill) {
   const p = bill.author_profile || {};
+  const tenure = tenureTag(bill.people?.authors?.[0]?.member || null);
   const factors = [];
   if (p.leadership_position) factors.push(p.leadership_position);
   if (p.committee_chair) factors.push('Committee chair');
   if (p.seniority_title) factors.push(p.seniority_title);
-  if (p.seniority_years > 0) factors.push(`Approximately ${p.seniority_years} years of legislative service`);
+  if (tenure) factors.push(tenure.detail);
+  else if (p.seniority_years > 0) factors.push(`Approximately ${p.seniority_years} years of legislative service`);
   if (p.historical_bills_passed) factors.push(`${p.historical_bills_passed.toLocaleString()} bills passed (historical record)`);
   if (p.prior_role) factors.push(p.prior_role+' (prior session, not confirmed for 90R)');
   if (p.relevant_committee_member) factors.push('Relevant committee assignment');
-  if (!factors.length) return {label:'Unassessed', factors:['Awaiting verified 90R committee and leadership assignments'],level:0};
-  return {label:p.leadership_position || p.committee_chair ? 'High institutional access' : p.seniority_years >= 12 ? 'Established member' : 'Tenure documented', factors,level:p.leadership_position || p.committee_chair ? 3 : p.seniority_years >= 12 ? 2 : 1};
+  // Without a roster match, a curated profile's total service still marks a senior author.
+  const key = p.leadership_position ? 'leadership' : p.committee_chair ? 'chair'
+    : tenure ? tenure.key : p.seniority_years >= TENURE_SENIOR_YEARS ? 'senior' : 'unknown';
+  if (!factors.length) factors.push('Awaiting verified 90R committee and leadership assignments');
+  return {key, ...INFLUENCE[key], factors};
 }
 
 // One snapshot row -> the bill shape the tracker and the agent pages use; null for an invalid bill id.
