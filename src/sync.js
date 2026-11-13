@@ -14,8 +14,11 @@ const SECTIONS = {
 };
 const NAMES = Object.keys(SECTIONS);
 const has = (data, name) => Array.isArray(data?.[name]);
+// The colour theme is one value, not a list: last write wins. A device sends it only with a theme change of its own
+// (or when it creates the link), so a device that never changed it cannot overwrite another's choice with a stale copy.
+const lastTheme = ops => { for (let i = (ops || []).length - 1; i >= 0; i--) if (ops[i].op === 'theme') return ops[i].id; return null; };
 
-export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, base = './api/sync', getWatch, getFollows = () => [], getSearches = () => [], debounceMs = 800} = {}) {
+export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, base = './api/sync', getWatch, getFollows = () => [], getSearches = () => [], getTheme = () => null, debounceMs = 800} = {}) {
   let state = read(), available = null, timer = null, flushing = null;
   const getters = {follows: () => cleanFollows(getFollows()), searches: () => cleanSearches(getSearches())};
   let unsupported = {};  // Sections this session's server dropped after we sent them; stop re-sending each pull.
@@ -47,19 +50,26 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
     if (state.merged[name]) return has(server, name) ? apply(server[name], state.pending) : getters[name]();
     return apply(union(has(server, name) ? server[name] : [], getters[name]()), state.pending);
   }
-  const payload = (watch, server) => Object.fromEntries([['watch', watch], ...NAMES.map(n => [n, sectionToSend(n, server)])]);
+  const payload = (watch, server) => {
+    const out = Object.fromEntries([['watch', watch], ...NAMES.map(n => [n, sectionToSend(n, server)])]);
+    const theme = lastTheme(state.pending);
+    if (theme) out.theme = theme;
+    return out;
+  };
   // After a successful write that carried every section: which ones did the server keep?
   function noteWrite(data) {
     for (const name of NAMES) if (has(data, name)) state.merged[name] = true; else unsupported[name] = true;
   }
   function settle(data) {
     values = Object.fromEntries(NAMES.map(n => [n, has(data, n) ? SECTIONS[n].apply(data[n], state.pending) : null]));
+    values.theme = lastTheme(state.pending) ?? (typeof data?.theme === 'string' ? data.theme : null);
   }
 
   const client = {
     get linked() { return state ? {mode: state.mode, viewKey: state.viewKey || null, editKey: state.mode === 'edit' ? state.key : null, pending: state.pending.length} : null; },
     get follows() { return values.follows ?? null; },
     get searches() { return values.searches ?? null; },
+    get theme() { return values.theme ?? null; },
 
     async isAvailable() {
       if (available === null) {
@@ -69,7 +79,8 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
     },
 
     async create(watch, followList = getFollows(), searchList = getSearches()) {
-      const r = await call('POST', '', {data: {watch, follows: cleanFollows(followList), searches: cleanSearches(searchList)}});
+      const theme = getTheme();
+      const r = await call('POST', '', {data: {watch, follows: cleanFollows(followList), searches: cleanSearches(searchList), ...(theme ? {theme} : {})}});
       if (r.status !== 201) throw Error(r.data?.error || `Sync is unavailable (HTTP ${r.status})`);
       state = {key: r.data.edit_key, mode: 'edit', viewKey: r.data.view_key, version: r.data.version, pending: [], merged: {}};
       unsupported = {};

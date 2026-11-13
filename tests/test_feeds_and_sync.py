@@ -221,6 +221,25 @@ class SyncAppTests(unittest.TestCase):
             self.assertEqual(status, 400, str(searches)[:80])
         self.assertEqual(self.call('PUT', body={'version': 1, 'data': {'watch': [], 'searches': [good]}}, key=made['edit_key'])[0], 200)
 
+    def test_theme_syncs_last_write_wins_and_stays_off_view_links(self):
+        status, made = self.call('POST', body={'data': {'watch': [], 'theme': 'bluebonnet'}})
+        self.assertEqual((status, made['data']['theme']), (201, 'bluebonnet'))
+        key = made['edit_key']
+        # A write without a theme (an older page, or a device that never changed it) keeps the stored one.
+        status, kept = self.call('PUT', body={'version': 1, 'data': {'watch': ['HB5']}}, key=key)
+        self.assertEqual((status, kept['data']['theme']), (200, 'bluebonnet'))
+        status, changed = self.call('PUT', body={'version': 2, 'data': {'watch': ['HB5'], 'theme': 'ranch'}}, key=key)
+        self.assertEqual((status, changed['data']['theme']), (200, 'ranch'))
+        status, view = self.call('GET', key=made['view_key'])
+        self.assertEqual((status, set(view['data'])), (200, {'watch', 'filters'}))
+
+    def test_theme_is_validated(self):
+        made = self.create()
+        for theme in (7, None, '', 'Granite', '../x', 'a' * 25, ['ranch'], '1ranch'):
+            status, _ = self.call('PUT', body={'version': 1, 'data': {'watch': [], 'theme': theme}}, key=made['edit_key'])
+            self.assertEqual(status, 400, repr(theme))
+        self.assertEqual(self.call('PUT', body={'version': 1, 'data': {'watch': [], 'theme': 'lone-star'}}, key=made['edit_key'])[0], 200)
+
     def test_largest_valid_profile_fits_the_gateway_limit(self):
         searches = [{'id': f'abcd{i:04d}', 'name': 'n' * 80, 'filters': {'query': 'q' * 200, 'topic': 't' * 150, 'agency': 'a' * 150},
                      'seen': '2026-11-12'} for i in range(svc.MAX_SEARCHES)]

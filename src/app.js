@@ -5,7 +5,7 @@ import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex
   STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
 import {fillDrawerBrackets} from './features/brackets/view.js';
-import {setupThemePicker} from './features/theme/view.js';
+import {setupThemePicker, setTheme, savedTheme} from './features/theme/view.js';
 import {state} from './core/state.js';
 import {$, esc, toast} from './core/dom.js';
 import {timeoutSignal} from './core/net.js';
@@ -131,7 +131,7 @@ async function init(){
   state.near=cleanNear(readJson(NEAR_KEY),null);
   const syncKey=applyLocation(true);
   setupDisclaimer();
-  setupThemePicker();
+  setupThemePicker(id=>{if(sync.linked?.mode==='edit')sync.record('theme',id)});
   setupSync(syncKey);
   if(state.bills.length)loadStatutes();
   // Keep the progress view current while it is open; other views never refetch.
@@ -163,7 +163,7 @@ function setupDisclaimer(){
 }
 
 // ---- Saving choices without accounts: URL state, remembered filters, files and private sync links ----
-const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>[...state.watch],getFollows:()=>[...state.follow],getSearches:()=>state.searches});
+const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>[...state.watch],getFollows:()=>[...state.follow],getSearches:()=>state.searches,getTheme:savedTheme});
 let syncAvailable=null,lastPull=0;
 const siteBase=()=>location.href.split('#')[0];
 
@@ -374,7 +374,8 @@ async function pullSync(mergeLocal){
   if(!syncAvailable||!sync.linked)return;
   lastPull=Date.now();
   try{
-    const {watch,follows,searches}=await sync.pull();  // The client already merged this device's follows and searches.
+    const {watch,follows,searches,theme}=await sync.pull();  // The client already merged this device's follows and searches.
+    if(theme)setTheme(theme);
     const local=[...state.watch];
     setWatch(watch);adoptFollows(follows);adoptSearches(searches);
     if(mergeLocal)changeWatch('add',local.filter(id=>!watch.includes(id)));  // Joining keeps this device's bills.
@@ -410,7 +411,7 @@ async function handleSaveClick(target){
   const hit=sel=>target.closest(sel);
   if(hit('#copy-view-link')){persistState();return copyText(location.href,'Link to this view')}
   if(hit('#share-watch'))return copyText(siteBase()+buildHash('all',{},{list:[...state.watch]}),'Share link');
-  if(hit('#export-watch')){download('texas-bill-atlas-saved.json',profileFile({watch:state.watch,follows:state.follow,searches:state.searches}),'application/json');return toast('Watchlist, followed legislators and saved searches exported')}
+  if(hit('#export-watch')){download('texas-bill-atlas-saved.json',profileFile({watch:state.watch,follows:state.follow,searches:state.searches,theme:savedTheme()}),'application/json');return toast('Watchlist, followed legislators, saved searches and colours exported')}
   if(hit('#import-watch')){$('#import-watch-file').click();return}
   if(hit('#shared-add')){const before=state.watch.size;changeWatch('add',state.sharedList);refreshWatch();return toast(`Added ${state.watch.size-before} bills to your watchlist`)}
   if(hit('#shared-close')){Object.assign(state,{sharedList:null,sharedMode:null,sharedSyncKey:null,visibleCount:30});return renderContent()}
@@ -428,7 +429,8 @@ async function handleSaveClick(target){
 async function importWatchlist(file){
   try{
     if(file.size>1024*1024)throw Error('Select a file smaller than 1 MB');
-    const {bills,follows,searches}=parseProfileFile(await file.text()),before=state.watch.size,followed=state.follow.length;
+    const {bills,follows,searches,theme}=parseProfileFile(await file.text()),before=state.watch.size,followed=state.follow.length;
+    if(theme)setTheme(theme);
     changeWatch('add',bills);changeFollow('follow',follows);
     const known=new Set(state.searches.map(s=>s.id)),added=searches.filter(s=>!known.has(s.id)).slice(0,Math.max(0,MAX_SEARCHES-state.searches.length));
     for(const s of added)changeSearch('save-search',s);

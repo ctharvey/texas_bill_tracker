@@ -154,17 +154,18 @@ export function searchName(filters, agencyName = id => id) {
   return (parts.join(' · ') || 'All bills').slice(0, 80);
 }
 
-// One file for everything saved: the watchlist (as the first of `lists`, ready for named lists), follows and saved
-// searches. Device-only things (Near you districts, remembered filters, the sync link) are never in it.
+// One file for everything saved: the watchlist (as the first of `lists`, ready for named lists), follows, saved
+// searches and the colour theme. Device-only things (Near you districts, remembered filters, the sync link) are never in it.
+const THEME_ID = /^[a-z][a-z-]{0,23}$/;
 export const PROFILE_FORMAT = 'texas-bill-atlas-profile-v1';
-export function profileFile({watch = [], follows = [], searches = []} = {}, now = new Date()) {
+export function profileFile({watch = [], follows = [], searches = [], theme = null} = {}, now = new Date()) {
   return JSON.stringify({format: PROFILE_FORMAT, session: '90R', exported_at: now.toISOString(),
     lists: [{id: 'main', name: 'Watchlist', bills: [...watch]}], follows: cleanFollows([...follows]),
-    searches: cleanSearches(searches)}, null, 2);
+    searches: cleanSearches(searches), ...(typeof theme === 'string' && THEME_ID.test(theme) ? {theme} : {})}, null, 2);
 }
 
 // A profile file, or anything parseWatchlistFile reads (older watchlist exports, arrays, pasted text).
-// Returns {bills, follows, searches}; importing only adds.
+// Returns {bills, follows, searches} plus theme when the file has valid colours; importing only adds.
 export function parseProfileFile(text) {
   let data = null;
   try { data = JSON.parse(text); } catch {}
@@ -173,5 +174,5 @@ export function parseProfileFile(text) {
   const bills = uniqueIds(lists.flatMap(l => Array.isArray(l?.bills) ? l.bills.filter(x => typeof x === 'string') : []));
   const follows = cleanFollows(data.follows), searches = cleanSearches(data.searches);
   if (!bills.length && !follows.length && !searches.length) throw Error('This file has no bills or legislators (or saved searches)');
-  return {bills, follows, searches};
+  return {bills, follows, searches, ...(typeof data.theme === 'string' && THEME_ID.test(data.theme) ? {theme: data.theme} : {})};
 }
