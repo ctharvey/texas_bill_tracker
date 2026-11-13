@@ -67,16 +67,45 @@ class ConcurrentWorkerTests(FlexLoopCase):
         self.assertEqual([r['state'] for r in self.ledger_rows()], ['returned'] * len(self.ids))
         self.assertGreaterEqual(sum(self.sleeps), 300)  # the revisit waited for retry-after
 
-    def test_rows_of_a_crashed_run_block_every_worker(self):
-        # A crash with two calls in flight leaves two pending rows owned by a dead run.
+    def stranded(self, count):
         self.cache.mkdir(parents=True)
         (self.cache / 'budget.json').write_text(json.dumps({'2026-11-10': {
-            'a' * 64: {'state': 'pending', 'reserved': .01, 'owner': 'dead'},
-            'b' * 64: {'state': 'pending', 'reserved': .01, 'owner': 'dead'}}}), 'utf-8')
+            c * 64: {'state': 'pending', 'reserved': .01, 'owner': 'dead'} for c in 'abcdefghij'[:count]}}), 'utf-8')
+
+    def test_rows_of_a_crashed_run_are_held_at_start_and_other_bills_go_on(self):
+        # Was "block every worker" until an operator ran --hold (13 Nov stall): a crash with two calls in flight
+        # leaves two pending rows owned by a dead run; the next run books and holds them under the worker lock.
+        self.stranded(2)
+        queue = self.run_workers()
+        self.assertEqual(sorted(queue['seen']), sorted(self.ids))
+        held = [r for r in self.ledger_rows() if r.get('held')]
+        self.assertEqual([(r['error_type'], r['cost']) for r in held], [('PendingAfterStop', .01)] * 2)
+        self.assertNotIn('pending', [r['state'] for r in self.ledger_rows()])
+
+    def test_a_crash_loop_past_the_daily_cap_leaves_rows_pending_and_sends_nothing(self):
+        self.stranded(flex_boundary.CRASH_HOLD_LIMIT + 1)
         self.sdk.handler = lambda bill, n: self.fail('Must not send past unresolved rows')
         queue = self.run_workers()
         self.assertEqual(self.sdk.calls, [])
         self.assertEqual(queue.get('seen', []), [])
+        self.assertEqual(queue.get('failed', {}), {})  # a systemic refusal fails no bill
+        self.assertEqual([r['state'] for r in self.ledger_rows()], ['pending'] * (flex_boundary.CRASH_HOLD_LIMIT + 1))
+
+    def test_a_stopped_runs_own_unknown_outcome_holds_only_its_bill_on_the_next_run(self):
+        # Run 1: HB1's reply is lost and the hold never lands (as a crash mid-send): its row stays pending and the
+        # run stops, failing no bill. Run 2 holds the row; HB1 fails as held and is never resent; the rest go on.
+        self.sdk = BillSDK(lambda bill, n: (_ for _ in ()).throw(TimeoutError('read timeout')) if bill == 'HB1' else OK)
+        with patch.object(flex_boundary.FlexBoundary, '_hold', lambda self, request, error: None), \
+                self.assertRaises(SystemExit):
+            self.run_workers(workers=1)
+        path = self.cache / 'queue.json'
+        self.assertEqual(json.loads(path.read_text('utf-8')).get('failed', {}) if path.exists() else {}, {})
+        self.assertEqual([r['state'] for r in self.ledger_rows()], ['pending'])
+        queue = self.run_workers(workers=1)
+        self.assertEqual(self.sdk.calls.count('HB1'), 1)
+        self.assertEqual(queue['failed']['HB1']['stage'], 'held')
+        self.assertEqual(sorted(queue['seen']), sorted(self.ids[1:]))
+        self.assertEqual(pipeline.queue_candidates(self.ids, queue)[-1], 'HB1')  # parked after every other bill
 
     def test_deadline_stops_new_bills_but_in_flight_ones_finish_and_are_recorded(self):
         self.fake_time()

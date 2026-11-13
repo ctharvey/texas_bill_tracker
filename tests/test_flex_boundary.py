@@ -14,6 +14,7 @@ import threading
 import time
 import types
 import unittest
+import unittest.mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -261,6 +262,71 @@ class HeldCallTests(BoundaryCase):
         self.assertEqual(len(self.sdk.calls), 2)
         self.assertEqual(self.entry(third)["state"], "not_submitted")  # provably unsent: sendable once released
         self.assertEqual(len(self.held_rows()), 2)
+
+    def write_held(self, ages, error_type="UncertainOutcome", held=True):
+        now = time.time()
+        rows = {f"{i:064x}": {"state": "returned", "cost": .01, "reserved": 0, "held": held, "held_at": now - age,
+                              "error_type": error_type} for i, age in enumerate(ages)}
+        (self.dir / "budget.json").write_text(json.dumps({"2026-11-13": rows}), "utf-8")
+
+    def test_the_breaker_reopens_once_holds_age_out_of_the_window(self):
+        # Was a permanent stop until an operator released the holds (13 Nov: three holds stalled reviews).
+        self.write_held([60] * fb.HELD_LIMIT)
+        b = self.boundary([OK])
+        with self.assertRaises(ec.OutcomeUnresolved):
+            self.run_once(b)
+        self.assertEqual(self.sdk.calls, [])
+        self.write_held([fb.HELD_WINDOW_S + 60] * fb.HELD_LIMIT)
+        self.assertEqual(self.run_once(b, REQ2).response, OK)
+
+    def test_the_daily_bound_holds_through_a_long_outage(self):
+        # One hold every 20 minutes never trips the 30-minute window; the 24-hour bound does.
+        self.write_held([1200 * i + 60 for i in range(fb.HELD_DAY_LIMIT)])
+        b = self.boundary([OK])
+        with self.assertRaises(ec.OutcomeUnresolved):
+            self.run_once(b)
+        self.write_held([fb.DAY_S + 1200 * i for i in range(fb.HELD_DAY_LIMIT)])
+        self.assertEqual(self.run_once(b).response, OK)
+
+    def test_stranded_and_released_holds_do_not_trip_the_breaker(self):
+        self.write_held([60] * fb.HELD_LIMIT, error_type=fb.STRANDED)
+        self.assertEqual(self.run_once(self.boundary([OK])).response, OK)
+        self.write_held([60] * fb.HELD_LIMIT, held=False)
+        self.assertEqual(self.run_once(self.boundary([OK]), REQ2).response, OK)
+
+    def test_a_row_without_a_held_time_never_ages_out(self):
+        self.write_held([fb.DAY_S * 2] * fb.HELD_LIMIT)
+        data = json.loads((self.dir / "budget.json").read_text("utf-8"))
+        for row in data["2026-11-13"].values():
+            del row["held_at"]
+        (self.dir / "budget.json").write_text(json.dumps(data), "utf-8")
+        with self.assertRaises(ec.OutcomeUnresolved):
+            self.run_once(self.boundary([OK]))
+
+    def test_hold_stranded_books_dead_rows_whose_request_is_never_resent(self):
+        b = self.boundary([TimeoutError("t"), OK, OK])
+        with unittest.mock.patch.object(fb.FlexBoundary, "_hold", lambda self, request, error: None), \
+                self.assertRaises(cth_flex.UncertainOutcome):
+            self.run_once(b)  # the reply is lost and nothing books it: a crash mid-send
+        fresh = self.boundary([OK, OK])
+        with self.assertRaises(ec.OutcomeUnresolved):  # the pending row refuses every call
+            self.run_once(fresh, REQ2)
+        held, left = fresh.hold_stranded()
+        self.assertEqual(([k for k, _ in held], left), ([fb.FlexBoundary.key(REQ)], []))
+        self.assertEqual(self.run_once(fresh, REQ2).response, OK)
+        with self.assertRaises(ec.UnresolvedCall):
+            self.run_once(fresh)
+        self.assertEqual(len(self.sdk.calls), 1)  # only REQ2 went on the fresh boundary
+        self.assertEqual(fresh.hold_stranded(), ([], []))
+
+    def test_hold_stranded_counts_earlier_crash_holds_including_released_ones(self):
+        self.write_held([3600] * (fb.CRASH_HOLD_LIMIT - 1), error_type=fb.STRANDED, held=False)
+        data = json.loads((self.dir / "budget.json").read_text("utf-8"))
+        data["2026-11-13"]["a" * 64] = {"state": "pending", "reserved": .01, "owner": "dead"}
+        data["2026-11-13"]["b" * 64] = {"state": "pending", "reserved": .01, "owner": "dead"}
+        (self.dir / "budget.json").write_text(json.dumps(data), "utf-8")
+        self.assertEqual(self.boundary().hold_stranded(), ([], ["a" * 64, "b" * 64]))
+        self.assertEqual(self.states().count("pending"), 2)
 
     def test_a_failed_hold_write_fails_closed(self):
         b = self.boundary([TimeoutError("t"), OK])

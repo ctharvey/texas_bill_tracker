@@ -1,9 +1,14 @@
 [Unit]
-Description=Hourly private bill review after the metadata refresh
+Description=Continuous private bill review: a new run two minutes after the last one ends
 
 [Timer]
+# Continuous: each run ends by its own time limit (--max-minutes, 55), and the next starts two minutes later, after
+# a git pull. The hourly calendar entry is a backstop, should a failed run (exit 2) or a failed pull not re-arm the
+# two-minute timer; a start while a run is active does nothing.
+OnUnitInactiveSec=2min
+OnBootSec=5min
 OnCalendar=*-*-* *:35:00
-RandomizedDelaySec=120
+RandomizedDelaySec=30
 Persistent=true
 Unit=texas-bill-review.service
 

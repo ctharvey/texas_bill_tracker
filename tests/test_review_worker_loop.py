@@ -119,11 +119,62 @@ class WorkerLoopTests(unittest.TestCase):
             self.run_main(lambda b, r: {'bill_id': b}, run_document)
         return out.getvalue()
 
-    def test_an_unexpected_stop_names_where_it_failed_but_never_the_error_text(self):
-        out = self.stop_output(KeyError('sk-secret-from-sdk'))
-        self.assertIn('HB1 stopped KeyError - unexpected error at test_review_worker_loop.py:', out)
-        self.assertIn('the bill stays queued', out)
-        self.assertNotIn('sk-secret', out)
+    def test_an_unexpected_error_fails_only_its_bill_and_names_where_but_never_the_error_text(self):
+        # Was a whole-run stop (exit 2) until the next hourly run, which hit the same bill again.
+        import contextlib, io
+        def run_document(doc, *a, **k):
+            if doc['bill_id'] == 'HB2':
+                raise KeyError('sk-secret-from-sdk')
+            return bundle(doc['bill_id'])
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            queue = self.run_main(lambda b, r: {'bill_id': b}, run_document)
+        self.assertIn('HB2 failed KeyError - unexpected error at test_review_worker_loop.py:', out.getvalue())
+        self.assertIn('the bill waits at the end of the queue', out.getvalue())
+        self.assertNotIn('sk-secret', out.getvalue())
+        self.assertEqual(queue['failed'], {'HB2': {'count': 1, 'stage': 'processing', 'reason': 'KeyError'}})
+        self.assertEqual(queue['seen'], [b for b in self.ids if b != 'HB2'])
+        queue['seen'].remove('HB8')  # parked after new work and every known bill
+        self.assertEqual(pipeline.queue_candidates(self.ids, queue)[0], 'HB8')
+        self.assertEqual(pipeline.queue_candidates(self.ids, queue)[-1], 'HB2')
+
+    def test_an_error_with_an_unresolved_ledger_row_still_stops(self):
+        # Fails closed: an unexpected error while a call has no recorded outcome says nothing about one bill.
+        budget = type('B', (), {'ledger': {'d': {'k': {'state': 'pending'}}}})()
+        self.assertTrue(pipeline.stops_run(KeyError('x'), budget))
+        self.assertTrue(pipeline.stops_run(KeyError('x'), object()))  # unreadable ledger
+        self.assertFalse(pipeline.stops_run(KeyError('x'), type('B', (), {'ledger': {}})()))
+        held = RuntimeError('x'); held.held = True
+        self.assertFalse(pipeline.stops_run(held, budget))
+        quota = RuntimeError('x'); quota.code = 'insufficient_quota'
+        self.assertTrue(pipeline.stops_run(quota, type('B', (), {'ledger': {}})()))
+
+    def test_a_held_question_keeps_its_bill_off_the_retry_list(self):
+        held = [{'id': 'q1', 'reason': 'UncertainOutcome', 'held': True},
+                {'id': 'q2', 'reason': 'Deferred with preceding request', 'held': True}]
+        queue = self.run_main(lambda b, r: {'bill_id': b},
+                              lambda doc, *a, **k: bundle(doc['bill_id'], 'needs_review',
+                                                          held if doc['bill_id'] == 'HB1' else ()))
+        self.assertEqual(queue['retry'], [])
+        self.assertEqual(queue['seen'], self.ids)
+
+    def test_a_quota_stop_backs_off_for_an_hour(self):
+        import contextlib, io
+        processed = []
+        def run_document(doc, *a, **k):
+            processed.append(doc['bill_id']); raise pipeline.ApiStopped('insufficient_quota')
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as caught:
+            self.run_main(lambda b, r: {'bill_id': b}, run_document)
+        self.assertEqual((caught.exception.code, processed), (2, ['HB1']))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.run_main(lambda b, r: self.fail('Must not start within the backoff'), run_document)
+        self.assertIn('waiting an hour between tries', out.getvalue())
+        marker = self.cache / pipeline.ACCOUNT_STOP
+        marker.write_text(json.dumps({'stopped_at': pipeline.time.time() - pipeline.ACCOUNT_BACKOFF_S - 1}), 'utf-8')
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+            self.run_main(lambda b, r: {'bill_id': b}, run_document)
+        self.assertEqual(processed, ['HB1', 'HB1'])  # tried again once the hour passed
 
     def test_an_unknown_outcome_stop_prints_the_pending_key_and_the_command(self):
         out = self.stop_output(pipeline.WorkerStopped('Unknown request outcome; worker stopped after TimeoutError. '
@@ -238,7 +289,7 @@ class PublicStatusTests(WorkerLoopTests):
         self.assertEqual((self.read()['running'], self.read()['pass']), (False, None))
 
     def test_crash_still_publishes_stopped_status(self):
-        def run_document(doc, *a, **k): raise RuntimeError('unexpected')
+        def run_document(doc, *a, **k): raise pipeline.WorkerStopped('Unknown request outcome')
         with self.assertRaises(SystemExit):
             self.run_main(lambda b, r: {'bill_id': b}, run_document, '--publish-tags', str(self.tags))
         self.assertFalse(self.read()['running'])
@@ -352,7 +403,7 @@ class CapacityBackoffTests(WorkerLoopTests):
         self.assertEqual((processed, self.sleeps), (['HB1'], []))
 
     def test_unknown_outcome_during_questions_still_stops_the_worker(self):
-        def run_document(doc, *a, **k): raise RuntimeError('Unknown request outcome; worker stopped')
+        def run_document(doc, *a, **k): raise pipeline.WorkerStopped('Unknown request outcome; worker stopped')
         with self.assertRaises(SystemExit):
             self.run_main(lambda b, r: {'bill_id': b}, run_document)
         self.assertEqual(self.sleeps, [])
@@ -398,6 +449,37 @@ class HeldQuestionTests(unittest.TestCase):
         self.assertIn('after TimeoutError. Pending request k1, k2;', message)
         self.assertIn('scripts/flex_boundary.py --cache-dir CACHE --hold k1', message)
         self.assertNotIn('sk-secret', message)
+
+
+class SecondPassFailureTests(unittest.TestCase):
+    def run_pass(self, errors, ledger=None):
+        import contextlib, io, types
+        saved = []
+        def job(bill_id):
+            def call():
+                if bill_id in errors:
+                    raise errors[bill_id]
+                return {}
+            return bill_id, call, lambda report, b=bill_id: saved.append(b)
+        args = types.SimpleNamespace(execute=True, cache_dir=Path(tempfile.mkdtemp()))
+        budget = type('B', (), {'ledger': ledger or {}})()
+        with contextlib.redirect_stdout(io.StringIO()):
+            count = pipeline._second_pass('Topic suggestions', iter([job(b) for b in ('HB1', 'HB2', 'HB3')]),
+                                          args, float('inf'), budget=budget)
+        return count, saved
+
+    def test_a_held_call_and_an_unexpected_error_skip_only_their_bills(self):
+        held = RuntimeError('lost reply'); held.held = True
+        self.assertEqual(self.run_pass({'HB1': held, 'HB2': KeyError('bug')}), (1, ['HB3']))
+
+    def test_an_error_with_an_unresolved_ledger_row_stops_the_worker(self):
+        with self.assertRaises(SystemExit):
+            self.run_pass({'HB1': RuntimeError('lost reply')}, ledger={'d': {'k': {'state': 'pending'}}})
+
+    def test_repeated_errors_end_the_pass_not_the_run(self):
+        errors = {b: KeyError('bug') for b in ('HB1', 'HB2', 'HB3')}
+        with patch.object(pipeline, 'OUTAGE_LIMIT', 2):
+            self.assertEqual(self.run_pass(errors), (0, []))
 
 
 class FirstPassStatusTests(unittest.TestCase):

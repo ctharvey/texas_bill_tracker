@@ -42,9 +42,17 @@ LEDGER_ZONE = "America/Chicago"
 TEXAS_POLICY = RetryPolicy(capacity_attempts=3, rate_limit_attempts=3, base_s=30, cap_s=60, jitter=False,
                            max_hint_s=7 * 24 * 3600, defer_over_s=60)
 
-# Held calls (unknown outcome, booked at their upper bound, waiting for an operator) allowed before every new call
-# is refused: one uncertain reply holds only its bill, but a provider outage cannot keep paying for unknowns.
+# Outage breaker. A held call (unknown outcome, booked at its upper bound) holds only its bill; HELD_LIMIT of them
+# within HELD_WINDOW_S, or HELD_DAY_LIMIT within a day, refuse every new call. Holds age out of both windows, so
+# the worker resumes without an operator, and a long outage still pays for at most HELD_DAY_LIMIT unknowns a day.
 HELD_LIMIT = 3
+HELD_WINDOW_S = 30 * 60
+HELD_DAY_LIMIT = 10
+DAY_S = 24 * 3600
+# Pending rows a dead run left behind are booked and held automatically at the next run's start, at most this many
+# a day (held or since released). Past it they stay pending, the ledger refuses every call, and an operator decides.
+CRASH_HOLD_LIMIT = 6
+STRANDED = "PendingAfterStop"
 
 _SAME_NAME = {flex_ledger.BudgetExceeded: BudgetExceeded, flex_ledger.OutcomeUnresolved: OutcomeUnresolved,
               flex_ledger.AlreadyBilled: AlreadyBilled, flex_ledger.LongContext: LongContext}
@@ -278,14 +286,52 @@ class FlexBoundary:
 
     def _check_held_limit(self) -> None:
         try:
-            count = len(self.held())
+            held = [row for _day, _key, row in self.held() if row.get("error_type") != STRANDED]
         except NotSent:
             raise
         except Exception as error:  # noqa: BLE001 - nothing was sent; a NotSent, never a maybe-billed error
             raise flex_ledger.LedgerUnavailable(f"not sent: ledger unavailable ({type(error).__name__})") from error
-        if count >= self.max_held:
+        now = time.time()
+        # A row without a usable held_at counts as just held (fails closed: it never ages out).
+        ages = [now - (row["held_at"] if isinstance(row.get("held_at"), (int, float)) else now) for row in held]
+        recent = sum(age < HELD_WINDOW_S for age in ages)
+        day = sum(age < DAY_S for age in ages)
+        if recent >= self.max_held:
             raise flex_ledger.OutcomeUnresolved(
-                f"{count} calls are held with unknown outcomes; new calls are blocked until an operator releases them")
+                f"{recent} calls were held with unknown outcomes in the last {HELD_WINDOW_S // 60} minutes; new calls "
+                "wait until they age out (likely a provider outage)")
+        if day >= HELD_DAY_LIMIT:
+            raise flex_ledger.OutcomeUnresolved(
+                f"{day} calls were held with unknown outcomes in the last 24 hours; new calls wait until they age out "
+                "or an operator releases them")
+
+    def hold_stranded(self) -> tuple[list[tuple[str, float]], list[str]]:
+        """Run start, under the worker lock: book and hold every pending row (a call a dead run left with no recorded
+        outcome), so only its bill waits and other bills go on. Its cache entry stays pending, so the request is never
+        resent by itself. Returns (held [(key, booking)], left pending): rows stay pending, refusing every new call,
+        when holding them would pass CRASH_HOLD_LIMIT in a day (a crash loop)."""
+        with self._lock:
+            if self._inflight:
+                raise RuntimeError("hold_stranded runs before any send")
+        with self.spend._locked() as data:
+            now = time.time()
+            stranded = [(rows, key, row) for rows in data.values() for key, row in rows.items()
+                        if isinstance(row, dict) and row.get("state") == "pending"]
+            if not stranded:
+                return [], []
+            recent = sum(1 for rows in data.values() for row in rows.values()
+                         if isinstance(row, dict) and row.get("error_type") == STRANDED
+                         and isinstance(row.get("held_at"), (int, float)) and now - row["held_at"] < DAY_S)
+            if recent + len(stranded) > CRASH_HOLD_LIMIT:
+                return [], sorted(key for _rows, key, _row in stranded)
+            held = []
+            for rows, key, row in stranded:
+                bound = float(row.get("reserved", 0))
+                rows[key] = {"state": "returned", "cost": bound, "reserved": 0, "held": True, "held_at": now,
+                             "error_type": STRANDED, "auto": True}
+                held.append((key, bound))
+            self.spend._save(data)
+            return sorted(held), []
 
     def pending_rows(self) -> list[tuple[str, str, dict]]:
         """(day, request key, row) for every pending row: a call with no recorded outcome (e.g. a crash mid-send)."""
@@ -302,7 +348,7 @@ class FlexBoundary:
                 if isinstance(row, dict) and row.get("state") == "pending":
                     bound = float(row.get("reserved", 0))
                     rows[key] = {"state": "returned", "cost": bound, "reserved": 0, "held": True,
-                                 "held_at": time.time(), "error_type": "PendingAfterStop"}
+                                 "held_at": time.time(), "error_type": STRANDED}
                     self.spend._save(data)
                     return bound
         raise KeyError(key)

@@ -83,8 +83,9 @@ default **$0.10 per run**. A private durable ledger reserves a conservative uppe
 call, accounts for cache writes and output, and records actual estimates afterward. Unknown outcomes retain
 their reservation and block new calls until reconciled. Under `--transport flex`, an unknown outcome reported by
 the client (a timeout or a 5xx after sending) is instead **held**: booked at its upper bound, never resent, and only
-its bill waits while the other lanes keep going; three held calls stop every new call until an operator releases
-them (see "Held calls" below). A crash mid-call still leaves a pending row that blocks everything. A worker lock
+its bill waits while the other lanes keep going; three held calls within 30 minutes, or ten within 24 hours, refuse
+every new call until they age out (see "Held calls" below). A crash mid-call leaves a pending row that refuses every
+call until the next run's start holds it (at most six a day; past that an operator decides). A worker lock
 prevents concurrent spending races.
 Cache hits make no provider call. When Flex capacity is unavailable (first pass or a review question), the bill
 is set aside until the provider's retry-after (about 300 s in practice) and the run continues immediately with
@@ -406,8 +407,8 @@ Hourly operation uses `scripts/texas-bill-review.service` and `.timer`, a dedica
 and `/var/lib/texas-bill-review/{repository,venv,cache}`. The repository stays on `main` and pulls with
 `--ff-only`. Install optional dependencies into the dedicated venv; install the units under `/etc/systemd/system`.
 Set `OPENAI_API_KEY` only in root-owned mode-0600 `/etc/texas-bill-review.env`, outside the web root and git.
-Enable `texas-bill-review.timer` after the pilot; it runs hourly at minute 35, with up to two minutes jitter,
-processing bills serially for up to 55 minutes. The production unit currently runs with `--no-spending-cap
+Enable `texas-bill-review.timer` after the pilot; it starts a run two minutes after the last one ends (each run
+lasts up to 55 minutes, then pulls again), with an hourly start at minute 35 as a backstop. The production unit currently runs with `--no-spending-cap
 --order reverse` so the backlog completes; restore `--daily-budget 1 --run-budget 0.10` to re-enable the guard. Inspect `journalctl -u texas-bill-review.service` and the private
 ledger/review queue. To pause spending, stop/disable this timer; the public tracker and metadata refresh remain
 independent. Reinstall dependencies when their requirements change.
@@ -523,17 +524,21 @@ Call reduction and cache rules:
   entry blocks resubmission until its outcome is reconciled. Do not delete uncertain entries merely to retry:
   inspect the private request/time and provider logs first. Known capacity rejections have a cooldown.
 - Held calls (flex): the journal prints `<bill> held UncertainOutcome - request <key>; ...` and the bill is listed in the
-  queue's `failed` (stage `held`) or keeps a retryable question. Revisits make no call. To reconcile, check the
+  queue's `failed` (stage `held`, visited after every other bill) or keeps a held question (not retried early).
+  Revisits make no call. To reconcile, check the
   provider usage log for the request time, then, with no run active, as the service user:
   `python scripts/flex_boundary.py --cache-dir <cache> [--release <key>]` lists held calls or releases one. A release
   keeps the booked bound in the ledger under a renamed key and drops the cache entry, so the bill's next visit sends
   the request once more. Do not hand-edit the ledger: settling a row as `returned` keeps the key and the bill is
   then refused as `AlreadyBilled`.
 - Stops: every stopped/failed/held/deferred line ends with `- <next step>`, built from the error type and request
-  keys only (never the provider's error text). An unknown outcome with no held mark stops the worker with
-  `Unknown request outcome; worker stopped after <type>. Pending request <key>`. With no run active, the listing
-  above shows that row as pending; after checking the usage log, `--hold <key>` books it at its reservation and holds
-  it, so other bills go on and only that bill waits for a later `--release`.
+  keys only (never the provider's error text). An unexpected error fails only its bill (`failed`, stage
+  `processing`, visited after every other bill); five new failures in a row stop the run. Only worker-wide errors stop
+  it at once (exit 2): quota, billing or key (later starts then wait an hour; delete `<cache>/account_stop.json` to
+  retry sooner), a missing dependency, or an unknown outcome with no held mark, which prints
+  `Unknown request outcome; worker stopped after <type>. Pending request <key>`. The next run's start books that row
+  and holds it (`Held request <key> a stopped run left pending`), so other bills go on and only that bill waits for
+  a later `--release`; `--hold <key>` does the same by hand.
 
 Shared instructions/schema and vocabulary precede bill-specific content. An explicit 12-hour breakpoint targets
 prompt reuse across bills/hourly runs; the changing full bill has no write breakpoint in this single-call path.
