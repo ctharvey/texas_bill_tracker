@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync, readdirSync} from 'node:fs';
 import {CLICK_ORDER, onClick, clickOn, dispatchClick} from '../src/core/dispatch.js';
 import {registerView, setFallbackView, viewHeading, renderView} from '../src/core/router.js';
 
-const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+// Every module under src/, so a handler or view keeps counting after it moves into src/features/.
+const src = new URL('../src/', import.meta.url);
+const sources = readdirSync(src, {recursive: true}).filter(f => f.endsWith('.js'))
+  .map(f => readFileSync(new URL(f.replaceAll('\\', '/'), src), 'utf8')).join('\n');
 const target = matches => ({closest: selector => matches.includes(selector) ? {selector} : null});
 
 // The registries are module singletons, so the dispatch tests share one set of handlers.
@@ -31,18 +34,17 @@ test('handler names are fixed and registered once', () => {
   assert.throws(() => onClick('watch', () => true), /registered twice/);
 });
 
-test('app.js registers every click handler exactly once, and nothing else', () => {
-  const names = [...app.matchAll(/\b(?:onClick|clickOn)\('([\w-]+)'/g)].map(m => m[1]);
+test('src/ registers every click handler exactly once, and nothing else', () => {
+  const names = [...sources.matchAll(/\b(?:onClick|clickOn)\('([\w-]+)'/g)].map(m => m[1]);
   assert.deepEqual([...names].sort(), [...CLICK_ORDER].sort());
-  assert.deepEqual(names, CLICK_ORDER);  // written in dispatch order, so the source reads like the old handleClick
-  assert.doesNotMatch(app, /function handleClick/);
+  assert.doesNotMatch(sources, /function handleClick/);
 });
 
-test('app.js registers the twelve views, with the data page as the fallback', () => {
-  const names = [...app.matchAll(/registerView\('(\w+)'/g)].map(m => m[1]);
-  assert.deepEqual(names, ['all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'agencies', 'review',
-    'method', 'saving', 'data']);
-  assert.match(app, /setFallbackView\('data'\)/);
+test('src/ registers the twelve views once each, with the data page as the fallback', () => {
+  const names = [...sources.matchAll(/registerView\('(\w+)'/g)].map(m => m[1]);
+  assert.deepEqual(names.sort(), ['agencies', 'all', 'data', 'following', 'local', 'member', 'method', 'review', 'saving',
+    'statute', 'today', 'watchlist']);
+  assert.match(sources, /setFallbackView\('data'\)/);
 });
 
 test('a view renders into the element and runs its after-render step; an unknown view renders the fallback', () => {
