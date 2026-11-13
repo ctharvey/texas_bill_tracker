@@ -36,7 +36,7 @@ def upload(page, name, payload):
 
 def test_drawer_offers_a_review_file_button_and_says_none_is_loaded(device):
     page = device.open("#bill?id=HB110")
-    section = page.locator(f"{DRAWER} section", has=page.locator("h3", has_text="Full text & highlighted evidence"))
+    section = page.locator(f"{DRAWER} section.drawer-section", has=page.locator("h3", has_text="Full text & highlighted evidence"))
     expect(section.get_by_role("button", name="Open a review file")).to_be_visible()
     expect(section).to_contain_text(NOT_YET)
 

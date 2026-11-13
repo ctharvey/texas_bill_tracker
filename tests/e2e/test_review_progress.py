@@ -69,7 +69,7 @@ def test_progress_page_shows_counts_and_groups(device):
     # Idle: the run card says when the next run starts; the full review pass counts bills not started.
     run = page.locator(".review-run")
     expect(run.locator(".review-run-state strong")).to_have_text("Idle")
-    expect(run.locator(".review-run-state span")).to_contain_text("Next run about")
+    expect(run.locator(".review-run-state div > span")).to_contain_text("Next run about")
     expect(run.locator(".review-pass")).to_have_count(4)
     expect(run.locator(".review-pass").first.locator(".pass-count strong")).to_have_text(f"{c['Not started']:,}")
 
@@ -151,7 +151,7 @@ def test_run_card_names_the_pass_and_counts_each(device):
     page = device.open("#review")
     run = page.locator(".review-run")
     expect(run.locator(".review-run-state strong")).to_have_text("Working on: Topics and scope votes")
-    expect(run.locator(".review-run-state span")).to_contain_text("14 of 55 minutes used")
+    expect(run.locator(".review-run-state div > span")).to_contain_text("14 of 55 minutes used")
     now = run.locator(".review-pass.now")
     expect(now).to_have_count(1)
     expect(now).to_have_attribute("aria-current", "step")

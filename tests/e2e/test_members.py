@@ -100,6 +100,7 @@ def test_drawer_author_links_to_member_page(device):
     link = page.locator("#bill-page a.member-name", has_text="Landgraf")
     expect(link).to_have_attribute("href", f"#member?code={LANDGRAF}")
     link.click()
+    expect(page.locator("#bill-page")).to_have_count(0)
     expect(page.locator("#dynamic-content h2")).to_have_text("Rep. Brooks Landgraf")
     assert page.evaluate("location.hash") == f"#member?code={LANDGRAF}"
     expect(page.locator("#dynamic-content .today-row").first).to_be_visible()

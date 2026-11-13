@@ -1493,7 +1493,7 @@ async function copyForAi(button){
   }else{
     // Last resort: show the text, selected, so it can be copied by hand.
     let box=$('#ai-fallback');
-    if(!box){box=document.createElement('textarea');box.id='ai-fallback';box.className='ai-fallback';box.readOnly=true;box.rows=6;button.closest('.ai-copy').append(box)}
+    if(!box){box=document.createElement('textarea');box.id='ai-fallback';box.className='ai-fallback';box.readOnly=true;box.rows=6;(button.closest('.ai-copy')||button.closest('.bill-head')||button.parentElement).append(box)}
     box.value=text;box.focus();box.select();toast('Press Ctrl+C to copy');
   }
 }

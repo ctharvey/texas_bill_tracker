@@ -152,7 +152,7 @@ def test_clicking_elsewhere_hides_the_list(device):
     page = device.open("#all")
     page.click("#filter-agency")
     expect(page.locator("#agency-options")).to_be_visible()
-    page.locator(".section-head h2").click()
+    page.locator("#page-title").click()
     expect(page.locator("#agency-options")).to_be_hidden()
     expect(page.locator("#result-count")).to_have_text(TOTAL)
 
