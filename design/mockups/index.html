@@ -204,6 +204,28 @@ body[data-sel="star"] .card[aria-selected="true"]::before{content:"";position:ab
 @media (prefers-reduced-motion:reduce){body:not([data-motion="on"])[data-sel="star"] .card[aria-selected="true"]::before,
   body:not([data-motion="on"])[data-sel="star"] .card[aria-selected="true"]::after{animation:none}}
 body[data-sel="star"] .card[aria-selected="true"] .title a{color:var(--accent)}
+/* Flag: the hoist band becomes a small Texas flag (blue hoist with the white star, white over red), with fabric folds
+   rippling slowly from hoist to fly once (about 3s) after it sweeps in, then resting. Flag colours whatever the direction.
+   Text starts 48px in on every card in this style (4 + 44 unselected, 40 + 8 selected), so selecting does not shift it. */
+body[data-sel="flag"] .card{padding-left:44px}
+body[data-sel="flag"] .card[aria-selected="true"]{z-index:2;border:2px solid var(--accent);border-left-width:40px;padding:13px 13px 13px 8px}
+body[data-sel="flag"] .card[aria-selected="true"] .title a{color:var(--accent)}
+/* top/bottom 0: the 2px selection border runs along the flag's top and bottom edges too */
+body[data-sel="flag"] .card[aria-selected="true"]::before{content:"";position:absolute;left:-40px;top:0;bottom:0;width:40px;
+  border-radius:calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px);pointer-events:none;
+  background:
+    repeating-linear-gradient(100deg,#0000 0 6px,#00000038 13px,#0000 20px,#ffffff40 27px,#0000 34px) 0 0/68px 100%,
+    linear-gradient(#002868,#002868) 0 0/24px 100% no-repeat,
+    linear-gradient(#fff 50%,#bf0a30 50%) 24px 0/16px 100% no-repeat;
+  box-shadow:inset -1px 0 0 #0000001f;
+  animation:band-in .3s ease-out backwards,ripple 2.8s .3s ease-in-out 1}
+body[data-sel="flag"] .card[aria-selected="true"]::after{content:"\2605";position:absolute;left:-40px;top:0;bottom:0;width:24px;
+  display:grid;place-items:center;font-size:17px;line-height:1;color:#fff;pointer-events:none;
+  animation:star-in .65s .12s cubic-bezier(.3,1.5,.5,1) backwards,bob 2.8s .3s ease-in-out 1}
+@keyframes ripple{to{background-position:68px 0,0 0,24px 0}}
+@keyframes bob{50%{translate:0 -1.5px;rotate:-6deg}}
+@media (prefers-reduced-motion:reduce){body:not([data-motion="on"])[data-sel="flag"] .card[aria-selected="true"]::before,
+  body:not([data-motion="on"])[data-sel="flag"] .card[aria-selected="true"]::after{animation:none}}
 /* Lift: the card rises with a soft shadow; the rest of the list steps back slightly */
 body[data-sel~="lift"] .card{transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s,opacity .2s}
 body[data-sel="lift"] .list:has(.card[aria-selected="true"]) .card:not([aria-selected="true"]){opacity:.62}
@@ -333,6 +355,7 @@ body[data-sel~="lift"] .card[aria-selected="true"]{z-index:2;transform:translate
     <button data-setsel="lift" aria-pressed="false">Lift</button>
     <button data-setsel="fill lift" aria-pressed="false">Fill + Lift</button>
     <button data-setsel="star" aria-pressed="false">&#9733; Star</button>
+    <button data-setsel="flag" aria-pressed="false">Flag</button>
   </div>
   <div class="grp" id="motion-grp" hidden><span class="lbl" style="color:#f0b45a">Your system asks for reduced motion</span>
     <button id="motion-toggle" aria-pressed="false">Play motion anyway</button>
