@@ -1,5 +1,6 @@
 import {SEARCH_FIELDS, searchFields, searchText, matchReasons} from './features/search/model.js';
 import {nextVisit, changedSince, newestReviewed} from './features/home/model.js';
+import {runState, passRows, lookup, RUN_LIMIT_MINUTES} from './features/review/model.js';
 import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal,
   STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
@@ -111,6 +112,7 @@ async function init(){
   document.addEventListener('input',handleInput);
   document.addEventListener('submit',e=>{if(e.target.id==='near-address-form'){e.preventDefault();nearAddress($('#near-address')?.value)}
     if(e.target.id==='home-search-form'){e.preventDefault();location.hash=buildHash('all',{query:$('#home-search').value.trim()})}
+    if(e.target.id==='review-lookup-form'){e.preventDefault();const id=$('#review-lookup-result [data-open]')?.dataset.open;if(id)openBillPage(id,true)}
     const form=e.target.closest?.('[data-search-rename-form]');
     if(form){e.preventDefault();const s=state.searches.find(x=>x.id===form.dataset.searchRenameForm),name=form.elements.name.value.trim().slice(0,80);
       if(s&&name&&name!==s.name)changeSearch('save-search',{...s,name});state.renamingSearch=null;renderContent()}});
@@ -135,8 +137,12 @@ async function init(){
     const before=state.reviewStatus?.updated_at;await loadReviewStatus();
     if(state.view==='review'&&state.reviewStatus?.updated_at!==before){
       const open=[...document.querySelectorAll('.review-group')].map(d=>d.open);
+      const box=$('#review-lookup'),typed=box?.value||'',focused=document.activeElement===box,caret=box?.selectionStart??null;
       renderOverview();renderContent();
       document.querySelectorAll('.review-group').forEach((d,i)=>{if(i<open.length)d.open=open[i]});
+      const again=$('#review-lookup');
+      if(again&&typed){again.value=typed;$('#review-lookup-result').innerHTML=reviewLookupHtml(typed)}
+      if(again&&focused){again.focus();if(caret!==null)again.setSelectionRange(caret,caret)}
     }
   },60000);
 }
@@ -1069,39 +1075,64 @@ function agenciesMarkup(){
   return `<div class="section-head"><div><div class="section-overline">IMPACT DIRECTORY</div><h2>Texas state agencies</h2></div><span class="subtitle">${counts.size} with possible links in this snapshot</span></div><div class="info-callout"><strong>Why an agency index?</strong> One bill can change the work of several state agencies. “Direct” means the supplied material names an agency; “possible” means an inferred policy connection. An agency absent from a caption is not proof it is unaffected—full bill text review is needed for comprehensive coverage.</div><div class="agency-grid" style="margin-top:18px">${agencies.map(a=>`<button class="agency-card" data-agency-pick="${esc(a.id)}"><span class="agency-code">${esc(a.id.toUpperCase())}</span><strong>${esc(a.name)}</strong><span class="hits">${counts.get(a.id)||0} ${counts.get(a.id)===1?'bill':'bills'} in snapshot →</span></button>`).join('')}</div>`;
 }
 
-function reviewMarkup(){
+const clockText=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/Chicago'})+' CT';
+function reviewParts(){
   const ids=state.bills.map(b=>b.id),status=state.reviewStatus,tagged=state.luna?.bills||{};
-  const s=reviewSummary(reviewProgress(ids,status,Object.keys(tagged)));
+  return {ids,status,tagged,summary:reviewSummary(reviewProgress(ids,status,Object.keys(tagged))),run:runState(status,Date.now())};
+}
+// One bill's state, for the lookup box: a chip that opens the bill, and what is happening to it.
+function reviewLookupHtml(text){
+  const {ids,summary,tagged}=reviewParts(),found=lookup(text,summary,ids);
+  if(!found)return String(text||'').trim()?'<span class="review-lookup-hint">Type a bill number, such as HB 474 or SJR 9.</span>':'';
+  if(found.state==='unknown')return `<span class="review-lookup-hint">${esc(found.id)}: ${esc(found.label)}.</span>`;
+  const reviewedAt=tagged[found.id]&&state.bills.find(b=>b.id===found.id)?.luna?.reviewed_at;
+  const extra=found.state==='reviewed'||found.state==='questions'?(tagged[found.id]?` · tags published${reviewedAt?` ${esc(dateText(reviewedAt))}`:''}`:' · no verified tags published yet'):'';
+  return `<button class="review-chip${tagged[found.id]?' tagged':''}" data-open="${esc(found.id)}">${esc(found.id)}</button> <span class="review-lookup-state ${found.state}">${esc(found.label)}${extra}</span>`;
+}
+function reviewMarkup(){
+  const {ids,status,tagged,summary:s,run}=reviewParts();
   const total=ids.length||1,pct=n=>Math.round(n/total*1000)/10;
-  const minutes=status?.updated_at?(Date.now()-Date.parse(status.updated_at))/60000:null;
-  const stale=Boolean(status?.running)&&minutes>90;
-  const quiet=Boolean(status)&&!status.running&&minutes>75;  // runs are hourly; each one rewrites the status
-  const waiting=Boolean(status?.running)&&!stale&&Date.parse(status.waiting_until)>Date.now();
-  const line=!status?'Live worker status is unavailable, so bills with published Luna tags are counted as reviewed.'
-    :stale?`The worker last reported ${esc(stampText(status.updated_at))} and may have stopped.`
-    :quiet?`No hourly run has reported since ${esc(stampText(status.updated_at))}; the worker may be stopped.`
-    :waiting?`Waiting for Luna capacity · ${status.current?`retrying ${esc(status.current)}`:'resuming'} at ${esc(stampText(status.waiting_until))}`
-    :status.running?`Reviewing now · updated ${esc(stampText(status.updated_at))}`
+  const line=run.kind==='unavailable'?'Live worker status is unavailable, so bills with published Luna tags are counted as reviewed.'
+    :run.kind==='stale'?`The worker last reported ${esc(stampText(status.updated_at))} and may have stopped.`
+    :run.kind==='quiet'?`No hourly run has reported since ${esc(stampText(status.updated_at))}; the worker may be stopped.`
+    :run.kind==='waiting'?`Waiting for Luna capacity · ${status.current?`retrying ${esc(status.current)}`:'resuming'} at ${esc(stampText(status.waiting_until))}`
+    :run.kind==='running'?`Reviewing now · updated ${esc(stampText(status.updated_at))}`
     :`Idle until the next hourly run · last update ${esc(stampText(status.updated_at))}`;
   const chip=(id,note='')=>`<button class="review-chip${tagged[id]?' tagged':''}" data-open="${esc(id)}" title="${tagged[id]?'Luna tags published':'Reviewed; no verified tags published'}${note?' · '+esc(note):''}">${esc(id)}</button>`;
-  const group=(title,list,empty,open=true)=>`<details class="review-group"${open?' open':''}><summary><strong>${title}</strong> <span>${list.length.toLocaleString()}</span></summary>${list.length?`<div class="review-chips">${list.join('')}</div>`:`<p class="review-empty">${empty}</p>`}</details>`;
+  const group=(title,list,empty,open=false)=>`<details class="review-group"${open?' open':''}><summary><strong>${title}</strong> <span>${list.length.toLocaleString()}</span></summary>${list.length?`<div class="review-chips">${list.join('')}</div>`:`<p class="review-empty">${empty}</p>`}</details>`;
   const counts=[['Reviewed',s.reviewed.length,'done'],...(s.active.length?[['Reviewing now',s.active.length,'progress']]:[]),
     ['Waiting for bill text',s.noText.length,'notext'],...(s.failed.length?[['Failed',s.failed.length,'failed']]:[]),
     ['Not started',s.notStarted.length,'waiting']];
-  const now=s.active.length&&!stale?`<div class="review-now"><span class="review-pulse" aria-hidden="true"></span><div><small>${waiting?'Waiting to retry':'Reviewing now'}</small>${s.active.map(id=>chip(id)).join('')}</div>${s.upcoming.length?`<div><small>Up next</small>${s.upcoming.map(id=>chip(id)).join('')}</div>`:''}</div>`:'';
+  const live=run.kind==='running'||run.kind==='waiting';
+  const rows=passRows(status,s,run);
+  const current=rows.find(r=>r.now);
+  const runTitle={running:current?`Working on: ${current.label}`:'Reviewing now',waiting:'Waiting for Luna capacity',idle:'Idle',
+    quiet:'No recent run',stale:'May have stopped',unavailable:'Status unavailable'}[run.kind];
+  const runDetail=live?[run.startedAt?`Started ${clockText(run.startedAt)}`:'',run.minutesUsed!==null?`${Math.min(run.minutesUsed,RUN_LIMIT_MINUTES)} of ${RUN_LIMIT_MINUTES} minutes used`:'',
+      run.waitingUntil?`retrying at ${clockText(run.waitingUntil)}`:''].filter(Boolean).join(' · ')
+    :`Next run about ${clockText(run.nextRun)}`;
+  const passes=`<ol class="review-passes" aria-label="Review passes, in run order">${rows.map((r,i)=>`<li class="review-pass${r.now?' now':''}${r.known&&r.due===0?' clear':''}"${r.now?' aria-current="step"':''}><span class="pass-step" aria-hidden="true">${i+1}</span><div class="pass-name"><strong>${r.label}</strong><small>${r.note}</small></div><div class="pass-count">${r.known?`<strong>${r.due.toLocaleString()}</strong><span>${r.key==='review'?'not started':'bills left'}</span>`:'<strong>—</strong><span>counted after the next run</span>'}${r.checked?`<span class="pass-checked">${r.checked.toLocaleString()} done this run</span>`:''}</div></li>`).join('')}</ol>`;
+  const runCard=`<section class="review-run ${run.kind}" aria-label="Review worker"><div class="review-run-state">${live?'<span class="review-pulse" aria-hidden="true"></span>':'<span class="review-run-dot" aria-hidden="true"></span>'}<div><strong>${esc(runTitle)}</strong><span>${esc(runDetail)}</span></div></div>${passes}</section>`;
+  const now=s.active.length&&run.kind!=='stale'?`<div class="review-now"><span class="review-pulse" aria-hidden="true"></span><div><small>${run.kind==='waiting'?'Waiting to retry':'Reviewing now'}</small>${s.active.map(id=>chip(id)).join('')}</div>${s.upcoming.length?`<div><small>Up next</small>${s.upcoming.map(id=>chip(id)).join('')}</div>`:''}</div>`:'';
   const auditText=auditLine(state.audit);
   const headline=`<p class="review-headline"><strong>${s.reviewed.length.toLocaleString()} of ${ids.length.toLocaleString()} bills reviewed</strong> (${pct(s.reviewed.length)}%)${s.questionsQueued.length?` · ${s.questionsQueued.length.toLocaleString()} of them have follow-up questions queued`:''}</p>`;
+  const recent=newestReviewed(state.bills).slice(0,20);
   return `<div class="section-head"><div><div class="section-overline">LUNA FULL-TEXT REVIEW</div><h2>Review progress</h2></div><span class="subtitle">${line}</span></div>
+  ${runCard}
   ${headline}
   <div class="review-bar" role="img" aria-label="${counts.map(([label,n])=>`${n} ${label.toLowerCase()}`).join(', ')} of ${ids.length}">${counts.map(([,n,cls])=>`<span class="seg ${cls}" style="width:${pct(n)}%"></span>`).join('')}</div>
   <div class="review-counts">${counts.map(([label,n,cls])=>`<div class="review-count ${cls}"><span class="dot"></span><strong>${n.toLocaleString()}</strong><span>${label} · ${pct(n)}%</span></div>`).join('')}</div>
   ${now}
-  ${group('Reviewed',s.reviewed.map(id=>chip(id,s.questionsQueued.includes(id)?'follow-up questions queued':'')),'No bills reviewed yet.')}
-  ${group('Follow-up questions queued',s.questionsQueued.map(id=>chip(id,'first-pass review published; follow-up questions run on a later visit')),'No follow-up questions waiting.',false)}
-  ${group('Waiting for bill text',s.noText.map(id=>chip(id,'the legislature has not posted text yet')),'Every bill has text.',false)}
-  ${s.failed.length?group('Failed',s.failed.map(f=>chip(f.id,f.stage?`${f.stage} failed`:'failed')),'No failures.'):''}
-  ${group('Not started',s.notStarted.map(id=>chip(id)),'Every bill has been picked up.',false)}
-  ${auditText?`<p class="review-audit">${esc(auditText)}</p>`:''}
+  <div class="review-columns">
+    <section class="review-recent" aria-labelledby="review-recent-title"><h3 id="review-recent-title">Recently reviewed</h3>${recent.length?`<div class="today-list">${recent.map(b=>todayRow({bill:b,actions:[`Reviewed ${dateText(b.luna.reviewed_at)}`]})).join('')}</div>`:'<p class="review-empty">No reviews published yet.</p>'}</section>
+    <div class="review-side">
+      <form class="review-lookup" id="review-lookup-form" role="search"><label for="review-lookup">Check one bill</label><input id="review-lookup" maxlength="20" placeholder="Bill number, such as HB 474" autocomplete="off"><p class="review-lookup-result" id="review-lookup-result" aria-live="polite"></p></form>
+      ${group('Follow-up questions queued',s.questionsQueued.map(id=>chip(id,'first-pass review published; follow-up questions run on a later visit')),'No follow-up questions waiting.')}
+      ${group('Waiting for bill text',s.noText.map(id=>chip(id,'the legislature has not posted text yet')),'Every bill has text.')}
+      ${s.failed.length?group('Failed',s.failed.map(f=>chip(f.id,f.stage?`${f.stage} failed`:'failed')),'No failures.'):''}
+      ${auditText?`<p class="review-audit">${esc(auditText)}</p>`:''}
+    </div>
+  </div>
   <p class="review-legend"><span class="review-chip tagged">HB1</span> verified Luna tags published · <span class="review-chip">HB1</span> reviewed, no claims verified against the text yet. Bills waiting for text are retried automatically once the legislature posts it. Follow-up questions refine a review that is already published.</p>`;
 }
 
@@ -1468,6 +1499,7 @@ async function copyForAi(button){
 }
 
 function handleInput(e){
+  if(e.target.id==='review-lookup'){$('#review-lookup-result').innerHTML=reviewLookupHtml(e.target.value);return}
   if(e.target.id==='bill-search'){state.query=e.target.value.slice(0,200);state.visibleCount=30;renderResults()}
   if(e.target.id==='filter-agency'){
     if(state.agency){state.agency='';state.visibleCount=30;renderResults()}
