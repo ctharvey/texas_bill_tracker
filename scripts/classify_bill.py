@@ -9,7 +9,6 @@ from pathlib import Path
 import re
 
 import extract_bill as detailed
-from agency_names import is_generic_agency_name, named_agency_id
 
 ROOT = detailed.ROOT
 MODEL = "gpt-6-luna"
@@ -64,10 +63,7 @@ def build_request(document: dict, registry: list[dict]) -> dict:
     instructions += "\nCANONICAL POLICY TAGS:\n" + json.dumps(tags, ensure_ascii=False)
     if document.get("input_format") == "markdown":
         instructions += "\n" + (ROOT / "scripts/markdown_input_note.txt").read_text("utf-8")
-    # Luna names agencies without seeing the agency list (agency_names matches them), so the list can grow
-    # without changing this request; only the all-agencies scope marker is sent.
-    scope = [a for a in registry if a["id"] == "all-state-agencies"]
-    request = detailed.build_request(document, scope, schema=schema, instructions=instructions)
+    request = detailed.build_request(document, registry, schema=schema, instructions=instructions)
     request.update(model=MODEL, max_output_tokens=12000)
     request["text"]["format"]["name"] = "texas_bill_classification_v1"
     # Bill-dependent definitions stay after the shared prompt-cache breakpoint.
@@ -135,14 +131,12 @@ def validate_result(result: dict, document: dict, registry: list[dict], schema: 
     for agency in result["agencies"]:
         if not any(not e["span_id"].startswith("D_") for e in agency["evidence"]):
             errors.append("Agency impact requires bill evidence: " + agency["name"])
-        listed = agency["registry_id"] or named_agency_id(agency, names)
         if agency["registry_id"] is None:
-            if listed is None and is_generic_agency_name(agency["name"]):
-                reasons.append("Unresolved agency identity: " + agency["name"])
+            reasons.append("Unresolved agency identity: " + agency["name"])
         elif names.get(agency["registry_id"]) != agency["name"]:
             errors.append("Noncanonical agency identity: " + agency["name"])
         for definition in definitions.values():
-            if (listed == definition["registry_id"]
+            if (agency["registry_id"] == definition["registry_id"]
                     and agency["name"].casefold() not in " ".join(document["pages"]).casefold()
                     and not any(e["span_id"] == definition["id"] for e in agency["evidence"])):
                 errors.append("Agency identity requires statutory definition citation: " + agency["name"])

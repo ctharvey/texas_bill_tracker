@@ -15,14 +15,13 @@ import re
 import threading
 import time
 import traceback
+import unicodedata
 from collections import Counter, deque
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from urllib.request import Request, urlopen
 
 import classify_bill as classification
 import extract_bill as detailed
-from agency_names import (AGENCY_NAME_ALIASES, agency_name_key, is_generic_agency_name,  # noqa: F401
-                          named_agency_id)
 import contextlib
 from extraction_cache import (
     AlreadyBilled, ApiStopped, BudgetExceeded, CacheBusy, CacheCoolingDown, CapacityUnavailable, LongContext,
@@ -168,14 +167,9 @@ def questions_for(result: dict, document: dict, validation: dict | None = None) 
             questions.append({"question": item, "affected_claims": ["summary"],
                               "span_ids": [e["span_id"] for e in result["summary"]["evidence"]],
                               "needed_source": None})
-    names = {a["id"]: a["name"] for a in detailed.load_registry() if a["id"] != "all-state-agencies"}
     for index, agency in enumerate(result["agencies"]):
         label = f"agencies:{index}"
-        # Only a generic name ("the department") that the list and the definition table cannot place is a
-        # question; a named body that is not on the list is a gap in the list, not something Luna can answer.
-        if (agency["registry_id"] is None and is_generic_agency_name(agency["name"])
-                and agency_id_for(agency, document, names) is None
-                and not any(label in q["affected_claims"] for q in questions)):
+        if agency["registry_id"] is None and not any(label in q["affected_claims"] for q in questions):
             questions.append({"question": "Which state body does " + agency["name"] + " identify?",
                               "affected_claims": [f"agencies:{index}"],
                               "span_ids": [e["span_id"] for e in agency["evidence"]],
@@ -345,7 +339,8 @@ def resolution_request(question: dict, result: dict, document: dict, sources: li
             "bill_spans": {x: document["spans"][x] for x in ids if x in keep},
             "statutory_sources": [{k: v for k, v in s.items() if k != 'retrieved_at'} for s in sources],
             "reviewed_definitions": [{k: v for k, v in s.items() if k != 'verified_on'}
-                                     for s in classification.load_statutory_context(document)]}
+                                     for s in classification.load_statutory_context(document)],
+            "canonical_agencies": [x for x in detailed.load_registry() if x["id"] != "all-state-agencies"]}
     bank = {}
     materials = [(sid, document['spans'][sid]['text']) for sid in ids if sid in keep]
     materials += [(s['id'], s['text']) for s in sources]
@@ -762,6 +757,44 @@ def generic_agency_id(agency: dict, document: dict, names: dict[str, str]) -> st
     return registry_id if registry_id in names else None
 
 
+# Publish-time only: other names for registry agencies (the office's own title, its governing body, a common
+# acronym), each with its source. Registry names themselves are matched without an entry.
+AGENCY_NAME_ALIASES = Path(__file__).with_name("agency_name_aliases.json")
+_name_tables: dict = {}
+
+
+def agency_name_key(name: str) -> str:
+    """Comparison form of an agency name: no accents, case or punctuation, "&" as "and", and a leading "the" or
+    "Texas" and a trailing "of Texas" ignored ("Railroad Commission of Texas" = "railroad commission")."""
+    s = re.sub("['‘’ʼ]", "", name or "")  # "Auditor's" = "Auditors", whichever apostrophe
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower().replace("&", " and ")
+    s = re.sub(r"[^a-z0-9]+", " ", s).strip()
+    s = re.sub(r"^the ", "", s)
+    s = re.sub(r"^(?:state of texas|texas) ", "", s)
+    return re.sub(r" of (?:the state of )?texas$", "", s)
+
+
+def _name_table(names: dict[str, str]) -> dict[str, str]:
+    key = tuple(sorted(names.items()))
+    if key not in _name_tables:
+        seen: dict[str, set] = {}
+        for registry_id, name in names.items():
+            seen.setdefault(agency_name_key(name), set()).add(registry_id)
+        for entry in json.loads(AGENCY_NAME_ALIASES.read_text("utf-8")):
+            if entry["registry_id"] in names:
+                seen.setdefault(agency_name_key(entry["alias"]), set()).add(entry["registry_id"])
+        # A name that fits two agencies is ambiguous and maps to neither.
+        _name_tables[key] = {k: next(iter(ids)) for k, ids in seen.items() if k and len(ids) == 1}
+    return _name_tables[key]
+
+
+def named_agency_id(agency: dict, names: dict[str, str]) -> str | None:
+    """Registry ID whose name (or a listed alias) is the agency's name; None when no single agency has it.
+    Luna leaves registry_id empty for agencies it did not see in the request's registry (as with every bill
+    reviewed before the registry grew), so this catches them without a new paid review."""
+    return _name_table(names).get(agency_name_key(agency.get("name") or ""))
+
+
 def agency_id_for(agency: dict, document: dict, names: dict[str, str] | None) -> str | None:
     """Registry ID a published label gets in place of Luna's: for an unmapped agency, by generic term and then
     by name; for a mapped one, only when its name is a different listed agency's (Luna once filed "Texas
@@ -788,10 +821,12 @@ def public_agencies(kept: list[dict], document: dict, names: dict[str, str] | No
 
 
 def public_entry(bundle: dict, reviewed_at: str, scope: dict | None = None,
-                 names: dict[str, str] | None = None) -> dict | None:
+                 names: dict[str, str] | None = None, entities: list[dict] | None = None) -> dict | None:
     """Verified claims only; a field whose every claim failed verification is omitted (caption fallback).
     `scope`: the second pass's verified all-agencies marker for this review, or None (field omitted).
-    `names`: registry id -> name, enabling the generic-name mapping (public_agencies)."""
+    `names`: registry id -> name, enabling the generic-name mapping (public_agencies).
+    `entities`: verified bodies from the related-entities pass; those matching a listed agency not already
+    published are added (names that match nothing stay private)."""
     result = bundle.get("result")
     if not isinstance(result, dict):
         return None
@@ -810,6 +845,17 @@ def public_entry(bundle: dict, reviewed_at: str, scope: dict | None = None,
                             else [{k: item.get(k) for k in keys} for item in kept])
     # The all-agencies marker comes only from the second pass (topic_suggestions.scope_entry); the first pass's own
     # marker is not published (audit 2026-11-11: about half were wrong).
+    if entities and names:
+        listed = entry.get("agencies") or []
+        have, added = {a["id"] for a in listed}, []
+        for found in entities:
+            agency_id = agency_id_for({"name": found["name"], "registry_id": None}, bundle.get("document") or {}, names)
+            if agency_id and agency_id != "all-state-agencies" and agency_id not in have:
+                have.add(agency_id)
+                added.append({"id": agency_id, "name": names[agency_id], "impact": found["impact"],
+                              "explanation": found["explanation"]})
+        if added:
+            entry["agencies"] = listed + added
     if scope is not None:
         entry["all_state_agencies"] = {"applies": scope["applies"], "explanation": scope["explanation"]}
     entry["unverified_omitted"] = omitted
@@ -868,6 +914,7 @@ def live_reviews(cache_dir: Path, served: Path) -> tuple[dict[str, str], list[st
 
 def publish_tags(cache_dir: Path, out: Path, registry: list[dict], live: set[str] | None = None) -> int:
     """`live`: when given, only these bills are published (see live_reviews)."""
+    import related_entities
     import topic_suggestions
     bills = {}
     for path in sorted((cache_dir / "reviews").glob("*.json")):
@@ -880,7 +927,10 @@ def publish_tags(cache_dir: Path, out: Path, registry: list[dict], live: set[str
         stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
         scope = (topic_suggestions.read_scope(cache_dir, path.stem, bundle)
                  if isinstance(bundle, dict) and bundle.get("bill_id") == path.stem else None)
-        entry = public_entry(bundle, stamp.replace("+00:00", "Z"), scope, {a["id"]: a["name"] for a in registry})
+        entities = (related_entities.verified_entities(cache_dir, path.stem, bundle)
+                    if isinstance(bundle, dict) and bundle.get("bill_id") == path.stem else None)
+        entry = public_entry(bundle, stamp.replace("+00:00", "Z"), scope, {a["id"]: a["name"] for a in registry},
+                             entities)
         if entry and bundle.get("bill_id") == path.stem:
             bills[path.stem] = entry
     atomic_json(out, {"format": "texas-bill-luna-tags-v1", "model": classification.MODEL,
@@ -1232,6 +1282,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--suggest-topics", action="store_true",
                         help="Second pass, only once this run's review queue is empty: one low-effort Luna call per "
                              "settled review suggesting topics the tracker lacks (private; see topic_suggestions.py)")
+    parser.add_argument("--related-entities", action="store_true",
+                        help="Supplemental pass after topic suggestions: one list-free Luna read per reviewed text "
+                             "naming every related government body; names matching a listed agency the review lacks "
+                             "are published with its tags (records private in <cache>/entities)")
     parser.add_argument("--audit-sample", action="store_true",
                         help="Lowest-priority pass after topic suggestions: re-check about 2%% of settled reviews "
                              "against their bill text (private findings; counts published in audit.json)")
@@ -1421,6 +1475,41 @@ def audit_reviews(args, queue: dict, budget, deadline: float) -> int:
                    lambda report, b=bundle, i=bill_id: atomic_json(out / (i + ".json"),
                                                                    review_audit.record_for(b, report)))
     return _second_pass("Review audit", jobs(), args, deadline)
+
+
+def scan_entities(args, queue: dict, budget, deadline: float) -> int:
+    """Related-entities pass: one list-free Luna read per reviewed text, for bodies the review did not list."""
+    import related_entities
+    import review_stages
+    registry = detailed.load_registry()
+    cache, key_fn = _key_fn(budget)
+    retry, out = set(queue.get("retry", [])), args.cache_dir / "entities"
+    text_dir = args.text_dir or args.snapshot.parent / "text"
+    wanted = set(args.bill_id)
+
+    def jobs():
+        for path in sorted((args.cache_dir / "reviews").glob("*.json"), reverse=args.order == "reverse"):
+            bill_id = path.stem
+            bundle = _read_json(path)
+            if (not isinstance(bundle, dict) or not isinstance(bundle.get("result"), dict) or bill_id in retry
+                    or bundle.get("bill_id") != bill_id or (wanted and bill_id not in wanted)):
+                continue
+            try:
+                document = load_markdown_document(bill_id, text_dir, review_stages.version_code(bundle["document"]))
+                if document["text_sha256"] != bundle["document"].get("text_sha256"):
+                    continue  # the reviewed text is not the one on disk; scan once the review catches up
+                key = key_fn(related_entities.build_request(bill_id, document))
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+            if not related_entities.due(bundle, _read_json(out / (bill_id + ".json")), key):
+                continue
+            yield (bill_id,
+                   lambda i=bill_id, d=document: related_entities.scan(i, d, registry, args.cache_dir,
+                                                                       execute=args.execute, sender=budget.send,
+                                                                       cache=cache),
+                   lambda report, i=bill_id, d=document: atomic_json(out / (i + ".json"),
+                                                                     related_entities.record_for(i, d, report)))
+    return _second_pass("Related entities", jobs(), args, deadline)
 
 
 def publish_related(args, live: set[str] | None = None) -> None:
@@ -1854,6 +1943,8 @@ def main():
             try_publish_status(status_path, queue, current=None, upcoming=[], running=False)
         if args.suggest_topics and not stopped and not halt.is_set():
             suggest_topics(args, queue, budget, deadline)
+        if args.related_entities and args.input == "markdown" and not stopped and not halt.is_set():
+            scan_entities(args, queue, budget, deadline)
         if args.audit_sample and args.input == "markdown" and not stopped and not halt.is_set():
             audit_reviews(args, queue, budget, deadline)
         print("New model spending this run: $%.6f" % budget.run_spent)
