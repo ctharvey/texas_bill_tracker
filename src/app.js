@@ -442,7 +442,9 @@ async function importWatchlist(file){
 
 async function loadReviewStatus(){
   try{
-    const response=await fetch('./live/luna/status.json',{cache:'no-cache',signal:timeoutSignal(7500)});
+    // The edge cache keeps this file for minutes whatever the origin says; a 15-second bucket in the query keeps the
+    // live run view fresh while still letting the edge share one copy per bucket.
+    const response=await fetch(`./live/luna/status.json?t=${Math.floor(Date.now()/15000)}`,{cache:'no-cache',signal:timeoutSignal(7500)});
     if(!response.ok)throw Error(`HTTP ${response.status}`);
     const status=await response.json();
     if(status?.format!=='texas-bill-luna-status-v1'||!Array.isArray(status.reviewed))throw Error('Unrecognized status format');

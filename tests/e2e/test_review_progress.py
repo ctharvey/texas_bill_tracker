@@ -6,7 +6,7 @@ import re
 
 from playwright.sync_api import expect
 
-STATUS_URL = "**/live/luna/status.json"
+STATUS_URL = "**/live/luna/status.json*"  # the page adds a ?t= cache bucket
 BASE_UPDATED = "2026-11-12T15:40:29Z"
 
 
