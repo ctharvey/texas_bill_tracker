@@ -81,7 +81,8 @@ a{color:inherit}
 h1,h2,h3{text-wrap:balance}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 [hidden]{display:none!important}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* Reduced motion drops animations, unless the mock-up's "Play motion" switch overrides it for review */
+@media (prefers-reduced-motion:reduce){body:not([data-motion="on"]) *{transition:none!important}}
 
 /* ---------- Mock-up controls (not part of the design) ---------- */
 .controls{position:sticky;top:0;z-index:30;height:var(--bar);display:flex;gap:16px;align-items:center;overflow-x:auto;
@@ -184,13 +185,13 @@ body[data-sel="pointer"] .card[aria-selected="true"]::after{content:"";position:
 body[data-sel="pointer"] .card[aria-selected="true"] .num{color:var(--accent)}
 body[data-sel="pointer"] .preview{box-shadow:inset 0 3px 0 var(--accent)}
 /* Lift: the card rises with a soft shadow; the rest of the list steps back slightly */
-body[data-sel~="lift"] .card{transition:transform .15s,box-shadow .15s,opacity .15s}
+body[data-sel~="lift"] .card{transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s,opacity .2s}
 body[data-sel="lift"] .list:has(.card[aria-selected="true"]) .card:not([aria-selected="true"]){opacity:.62}
 /* Fill + lift: the tint already marks the card, so the rest of the list only steps back a little */
 body[data-sel="fill lift"] .list:has(.card[aria-selected="true"]) .card:not([aria-selected="true"]){opacity:.82}
 /* z-index: later cards are positioned too and would paint over the shadow. The raise stays under reduced motion;
    only its animation is dropped (by the global transition rule). */
-body[data-sel~="lift"] .card[aria-selected="true"]{z-index:2;transform:translateY(-3px);
+body[data-sel~="lift"] .card[aria-selected="true"]{z-index:2;transform:translateY(-4px);
   box-shadow:0 14px 30px -10px color-mix(in srgb,var(--ink) 45%,transparent),0 3px 8px -2px color-mix(in srgb,var(--ink) 22%,transparent)}
 .headrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
 .title{grid-column:1;margin:0;font-family:var(--font-title);font-weight:var(--title-weight);font-size:var(--title-size);line-height:1.3}
@@ -311,6 +312,9 @@ body[data-sel~="lift"] .card[aria-selected="true"]{z-index:2;transform:translate
     <button data-setsel="pointer" aria-pressed="false">Pointer</button>
     <button data-setsel="lift" aria-pressed="false">Lift</button>
     <button data-setsel="fill lift" aria-pressed="false">Fill + Lift</button>
+  </div>
+  <div class="grp" id="motion-grp" hidden><span class="lbl" style="color:#f0b45a">Your system asks for reduced motion</span>
+    <button id="motion-toggle" aria-pressed="false">Play motion anyway</button>
   </div>
   <div class="grp"><span class="lbl">Screen</span>
     <button data-setscreen="explorer" aria-pressed="true">Bills list</button>
@@ -520,6 +524,9 @@ body[data-sel~="lift"] .card[aria-selected="true"]{z-index:2;transform:translate
 </nav>
 
 <script>
+const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+const showMotion=()=>{document.getElementById('motion-grp').hidden=!reduced.matches};
+showMotion();reduced.addEventListener?.('change',showMotion);
 const press=(sel,attr,val)=>document.querySelectorAll(sel).forEach(b=>b.setAttribute('aria-pressed',String(b.getAttribute(attr)===val)));
 function setScreen(s){
   document.getElementById('screen-explorer').hidden=s!=='explorer';
@@ -529,6 +536,8 @@ function setScreen(s){
 document.addEventListener('click',e=>{
   const t=e.target;
   const d=t.closest('[data-setdir]');if(d){document.body.dataset.dir=d.dataset.setdir;press('[data-setdir]','data-setdir',d.dataset.setdir);return}
+  if(t.closest('#motion-toggle')){const on=document.body.dataset.motion!=='on';document.body.dataset.motion=on?'on':'';
+    document.getElementById('motion-toggle').setAttribute('aria-pressed',String(on));return}
   const v=t.closest('[data-setsel]');if(v){document.body.dataset.sel=v.dataset.setsel;press('[data-setsel]','data-setsel',v.dataset.setsel);return}
   const s=t.closest('[data-setscreen]');if(s){setScreen(s.dataset.setscreen);return}
   if(t.closest('[data-open]')){e.preventDefault();setScreen('bill');return}
