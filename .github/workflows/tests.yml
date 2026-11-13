@@ -16,7 +16,7 @@ permissions:
   contents: read
 jobs:
   unit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # ubuntu-latest (26.04) has no Python 3.12.10, which the goldens pin
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +36,7 @@ jobs:
   e2e:
     name: e2e (${{ matrix.mode }}, ${{ matrix.viewport }})
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # ubuntu-latest (26.04) has no Python 3.12.10, which the goldens pin
     timeout-minutes: 60  # ~12 min with pytest-xdist on every core (~42 min serial)
     strategy:
       fail-fast: false
