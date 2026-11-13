@@ -34,21 +34,21 @@ test('styles.css has a palette for every non-default theme and none for removed 
   assert.deepEqual(blocks, others);
 });
 
-test('light or dark: a choice wins, Match device follows the device, anything else is Match device', () => {
-  assert.equal(DEFAULT_MODE, 'system');
-  assert.deepEqual(MODES.map(m => m.id), ['system', 'light', 'dark']);
-  assert.deepEqual(['dark', 'light', 'nope', null].map(cleanMode), ['dark', 'light', 'system', 'system']);
-  assert.deepEqual([shownMode('system', true), shownMode('system', false), shownMode('light', true), shownMode('dark', false), shownMode('x', true)],
-    ['dark', 'light', 'light', 'dark', 'dark']);
+test('light or dark: a choice wins, Match device follows the device, anything else is Light', () => {
+  assert.equal(DEFAULT_MODE, 'light');
+  assert.deepEqual(MODES.map(m => m.id), ['light', 'dark', 'system']);
+  assert.deepEqual(['dark', 'system', 'nope', null].map(cleanMode), ['dark', 'system', 'light', 'light']);
+  assert.deepEqual([shownMode('system', true), shownMode('system', false), shownMode('light', true), shownMode('dark', false), shownMode('x', true), shownMode(undefined, true)],
+    ['dark', 'light', 'light', 'dark', 'light', 'light']);
   const filters = {topic: 'Taxes'};
   assert.deepEqual(withTheme(withMode({filters}, 'dark'), 'ranch'), {filters, mode: 'dark', theme: 'ranch'});
-  assert.deepEqual(withMode(['x'], 'nope'), {mode: 'system'});
+  assert.deepEqual(withMode(['x'], 'nope'), {mode: 'light'});
 });
 
-test('the pre-paint script sets light or dark, from the device when the saved mode is missing or storage fails', () => {
+test('the pre-paint script shows light unless the reader chose Dark, or Match device on a dark device', () => {
   const html = read('index.html');
-  assert.match(html, /var m=p\.mode;if\(m!=='light'&&m!=='dark'\)try\{m=matchMedia\('\(prefers-color-scheme: dark\)'\)\.matches\?'dark':'light'\}catch\(e\)\{m='light'\}d\.dataset\.mode=m/);
-  // Storage is read inside its own try, so a blocked localStorage still reaches the device check.
+  assert.match(html, /var m=p\.mode;if\(m==='system'\)try\{m=matchMedia\('\(prefers-color-scheme: dark\)'\)\.matches\?'dark':'light'\}catch\(e\)\{m='light'\}d\.dataset\.mode=m==='dark'\?'dark':'light'/);
+  // Storage is read inside its own try, so a blocked localStorage still sets a mode (light).
   assert.match(html, /try\{p=JSON\.parse\(localStorage\.getItem\('tx-bill-atlas-prefs-v1'\)\|\|'null'\)\|\|\{\}\}catch\(e\)\{\}/);
 });
 

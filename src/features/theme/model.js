@@ -12,12 +12,13 @@ const IDS = new Set(THEMES.map(t => t.id));
 // A saved theme id, or the default for anything else (a removed theme, a hand-edited value, a missing field).
 export const cleanTheme = value => (typeof value === 'string' && IDS.has(value) ? value : DEFAULT_THEME);
 
-// Light or dark: the reader's choice, or 'system' to follow the device. Device-only; it is not synced or exported.
-export const DEFAULT_MODE = 'system';
+// Light or dark: the reader's choice, or 'system' to follow the device. Light until a reader chooses, so nobody's
+// page turns dark without asking. Device-only; it is not synced or exported.
+export const DEFAULT_MODE = 'light';
 export const MODES = [
-  {id: 'system', name: 'Match device'},
   {id: 'light', name: 'Light'},
   {id: 'dark', name: 'Dark'},
+  {id: 'system', name: 'Match device'},
 ];
 export const cleanMode = value => (MODES.some(m => m.id === value) ? value : DEFAULT_MODE);
 // The mode the page shows: 'light' or 'dark'.

@@ -11,8 +11,8 @@
   <!-- Every theme's faces in one request; browsers download only the faces the active theme uses. -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Public+Sans:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Libre+Franklin:wght@600;800&family=Zilla+Slab:wght@600&display=swap" rel="stylesheet">
   <!-- The saved colour theme and light or dark, set before first paint (src/features/theme/model.js lists the same ids).
-       Without storage the device's preference still decides light or dark. -->
-  <script>(function(){var d=document.documentElement,p={};try{p=JSON.parse(localStorage.getItem('tx-bill-atlas-prefs-v1')||'null')||{}}catch(e){}var t=p.theme;if(['granite','lone-star','bluebonnet','ranch'].indexOf(t)>=0)d.dataset.palette=t;var m=p.mode;if(m!=='light'&&m!=='dark')try{m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}catch(e){m='light'}d.dataset.mode=m})()</script>
+       Light unless the reader chose Dark, or Match device on a dark device. -->
+  <script>(function(){var d=document.documentElement,p={};try{p=JSON.parse(localStorage.getItem('tx-bill-atlas-prefs-v1')||'null')||{}}catch(e){}var t=p.theme;if(['granite','lone-star','bluebonnet','ranch'].indexOf(t)>=0)d.dataset.palette=t;var m=p.mode;if(m==='system')try{m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}catch(e){m='light'}d.dataset.mode=m==='dark'?'dark':'light'})()</script>
   <link rel="alternate" type="text/markdown" href="https://agent.bills.ctharvey.me/index.md" title="Texas Bill Atlas for AI agents (Markdown and JSON, no JavaScript)">
   <link rel="stylesheet" href="./src/styles.css">
   <script type="module" src="./src/app.js"></script>
