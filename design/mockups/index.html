@@ -190,7 +190,19 @@ body[data-sel="pointer"] .preview{box-shadow:inset 0 3px 0 var(--accent)}
 body[data-sel="star"] .card{padding-left:32px}
 body[data-sel="star"] .card[aria-selected="true"]{z-index:2;border:2px solid var(--accent);border-left-width:28px;padding:13px 13px 13px 8px}
 body[data-sel="star"] .card[aria-selected="true"]::after{content:"\2605";position:absolute;left:-28px;top:0;bottom:0;width:28px;
-  display:grid;place-items:center;font-size:19px;line-height:1;color:#fff;pointer-events:none}
+  display:grid;place-items:center;font-size:19px;line-height:1;color:#fff;pointer-events:none;
+  animation:star-in .65s .12s cubic-bezier(.3,1.5,.5,1) backwards}
+/* One-time entrance on select, then still: the band sweeps in, a shine crosses it once, the star spins in and settles.
+   The band and shine are a ::before over the border area, so the card's own border stays the resting state. */
+body[data-sel="star"] .card[aria-selected="true"]::before{content:"";position:absolute;left:-28px;top:-2px;bottom:-2px;width:28px;
+  border-radius:var(--radius) 0 0 var(--radius);pointer-events:none;
+  background:linear-gradient(100deg,transparent 30%,#ffffff8c 50%,transparent 70%) -40px 0/40px 100% no-repeat,var(--accent);
+  animation:band-in .3s ease-out backwards,shine .7s .25s ease-in-out forwards}
+@keyframes band-in{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes shine{to{background-position:40px 0,0 0}}
+@keyframes star-in{from{opacity:0;scale:.2;rotate:-144deg}to{opacity:1;scale:1;rotate:0deg}}
+@media (prefers-reduced-motion:reduce){body:not([data-motion="on"])[data-sel="star"] .card[aria-selected="true"]::before,
+  body:not([data-motion="on"])[data-sel="star"] .card[aria-selected="true"]::after{animation:none}}
 body[data-sel="star"] .card[aria-selected="true"] .title a{color:var(--accent)}
 /* Lift: the card rises with a soft shadow; the rest of the list steps back slightly */
 body[data-sel~="lift"] .card{transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s,opacity .2s}
