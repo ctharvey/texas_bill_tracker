@@ -183,6 +183,7 @@ def test_agency_filter_also_lists_bills_tagged_through_a_companion(device):
 
 def test_focus_by_keyboard_opens_the_list(device):
     page = device.open("#all")
+    reveal(page, "#filter-agency")
     page.focus("#filter-agency")
     expect(page.locator("#agency-options")).to_be_visible()
     expect(page.locator("#filter-agency")).to_have_attribute("aria-expanded", "true")
