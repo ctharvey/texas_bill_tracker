@@ -98,5 +98,71 @@ class PublicAgenciesTests(unittest.TestCase):
                          [("dfps", NAMES["dfps"])])
 
 
+
+class LunaNamesWithoutTheListTests(unittest.TestCase):
+    """Luna names bodies without seeing the agency list; code decides which listed agency a name means."""
+
+    def doc(self, text="The Texas Department of Transportation shall build markers."):
+        return detailed.document_from_pages("HB1", "90R", "introduced", [text])
+
+    def test_the_request_carries_no_agency_list(self):
+        import classify_bill
+        request = classify_bill.build_request(self.doc(), detailed.load_registry())
+        prompt = request["input"][0]["content"][0]["text"]
+        self.assertIn('"agencies":[]', prompt)
+        for name in ("Texas Cyber Command", "Health and Human Services Commission", "Texas Optometry Board"):
+            self.assertNotIn(name, prompt)
+        self.assertIn("all-state-agencies", prompt)  # the scope marker is still described
+        self.assertIn("Always set registry_id to null", prompt)
+
+    def test_the_request_does_not_change_when_the_list_grows(self):
+        import classify_bill
+        registry = detailed.load_registry()
+        grown = registry + [{"id": "new-body", "name": "Texas New Body"}]
+        self.assertEqual(classify_bill.build_request(self.doc(), registry), classify_bill.build_request(self.doc(), grown))
+
+    def test_only_generic_names_are_identity_questions(self):
+        def questions(name):
+            result = {"summary": {"text": "A bill.", "evidence": []}, "uncertainties": [], "major_effects": [],
+                      "affected_groups": [], "agencies": [{"registry_id": None, "name": name, "explanation": "x",
+                                                           "evidence": [{"span_id": "P001S001", "quote": "x"}]}]}
+            return pipeline.questions_for(result, {"spans": {}})
+        self.assertEqual(len(questions("the department")), 1)
+        self.assertEqual(len(questions("Board")), 1)
+        self.assertEqual(questions("Texas Department of Transportation"), [])     # on the list
+        self.assertEqual(questions("state auditor"), [])                          # an alias
+        self.assertEqual(questions("Texas Department of Artificial Intelligence"), [])  # named, not listed
+
+    def test_generic_names(self):
+        for name in ("the department", "Board", "state agency", "each appropriate state agency", "the commissioner",
+                     "law enforcement agencies", "the executive commissioner"):
+            self.assertTrue(pipeline.is_generic_agency_name(name), name)
+        for name in ("Texas Department of Transportation", "state auditor", "Office of the State Long-Term Care Ombudsman",
+                     "Austin Independent School District", "Commission on Jail Standards", ""):
+            self.assertFalse(pipeline.is_generic_agency_name(name), name)
+
+    def test_the_validator_flags_only_unplaceable_generic_names(self):
+        import classify_bill
+        from test_classify_bill import result
+        registry = detailed.load_registry()
+        doc = detailed.document_from_pages("HB1", "90R", "introduced", ["The department shall build markers."])
+        schema = classify_bill.build_request(doc, registry)["text"]["format"]["schema"]
+
+        def reasons(name):
+            value = result()
+            value["agencies"] = [{"registry_id": None, "name": name, "impact": "direct", "explanation": "Builds.",
+                                  "evidence": [{"span_id": "P001S001", "quote": "The department shall build markers."}]}]
+            return classify_bill.validate_result(value, doc, registry, schema, "f" * 64)["review_reasons"]
+        self.assertIn("Unresolved agency identity: the department", reasons("the department"))
+        self.assertNotIn("Unresolved agency identity: Texas Department of Transportation",
+                         reasons("Texas Department of Transportation"))
+        self.assertFalse([r for r in reasons("Texas Department of Artificial Intelligence") if "identity" in r])
+
+    def test_published_fiscal_agencies_get_a_listed_id(self):
+        import review_stages
+        self.assertEqual(review_stages._listed_id("Texas Department of Transportation"), "txdot")
+        self.assertEqual(review_stages._listed_id("Department of Family and Protective Services"), "dfps")
+        self.assertIsNone(review_stages._listed_id("the department"))
+
 if __name__ == "__main__":
     unittest.main()

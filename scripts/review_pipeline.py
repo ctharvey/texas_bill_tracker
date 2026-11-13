@@ -15,13 +15,14 @@ import re
 import threading
 import time
 import traceback
-import unicodedata
 from collections import Counter, deque
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from urllib.request import Request, urlopen
 
 import classify_bill as classification
 import extract_bill as detailed
+from agency_names import (AGENCY_NAME_ALIASES, agency_name_key, is_generic_agency_name,  # noqa: F401
+                          named_agency_id)
 import contextlib
 from extraction_cache import (
     AlreadyBilled, ApiStopped, BudgetExceeded, CacheBusy, CacheCoolingDown, CapacityUnavailable, LongContext,
@@ -167,9 +168,14 @@ def questions_for(result: dict, document: dict, validation: dict | None = None) 
             questions.append({"question": item, "affected_claims": ["summary"],
                               "span_ids": [e["span_id"] for e in result["summary"]["evidence"]],
                               "needed_source": None})
+    names = {a["id"]: a["name"] for a in detailed.load_registry() if a["id"] != "all-state-agencies"}
     for index, agency in enumerate(result["agencies"]):
         label = f"agencies:{index}"
-        if agency["registry_id"] is None and not any(label in q["affected_claims"] for q in questions):
+        # Only a generic name ("the department") that the list and the definition table cannot place is a
+        # question; a named body that is not on the list is a gap in the list, not something Luna can answer.
+        if (agency["registry_id"] is None and is_generic_agency_name(agency["name"])
+                and agency_id_for(agency, document, names) is None
+                and not any(label in q["affected_claims"] for q in questions)):
             questions.append({"question": "Which state body does " + agency["name"] + " identify?",
                               "affected_claims": [f"agencies:{index}"],
                               "span_ids": [e["span_id"] for e in agency["evidence"]],
@@ -339,8 +345,7 @@ def resolution_request(question: dict, result: dict, document: dict, sources: li
             "bill_spans": {x: document["spans"][x] for x in ids if x in keep},
             "statutory_sources": [{k: v for k, v in s.items() if k != 'retrieved_at'} for s in sources],
             "reviewed_definitions": [{k: v for k, v in s.items() if k != 'verified_on'}
-                                     for s in classification.load_statutory_context(document)],
-            "canonical_agencies": [x for x in detailed.load_registry() if x["id"] != "all-state-agencies"]}
+                                     for s in classification.load_statutory_context(document)]}
     bank = {}
     materials = [(sid, document['spans'][sid]['text']) for sid in ids if sid in keep]
     materials += [(s['id'], s['text']) for s in sources]
@@ -755,44 +760,6 @@ def generic_agency_id(agency: dict, document: dict, names: dict[str, str]) -> st
         return None
     registry_id = agency_name_definitions().get((headers[-1].group(2), headers[-1].group(1), term))
     return registry_id if registry_id in names else None
-
-
-# Publish-time only: other names for registry agencies (the office's own title, its governing body, a common
-# acronym), each with its source. Registry names themselves are matched without an entry.
-AGENCY_NAME_ALIASES = Path(__file__).with_name("agency_name_aliases.json")
-_name_tables: dict = {}
-
-
-def agency_name_key(name: str) -> str:
-    """Comparison form of an agency name: no accents, case or punctuation, "&" as "and", and a leading "the" or
-    "Texas" and a trailing "of Texas" ignored ("Railroad Commission of Texas" = "railroad commission")."""
-    s = re.sub("['‘’ʼ]", "", name or "")  # "Auditor's" = "Auditors", whichever apostrophe
-    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower().replace("&", " and ")
-    s = re.sub(r"[^a-z0-9]+", " ", s).strip()
-    s = re.sub(r"^the ", "", s)
-    s = re.sub(r"^(?:state of texas|texas) ", "", s)
-    return re.sub(r" of (?:the state of )?texas$", "", s)
-
-
-def _name_table(names: dict[str, str]) -> dict[str, str]:
-    key = tuple(sorted(names.items()))
-    if key not in _name_tables:
-        seen: dict[str, set] = {}
-        for registry_id, name in names.items():
-            seen.setdefault(agency_name_key(name), set()).add(registry_id)
-        for entry in json.loads(AGENCY_NAME_ALIASES.read_text("utf-8")):
-            if entry["registry_id"] in names:
-                seen.setdefault(agency_name_key(entry["alias"]), set()).add(entry["registry_id"])
-        # A name that fits two agencies is ambiguous and maps to neither.
-        _name_tables[key] = {k: next(iter(ids)) for k, ids in seen.items() if k and len(ids) == 1}
-    return _name_tables[key]
-
-
-def named_agency_id(agency: dict, names: dict[str, str]) -> str | None:
-    """Registry ID whose name (or a listed alias) is the agency's name; None when no single agency has it.
-    Luna leaves registry_id empty for agencies it did not see in the request's registry (as with every bill
-    reviewed before the registry grew), so this catches them without a new paid review."""
-    return _name_table(names).get(agency_name_key(agency.get("name") or ""))
 
 
 def agency_id_for(agency: dict, document: dict, names: dict[str, str] | None) -> str | None:

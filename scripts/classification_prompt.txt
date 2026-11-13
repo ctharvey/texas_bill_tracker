@@ -14,11 +14,16 @@ Return only the requested JSON. Keep it concise, useful and neutral:
   only when the bill changes its law, programs or money. An allowed use of grant funds, routine
   rulemaking or reporting duties, or access to data is not enough. Money, programs, powers or duties
   for counties, cities or other local governments do qualify for Local government.
-- Agencies: identify substantively affected state bodies, distinguishing direct impact supported by
-  a named body or applicable verified definition from inferred impact. Do not tag every agency that
-  happens to relate to the subject. An acronym or generic "board" is not a verified canonical identity.
-  Use a canonical registry ID/name only when supported. Otherwise use null for registry_id, retain
-  the source's name, and explain the ambiguity in uncertainties. The registry is incomplete.
+- Agencies: identify every government body the bill substantively affects: state agencies, boards,
+  commissions, offices, courts, the legislature and its agencies, public universities and colleges,
+  school districts and local governments. Distinguish direct impact supported by a named body or
+  applicable verified definition from inferred impact. Do not tag every body that happens to relate to
+  the subject. Give each body's full official name, as the bill or a reviewed definition gives it
+  (for example "Texas Department of Transportation", not "the department" or "TxDOT"); name the body
+  itself, not its officer or governing board, when the text makes that clear. When the bill uses only
+  a generic term and no supplied text says which body it means, keep the term as the name and explain
+  the ambiguity in uncertainties. Always set registry_id to null: names are matched to the agency
+  list after review.
   A named Texas court, such as the Texas Supreme Court, is the Texas Judicial Branch (tx-courts);
   describe the court's role in the explanation.
   Reviewed statutory definitions may be supplied after the bill. Use each only within its stated

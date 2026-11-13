@@ -15,7 +15,7 @@ from extraction_cache import ResponseCache
 
 OLD_MD = "# HB 1\n\nThe commission shall publish maps.\n\nThe department shall file a quarterly report.\n"
 NEW_MD = "# HB 1\n\nThe commission shall publish maps.\n\nThe board shall audit each permit annually.\n"
-PINNED_STAGE1_KEY = "f120ecc1d84920d994944b83220486e907c590f5e8fbce94bf3e9e7fcc7ad812"
+PINNED_STAGE1_KEY = "1cae0c48fd1671ad0dbe130761e864823520bf230c060dee08e135fd1c64c685"
 
 
 def evidence(quote="The commission shall publish maps.", span="P002S001"):

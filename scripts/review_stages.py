@@ -203,10 +203,7 @@ def _canonical(value) -> str:
 
 def build_fiscal_request(bundle: dict, docs: list[dict], registry: list[dict]) -> dict:
     schema = json.loads((ROOT / "scripts/fiscal_check_schema.json").read_text("utf-8"))
-    instructions = ((ROOT / "scripts/fiscal_check_prompt.txt").read_text("utf-8")
-                    + "\nCANONICAL AGENCIES:\n"
-                    + _canonical([a for a in sorted(registry, key=lambda a: a["id"])
-                                  if a["id"] != "all-state-agencies"]))
+    instructions = (ROOT / "scripts/fiscal_check_prompt.txt").read_text("utf-8")
     result = bundle["result"]
     review = {"agencies": [{k: a.get(k) for k in ("registry_id", "name", "impact", "explanation")}
                            for a in result.get("agencies", [])],
@@ -230,6 +227,12 @@ def build_fiscal_request(bundle: dict, docs: list[dict], registry: list[dict]) -
                         + "\nDOCUMENTS:\n" + sources}]},
         ],
     }
+
+
+def _listed_id(name: str) -> str | None:
+    from agency_names import named_agency_id
+    names = {a["id"]: a["name"] for a in classify_bill.detailed.load_registry() if a["id"] != "all-state-agencies"}
+    return named_agency_id({"name": name}, names)
 
 
 def _squash(text: str) -> str:
@@ -304,7 +307,7 @@ def public_fiscal(record: dict) -> dict | None:
         output["summary"] = {"text": result["fiscal_summary"]["text"],
                              "quotes": quotes(result["fiscal_summary"]["evidence"])}
     output["agencies"] = [
-        {"name": a["name"], "registry_id": a["registry_id"], "in_review": a["in_review"],
+        {"name": a["name"], "registry_id": a["registry_id"] or _listed_id(a["name"]), "in_review": a["in_review"],
          "fiscal_effect": a["fiscal_effect"], "quotes": quotes(a["evidence"])}
         for a, ok in zip(result["agencies"], flags("agencies", len(result["agencies"]))) if ok]
     output["disagreements"] = [
