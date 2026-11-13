@@ -276,7 +276,7 @@ mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;
   .law-version{grid-template-columns:1fr}
   .law-version button{grid-column:1;grid-row:auto;justify-self:start;margin-top:6px}
 }
-.theme-pick{margin-left:8px;display:inline-flex;align-items:center;gap:6px}.theme-pick select{font:inherit;font-size:var(--fs-xs);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:calc(6px*var(--rs));padding:2px 6px}
+.topbar-prefs{display:flex;align-items:center;gap:6px}.theme-pick{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 2px 0 9px;border:1px solid var(--line);border-radius:999px;background:var(--surface);cursor:pointer}.theme-pick:hover,.mode-toggle:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}.theme-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);flex:none}.theme-pick select{font:inherit;font-size:var(--fs-xs);font-weight:600;color:var(--ink);background:transparent;border:0;padding:0 2px;cursor:pointer}.mode-toggle{width:28px;height:28px;display:grid;place-items:center;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--ink);font-size:15px;line-height:1}
 
 /* Home dashboard */
 .home-search{background:var(--surface);border:1px solid var(--line);border-radius:calc(14px*var(--rs));box-shadow:var(--shadow);padding:20px 22px 14px;margin-bottom:22px}
@@ -469,3 +469,5 @@ small{font-size:var(--fs-xs)}
 :where(:root[data-mode="dark"]) .saved-search-new{color:#80dbca}
 :where(:root[data-mode="dark"]) mark.law-out{color:#feb1a4}
 :where(:root[data-mode="dark"]) mark.law-in{color:#95d5d2}
+/* Phone: the top bar may wrap rather than push the page wider. */
+@media(max-width:760px){.topbar{height:auto;min-height:50px;flex-wrap:wrap;row-gap:8px;padding-block:9px}.topbar-right{flex:1 1 auto;min-width:0;flex-wrap:wrap;gap:8px 12px;justify-content:flex-end}}
