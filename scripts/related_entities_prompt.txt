@@ -16,4 +16,7 @@ and to "inferred" when the body is affected only as a consequence of the bill's 
 relationship in one sentence. Quote the bill text that shows it: an exact excerpt copied character for character
 from BILL TEXT without the <ins>/<del> tags, and without "...".
 
+Do not list a body that only receives a report, notice, copy or submission under the bill; list it only when the
+bill also gives it a duty, power, program, rule, fee or funding change.
+
 List each body once. Do not list a body only because it relates to the subject, and do not judge the bill's merits.
