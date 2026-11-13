@@ -303,6 +303,9 @@ test('saved searches: cleaning, ops, names and ids', () => {
   assert.deepEqual(applyOps(['HB2'], ops), ['HB2', 'HB1']);
   assert.equal(searchName({query: ' water ', topic: 'Energy', chamber: 'Senate', sort: 'latest'}), '“water” · Energy · Senate');
   assert.equal(searchName({}), 'All bills');
+  assert.equal(searchName({chamber: 'House', party: 'Bipartisan'}), 'House · Bipartisan authors');
+  assert.equal(buildHash('all', {...FILTER_DEFAULTS, party: 'Democratic'}), '#all?party=Democratic');
+  assert.equal(parseHash('#all?party=Republican').filters.party, 'Republican');
   assert.match(newSearchId(), /^[a-z0-9]{10}$/);
   assert.equal(cleanSearches(Array.from({length: 30}, (_, i) => search(`id${String(i).padStart(6, '0')}`, `S${i}`))).length, MAX_SEARCHES);
 });

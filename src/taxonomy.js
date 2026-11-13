@@ -296,6 +296,10 @@ export function authorshipParty(bill) {
   return {tint, label, detail, authors, coauthors};
 }
 
+// The explorer's party filter: its values, and the authorship tint each one keeps.
+export const PARTY_FILTERS = {Republican: 'rep', Democratic: 'dem', Bipartisan: 'bipartisan'};
+export const partyFilterMatches = (bill, value) => !value || authorshipParty(bill).tint === PARTY_FILTERS[value];
+
 export function memberSummary(member) {
   if (!member) return 'Not matched to the 90th Legislature roster';
   const bits = [];

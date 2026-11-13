@@ -1,5 +1,5 @@
 // Saving choices without accounts: URL state, remembered filters, profile and watchlist files, and sync merging.
-export const FILTER_DEFAULTS = {query: '', topic: '', agency: '', chamber: '', stage: '', action: '', outlook: '', sort: 'newest', onlyWatch: false};
+export const FILTER_DEFAULTS = {query: '', topic: '', agency: '', chamber: '', party: '', stage: '', action: '', outlook: '', sort: 'newest', onlyWatch: false};
 const FILTER_NAMES = Object.keys(FILTER_DEFAULTS);
 export const VIEWS = ['all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'agencies', 'review', 'method', 'saving', 'data'];
 const LAW_CODE = /^[A-Z]{2}$/;
@@ -139,7 +139,7 @@ export function newSearchId(random = n => crypto.getRandomValues(new Uint8Array(
 // A readable default name from the filters that are set.
 export function searchName(filters, agencyName = id => id) {
   const f = cleanFilters(filters);
-  const parts = [f.query && `“${f.query.trim()}”`, f.topic, f.agency && agencyName(f.agency), f.chamber, f.stage, f.outlook,
+  const parts = [f.query && `“${f.query.trim()}”`, f.topic, f.agency && agencyName(f.agency), f.chamber, f.party && `${f.party} authors`, f.stage, f.outlook,
     f.action, f.onlyWatch && 'Watched only'].filter(Boolean);
   return (parts.join(' · ') || 'All bills').slice(0, 80);
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {attachMembers, authorshipParty, memberSummary, authorInfluence} from '../src/taxonomy.js';
+import {attachMembers, authorshipParty, memberSummary, authorInfluence, PARTY_FILTERS, partyFilterMatches} from '../src/taxonomy.js';
 
 const member = (chamber, name, party, extra = {}) => ({chamber, display_name: name, full_name: name, party,
   district: '1', service: party ? [{chamber, district: '1', years: '2015 - 2027', party: party[0]}] : [],
@@ -78,4 +78,16 @@ test('tenure tags count time in the current chamber: first term, 12+ years, othe
   assert.equal(tenureTag(m('house', ['house', '2019 - 2029'])).years, 8);                  // counted only to the 2027 start
   assert.equal(tenureTag(m('house', ['house', 'unknown'])), null);                        // unreadable years: no tag
   assert.equal(tenureTag(null), null);
+});
+
+test('the party filter keeps bills by their authorship tint', () => {
+  const bills = [bill('HB1', ['Bucy', 'Moody']), bill('HB2', ['Landgraf']), bill('HB3', ['Bucy', 'Landgraf']),
+    bill('HB4', ['Landgraf'], ['Moody']), bill('HB6', ['Bailey'], ['Moody']), {id: 'HB7', authors: ['Bucy']}];
+  const keep = value => bills.filter(b => partyFilterMatches(b, value)).map(b => b.id);
+  assert.deepEqual(Object.keys(PARTY_FILTERS), ['Republican', 'Democratic', 'Bipartisan']);
+  assert.deepEqual(keep('Republican'), ['HB2']);
+  assert.deepEqual(keep('Democratic'), ['HB1']);
+  assert.deepEqual(keep('Bipartisan'), ['HB3', 'HB4']);  // a Democratic coauthor makes HB4 bipartisan, not Republican
+  assert.equal(keep('').length, bills.length);            // no filter keeps unknown-party bills too
+  assert.deepEqual(keep('Whig'), []);                     // an unknown value from a link matches nothing
 });
