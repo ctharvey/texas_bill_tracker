@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_topic_suggestions import SuggestionCase, pipeline  # noqa: E402
-from test_review_stages_pipeline import QUOTE_I, body  # noqa: E402
+from test_review_stages_pipeline import QUOTE_I, body, md_h, md_i, sha  # noqa: E402
+from test_text_rebinding import rerender  # noqa: E402
 
 import extract_bill as detailed  # noqa: E402
 import related_entities  # noqa: E402
@@ -85,7 +86,7 @@ class PublishMergeTests(unittest.TestCase):
         self.assertEqual(pipeline.public_entry(bundle, 'T', None, NAMES)['agencies'], [])
 
 
-class PassTests(SuggestionCase):
+class EntitiesCase(SuggestionCase):
     def setUp(self):
         super().setUp()
         self.entities = [found('Texas Department of Transportation'), found('Texas Cyber Command', 'not in the bill'),
@@ -103,6 +104,8 @@ class PassTests(SuggestionCase):
     def record(self, bill='HB1'):
         return json.loads((self.cache / 'entities' / (bill + '.json')).read_text('utf-8'))
 
+
+class PassTests(EntitiesCase):
     def test_verified_listed_bodies_are_published_and_the_rest_stay_private(self):
         self.seed(['HB1', 'HB2'])
         out = self.run_scan()
@@ -146,6 +149,92 @@ class PassTests(SuggestionCase):
         with patch.object(pipeline, 'queue_candidates', lambda *a, **k: []):
             self.run_scan()
         self.assertEqual(self.count(ENTITIES, mark), 0)
+
+
+class ReviewStateTests(EntitiesCase):
+    """The pass across review states: settled or not, failed, re-rendered text, a new version."""
+
+    def test_a_bill_with_queued_questions_is_scanned_only_once_settled(self):
+        self.first_uncertainties = [{'question': 'Does the sunset apply?', 'affected_claims': ['summary'],
+                                     'span_ids': ['P004S001'], 'needed_source': None}]
+        self.seed()
+        self.run_scan()
+        self.assertIn('HB1', json.loads((self.cache / 'queue.json').read_text('utf-8'))['retry'])
+        self.assertEqual(self.count(ENTITIES), 0)
+
+    def test_a_needs_review_bill_gets_its_entities_and_keeps_its_status(self):
+        self.seed()
+        self.run_scan()
+        path = self.cache / 'reviews' / 'HB1.json'
+        bundle = json.loads(path.read_text('utf-8'))
+        bundle['status'] = 'needs_review'
+        path.write_text(json.dumps(bundle), 'utf-8')
+        with patch.object(pipeline, 'scan_entities', lambda *a, **k: 0),                 patch.object(pipeline, 'queue_candidates', lambda *a, **k: []):
+            self.run_scan()
+        entry = self.published()['HB1']
+        self.assertEqual(entry['status'], 'needs_review')
+        self.assertEqual([a['id'] for a in entry['agencies']], ['txdot'])
+
+    def test_a_review_without_a_result_is_not_scanned(self):
+        self.seed(['HB1', 'HB2'])
+        self.run_scan()
+        (self.cache / 'entities' / 'HB2.json').unlink()
+        path = self.cache / 'reviews' / 'HB2.json'
+        bundle = json.loads(path.read_text('utf-8'))
+        bundle.pop('result')
+        path.write_text(json.dumps(bundle), 'utf-8')
+        mark = len(self.sdk.requests)
+        with patch.object(pipeline, 'queue_candidates', lambda *a, **k: []):
+            self.run_scan()
+        self.assertEqual(self.count(ENTITIES, mark), 0)
+        self.assertFalse((self.cache / 'entities' / 'HB2.json').exists())
+
+    def test_a_rerendered_text_keeps_its_entities_without_a_new_call(self):
+        self.seed()
+        self.run_scan()
+        self.put('HB1', 'I', rerender(md_i('HB1')))
+        mark = len(self.sdk.requests)
+        out = self.run_scan()
+        self.assertIn('Re-attached 1', out)
+        self.assertEqual(self.count(ENTITIES, mark), 0)
+        self.assertEqual(self.record()['text_sha256'], sha(rerender(md_i('HB1'))))
+        self.assertEqual([a['id'] for a in self.published()['HB1']['agencies']], ['txdot'])
+
+    def test_a_record_left_on_old_text_is_rebound_by_a_cached_rescan(self):
+        self.seed()
+        self.run_scan()
+        path = self.cache / 'entities' / 'HB1.json'
+        path.write_text(json.dumps({**self.record(), 'text_sha256': 'c' * 64}), 'utf-8')
+        mark = len(self.sdk.requests)
+        with patch.object(pipeline, 'queue_candidates', lambda *a, **k: []):
+            self.run_scan()
+        self.assertEqual(self.count(ENTITIES, mark), 0)  # same request: a response-cache hit
+        self.assertEqual(self.record()['text_sha256'], sha(md_i('HB1')))
+        self.assertEqual([a['id'] for a in self.published()['HB1']['agencies']], ['txdot'])
+
+    def test_a_new_version_hides_old_entities_until_its_own_scan(self):
+        quarterly = 'The agency shall report quarterly on widgets.'
+        self.overrides[ENTITIES] = lambda bill, text: body({'entities': [
+            found('Texas Department of Transportation', QUOTE_I if 'annually' in text else quarterly)]})
+        self.seed()
+        self.run_main('--related-entities')
+        first_key = self.record()['request_key']
+        self.put('HB1', 'H', md_h('HB1'))
+        mark = len(self.sdk.requests)
+        self.run_main('--related-entities')
+        self.assertEqual(json.loads((self.cache / 'reviews' / 'HB1.json').read_text('utf-8'))['document']['version'], 'H')
+        self.assertEqual(self.count(ENTITIES, mark), 1)
+        self.assertNotEqual(self.record()['request_key'], first_key)
+        self.assertEqual(self.record()['text_sha256'], sha(md_h('HB1')))
+        self.assertEqual([a['id'] for a in self.published()['HB1']['agencies']], ['txdot'])
+
+    def test_due_rules(self):
+        record = {'request_key': 'k', 'text_sha256': 'a'}
+        self.assertFalse(related_entities.due({}, record, 'k', 'a'))
+        self.assertTrue(related_entities.due({}, record, 'k', 'b'))
+        self.assertTrue(related_entities.due({}, record, 'other', 'a'))
+        self.assertTrue(related_entities.due({}, None, 'k', 'a'))
+        self.assertFalse(related_entities.due(None, None, 'k', 'a'))
 
 
 if __name__ == '__main__':

@@ -640,9 +640,17 @@ def version_listed(bill_id: str, text_dir: Path, code: str | None) -> bool:
 
 
 def rebind_dependent_records(cache_dir: Path, bill_id: str, bundle: dict, from_sha: str | None, to_sha: str) -> None:
-    """Move the audit record and fiscal check made for this exact review from its old text hash to the new one.
-    Only records bound to this review (review hash / first-pass key) and to from_sha (or already to_sha) move."""
+    """Move the audit record, fiscal check and related-entities record made for this exact review from its old text
+    hash to the new one. Only records bound to this review (review hash / first-pass key) or, for entities (which read
+    only the text), to from_sha move."""
+    import related_entities
     import review_audit
+    entities_path = cache_dir / "entities" / (bill_id + ".json")
+    record = _read_json(entities_path)
+    if (isinstance(record, dict) and record.get("format") == related_entities.RECORD_FORMAT
+            and record.get("text_sha256") == from_sha and from_sha):
+        record["text_sha256"] = to_sha
+        atomic_json(entities_path, record)
     audit_path = cache_dir / "audit" / (bill_id + ".json")
     record = _read_json(audit_path)
     if (isinstance(record, dict) and record.get("text_sha256") == from_sha
@@ -1501,7 +1509,7 @@ def scan_entities(args, queue: dict, budget, deadline: float) -> int:
                 key = key_fn(related_entities.build_request(bill_id, document))
             except (OSError, ValueError, KeyError, TypeError):
                 continue
-            if not related_entities.due(bundle, _read_json(out / (bill_id + ".json")), key):
+            if not related_entities.due(bundle, _read_json(out / (bill_id + ".json")), key, document["text_sha256"]):
                 continue
             yield (bill_id,
                    lambda i=bill_id, d=document: related_entities.scan(i, d, registry, args.cache_dir,

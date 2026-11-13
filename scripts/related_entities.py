@@ -61,8 +61,13 @@ def validate(result: dict, document: dict) -> dict:
     return {"errors": [], "status": "checked", "entities": entities}
 
 
-def due(bundle: dict | None, record: dict | None, request_key: str) -> bool:
-    return isinstance(bundle, dict) and (not isinstance(record, dict) or record.get("request_key") != request_key)
+def due(bundle: dict | None, record: dict | None, request_key: str, text_sha256: str | None = None) -> bool:
+    """Due when there is no record for this request, or the record is bound to other text (a re-render can keep the
+    request identical; re-running it is then a response-cache hit that rebinds the record)."""
+    if not isinstance(bundle, dict):
+        return False
+    return (not isinstance(record, dict) or record.get("request_key") != request_key
+            or (text_sha256 is not None and record.get("text_sha256") != text_sha256))
 
 
 def scan(bill_id: str, document: dict, registry: list[dict], cache_root: Path, *, execute=False, sender=None,
