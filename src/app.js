@@ -705,11 +705,11 @@ const previewing=()=>Boolean(preview.id)&&PREVIEW_WIDE.matches&&Boolean($('#bill
 function previewMarkup(b){
   const h=assessHearing(b),last=lastActionInfo(b),watched=state.watch.has(b.id),real=realAgencies(b);
   const cards=[...document.querySelectorAll('#bill-list .bill-card')],at=cards.findIndex(c=>c.dataset.billId===b.id);
-  const summary=b.luna?.summary?{label:'Luna summary',text:b.luna.summary}:{label:'Caption',text:b.caption};
+  const summary=b.luna?.summary?{label:'Luna summary',text:b.luna.summary}:sameText(b.caption,b.title)?null:{label:'Caption',text:b.caption};
   return `<div class="preview-head">${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><button type="button" class="preview-close" id="preview-close" aria-label="Close preview">×</button></div>
     <h2 class="preview-title" id="preview-title" tabindex="-1">${esc(b.title)}</h2>
     ${headlineLine(b,'drawer')}
-    <section class="preview-summary"><h3>${summary.label}</h3><p>${esc(summary.text)}</p></section>
+    ${summary?`<section class="preview-summary"><h3>${summary.label}</h3><p>${esc(summary.text)}</p></section>`:''}
     <dl class="preview-facts">
       <div><dt>Last action</dt><dd>${esc(last.label)}${last.chamber?` · ${esc(last.chamber)}`:''}${last.date?` · ${esc(dateText(last.date))}`:''}<small>${esc(last.text)}</small></dd></div>
       <div><dt>Hearing progress</dt><dd>${esc(h.label)}</dd></div>
