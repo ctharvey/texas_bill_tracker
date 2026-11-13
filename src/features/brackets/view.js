@@ -1,8 +1,8 @@
 import {validBracketIndex, bracketRows, placeCount, BRACKET_RELATIONS} from './model.js';
 
-// app.js passes in its state and helpers until src/core/ exists; importing app.js here would be a cycle.
-let state, $, esc, timeoutSignal;
-export function initBrackets(deps) { ({state, $, esc, timeoutSignal} = deps); }
+import {state} from '../../core/state.js';
+import {$, esc} from '../../core/dom.js';
+import {timeoutSignal} from '../../core/net.js';
 
 // Appended after styles.css, so these rules keep the cascade position they had at the end of its law block.
 const sheet = document.createElement('link');

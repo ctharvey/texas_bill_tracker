@@ -1,0 +1,3 @@
+// The page's one state object. Features import it from here, never from app.js.
+export const state = {view:'all',bills:[],watch:new Set(),query:'',topic:'',agency:'',chamber:'',party:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30,meta:null,luna:null,related:null,audit:null,roster:null,reviewStatus:null,sharedList:null,sharedMode:null,sharedSyncKey:null,openBill:null,todayTopic:'',todayLimit:100,todayAllTopics:false,near:null,nearGeo:null,nearPick:null,nearBusy:'',nearError:'',nearShow:{members:30,area:30},memberCode:null,memberShow:{},geoTables:null,statutes:null,statutesFailed:false,statuteKey:null,statuteCompare:null,statuteShow:'both',brackets:null,
+  follow:[],followShow:30,searches:[],renamingSearch:null};

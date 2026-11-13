@@ -1,30 +1,22 @@
 import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal,
   STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
-import {initBrackets, fillDrawerBrackets} from './features/brackets/view.js';
+import {fillDrawerBrackets} from './features/brackets/view.js';
+import {state} from './core/state.js';
+import {$, esc, toast} from './core/dom.js';
+import {timeoutSignal} from './core/net.js';
+import {registerHooks} from './core/hooks.js';
+import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
   cleanSearches, applySearchOps, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
 import {createSyncClient} from './sync.js';
 import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, followedBills, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
 import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, searchTerms, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
 
-const $ = (selector, root=document) => root.querySelector(selector);
-const esc = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state = {view:'all',bills:[],watch:new Set(),query:'',topic:'',agency:'',chamber:'',party:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30,meta:null,luna:null,related:null,audit:null,roster:null,reviewStatus:null,sharedList:null,sharedMode:null,sharedSyncKey:null,openBill:null,todayTopic:'',todayLimit:100,todayAllTopics:false,near:null,nearGeo:null,nearPick:null,nearBusy:'',nearError:'',nearShow:{members:30,area:30},memberCode:null,memberShow:{},geoTables:null,statutes:null,statutesFailed:false,statuteKey:null,statuteCompare:null,statuteShow:'both',brackets:null};
 const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last action',actionstage:'Last action stage',number:'Bill number',agencies:'Most agencies',hearing:'Hearing progress',influence:'Author influence'};
 const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
 const reviews = new Map();
-const storageKey = 'tx-bill-atlas-watch-90r';
-const STORAGE_OK = (()=>{try{localStorage.setItem('__txb_test','1');localStorage.removeItem('__txb_test');return true}catch{return false}})();
-try{state.watch=new Set(JSON.parse(localStorage.getItem(storageKey)||'[]'))}catch{}
-// Followed legislators (member codes): this browser, exported files and sync links; never share or view-only links.
-const followKey = 'tx-bill-atlas-follow-90r';
-state.follow=[];state.followShow=30;
-try{state.follow=cleanFollows(JSON.parse(localStorage.getItem(followKey)||'[]'))}catch{}
-// Saved searches: same rules as follows (browser, files, sync links; never share or view-only links).
-const searchesKey = 'tx-bill-atlas-searches-90r';
-state.searches=[];state.renamingSearch=null;
-try{state.searches=cleanSearches(JSON.parse(localStorage.getItem(searchesKey)||'[]'))}catch{}
+loadSaved();
 
 const shortDate = iso => iso ? new Date(`${String(iso).slice(0,10)}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}) : '';
 const dateText = iso => iso ? new Date(`${String(iso).slice(0,10)}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}) : 'Not available';
@@ -33,12 +25,12 @@ const unique = a => [...new Set(a)];
 
 const realAgencies = b => b.agencies.filter(a=>a.id!==SCOPE_AGENCY_ID);
 const safeHref = value => {try{const u=new URL(String(value));return u.protocol==='https:'||u.protocol==='http:'?u.href:''}catch{return ''}};
-const timeoutSignal = ms => {if(typeof AbortSignal!=='undefined'&&typeof AbortSignal.timeout==='function')return AbortSignal.timeout(ms);const c=new AbortController();setTimeout(()=>c.abort(),ms);return c.signal};
 const NAME_TO_AGENCY_ID = new Map(AGENCIES.flatMap(a=>[[a.name.toLowerCase(),a.id],[a.id.toLowerCase(),a.id]]));
 
 const normalized=normalizeBill;
 
 async function init(){
+  registerHooks({renderContent, renderOverview, showDrawer, toast});
   const now=new Date();
   $('.day-box').textContent=new Intl.DateTimeFormat('en-US',{day:'2-digit',timeZone:'America/Chicago'}).format(now);
   $('.heading-date strong').textContent=new Intl.DateTimeFormat('en-US',{month:'short',year:'numeric',timeZone:'America/Chicago'}).format(now).toUpperCase();
@@ -134,7 +126,6 @@ async function init(){
   },60000);
 }
 
-const disclaimerKey='tx-bill-atlas-disclaimer-v1';
 function setupDisclaimer(){
   const dialog=$('#disclaimer');
   if(!dialog||typeof dialog.showModal!=='function')return;
@@ -148,10 +139,6 @@ function setupDisclaimer(){
 }
 
 // ---- Saving choices without accounts: URL state, remembered filters, files and private sync links ----
-const prefsKey='tx-bill-atlas-prefs-v1';
-const readJson=key=>{try{return JSON.parse(localStorage.getItem(key)||'null')}catch{return null}};
-const writeJson=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value))}catch{}};
-const memoryStorage=()=>{const m=new Map();return {getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)}};
 const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>[...state.watch],getFollows:()=>[...state.follow],getSearches:()=>state.searches});
 let syncAvailable=null,lastPull=0;
 const siteBase=()=>location.href.split('#')[0];
@@ -892,7 +879,6 @@ function fillDrawerStatutes(id){
 }
 
 // ---- Population brackets: src/features/brackets/view.js ----
-initBrackets({state, $, esc, timeoutSignal});
 
 // One side of the comparison: Current law, or one version (a group of bills with the same wording).
 function lawOptions(doc,groups){
@@ -1250,7 +1236,6 @@ function handleAgencyKeydown(event){
   next.scrollIntoView({block:'nearest'});
   return true;
 }
-function toast(message){const t=$('#toast');t.textContent=message;t.classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove('visible'),2500)}
 
 function handleClick(e){
   const agencyOption=e.target.closest('[data-agency-option]');
