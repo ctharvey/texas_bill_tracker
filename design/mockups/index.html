@@ -184,23 +184,12 @@ body[data-sel="pointer"] .card[aria-selected="true"]::after{content:"";position:
   border:9px solid transparent;border-left:12px solid var(--accent);border-right:0}
 body[data-sel="pointer"] .card[aria-selected="true"] .num{color:var(--accent)}
 body[data-sel="pointer"] .preview{box-shadow:inset 0 3px 0 var(--accent)}
-/* Star: a shimmering ring spins around the card while a star runs laps along its edge. Cheesy on purpose. */
-@property --spin{syntax:"<angle>";inherits:false;initial-value:0deg}
-@keyframes spin{to{--spin:360deg}}
-@keyframes lap{to{offset-distance:100%}}
-body[data-sel="star"] .card[aria-selected="true"]{z-index:2;border-color:transparent}
-body[data-sel="star"] .card[aria-selected="true"]::before{content:"";position:absolute;inset:-4px;border-radius:calc(var(--radius) + 4px);padding:3px;
-  background:conic-gradient(from var(--spin),var(--accent),var(--mark),#fff6c8,var(--mark),var(--accent),var(--p,var(--accent)),var(--accent));
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
-  animation:spin 2.4s linear infinite;pointer-events:none}
-/* The Texas flag star: white, outlined in dark navy; it travels the ring at a steady pace */
-body[data-sel="star"] .card[aria-selected="true"]::after{content:"\2605";position:absolute;left:0;top:0;font-size:24px;line-height:1;color:#fff;
-  -webkit-text-stroke:2px #0f1c33;paint-order:stroke fill;filter:drop-shadow(0 1px 1.5px #0006);
-  offset-path:inset(-2.5px round calc(var(--radius) + 3px));offset-anchor:center;offset-rotate:0deg;
-  animation:lap 7s linear infinite;pointer-events:none}
+/* Star: a plain accent border all round (the party bar gives way to it) and a Texas flag star centred on the left edge.
+   Padding grows to keep the text where it sits on an unselected card (1px border + 4px party bar before, 2px all round now). */
+body[data-sel="star"] .card[aria-selected="true"]{z-index:2;border:2px solid var(--accent);padding:13px 13px 13px 18px}
+body[data-sel="star"] .card[aria-selected="true"]::after{content:"\2605";position:absolute;left:-14px;top:50%;translate:0 -50%;font-size:24px;line-height:1;color:#fff;
+  -webkit-text-stroke:2px #0f1c33;paint-order:stroke fill;filter:drop-shadow(0 1px 1.5px #0006);pointer-events:none}
 body[data-sel="star"] .card[aria-selected="true"] .title a{color:var(--accent)}
-@media (prefers-reduced-motion:reduce){body:not([data-motion="on"])[data-sel="star"] .card[aria-selected="true"]::before,
-  body:not([data-motion="on"])[data-sel="star"] .card[aria-selected="true"]::after{animation:none}}
 /* Lift: the card rises with a soft shadow; the rest of the list steps back slightly */
 body[data-sel~="lift"] .card{transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s,opacity .2s}
 body[data-sel="lift"] .list:has(.card[aria-selected="true"]) .card:not([aria-selected="true"]){opacity:.62}
