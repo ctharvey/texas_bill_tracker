@@ -372,8 +372,17 @@ mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;
 .active-filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 6px}.active-filters:empty{display:none}
 .filter-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid color-mix(in srgb,var(--accent) 30%,var(--surface));background:var(--teal-soft);color:var(--teal);border-radius:calc(30px*var(--rs));padding:6px 11px;font-size:12px;font-weight:700}
 .filter-chip:hover{border-color:var(--teal)}.filter-chip span{font-size:14px;line-height:1}
-.text-button{border:0;background:none;color:var(--muted);font-size:12px;font-weight:700;text-decoration:underline;padding:6px 4px}.text-button:hover{color:var(--ink)}
+.text-button:hover{color:var(--ink)}
 .share-menu{position:relative}.share-menu>summary{list-style:none;cursor:pointer}.share-menu>summary::-webkit-details-marker{display:none}
 .share-panel{position:absolute;right:0;top:calc(100% + 6px);z-index:20;min-width:210px;display:grid;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:calc(10px*var(--rs));box-shadow:0 12px 28px rgba(20,36,58,.14)}
 .share-panel button{border:0;background:none;text-align:left;padding:10px 12px;border-radius:calc(7px*var(--rs));font-size:13px;color:var(--ink)}.share-panel button:hover{background:var(--teal-soft);color:var(--teal)}
 @media(max-width:760px){.share-panel{right:auto;left:0}}
+
+/* Watchlist (D8): bills first; saving, sharing and sync fold into one line that keeps the sync state in view. */
+.watch-save{background:var(--surface);border:1px solid var(--line);border-radius:calc(12px*var(--rs));margin-bottom:15px}
+.watch-save>summary{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;list-style:none;font-weight:700;font-size:13px}
+.watch-save>summary::-webkit-details-marker{display:none}.watch-save>summary::after{content:'▾';margin-left:auto;color:var(--muted)}.watch-save[open]>summary::after{content:'▴'}
+.watch-sync-state{font-weight:600;font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.watch-sync-state::before{content:'';width:8px;height:8px;border-radius:50%;background:color-mix(in srgb,var(--ink) 25%,var(--surface))}
+.watch-sync-state.synced{color:var(--teal)}.watch-sync-state.synced::before{background:var(--teal)}
+.watch-save>.watch-tools{margin:0;padding:14px;border-top:1px solid var(--line)}

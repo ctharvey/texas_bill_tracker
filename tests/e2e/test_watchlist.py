@@ -4,6 +4,8 @@ import json
 
 from playwright.sync_api import expect
 
+from harness import reveal
+
 WATCH_KEY = "tx-bill-atlas-watch-90r"
 
 
@@ -86,7 +88,9 @@ def test_empty_watchlist_shows_hint_and_disabled_share(device):
     page = device.open("#watchlist")
     expect(page.locator("#result-count")).to_have_text("0 bills")
     expect(page.locator("#bill-list")).to_contain_text("Star bills from the explorer to follow them here.")
+    reveal(page, "#share-watch")
     expect(page.locator("#share-watch")).to_be_disabled()
+    reveal(page, "#export-watch")
     expect(page.locator("#export-watch")).to_be_disabled()
 
 
@@ -95,6 +99,7 @@ def test_export_file_is_download_of_watchlist(device):
     star(page, "HB110").click()
     device.open("#watchlist")
     with page.expect_download() as dl:
+        reveal(page, "#export-watch")
         page.locator("#export-watch").click()
     download = dl.value
     assert download.suggested_filename == "texas-bill-atlas-saved.json"
@@ -134,3 +139,20 @@ def test_import_file_without_bills_fails_and_changes_nothing(device, tmp_path):
     expect(page.locator("#toast")).to_have_text("Import failed: No Texas bill numbers found")
     expect(page.locator("#nav-watch")).to_have_text("0")
     assert WATCH_KEY not in device.storage() or json.loads(device.storage()[WATCH_KEY]) == []
+
+
+def test_saving_tools_fold_into_one_line_that_shows_the_sync_state(device):
+    # D8: the bills come first; saving, sharing and sync sit behind one line that keeps the sync state in view.
+    page = device.open("#watchlist")
+    tools = page.locator("#watch-save")
+    expect(tools).not_to_have_attribute("open", "")
+    expect(tools.locator(".watch-sync-state")).to_have_text("This device only")
+    expect(page.locator("#share-watch")).to_be_hidden()
+    tools.locator("summary").click()
+    expect(page.locator("#share-watch")).to_be_visible()
+    # Starring from the list redraws it; the tools stay open.
+    page.evaluate("location.hash = '#all?query=HB110'")
+    star(page, "HB110").click()
+    page.evaluate("location.hash = '#watchlist'")
+    expect(watched_cards(page)).to_have_count(1)
+    expect(page.locator("#watch-save")).to_have_attribute("open", "")

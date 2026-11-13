@@ -54,8 +54,10 @@ def owner_with_link(device_factory):
     follow(a, MEMBER)
     save_search(a)
     page = a.open("#watchlist")
+    reveal(page, "#sync-create")
     page.click("#sync-create")
     expect(page.locator("#toast")).to_have_text("Sync link created. Copy the edit link to your other devices.")
+    reveal(page, "#sync-copy-edit")
     expect(page.locator("#sync-copy-edit")).to_be_visible()
     texts = {}
     for name, button in (("edit", "#sync-copy-edit"), ("view", "#sync-copy-view")):
@@ -126,6 +128,7 @@ def test_second_device_opens_the_edit_link_and_gets_everything(device_factory, f
     for bill in WATCH:
         expect(page.locator(f"#bill-list [data-watch='{bill}']")).to_have_attribute("aria-pressed", "true")
     assert key_of(edit) not in page.url and "sync=" not in page.url  # edit key never in the address bar
+    reveal(page, "#sync-copy-edit")
     expect(page.locator("#sync-copy-edit")).to_be_visible()
     page = b.open("#following")
     expect(page.locator(".followed-member")).to_have_count(1)
@@ -245,11 +248,15 @@ def test_deleting_the_link_keeps_the_list_on_the_device(device_factory, fresh_sy
     b.open(hash_of(edit))
     expect(b.page.locator("#toast")).to_have_text("This device is now synced")
     page = a.open("#watchlist")
+    reveal(page, "#sync-delete")
     page.click("#sync-delete")
+    reveal(page, "#sync-delete")
     expect(page.locator("#sync-delete")).to_have_text("Click again to delete for every device")  # arms; nothing deleted yet
     assert server_data(a, key_of(edit))["data"]["watch"] == WATCH
+    reveal(page, "#sync-delete")
     page.click("#sync-delete")
     expect(page.locator("#toast")).to_have_text("Sync link deleted; your list stays on this device")
+    reveal(page, "#sync-create")
     expect(page.locator("#sync-create")).to_be_visible()  # offers a new link; no longer synced
     expect(page.locator("#nav-watch")).to_have_text(str(len(WATCH)))
     for bill in WATCH:
@@ -273,6 +280,7 @@ def test_deleting_the_link_keeps_the_list_on_the_device(device_factory, fresh_sy
 def test_stop_syncing_keeps_the_list_and_leaves_the_link_alive(device_factory, fresh_sync):
     a, edit, _ = owner_with_link(device_factory)
     page = a.open("#watchlist")
+    reveal(page, "#sync-forget")
     page.click("#sync-forget")
     expect(page.locator("#toast")).to_have_text("This device stopped syncing; your list stays here")
     assert SYNC_KEY not in a.storage()

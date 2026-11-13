@@ -104,12 +104,15 @@ def main() -> int:
 
         # Sync link, created last so the server holds everything above.
         go("#watchlist")
+        harness.reveal(page, "#sync-create")
         page.click("#sync-create")
+        harness.reveal(page, "#sync-copy-edit")
         expect(page.locator("#sync-copy-edit")).to_be_visible()
         page.wait_for_function("localStorage.getItem('tx-bill-atlas-sync-v1')")
 
         # The profile file, exactly as the UI downloads it.
         with page.expect_download() as dl:
+            harness.reveal(page, "#export-watch")
             page.click("#export-watch")
         profile_name = dl.value.suggested_filename
         dl.value.save_as(OUT / "profile-file.json")
