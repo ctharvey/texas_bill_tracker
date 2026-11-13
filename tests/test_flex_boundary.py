@@ -279,6 +279,37 @@ class HeldCallTests(BoundaryCase):
             self.run_once(b, REQ2)
         self.assertEqual(len(self.sdk.calls), 1)
 
+    def test_hold_turns_a_leftover_pending_row_into_a_held_call_so_other_requests_go_on(self):
+        b = self.boundary([TimeoutError("t"), OK])
+        save = b.spend._save
+        def refuse_held(data):
+            if any(row.get("held") for rows in data.values() for row in rows.values()):
+                raise OSError("disk full")
+            save(data)
+        b.spend._save = refuse_held
+        with self.assertRaises(cth_flex.UncertainOutcome):
+            self.run_once(b)
+        b.spend._save = save
+        key = fb.FlexBoundary.key(REQ)
+        listing = io.StringIO()
+        with contextlib.redirect_stdout(listing):
+            self.assertEqual(fb.main(["--cache-dir", str(self.dir)]), 0)
+        self.assertIn(key + " pending (no recorded outcome; settle with --hold " + key + ")", listing.getvalue())
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(fb.main(["--cache-dir", str(self.dir), "--hold", key]), 0)
+        self.assertIn("Held " + key, out.getvalue())
+        [(_, held_key, row)] = b.held()
+        self.assertEqual((held_key, row["error_type"]), (key, "PendingAfterStop"))
+        self.assertGreater(row["cost"], 0)  # booked at its reservation
+        self.assertEqual(self.run_once(b, REQ2).response, OK)  # no longer blocks other calls
+        with self.assertRaises(ec.UnresolvedCall):  # and is never resent by itself
+            self.run_once(b)
+        self.assertEqual(len(self.sdk.calls), 2)
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(fb.main(["--cache-dir", str(self.dir), "--hold", key]), 1)  # no longer pending
+
+
     def test_release_keeps_the_booked_bound_and_lets_the_request_be_sent_once_more(self):
         b = self.boundary([TimeoutError("t"), OK])
         with self.assertRaises(cth_flex.UncertainOutcome):

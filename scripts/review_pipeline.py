@@ -14,6 +14,7 @@ from pathlib import Path
 import re
 import threading
 import time
+import traceback
 from collections import Counter, deque
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from urllib.request import Request, urlopen
@@ -37,6 +38,14 @@ CODE_IDS = {"Water Code": "WA", "Health and Safety Code": "HS", "Occupations Cod
 # Only these not-submitted reasons are specific to one bill. Every other one (budget, unresolved billing,
 # missing key or dependencies) is environmental and stops the run, so bills are never marked seen in bulk.
 PER_BILL_NOT_SUBMITTED = ("LongContext", "AlreadyBilled")
+# OutcomeUnresolved covers both a leftover pending row and the held-call cap.
+UNRESOLVED_STEP = ("an earlier call's outcome is unresolved; list calls with scripts/flex_boundary.py --cache-dir "
+                   "CACHE, then --hold a leftover pending one or --release a reconciled held one")
+NOT_SUBMITTED_STEPS = {
+    "BudgetExceeded": "spending limit reached; queued work resumes in the next run",
+    "OutcomeUnresolved": UNRESOLVED_STEP,
+    "LedgerUnavailable": "the spend ledger could not be read; check the cache directory's disk and permissions",
+}
 # Review errors the worker loop records against one bill and continues past; any other error stops the run.
 PER_BILL_ERRORS = (CacheCoolingDown, CacheBusy, CapacityUnavailable, OSError, ValueError)
 LEDGER_ZONE = "America/Chicago"
@@ -51,7 +60,40 @@ def held_outcome(error: BaseException) -> bool:
 
 def held_note(error: BaseException) -> str:
     key = getattr(error, "request_key", None)
-    return ("request %s; release it with scripts/flex_boundary.py --release once reconciled" % key) if key else ""
+    return ("request %s; check the provider usage log, then release it with "
+            "scripts/flex_boundary.py --cache-dir CACHE --release %s" % (key, key)) if key else ""
+
+
+class WorkerStopped(RuntimeError):
+    """A stop this module raises. Its message holds only type names and request keys, so it is safe to print."""
+
+
+def next_step(error: BaseException) -> str:
+    """What the operator does about one error line. Never includes the error's own text (SDK messages may carry
+    request or credential details); `WorkerStopped` messages are built here and are the one exception."""
+    if isinstance(error, WorkerStopped):
+        return str(error)
+    if held_outcome(error):
+        return held_note(error) or UNRESOLVED_STEP
+    if isinstance(error, (CacheCoolingDown, CacheBusy)):
+        return "retried automatically in a later run"
+    if isinstance(error, CapacityUnavailable):
+        return "provider capacity; retried automatically"
+    if isinstance(error, BudgetExceeded):
+        return "spending limit reached; queued work resumes in the next run"
+    if isinstance(error, OutcomeUnresolved):
+        return UNRESOLVED_STEP
+    if isinstance(error, ApiStopped) or getattr(error, "code", None) in (
+            "insufficient_quota", "invalid_api_key", "billing_hard_limit_reached"):
+        return "check the provider account (quota, billing or API key); runs keep stopping until it is fixed"
+    if isinstance(error, MarkdownOnly):
+        return "run with --input markdown"
+    if isinstance(error, (OSError, ValueError)):
+        return "retried in a later run; repeated new failures stop the run as a likely outage"
+    frames = traceback.extract_tb(error.__traceback__)[-2:]
+    where = " <- ".join("%s:%d in %s" % (Path(f.filename).name, f.lineno, f.name) for f in reversed(frames))
+    return "unexpected error%s; the bill stays queued, so fix the cause before the next run" % (
+        " at " + where if where else "")
 
 
 def ledger_day() -> str:
@@ -445,8 +487,14 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
                 pending.append({**question, "reason": type(error).__name__})
                 pending.extend({**q, "reason": "Deferred with preceding request"} for q in questions[index+1:])
                 break
-            if any(row.get("state") == "pending" for day in budget.ledger.values() for row in day.values()):
-                raise RuntimeError("Unknown request outcome; worker stopped") from None
+            stuck = sorted(key for day in budget.ledger.values() for key, row in day.items()
+                           if row.get("state") == "pending")
+            if stuck:
+                raise WorkerStopped(
+                    "Unknown request outcome; worker stopped after %s. Pending request %s; check the provider "
+                    "usage log, then run scripts/flex_boundary.py --cache-dir CACHE --hold %s"
+                    % (type(error).__name__, ", ".join(stuck[:3]) + (" (+%d more)" % (len(stuck) - 3) if len(stuck) > 3 else ""),
+                       stuck[0])) from None
             if isinstance(error, ApiStopped) or getattr(error, "code", None) in (
                     "insufficient_quota", "invalid_api_key", "billing_hard_limit_reached"):
                 raise
@@ -1235,19 +1283,20 @@ def _second_pass(label: str, jobs, args, deadline: float, refused: RefusedBills 
                 break
             continue
         except (CacheCoolingDown, CacheBusy, OSError, ValueError) as error:
-            print(bill_id, f"{label.lower()} skipped:", type(error).__name__, flush=True)
+            print(bill_id, f"{label.lower()} skipped:", type(error).__name__, "-", next_step(error), flush=True)
             continue
         except Exception as error:
             if held_outcome(error):
-                print(bill_id, f"{label.lower()} held:", type(error).__name__, held_note(error), flush=True)
+                print(bill_id, f"{label.lower()} held:", type(error).__name__, "-", next_step(error), flush=True)
                 continue
-            print(bill_id, "stopped", type(error).__name__, f"({label.lower()})", flush=True)
+            print(bill_id, "stopped", type(error).__name__, f"({label.lower()})", "-", next_step(error), flush=True)
             raise SystemExit(2)
         if report.get("action") == "not_submitted":
             if report.get("reason_type") in PER_BILL_NOT_SUBMITTED:
                 continue
             if args.execute:
-                print(f"{label} stopped:", report.get("reason_type"), flush=True)
+                print(f"{label} stopped:", report.get("reason_type"), "-", NOT_SUBMITTED_STEPS.get(
+                    report.get("reason_type"), "nothing more is sent this run; see the run's earlier lines"), flush=True)
             break  # budget, an unresolved outcome, or a dry run: nothing more is sent this run
         save(report)
         if refused is not None:
@@ -1604,11 +1653,11 @@ def main():
                     bundle["stop_run"], bundle["retry_after"] = "CapacityUnavailable (fiscal check)", error.retry_after
                     return
                 except (CacheCoolingDown, CacheBusy, OSError, ValueError) as error:
-                    print(bill_id, "fiscal check skipped:", type(error).__name__, flush=True)
+                    print(bill_id, "fiscal check skipped:", type(error).__name__, "-", next_step(error), flush=True)
                     return  # retried on a later visit; never billed
                 except Exception as error:
                     if held_outcome(error):
-                        print(bill_id, "fiscal check held:", type(error).__name__, held_note(error), flush=True)
+                        print(bill_id, "fiscal check held:", type(error).__name__, "-", next_step(error), flush=True)
                         return  # this check waits for an operator; never resent
                     # Unknown outcome, quota or budget: the run stops after this bill's review is recorded.
                     bundle["stop_run"] = type(error).__name__ + " (fiscal check)"
@@ -1640,13 +1689,14 @@ def main():
                     new_failures += bill_id not in queue['failed'] and not waiting
                     record_failure(queue, bill_id, 'download', value)
                     atomic_json(queue_path, queue)
-                    print(bill_id, "download_failed", type(value).__name__, flush=True)
+                    print(bill_id, "download_failed", type(value).__name__, "-",
+                          "waiting for posted text" if waiting else next_step(value), flush=True)
                     if new_failures >= OUTAGE_LIMIT:
                         print("Stopped: repeated new failures; FTP or storage may be unavailable", flush=True)
                         return True
                     return False
                 if kind == "download_stopped":
-                    print(bill_id, "stopped", type(value).__name__, flush=True)
+                    print(bill_id, "stopped", type(value).__name__, "-", next_step(value), flush=True)
                     raise SystemExit(2)
                 if kind == "error":
                     error = value
@@ -1656,7 +1706,7 @@ def main():
                         if bill_id in queue['seen'] and bill_id not in queue['retry']:
                             queue['retry'].append(bill_id)
                         atomic_json(queue_path, queue)
-                        print(bill_id, "deferred", type(error).__name__, flush=True)
+                        print(bill_id, "deferred", type(error).__name__, "-", next_step(error), flush=True)
                         return False
                     if isinstance(error, (BudgetExceeded, CapacityUnavailable)):
                         if bill_id in queue['seen'] and bill_id not in queue['retry']:
@@ -1665,14 +1715,14 @@ def main():
                         if isinstance(error, CapacityUnavailable):
                             defer_for_capacity(bill_id, error.retry_after)
                             return False
-                        print(bill_id, "deferred", type(error).__name__, flush=True)
+                        print(bill_id, "deferred", type(error).__name__, "-", next_step(error), flush=True)
                         print("Deferred: budget/capacity guard", flush=True)
                         return True
                     if isinstance(error, (OSError, ValueError)):
                         new_failures += bill_id not in queue['failed']
                         record_failure(queue, bill_id, 'processing', error)
                         atomic_json(queue_path, queue)
-                        print(bill_id, "failed", type(error).__name__, flush=True)
+                        print(bill_id, "failed", type(error).__name__, "-", next_step(error), flush=True)
                         if new_failures >= OUTAGE_LIMIT:
                             print("Stopped: repeated new failures; FTP or storage may be unavailable", flush=True)
                             return True
@@ -1681,16 +1731,18 @@ def main():
                         # Only this bill waits for an operator (its call is never resent); other bills go on.
                         record_failure(queue, bill_id, 'held', error)
                         atomic_json(queue_path, queue)
-                        print(bill_id, "held", type(error).__name__, held_note(error), flush=True)
+                        print(bill_id, "held", type(error).__name__, "-", next_step(error), flush=True)
                         return False
-                    print(bill_id, "stopped", type(error).__name__, flush=True)
+                    print(bill_id, "stopped", type(error).__name__, "-", next_step(error), flush=True)
                     raise SystemExit(2)
                 bundle = value
                 new_failures = 0
                 status = bundle["status"]
                 if status in ("deferred", "prepared"):
                     # Nothing was reviewed: leave queue state and any earlier review untouched.
-                    print(bill_id, status, bundle["first_pass"].get("reason_type", ""), flush=True)
+                    reason_type = bundle["first_pass"].get("reason_type", "")
+                    print(bill_id, status, reason_type, *(("-", NOT_SUBMITTED_STEPS[reason_type])
+                                                         if reason_type in NOT_SUBMITTED_STEPS else ()), flush=True)
                     if status == "deferred":
                         print("Deferred: budget/capacity guard", flush=True)
                         return True
@@ -1729,7 +1781,9 @@ def main():
                     defer_for_capacity(bill_id, bundle.get("retry_after") or 0)
                     return False
                 if stop_run:
-                    print("Deferred: budget/capacity guard during review questions", flush=True)
+                    print("Deferred: budget/capacity guard during review questions -", stop_run, "-",
+                          NOT_SUBMITTED_STEPS.get(stop_run.split()[0].rstrip(":"), "queued work resumes in the next run"),
+                          flush=True)
                     return True
                 capacity_waits = 0
                 return False

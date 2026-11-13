@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-12
+- Review worker errors are actionable: stopped, failed, held and deferred lines end with the next step (never the
+  provider's error text), an unexpected stop names the code location, and an unknown-outcome stop names the pending
+  request. `scripts/flex_boundary.py` lists pending rows and `--hold <key>` turns a leftover one into a held call.
 - Tags made consistent:
   - Bill cards no longer show "Tenure documented" (it only said a service record existed). The author pill now uses
     the same tenure tag as member lists, by time in the current chamber: "Senior author" or "First-term author",

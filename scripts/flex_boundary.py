@@ -287,6 +287,26 @@ class FlexBoundary:
             raise flex_ledger.OutcomeUnresolved(
                 f"{count} calls are held with unknown outcomes; new calls are blocked until an operator releases them")
 
+    def pending_rows(self) -> list[tuple[str, str, dict]]:
+        """(day, request key, row) for every pending row: a call with no recorded outcome (e.g. a crash mid-send)."""
+        with self.spend._locked() as data:
+            return [(day, key, row) for day, rows in data.items() for key, row in rows.items()
+                    if isinstance(row, dict) and row.get("state") == "pending"]
+
+    def hold_pending(self, key: str) -> float:
+        """Operator, with no run active: turn a leftover pending row into a held call booked at its reservation, so
+        new calls may go again while only its bill waits (release it later with --release). Returns the booking."""
+        with self.spend._locked() as data:
+            for rows in data.values():
+                row = rows.get(key)
+                if isinstance(row, dict) and row.get("state") == "pending":
+                    bound = float(row.get("reserved", 0))
+                    rows[key] = {"state": "returned", "cost": bound, "reserved": 0, "held": True,
+                                 "held_at": time.time(), "error_type": "PendingAfterStop"}
+                    self.spend._save(data)
+                    return bound
+        raise KeyError(key)
+
     def release_held(self, key: str) -> str:
         """Operator: let one held request be sent again (e.g. after checking the provider's usage log). Its booked
         bound stays in the ledger under a renamed key; the ledger row moves first, so a failure in between leaves the
@@ -313,6 +333,8 @@ def main(argv=None) -> int:
                                                  "their upper bound). Check the provider usage log before releasing.")
     parser.add_argument("--cache-dir", type=Path, required=True)
     parser.add_argument("--release", metavar="REQUEST_KEY", help="let this held request be sent again")
+    parser.add_argument("--hold", metavar="REQUEST_KEY",
+                        help="book a leftover pending request at its reservation and hold it, so other bills go on")
     args = parser.parse_args(argv)
     try:
         lock = ResponseCache(args.cache_dir / "worker-lock")._lock("worker")
@@ -322,8 +344,16 @@ def main(argv=None) -> int:
         return 1
     try:
         boundary = FlexBoundary(args.cache_dir, None, None)
+        if args.hold:
+            try:
+                print("Held", args.hold, "(booked $%.6f; release it once reconciled)" % boundary.hold_pending(args.hold))
+            except KeyError:
+                print("No pending request", args.hold, file=sys.stderr)
+                return 1
         if args.release:
             print("Released", args.release, "(booked cost kept as", boundary.release_held(args.release) + ")")
+        for day, key, row in boundary.pending_rows():
+            print(day, key, "pending (no recorded outcome; settle with --hold %s)" % key)
         for day, key, row in boundary.held():
             print(day, key, "booked $%.6f" % row.get("cost", 0), row.get("error_type", ""))
     finally:

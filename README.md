@@ -522,13 +522,18 @@ Call reduction and cache rules:
 - OS locks prevent identical concurrent submissions; writes are atomic. A pending crash, timeout or corrupt
   entry blocks resubmission until its outcome is reconciled. Do not delete uncertain entries merely to retry:
   inspect the private request/time and provider logs first. Known capacity rejections have a cooldown.
-- Held calls (flex): the journal prints `<bill> held UncertainOutcome request <key>` and the bill is listed in the
+- Held calls (flex): the journal prints `<bill> held UncertainOutcome - request <key>; ...` and the bill is listed in the
   queue's `failed` (stage `held`) or keeps a retryable question. Revisits make no call. To reconcile, check the
   provider usage log for the request time, then, with no run active, as the service user:
   `python scripts/flex_boundary.py --cache-dir <cache> [--release <key>]` lists held calls or releases one. A release
   keeps the booked bound in the ledger under a renamed key and drops the cache entry, so the bill's next visit sends
   the request once more. Do not hand-edit the ledger: settling a row as `returned` keeps the key and the bill is
   then refused as `AlreadyBilled`.
+- Stops: every stopped/failed/held/deferred line ends with `- <next step>`, built from the error type and request
+  keys only (never the provider's error text). An unknown outcome with no held mark stops the worker with
+  `Unknown request outcome; worker stopped after <type>. Pending request <key>`. With no run active, the listing
+  above shows that row as pending; after checking the usage log, `--hold <key>` books it at its reservation and holds
+  it, so other bills go on and only that bill waits for a later `--release`.
 
 Shared instructions/schema and vocabulary precede bill-specific content. An explicit 12-hour breakpoint targets
 prompt reuse across bills/hourly runs; the changing full bill has no write breakpoint in this single-call path.

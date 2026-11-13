@@ -111,6 +111,37 @@ class WorkerLoopTests(unittest.TestCase):
                                   '--max-minutes', '1')
         self.assertEqual(queue['seen'], ['HB1', 'HB2'])
 
+    def stop_output(self, error):
+        import contextlib, io
+        def run_document(doc, *a, **k): raise error
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
+            self.run_main(lambda b, r: {'bill_id': b}, run_document)
+        return out.getvalue()
+
+    def test_an_unexpected_stop_names_where_it_failed_but_never_the_error_text(self):
+        out = self.stop_output(KeyError('sk-secret-from-sdk'))
+        self.assertIn('HB1 stopped KeyError - unexpected error at test_review_worker_loop.py:', out)
+        self.assertIn('the bill stays queued', out)
+        self.assertNotIn('sk-secret', out)
+
+    def test_an_unknown_outcome_stop_prints_the_pending_key_and_the_command(self):
+        out = self.stop_output(pipeline.WorkerStopped('Unknown request outcome; worker stopped after TimeoutError. '
+                                                      'Pending request abc; run --hold abc'))
+        self.assertIn('HB1 stopped WorkerStopped - Unknown request outcome; worker stopped after TimeoutError. '
+                      'Pending request abc', out)
+
+    def test_held_and_deferred_lines_say_what_happens_next(self):
+        held = RuntimeError('provider said sk-secret'); held.held = True; held.request_key = 'k1'
+        self.assertEqual(pipeline.next_step(held), 'request k1; check the provider usage log, then release it '
+                         'with scripts/flex_boundary.py --cache-dir CACHE --release k1')
+        self.assertEqual(pipeline.next_step(pipeline.CacheBusy('x')), 'retried automatically in a later run')
+        self.assertIn('spending limit', pipeline.next_step(pipeline.BudgetExceeded('x')))
+        quota = RuntimeError('sk-secret'); quota.code = 'insufficient_quota'
+        self.assertIn('provider account', pipeline.next_step(quota))
+        for error in (held, quota, ValueError('sk-secret'), OSError('sk-secret')):
+            self.assertNotIn('sk-secret', pipeline.next_step(error))
+
 
 class PublicStatusTests(WorkerLoopTests):
     def setUp(self):
@@ -319,6 +350,19 @@ class HeldQuestionTests(unittest.TestCase):
                 patch.object(pipeline, 'resolve', side_effect=TimeoutError('read timeout')), \
                 self.assertRaises(RuntimeError):
             pipeline.run_document({'bill_id': 'HB9'}, [], Path('.'), budget, True)
+
+
+    def test_the_unknown_outcome_stop_names_the_pending_keys_and_the_error_type_only(self):
+        first = {'result': {'uncertainties': [], 'agencies': []}, 'request_key': 'k'}
+        budget = type('Budget', (), {'ledger': {'d': {'k2': {'state': 'pending'}, 'k1': {'state': 'pending'},
+                                                      'k0': {'state': 'returned'}}},
+                                     'run_spent': 0.0, 'send': None})()
+        with patch.object(classification, 'classify', return_value=first),                 patch.object(pipeline, 'questions_for', return_value=[{'id': 'q1', 'question': 'a'}]),                 patch.object(pipeline, 'resolve', side_effect=TimeoutError('sk-secret read timeout')),                 self.assertRaises(pipeline.WorkerStopped) as stop:
+            pipeline.run_document({'bill_id': 'HB9'}, [], Path('.'), budget, True)
+        message = str(stop.exception)
+        self.assertIn('after TimeoutError. Pending request k1, k2;', message)
+        self.assertIn('scripts/flex_boundary.py --cache-dir CACHE --hold k1', message)
+        self.assertNotIn('sk-secret', message)
 
 
 class FirstPassStatusTests(unittest.TestCase):
