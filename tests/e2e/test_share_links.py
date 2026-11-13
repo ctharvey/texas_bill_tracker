@@ -5,6 +5,8 @@ import re
 
 from playwright.sync_api import expect
 
+from harness import click, reveal
+
 WATCH_KEY = "tx-bill-atlas-watch-90r"
 
 
@@ -30,7 +32,7 @@ def build_rich_profile(device):
     page.locator("button.follow-button").click()
     expect(page.locator("#toast")).to_contain_text("Following")
     device.open("#all?query=HB717")
-    page.locator("#save-search").click()
+    click(page, "#save-search")
     expect(page.locator("#toast")).to_contain_text("Saved ")
     return page
 
@@ -131,7 +133,7 @@ def test_show_all_bills_leaves_the_shared_list(device_factory):
 def test_copy_view_link_copies_current_url_with_filters(device):
     allow_clipboard(device)
     page = device.open("#all?query=HB110&chamber=House")
-    page.locator("#copy-view-link").click()
+    click(page, "#copy-view-link")
     expect(page.locator("#toast")).to_have_text("Link to this view copied")
     assert clipboard(page) == device.site.base + "#all?query=HB110&chamber=House"
 

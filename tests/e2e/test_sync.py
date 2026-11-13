@@ -13,6 +13,8 @@ import time
 
 from playwright.sync_api import expect
 
+from harness import click, reveal
+
 WATCH = ["HB110", "HB239"]
 MEMBER = "A4395"
 SYNC_KEY = "tx-bill-atlas-sync-v1"
@@ -38,7 +40,7 @@ def follow(device, code):
 def save_search(device, chamber="House"):
     page = device.open("#all")
     page.select_option("#filter-chamber", label=chamber)
-    page.click("#save-search")
+    click(page, "#save-search")
     page.wait_for_function("JSON.parse(localStorage.getItem('tx-bill-atlas-searches-90r')||'[]').length>=1")
 
 

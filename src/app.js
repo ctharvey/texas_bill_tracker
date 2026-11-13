@@ -119,6 +119,8 @@ async function init(){
   document.addEventListener('focusin',event=>{
     if(event.target.id==='filter-agency')showAgencyChoices('');
   });
+  document.addEventListener('toggle',e=>{if(e.target.id==='more-filters')state.moreFiltersOpen=e.target.open},true);
+  document.addEventListener('click',e=>{const m=$('#share-menu');if(m?.open&&(!m.contains(e.target)||e.target.closest('.share-panel button')))setTimeout(()=>{m.open=false})});
   document.addEventListener('keydown',event=>{
     if(event.key==='Escape'&&preview.id&&!$('#bill-preview')?.hidden){closePreview();return}
     if(event.key==='Escape'&&$('.sidebar').classList.contains('nav-open')){setNavOpen(false);$('#nav-more').focus()}
@@ -539,14 +541,36 @@ function agencySortButtons(){
 }
 
 const SEARCH_EXAMPLES=[...SEARCH_FIELDS.filter(f=>f.example).map(f=>f.example),'"minimum wage"'];
+// ---- Filters (D6) ----
+const MORE_FILTERS=['agency','party','outlook','action','onlyWatch'];
+const moreActive=()=>MORE_FILTERS.filter(k=>Boolean(state[k])).length;
+// Open when the reader opened it, or when one of its filters is set (an address can set them).
+const moreFiltersOpen=()=>Boolean(state.moreFiltersOpen)||moreActive()>0;
+const moreCountText=()=>moreActive()?` · ${moreActive()}`:'';
+// Each set filter as [key, label]; a chip's × clears that one key.
+function activeFilters(){
+  return [['query',state.query&&`Search “${state.query}”`],['topic',state.topic&&`Policy area: ${state.topic}`],['chamber',state.chamber],
+    ['stage',state.stage&&`Stage: ${state.stage}`],['agency',state.agency&&`Agency: ${agencyName(state.agency)}`],['party',state.party&&`Party: ${state.party}`],
+    ['outlook',state.outlook&&`Hearing: ${state.outlook}`],['action',state.action&&`Last action: ${state.action}`],['onlyWatch',state.onlyWatch&&'Watched only']].filter(([,label])=>label);
+}
+function activeFiltersMarkup(){
+  const set=activeFilters();
+  if(!set.length)return '';
+  return `${set.map(([key,label])=>`<button type="button" class="filter-chip" data-clear-filter="${key}" aria-label="Remove filter: ${esc(label)}">${esc(label)} <span aria-hidden="true">×</span></button>`).join('')}<button type="button" class="text-button" id="clear-filters">Clear all</button>`;
+}
+function clearFilter(key){
+  state[key]=key==='onlyWatch'?false:'';
+  state.visibleCount=30;renderContent();
+}
+
 function explorerMarkup(){
   const topics=unique([...POLICY_AREAS.map(t=>t.name),...state.bills.flatMap(b=>b.topics)]).sort();
   const popular=['Education','Healthcare','Elections','Taxes','Immigration','Data centers','Local government','Energy & utilities'];
   return `${sharedBanner()}${state.view==='watchlist'?watchTools():''}
-    <div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" maxlength="200" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><button class="outline-button" id="clear-filters">Clear filters</button><button class="outline-button" id="copy-view-link" title="Copy a link to this view, with its filters">Copy link</button>${state.view==='all'&&!state.sharedList?'<button class="outline-button" id="save-search" title="Keep this search and its filters under Following">Save search</button>':''}<button class="primary-button" id="export-csv">↓ Export results</button></div><details class="search-help"><summary>What search looks at</summary><p>Every word you type has to appear somewhere in the bill, in any order. It looks in: ${SEARCH_FIELDS.map(f=>esc(f.label)).join(', ')}. Luna's search terms are words it added to help find a bill; they are not shown on the card, so each result says which field matched.</p><p>Put words in "double quotes" to keep them together. A plural also finds the singular ("wages" finds "wage"). A section number such as <em>Penal Code 46.06</em> finds the bills that change it.</p><p class="search-examples">Try: ${SEARCH_EXAMPLES.map(x=>`<button type="button" class="search-example" data-search-example="${esc(x)}">${esc(x)}</button>`).join('')}</p></details>
-    <div class="filter-row"><select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><div class="agency-combobox" id="agency-combobox"><input aria-label="Affected agency" aria-controls="agency-options" aria-expanded="false" aria-autocomplete="list" role="combobox" id="filter-agency" placeholder="All affected agencies" value="${esc(state.agency?agencyName(state.agency):'')}" autocomplete="off"><span class="agency-chevron" aria-hidden="true">⌄</span><div class="agency-panel" id="agency-panel" hidden><div class="agency-sort" role="group" aria-label="Sort agencies">${agencySortButtons()}</div><div class="agency-options" id="agency-options" role="listbox" hidden>${agencyOptionsMarkup()}</div></div></div><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Author party" id="filter-party" title="Republican or Democratic: the primary author's party, with no author or coauthor from the other party. Bipartisan: authors or coauthors from both parties.">${options(Object.keys(PARTY_FILTERS),state.party,'Any party')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted'],state.stage,'Any stage')}</select><select aria-label="Hearing status" id="filter-outlook">${options([NO_HEARING,'Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><select aria-label="Last action" id="filter-action">${options(unique([...LAST_ACTION_TYPES.map(t=>t.label),'Other action']).filter(l=>l===state.action||state.bills.some(b=>lastActionInfo(b).label===l)),state.action,'Any last action')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></div>
+    <div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" maxlength="200" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><details class="share-menu" id="share-menu"><summary class="outline-button">Share / save</summary><div class="share-panel"><button type="button" id="copy-view-link" title="Copy a link to this view, with its filters">Copy link</button>${state.view==='all'&&!state.sharedList?'<button type="button" id="save-search" title="Keep this search and its filters under Following">Save search</button>':''}<button type="button" id="export-csv">↓ Export results (CSV)</button></div></details></div><details class="search-help"><summary>What search looks at</summary><p>Every word you type has to appear somewhere in the bill, in any order. It looks in: ${SEARCH_FIELDS.map(f=>esc(f.label)).join(', ')}. Luna's search terms are words it added to help find a bill; they are not shown on the card, so each result says which field matched.</p><p>Put words in "double quotes" to keep them together. A plural also finds the singular ("wages" finds "wage"). A section number such as <em>Penal Code 46.06</em> finds the bills that change it.</p><p class="search-examples">Try: ${SEARCH_EXAMPLES.map(x=>`<button type="button" class="search-example" data-search-example="${esc(x)}">${esc(x)}</button>`).join('')}</p></details>
+    <div class="filter-row"><select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted'],state.stage,'Any stage')}</select><details class="more-filters" id="more-filters"${moreFiltersOpen()?' open':''}><summary class="outline-button">More filters<span id="more-count">${moreCountText()}</span></summary><div class="filter-row more-row"><div class="agency-combobox" id="agency-combobox"><input aria-label="Affected agency" aria-controls="agency-options" aria-expanded="false" aria-autocomplete="list" role="combobox" id="filter-agency" placeholder="All affected agencies" value="${esc(state.agency?agencyName(state.agency):'')}" autocomplete="off"><span class="agency-chevron" aria-hidden="true">⌄</span><div class="agency-panel" id="agency-panel" hidden><div class="agency-sort" role="group" aria-label="Sort agencies">${agencySortButtons()}</div><div class="agency-options" id="agency-options" role="listbox" hidden>${agencyOptionsMarkup()}</div></div></div><select aria-label="Author party" id="filter-party" title="Republican or Democratic: the primary author's party, with no author or coauthor from the other party. Bipartisan: authors or coauthors from both parties.">${options(Object.keys(PARTY_FILTERS),state.party,'Any party')}</select><select aria-label="Hearing status" id="filter-outlook">${options([NO_HEARING,'Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><select aria-label="Last action" id="filter-action">${options(unique([...LAST_ACTION_TYPES.map(t=>t.label),'Other action']).filter(l=>l===state.action||state.bills.some(b=>lastActionInfo(b).label===l)),state.action,'Any last action')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></details></div></div>
     <div class="topic-strip" aria-label="Quick topic filters"><button class="topic-chip ${state.topic===''?'selected':''}" data-topic="">All topics</button>${popular.map(t=>`<button class="topic-chip ${state.topic===t?'selected':''}" data-topic="${esc(t)}">${esc(t)}</button>`).join('')}</div>
-    <div class="results-header"><div><strong id="result-count">—</strong><span id="result-note"></span></div><select id="sort-order" aria-label="Sort bills">${options(Object.values(SORTS),SORTS[state.sort],'Sort by')}</select></div><div class="explorer-results" id="explorer-results"><div class="bill-list" id="bill-list"></div><aside class="bill-preview" id="bill-preview" aria-labelledby="preview-title" hidden></aside></div><div class="explorer-bottom" id="results-bottom"></div>`;
+    <div class="active-filters" id="active-filters" aria-label="Active filters"></div><div class="results-header"><div><strong id="result-count">—</strong><span id="result-note"></span></div><select id="sort-order" aria-label="Sort bills">${options(Object.values(SORTS),SORTS[state.sort],'Sort by')}</select></div><div class="explorer-results" id="explorer-results"><div class="bill-list" id="bill-list"></div><aside class="bill-preview" id="bill-preview" aria-labelledby="preview-title" hidden></aside></div><div class="explorer-bottom" id="results-bottom"></div>`;
 }
 
 const companionCache={bills:null,index:new Map()};
@@ -667,6 +691,8 @@ function renderResults(){
   $('#results-bottom').innerHTML=`${list.length>shownCount?`<button class="outline-button" id="load-more">Load 30 more · showing ${shownCount} of ${list.length}</button><div style="height:12px"></div>`:''}${esc(state.meta?.coverage_note||'Check the official record for authoritative status.')}`;
   persistState();
   syncPreview();
+  const chips=$('#active-filters');if(chips)chips.innerHTML=activeFiltersMarkup();
+  const more=$('#more-count');if(more)more.textContent=moreCountText();
 }
 
 // ---- Preview (D2-B): a short look at one bill beside the results, for triage. Wide screens only; it holds no
@@ -1498,6 +1524,7 @@ function registerClicks(){
   clickOn('search-example','[data-search-example]',x=>{state.query=x.dataset.searchExample;state.visibleCount=30;renderContent();$('#bill-search')?.focus()});
   clickOn('topic','[data-topic]',topic=>{state.topic=topic.dataset.topic;state.visibleCount=30;renderContent()});
   clickOn('agency-pick','[data-agency-pick]',pick=>{switchFilters('all');state.agency=pick.dataset.agencyPick;state.visibleCount=30;state.view='all';location.hash='all';setView('all')});
+  clickOn('clear-filter','[data-clear-filter]',chip=>clearFilter(chip.dataset.clearFilter));
   clickOn('clear-filters','#clear-filters',()=>{Object.assign(state,{query:'',topic:'',agency:'',chamber:'',party:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30});renderContent()});
   clickOn('watch-filter','#watch-filter',()=>{state.onlyWatch=!state.onlyWatch;state.visibleCount=30;renderContent()});
   clickOn('load-more','#load-more',()=>{state.visibleCount+=30;renderResults()});

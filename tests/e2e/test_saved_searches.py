@@ -5,6 +5,8 @@ import re
 
 from playwright.sync_api import expect
 
+from harness import click, reveal
+
 SEARCHES_KEY = "tx-bill-atlas-searches-90r"
 TODAY = "2026-11-12"  # the frozen clock (2026-11-12T15:49Z) is this Texas day
 
@@ -26,7 +28,7 @@ def explorer_count(page):
 def test_save_current_search_appears_under_following_with_name_and_count(device):
     page = device.open("#all?query=HB110")
     expect(page.locator("#result-count")).to_have_text("1 bill")
-    page.locator("#save-search").click()
+    click(page, "#save-search")
     expect(page.locator("#toast")).to_have_text("Saved ““HB110”” · find it under Following")
     saved = stored(device)
     assert len(saved) == 1
@@ -47,7 +49,7 @@ def test_save_current_search_appears_under_following_with_name_and_count(device)
 def test_count_matches_explorer_for_multi_filter_search(device):
     page = device.open("#all?chamber=Senate&sort=number")
     n = explorer_count(page)
-    page.locator("#save-search").click()
+    click(page, "#save-search")
     saved = stored(device)
     assert saved[0]["filters"] == {"chamber": "Senate", "sort": "number"}
     assert saved[0]["name"] == "Senate"
@@ -59,16 +61,16 @@ def test_count_matches_explorer_for_multi_filter_search(device):
 
 def test_saving_same_filters_twice_is_refused(device):
     page = device.open("#all?query=HB110")
-    page.locator("#save-search").click()
+    click(page, "#save-search")
     expect(page.locator("#toast")).to_contain_text("Saved ")
-    page.locator("#save-search").click()
+    click(page, "#save-search")
     expect(page.locator("#toast")).to_have_text("Already saved as ““HB110””")
     assert len(stored(device)) == 1
 
 
 def test_saved_search_survives_reload(device):
     page = device.open("#all?query=HB110")
-    page.locator("#save-search").click()
+    click(page, "#save-search")
     page.reload()
     page.wait_for_selector("#dynamic-content *", state="attached")
     expect(page.locator("#nav-follow")).to_have_text("1")
@@ -78,7 +80,7 @@ def test_saved_search_survives_reload(device):
 
 def test_rename_search(device):
     page = device.open("#all?query=HB110")
-    page.locator("#save-search").click()
+    click(page, "#save-search")
     device.open("#following")
     page.locator("[data-search-rename]").click()
     box = page.locator('[data-search-rename-form] input[name="name"]')
@@ -96,7 +98,7 @@ def test_rename_search(device):
 
 def test_delete_needs_second_click_then_toasts(device):
     page = device.open("#all?query=HB110")
-    page.locator("#save-search").click()
+    click(page, "#save-search")
     device.open("#following")
     delete = page.locator("[data-search-delete]")
     delete.click()
@@ -154,13 +156,13 @@ def test_search_limit_of_20(device_factory, site):
     searches = [{"id": f"id{i:08d}", "name": f"Search {i}", "filters": {"query": f"HB{i + 1}"}, "seen": TODAY} for i in range(20)]
     d = seeded_device(device_factory, site, searches)
     page = d.open("#all?query=HB110")
-    page.locator("#save-search").click()
+    click(page, "#save-search")
     expect(page.locator("#toast")).to_have_text("You can save up to 20 searches")
     assert len(stored(d)) == 20
 
 
 def test_too_long_search_is_refused(device):
     page = device.open("#all?query=" + "a" * 190 + "&topic=" + "b" * 190 + "&agency=" + "c" * 190 + "&stage=" + "d" * 190)
-    page.locator("#save-search").click()
+    click(page, "#save-search")
     expect(page.locator("#toast")).to_have_text("This search is too long to save; shorten the search words")
     assert stored(device) == []

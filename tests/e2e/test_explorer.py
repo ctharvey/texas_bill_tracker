@@ -5,6 +5,8 @@ from urllib.parse import parse_qs, unquote
 
 from playwright.sync_api import expect
 
+from harness import click, reveal
+
 TOTAL = "1384 bills"
 PREFS_KEY = "tx-bill-atlas-prefs-v1"
 
@@ -29,6 +31,7 @@ def count(page):
 
 
 def pick(page, selector, label):
+    reveal(page, selector)
     page.select_option(selector, label=label)
 
 
@@ -274,18 +277,18 @@ def test_only_watched_toggle(device):
     expect(page.locator('[data-watch="HB110"]')).to_have_attribute("aria-pressed", "true")
     page.fill("#bill-search", "")
     expect(page.locator("#result-count")).to_have_text(TOTAL)
-    page.click("#watch-filter")
+    click(page, "#watch-filter")
     expect(page.locator("#result-count")).to_have_text("1 bill")
     assert numbers(page) == ["HB 110"]
     assert hash_params(page) == {"onlyWatch": ["1"]}
-    page.click("#watch-filter")
+    click(page, "#watch-filter")
     expect(page.locator("#result-count")).to_have_text(TOTAL)
     assert hash_of(page) == "#all"
 
 
 def test_only_watched_with_nothing_watched_is_empty(device):
     page = device.open("#all")
-    page.click("#watch-filter")
+    click(page, "#watch-filter")
     expect(page.locator("#result-count")).to_have_text("0 bills")
     expect(page.locator("#bill-list")).to_contain_text("Nothing matches yet")
 

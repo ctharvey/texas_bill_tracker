@@ -6,6 +6,8 @@ import json
 
 from playwright.sync_api import expect
 
+from harness import click, reveal
+
 HEADER = ["id", "title", "author", "chamber", "status", "filed_at", "hearing_progress", "policy_areas", "agencies",
           "agency_relationships", "official_url", "authors", "author_count", "coauthors", "coauthor_count", "sponsors",
           "sponsor_count", "cosponsors", "cosponsor_count"]
@@ -13,7 +15,7 @@ HEADER = ["id", "title", "author", "chamber", "status", "filed_at", "hearing_pro
 
 def download_csv(page, button="#export-csv"):
     with page.expect_download() as info:
-        page.click(button)
+        click(page, button)
     dl = info.value
     text = open(dl.path(), encoding="utf-8-sig").read()
     return dl.suggested_filename, list(csv.DictReader(io.StringIO(text)))
@@ -48,7 +50,7 @@ def test_export_file_has_a_byte_order_mark_and_crlf_rows(device):
     page = device.open("#all?query=HB110")
     expect(page.locator("#result-count")).to_have_text("1 bill")
     with page.expect_download() as info:
-        page.click("#export-csv")
+        click(page, "#export-csv")
     raw = open(info.value.path(), "rb").read()
     assert raw.startswith(b"\xef\xbb\xbfid,title,author,")
     assert raw.count(b"\r\n") == 1 and not raw.endswith(b"\r\n")
@@ -102,7 +104,7 @@ def test_export_then_import_round_trips_the_rows(device):
     page = device.open("#all?topic=Data%20centers&chamber=Senate")
     expect(page.locator("#result-count")).to_have_text("6 bills")
     with page.expect_download() as info:
-        page.click("#export-csv")
+        click(page, "#export-csv")
     exported = open(info.value.path(), encoding="utf-8").read()
     expected = sorted(card_ids(page))
     page.goto(device.site.base + "#data", wait_until="networkidle")

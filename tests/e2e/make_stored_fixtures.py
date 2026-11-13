@@ -80,9 +80,9 @@ def main() -> int:
         # Saved searches: one plain, one renamed.
         go("#all")
         page.select_option("#filter-chamber", label="House")
-        page.click("#save-search")
+        harness.click(page, "#save-search")
         page.fill("#bill-search", "water")
-        page.click("#save-search")
+        harness.click(page, "#save-search")
         page.wait_for_function("JSON.parse(localStorage.getItem('tx-bill-atlas-searches-90r')||'[]').length===2")
         go("#following")
         page.locator("[data-search-rename]").nth(1).click()
@@ -94,7 +94,7 @@ def main() -> int:
         go("#all")
         page.select_option("#filter-chamber", label="Senate")
         page.fill("#bill-search", "school")
-        page.click("#copy-view-link")  # persistState writes the remembered filters.
+        harness.click(page, "#copy-view-link")  # persistState writes the remembered filters.
         page.wait_for_function("localStorage.getItem('tx-bill-atlas-prefs-v1')")
 
         # Near you: "Use my location" with a mocked position.

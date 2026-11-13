@@ -137,3 +137,16 @@ class Site:
         self.server.shutdown()
         self.server.server_close()
         shutil.rmtree(self.tmp, ignore_errors=True)
+
+
+# The explorer keeps some controls in closed menus (More filters; Share / save). A test that is about the control,
+# not the menu, opens the menu holding it first. test_filters_menus.py tests the menus themselves.
+def reveal(page, selector):
+    page.locator(selector).first.wait_for(state="attached")
+    page.evaluate("s => { const d = document.querySelector(s)?.closest('details:not([open])'); if (d) d.querySelector('summary').click(); }",
+                  selector)
+
+
+def click(page, selector, **kwargs):
+    reveal(page, selector)
+    page.click(selector, **kwargs)
