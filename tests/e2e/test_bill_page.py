@@ -46,7 +46,7 @@ def test_opens_from_its_address(device):
     page = device.open("#bill?id=HB110")
     expect(page.locator(PAGE)).to_be_visible()
     expect(page.locator(".drawer-number")).to_have_text("90R / HB 110")
-    expect(page.locator(f"{PAGE} h2")).to_have_text("Relating to the minimum wage.")
+    expect(page.locator("#bill-page-title")).to_have_text("Relating to the minimum wage.")
 
 
 def test_old_bill_link_redirects_to_the_bill_page(device):
@@ -72,7 +72,7 @@ def test_header_pills_title_and_caption(device):
     expect(pills.locator(".chamber-pill")).to_have_text("House")
     expect(pills.locator(".status-pill")).to_have_text("Filed")
     expect(pills.locator(".party-pill")).to_have_text("Democratic author")
-    expect(bill.locator("h2")).to_have_text("Relating to the minimum wage.")
+    expect(bill.locator("#bill-page-title")).to_have_text("Relating to the minimum wage.")
     expect(bill.locator(".drawer-caption")).to_have_text("Relating to the minimum wage.")
     meta = bill.locator(".drawer-meta-grid")
     expect(meta).to_contain_text("Nov 9, 2026")  # filed on

@@ -121,6 +121,6 @@ def test_without_the_index_the_section_is_hidden_and_nothing_errors(device):
     expect(page.locator("#drawer-brackets")).to_be_hidden()
     assert page.locator("#drawer-brackets").inner_text().strip() == ""
     # The rest of the page still works.
-    expect(page.locator("#bill-page h2")).to_be_visible()
+    expect(page.locator("#bill-page-title")).to_be_visible()
     page.locator("#bill-back").click()
     expect(page.locator("#bill-page")).to_have_count(0)

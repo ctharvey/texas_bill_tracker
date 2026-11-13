@@ -30,7 +30,7 @@ def open_recording(device, bill_id):
     page.on("response", lambda r: responses.__setitem__(r.url.split("/live/", 1)[1], r.status) if "/live/" in r.url else None)
     page.on("console", lambda m: warnings.append(m.text) if m.type == "warning" else None)
     device.open(f"#bill?id={bill_id}")
-    expect(page.locator(f"{DRAWER} h2")).to_be_visible()
+    expect(page.locator("#bill-page-title")).to_be_visible()
     # The stage fetches run after the drawer opens; wait until all six per-bill requests have answered.
     expected = per_bill_urls(bill_id)
     for _ in range(100):
@@ -119,7 +119,7 @@ def test_changes_section_appears_only_for_changes_that_match_the_current_text(de
     # The same payload made for other text (hash differs) is refused.
     served["body"] = stale
     page.reload(wait_until="networkidle")
-    expect(page.locator(f"{DRAWER} h2")).to_be_visible()
+    expect(page.locator("#bill-page-title")).to_be_visible()
     for _ in range(10):
         page.wait_for_timeout(100)
     expect(page.locator(f"{DRAWER} .stage-changes")).to_have_count(0)

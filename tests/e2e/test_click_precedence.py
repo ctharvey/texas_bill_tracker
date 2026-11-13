@@ -255,7 +255,7 @@ def test_back_to_results_leaves_the_bill_page_and_escape_does_not(device):
 
 def test_clicking_inside_the_bill_page_does_not_leave_it(device):
     page = device.open("#bill?id=HB110")
-    page.locator("#bill-page h2").click()
+    page.locator("#bill-page-title").click()
     page.locator("#bill-page .drawer-caption").click()
     expect(page.locator("#bill-page")).to_be_visible()
 

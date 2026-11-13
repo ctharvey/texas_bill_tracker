@@ -18,7 +18,7 @@ def watched(device):
 
 def test_bill_without_companions_has_no_companion_block(device):
     page = device.open("#bill?id=HB147")
-    expect(page.locator(f"{DRAWER} h2")).to_be_visible()
+    expect(page.locator("#bill-page-title")).to_be_visible()
     expect(companion_section(page)).to_have_count(0)
 
 
