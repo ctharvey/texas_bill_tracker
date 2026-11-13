@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import threading
 import time
 import traceback
@@ -1323,6 +1324,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Ignore the daily and run budgets; calls are still reserved and recorded in the ledger")
     parser.add_argument("--order", choices=("forward", "reverse"), default="forward",
                         help="Work through the snapshot from the top (forward) or the bottom (reverse)")
+    parser.add_argument("--restart-on-update", action="store_true",
+                        help="Between bills, every few minutes, fetch the checkout's upstream; on newer code start no "
+                             "new bills, let in-flight ones finish and exit so the timer restarts on the new code")
     parser.add_argument("--max-minutes", type=float, default=55,
                         help="Wall-clock limit checked between bills, never mid-request")
     parser.add_argument("--snapshot", type=Path, default=ROOT / "data/bills.json",
@@ -1465,6 +1469,40 @@ def _read_json(path: Path):
 def _key_fn(budget):
     cache = getattr(budget, "response_cache", None)
     return cache, (cache.key if cache is not None else ResponseCache.key)
+
+
+class CodeUpdate:
+    """--restart-on-update: newer code on the checkout's upstream that the next start's `git pull --ff-only` can
+    take. Checked between bills at most every `interval` seconds; a failed git call is never an update."""
+
+    def __init__(self, root: Path, interval: float = 300, run=subprocess.run, clock=time.monotonic):
+        self.root, self.interval, self.run, self.clock = root, interval, run, clock
+        self.last = clock()  # the first check waits one interval: the run just pulled
+        self.head = self._git("rev-parse", "HEAD")
+
+    def _call(self, *args: str):
+        try:
+            return self.run(["git", "-C", str(self.root), *args], capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+    def _git(self, *args: str) -> str | None:
+        result = self._call(*args)
+        return result.stdout.strip() if result is not None and result.returncode == 0 else None
+
+    def available(self) -> str | None:
+        """The newer upstream commit's short id, or None."""
+        if not self.head or self.clock() - self.last < self.interval:
+            return None
+        self.last = self.clock()
+        if self._git("fetch", "--quiet") is None:
+            return None
+        upstream = self._git("rev-parse", "@{u}")
+        if not upstream or upstream == self.head:
+            return None
+        # Only a fast-forward: a diverged checkout would fail the next start's pull, so restarting gains nothing.
+        ancestor = self._call("merge-base", "--is-ancestor", self.head, upstream)
+        return upstream[:7] if ancestor is not None and ancestor.returncode == 0 else None
 
 
 def answered(cache_dir: Path, key: str | None) -> bool:
@@ -1797,6 +1835,19 @@ def main():
             try_publish_status(status_path, queue, **progress, **kwargs)
 
         stopped = False  # the main loop ended on a stop outcome or the time limit, not on an empty queue
+        update = CodeUpdate(ROOT) if args.restart_on_update and args.execute and not args.bill_id else None
+
+        def out_of_time() -> bool:
+            """Checked before each new bill: the time limit, or newer code to restart on."""
+            if time.monotonic() > deadline:
+                print("Stopped: run time limit; remaining work stays queued", flush=True)
+                return True
+            newer = update.available() if update is not None else None
+            if newer:
+                print("Stopped: new code %s on the upstream branch; finishing bills in progress, then exiting so the "
+                      "next start runs it" % newer, flush=True)
+                return True
+            return False
         try:
             pending, cooling, capacity_waits, redo = deque(candidates), [], 0, set()
             stopping = False  # several workers: no new bills; in-flight ones finish and are recorded
@@ -2067,8 +2118,7 @@ def main():
 
             if args.workers == 1:
                 while True:
-                    if time.monotonic() > deadline:
-                        print("Stopped: run time limit; remaining work stays queued", flush=True)
+                    if out_of_time():
                         stopped = True; break
                     bill_id = next_bill()
                     if bill_id is None:
@@ -2083,8 +2133,7 @@ def main():
                 with ThreadPoolExecutor(args.workers, thread_name_prefix="review") as pool:
                     while True:
                         while not stopping and not halt.is_set() and len(running) < args.workers:
-                            if time.monotonic() > deadline:
-                                print("Stopped: run time limit; remaining work stays queued", flush=True)
+                            if out_of_time():
                                 stopping = stopped = True
                                 break
                             bill_id = next_bill(block=not running)

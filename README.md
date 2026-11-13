@@ -107,6 +107,10 @@ claims with no more errors. A bill that already has its own review is never over
 never copied again; anything else gets a normal review (`--no-companion-reuse` turns reuse off).
 `--max-minutes` defaults to 55; a timer start that finds the previous run still holding the worker lock logs it
 and exits successfully.
+With `--restart-on-update` (set in the service) the run fetches the checkout's upstream every five minutes,
+between bills; on newer code it can fast-forward to, it starts no new bills, lets bills in progress finish, skips
+the later passes and exits successfully, so the timer's next start pulls and runs the new code. Never kill a run
+to deploy: a call cut off mid-request is held and needs a manual release.
 Reviews read only the official Markdown. The PDF path is retired: `--input pdf` stops the run before any connection
 or call, and `classify_bill.py`/`extract_bill.py` refuse `--execute`. A run that publishes must read the text the
 site serves (`live/text`, beside `--publish-tags`). Every publisher (tags, highlights, changes, fiscal, extras, audit
