@@ -361,10 +361,6 @@ def main(argv=None) -> int:
     return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
-
-
 def _default_openai():
     try:
         from openai import OpenAI
@@ -374,3 +370,8 @@ def _default_openai():
     if not key:
         raise NotSent("OPENAI_API_KEY is required for execution on a cache miss")
     return OpenAI(api_key=key, base_url="https://api.openai.com/v1", timeout=900, max_retries=0)
+
+
+# Last, so the CLI sees every module-level name (it once ran before _default_openai existed: NameError).
+if __name__ == "__main__":
+    raise SystemExit(main())

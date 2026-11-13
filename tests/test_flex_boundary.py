@@ -336,6 +336,14 @@ class HeldCallTests(BoundaryCase):
         with self.assertRaises(KeyError):
             self.boundary([]).release_held("0" * 64)
 
+    def test_the_cli_runs_as_a_script(self):
+        # Run as the operator does (python scripts/flex_boundary.py): the main block once ran before
+        # _default_openai was defined and every invocation raised NameError (13 Nov).
+        import subprocess
+        done = subprocess.run([sys.executable, str(ROOT / "scripts" / "flex_boundary.py"), "--cache-dir", str(self.dir)],
+                              capture_output=True, text=True, timeout=120)
+        self.assertEqual(done.returncode, 0, done.stderr)
+
 
 class WireTests(BoundaryCase):
     def test_posted_body_is_the_classification_request_with_cache_options_on_top(self):
