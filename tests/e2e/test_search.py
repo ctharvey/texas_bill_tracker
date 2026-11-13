@@ -209,6 +209,14 @@ def test_search_finds_a_bill_by_official_subject_and_by_impact(device):
     assert count(page) < 1384
 
 
+
+def test_search_finds_a_bill_by_the_groups_luna_says_it_affects(device):
+    # "cemetery plot owners" is an affected group in SB215's Luna review and appears in no other searchable field.
+    page = device.open("#all")
+    search(page, '"cemetery plot owners"')
+    expect_count(page, "1 bill")
+    expect(page.locator('.bill-card[data-bill-id="SB215"]')).to_be_visible()
+
 def test_search_reads_the_last_action_line(device):
     page = device.open("#all")
     search(page, '"H Filed"')

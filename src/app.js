@@ -572,7 +572,7 @@ function filteredBills(f=state){
     if(f.action&&lastActionInfo(b).label!==f.action)return false;
     if(f.stage){const st=(b.status||'').toLowerCase();const outlook=assessHearing(b).label.toLowerCase();if(!st.includes(f.stage.toLowerCase())&&outlook!==f.stage.toLowerCase())return false}
     if(lawBills.has(b.id))return true;
-    return !q||b.id.toLowerCase().includes(compact)||textMatches([b.id,b.number,b.title,b.caption,b.author,...b.authors,...(b.coauthors||[]),...(b.sponsors||[]),...(b.cosponsors||[]),b.last_action,...b.topics,...(b.subjects||[]),...(b.search_terms||[]),...b.impacts,...b.agencies.map(a=>agencyName(a.id)),...partyWords(b),shortDate(b.filed_at),shortDate(b.last_action_date)].join(' '),q);
+    return !q||b.id.toLowerCase().includes(compact)||textMatches([b.id,b.number,b.title,b.caption,b.author,...b.authors,...(b.coauthors||[]),...(b.sponsors||[]),...(b.cosponsors||[]),b.last_action,...b.topics,...(b.subjects||[]),...(b.search_terms||[]),...b.impacts,...(b.constituencies||[]),...b.agencies.map(a=>agencyName(a.id)),...partyWords(b),shortDate(b.filed_at),shortDate(b.last_action_date)].join(' '),q);
   });
   const byNumber=(a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true});
   const newerNumber=(a,b)=>newestFirst(a.id,b.id);
