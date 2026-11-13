@@ -336,7 +336,7 @@ def test_pressing_enter_keeps_the_results(device):
     page.locator("#bill-search").press("Enter")
     expect_count(page, "9 bills")
     expect(page.locator("#bill-search")).to_have_value("minimum wage")
-    expect(page.locator("#detail-drawer")).to_be_hidden()
+    expect(page.locator("#bill-page")).to_be_hidden()
 
 
 # ---- Address bar and memory ----
@@ -441,11 +441,11 @@ def test_opening_and_closing_a_bill_keeps_the_search(device):
     page = device.open("#all")
     search(page, "minimum wage")
     page.locator('.bill-card[data-bill-id="HB110"] .bill-number').click()
-    expect(page.locator("#detail-drawer")).to_be_visible()
+    expect(page.locator("#bill-page")).to_be_visible()
+    assert page.evaluate("location.hash") == "#bill?id=HB110"
+    page.locator("#bill-back").click()
+    expect(page.locator("#bill-page")).to_have_count(0)
     assert "query=minimum%20wage" in page.evaluate("location.hash")
-    assert "bill=HB110" in page.evaluate("location.hash")
-    page.keyboard.press("Escape")
-    expect(page.locator("#detail-drawer")).to_be_hidden()
     expect(page.locator("#bill-search")).to_have_value("minimum wage")
     expect_count(page, "9 bills")
 

@@ -24,8 +24,8 @@ def grant_clipboard(device):
 
 
 def star(device, bill):
-    page = device.open(f"#all?bill={bill}")
-    page.locator(f"#detail-drawer [data-watch='{bill}']").first.click()
+    page = device.open(f"#bill?id={bill}")
+    page.locator(f"#bill-page [data-watch='{bill}']").first.click()
     page.wait_for_function(f"JSON.parse(localStorage.getItem('tx-bill-atlas-watch-90r')||'[]').includes('{bill}')")
 
 
@@ -164,10 +164,10 @@ def test_conflicting_edits_both_survive(device_factory, fresh_sync):
     star(a, "HB381")  # A's write lands first.
     wait_server(a, key_of(edit), lambda d: "HB381" in d["watch"], "A's edit reaches the server")
     # B has not pulled since joining; it still holds the version from before A's write.
-    page = b.open("#all?bill=HB1003")
+    page = b.open("#bill?id=HB1003")
     is_put_ok = lambda r: r.url.endswith("/api/sync") and r.request.method == "PUT" and r.status == 200
     with page.expect_response(is_put_ok, timeout=15000):
-        page.locator("#detail-drawer [data-watch='HB1003']").first.click()
+        page.locator("#bill-page [data-watch='HB1003']").first.click()
     assert 409 in puts, puts  # B wrote from a stale version: the conflict happened, and the retry then succeeded
     wait_server(b, key_of(edit), lambda d: "HB1003" in d["watch"] and "HB381" in d["watch"], "both edits on the server")
     assert server_data(b, key_of(edit))["data"]["watch"] == [*WATCH, "HB381", "HB1003"]

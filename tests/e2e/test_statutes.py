@@ -1,4 +1,4 @@
-"""Statute tracking: the drawer list, the section page and its side-by-side compare, section search, and no index."""
+"""Statute tracking: the bill page list, the section page and its side-by-side compare, section search, and no index."""
 
 import re
 
@@ -8,7 +8,7 @@ SECTION = "#statute?law=LA&sec=62.051"
 
 
 def drawer_statutes(device, bill="HB110"):
-    page = device.open(f"#all?bill={bill}")
+    page = device.open(f"#bill?id={bill}")
     return page, page.locator("#drawer-statutes")
 
 
@@ -129,14 +129,14 @@ def test_phone_column_toggle(device, viewport):
     assert len(visible_cells()) == 2
 
 
-def test_bill_opened_from_the_section_page_keeps_the_section_in_the_address(device):
+def test_back_from_a_bill_opened_on_the_section_page_returns_to_the_section(device):
     page = open_section(device)
     page.locator(".law-version a.bill-number").first.click()
-    expect(page.locator("#detail-drawer")).to_be_visible()
-    assert "bill=" in page.url and "statute" in page.url and "sec=62.051" in page.url
-    page.keyboard.press("Escape")
-    expect(page.locator("#detail-drawer")).to_be_hidden()
-    assert "bill=" not in page.url and page.url.endswith(SECTION)
+    expect(page.locator("#bill-page")).to_be_visible()
+    assert "#bill?id=" in page.url
+    page.locator("#bill-back").click()
+    expect(page.locator("#bill-page")).to_have_count(0)
+    assert page.url.endswith(SECTION)
 
 
 def test_section_search_finds_every_bill_that_changes_it(device):
@@ -178,11 +178,11 @@ def test_malformed_section_address_is_refused(device):
 
 def test_without_the_index_nothing_breaks(device):
     device.context.route("**/live/statutes/index.json", lambda r: r.fulfill(status=404, body=""))
-    page = device.open("#all?bill=HB110")
-    expect(page.locator("#detail-drawer")).to_be_visible()
+    page = device.open("#bill?id=HB110")
+    expect(page.locator("#bill-page")).to_be_visible()
     expect(page.locator("#drawer-statutes")).to_be_hidden()
     assert page.locator("#drawer-statutes").inner_text().strip() == ""
-    page.keyboard.press("Escape")
+    page.locator("#bill-back").click()
     page.fill("#bill-search", "62.051")
     expect(page.locator(".statute-hint")).to_have_count(0)
     page.goto(device.site.base + SECTION)

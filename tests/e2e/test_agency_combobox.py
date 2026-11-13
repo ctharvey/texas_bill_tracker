@@ -145,7 +145,7 @@ def test_escape_with_a_pick_keeps_the_name(device):
     expect(page.locator("#agency-options")).to_be_hidden()
     expect(page.locator("#filter-agency")).to_have_value("Employees Retirement System of Texas")
     expect(page.locator("#result-count")).to_have_text("4 bills")
-    expect(page.locator("#detail-drawer")).to_be_hidden()
+    expect(page.locator("#bill-page")).to_be_hidden()
 
 
 def test_clicking_elsewhere_hides_the_list(device):

@@ -1,4 +1,4 @@
-"""Bill explorer (#all): search, filters, sorting, paging, URL hash and remembered filters, watched-only, drawer."""
+"""Bill explorer (#all): search, filters, sorting, paging, URL hash and remembered filters, watched-only, opening a bill."""
 
 import json
 from urllib.parse import parse_qs, unquote
@@ -288,31 +288,31 @@ def test_only_watched_with_nothing_watched_is_empty(device):
     expect(page.locator("#bill-list")).to_contain_text("Nothing matches yet")
 
 
-def test_clicking_a_card_opens_the_drawer_and_records_the_bill(device):
+def test_clicking_a_card_opens_the_bill_page_and_back_keeps_the_search(device):
     page = device.open("#all?query=HB110")
     expect(page.locator("#result-count")).to_have_text("1 bill")
     page.locator('.bill-card[data-bill-id="HB110"] .bill-description').click()
-    expect(page.locator("#detail-drawer")).to_be_visible()
-    expect(page.locator("#detail-drawer")).to_contain_text("HB 110")
-    expect(page.locator("#detail-drawer")).to_contain_text("minimum wage")
-    assert hash_params(page) == {"query": ["HB110"], "bill": ["HB110"]}
-    page.click("#drawer-close")
-    expect(page.locator("#detail-drawer")).to_be_hidden()
-    page.wait_for_function("!location.hash.includes('bill=')")  # closing steps back over the entry the bill added
+    expect(page.locator("#bill-page")).to_be_visible()
+    expect(page.locator("#bill-page")).to_contain_text("HB 110")
+    expect(page.locator("#bill-page")).to_contain_text("minimum wage")
+    assert page.url.endswith("#bill?id=HB110")
+    page.click("#bill-back")
+    expect(page.locator("#bill-page")).to_have_count(0)
+    page.wait_for_function("location.hash.startsWith('#all')")
     assert hash_params(page) == {"query": ["HB110"]}
 
 
-def test_bill_details_button_opens_the_drawer(device):
+def test_bill_details_button_opens_the_bill_page(device):
     page = device.open("#all?query=HB110")
     page.locator('.bill-card[data-bill-id="HB110"] .bill-open').click()
-    expect(page.locator("#detail-drawer")).to_be_visible()
-    assert hash_params(page)["bill"] == ["HB110"]
+    expect(page.locator("#bill-page")).to_be_visible()
+    assert page.url.endswith("#bill?id=HB110")
 
 
-def test_bill_in_the_hash_opens_the_drawer_on_load(device):
-    page = device.open("#all?bill=HB110")
-    expect(page.locator("#detail-drawer")).to_be_visible()
-    expect(page.locator("#detail-drawer")).to_contain_text("minimum wage")
+def test_bill_address_opens_the_bill_page_on_load(device):
+    page = device.open("#bill?id=HB110")
+    expect(page.locator("#bill-page")).to_be_visible()
+    expect(page.locator("#bill-page")).to_contain_text("minimum wage")
 
 
 def test_remembered_filters_come_back_on_reload(device):

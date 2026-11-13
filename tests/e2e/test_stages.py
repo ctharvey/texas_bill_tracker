@@ -11,7 +11,7 @@ import pytest
 from playwright.sync_api import expect
 
 LIVE = Path(__file__).resolve().parent / "fixtures" / "live"
-DRAWER = "#detail-drawer"
+DRAWER = "#bill-page"
 BILLS = ["HB110", "HB147", "HB239", "HB381", "HB448", "HB717", "HB1001", "HB1002", "HB1003"]
 STAGE_HEADINGS = ["What changed", "Hearing", "Fiscal note check"]
 
@@ -29,7 +29,7 @@ def open_recording(device, bill_id):
     page.on("request", lambda r: device.requests.append(r.url.split("/live/", 1)[1]) if "/live/" in r.url else None)
     page.on("response", lambda r: responses.__setitem__(r.url.split("/live/", 1)[1], r.status) if "/live/" in r.url else None)
     page.on("console", lambda m: warnings.append(m.text) if m.type == "warning" else None)
-    device.open(f"#all?bill={bill_id}")
+    device.open(f"#bill?id={bill_id}")
     expect(page.locator(f"{DRAWER} h2")).to_be_visible()
     # The stage fetches run after the drawer opens; wait until all six per-bill requests have answered.
     expected = per_bill_urls(bill_id)
@@ -91,7 +91,7 @@ def test_hearing_section_appears_when_witness_data_exists(device):
                    {"name": "Sam Roe", "position": "against", "testified": False}]}
     device.context.route("**/live/history/HB110/witnesses-H.json", lambda route: route.fulfill(
         status=200, content_type="application/json", body=json.dumps(payload)))
-    page = device.open("#all?bill=HB110")
+    page = device.open("#bill?id=HB110")
     hearing = page.locator(f"{DRAWER} .stage-hearing")
     expect(hearing.locator("h3")).to_have_text("Hearing")
     expect(hearing).to_contain_text("House · Labor & Employment")
@@ -111,7 +111,7 @@ def test_changes_section_appears_only_for_changes_that_match_the_current_text(de
     served = {"body": good}
     device.context.route("**/live/luna/changes/HB110.json", lambda route: route.fulfill(
         status=200, content_type="application/json", body=json.dumps(served["body"])))
-    page = device.open("#all?bill=HB110")
+    page = device.open("#bill?id=HB110")
     changes = page.locator(f"{DRAWER} .stage-changes")
     expect(changes.locator("h3")).to_have_text("What changed")
     expect(changes).to_contain_text("New wage floor")

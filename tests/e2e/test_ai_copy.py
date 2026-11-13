@@ -1,8 +1,8 @@
-"""'Copy for AI' in the drawer and 'Copy page for AI' in the top bar: what lands on the clipboard."""
+"""'Copy for AI' on the bill page and 'Copy page for AI' in the top bar: what lands on the clipboard."""
 
 from playwright.sync_api import expect
 
-DRAWER = "#detail-drawer"
+DRAWER = "#bill-page"  # the bill page
 AGENT = "https://agent.bills.ctharvey.me/"
 
 
@@ -17,7 +17,7 @@ def clipboard(page):
 
 def test_copy_for_ai_in_the_drawer_copies_a_prompt_for_the_bill(device):
     grant(device)
-    page = device.open("#all?bill=HB147")
+    page = device.open("#bill?id=HB147")
     button = page.locator(f"{DRAWER} [data-copy-ai]")
     expect(button).to_have_text("Copy for AI")
     button.click()
@@ -35,7 +35,7 @@ def test_copy_for_ai_in_the_drawer_copies_a_prompt_for_the_bill(device):
 
 def test_copy_for_ai_includes_each_companion(device):
     grant(device)
-    page = device.open("#all?bill=HB110")
+    page = device.open("#bill?id=HB110")
     page.locator(f"{DRAWER} [data-copy-ai]").click()
     expect(page.locator(f"{DRAWER} [data-copy-ai]")).to_have_text("Copied")
     text = clipboard(page)
@@ -45,7 +45,7 @@ def test_copy_for_ai_includes_each_companion(device):
 
 def test_copied_label_goes_back_to_copy_for_ai(device):
     grant(device)
-    page = device.open("#all?bill=HB110")
+    page = device.open("#bill?id=HB110")
     button = page.locator(f"{DRAWER} [data-copy-ai]")
     button.click()
     expect(button).to_have_text("Copied")
@@ -54,8 +54,7 @@ def test_copied_label_goes_back_to_copy_for_ai(device):
 
 def test_page_button_with_a_bill_open_copies_that_bills_prompt(device):
     grant(device)
-    page = device.open("#all?bill=HB110")
-    # On a wide screen the open drawer covers the top bar, so a mouse cannot reach the button; the keyboard can.
+    page = device.open("#bill?id=HB110")
     page.focus("#copy-page-ai")
     page.keyboard.press("Enter")
     expect(page.locator("#copy-page-ai")).to_have_text("Copied")
@@ -109,9 +108,9 @@ def test_page_button_on_an_info_page_points_at_its_agent_page(device):
     assert f"AI-readable version: {AGENT}saving.md" in lines
 
 
-def test_when_the_clipboard_is_blocked_the_drawer_shows_the_text_to_copy_by_hand(device):
+def test_when_the_clipboard_is_blocked_the_bill_page_shows_the_text_to_copy_by_hand(device):
     # No clipboard permission, and the legacy copy command refused: the prompt appears selected in a text box.
-    page = device.open("#all?bill=HB147")
+    page = device.open("#bill?id=HB147")
     page.evaluate("""() => {
         navigator.clipboard.writeText = () => Promise.reject(new Error('blocked'));
         document.execCommand = () => false;

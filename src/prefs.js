@@ -4,7 +4,7 @@ const FILTER_NAMES = Object.keys(FILTER_DEFAULTS);
 // Renamed filter values, so old links, saved searches and remembered filters keep working (taxonomy.NO_HEARING).
 const RENAMED = {outlook: {'Not rated': 'No hearing yet'}};
 const current = (name, value) => RENAMED[name]?.[value] ?? value;
-export const VIEWS = ['all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'agencies', 'review', 'method', 'saving', 'data'];
+export const VIEWS = ['all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'bill', 'agencies', 'review', 'method', 'saving', 'data'];
 const LAW_CODE = /^[A-Z]{2}$/;
 const LAW_SECTION = /^\d+[A-Z]?(?:\.\d+[A-Z]?)+$/;  // The statute index's section numbers (build_feeds.SECTION_NUM).
 export const MAX_LIST = 500;
@@ -47,7 +47,8 @@ export function parseHash(hash) {
     filters[name] = name === 'onlyWatch' ? params.get(name) === '1' : current(name, params.get(name).slice(0, 200));
   }
   const list = params.has('list') ? uniqueIds(params.get('list').split(',')) : null;
-  const bill = normalizeId(params.get('bill') || '');
+  // A bill page is `#bill?id=HB1`; `bill=` on any view is the older address (RSS items, agent docs, saved links).
+  const bill = normalizeId((view === 'bill' ? params.get('id') : null) || params.get('bill') || '');
   const sync = params.get('sync') || '';
   const member = String(params.get('code') || '').trim().toUpperCase();
   const law = String(params.get('law') || '').toUpperCase(), sec = String(params.get('sec') || '').toUpperCase();
@@ -67,11 +68,12 @@ export function buildHash(view, filters, {list = null, bill = null, sync = null,
       parts.push(`${name}=${name === 'onlyWatch' ? (value ? '1' : '0') : encodeURIComponent(value)}`);
     }
   }
+  if (view === 'bill' && isBillId(bill)) parts.push(`id=${bill}`);
   if (view === 'member' && MEMBER_CODE.test(member || '')) parts.push(`code=${member}`);
   const [law, sec] = String(statute || '').split(' ');
   if (view === 'statute' && LAW_CODE.test(law || '') && LAW_SECTION.test(sec || '')) parts.push(`law=${law}`, `sec=${sec}`);
   if (list?.length) parts.push(`list=${list.join(',')}`);
-  if (bill) parts.push(`bill=${bill}`);
+  if (bill && view !== 'bill') parts.push(`bill=${bill}`);
   if (sync && SYNC_KEY.test(sync)) parts.push(`sync=${sync}`);
   return `#${VIEWS.includes(view) ? view : 'all'}${parts.length ? `?${parts.join('&')}` : ''}`;
 }

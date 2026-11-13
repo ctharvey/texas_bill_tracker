@@ -1,10 +1,10 @@
-"""Companion and related-bill blocks in the drawer, and the one button that watches a whole companion group."""
+"""Companion and related-bill blocks on the bill page, and the one button that watches a whole companion group."""
 
 import json
 
 from playwright.sync_api import expect
 
-DRAWER = "#detail-drawer"
+DRAWER = "#bill-page"
 WATCH_KEY = "tx-bill-atlas-watch-90r"
 
 
@@ -17,13 +17,13 @@ def watched(device):
 
 
 def test_bill_without_companions_has_no_companion_block(device):
-    page = device.open("#all?bill=HB147")
+    page = device.open("#bill?id=HB147")
     expect(page.locator(f"{DRAWER} h2")).to_be_visible()
     expect(companion_section(page)).to_have_count(0)
 
 
 def test_companion_row_shows_number_chamber_relation_author_title_and_last_action(device):
-    page = device.open("#all?bill=HB110")
+    page = device.open("#bill?id=HB110")
     section = companion_section(page)
     expect(section.locator("h3")).to_have_text("Companion bill (1)")
     row = section.locator(".companion-row")
@@ -36,16 +36,16 @@ def test_companion_row_shows_number_chamber_relation_author_title_and_last_actio
 
 
 def test_companion_link_opens_the_other_bill(device):
-    page = device.open("#all?bill=HB110")
+    page = device.open("#bill?id=HB110")
     companion_section(page).locator("button.companion-open").click()
     expect(page.locator(".drawer-number")).to_have_text("90R / HB 972")
-    assert "bill=HB972" in page.url
+    assert page.url.endswith("#bill?id=HB972")
     # ... and that bill lists HB 110 back, even though it does not carry HB 110 in its own record.
     expect(companion_section(page).locator("button.companion-open", has_text="HB 110")).to_have_count(1)
 
 
 def test_a_bill_with_several_companions_lists_them_all_with_a_group_button(device):
-    page = device.open("#all?bill=HB972")
+    page = device.open("#bill?id=HB972")
     section = companion_section(page)
     expect(section.locator("h3")).to_have_text("Companion bills (4)")
     expect(section.locator("button.companion-open")).to_have_text(["HB 110", "HB 132", "HB 856", "HB 1051"])
@@ -53,8 +53,8 @@ def test_a_bill_with_several_companions_lists_them_all_with_a_group_button(devic
 
 
 def test_companion_listed_only_from_the_other_side_shows_the_senate_bill(device):
-    # HB 1059 lists SB 164 as its companion; SB 164's own record lists none, yet its drawer shows HB 1059.
-    page = device.open("#all?bill=SB164")
+    # HB 1059 lists SB 164 as its companion; SB 164's own record lists none, yet its page shows HB 1059.
+    page = device.open("#bill?id=SB164")
     row = companion_section(page).locator(".companion-row")
     expect(row).to_have_count(1)
     expect(row.locator("button.companion-open")).to_have_text("HB 1059")
@@ -63,7 +63,7 @@ def test_companion_listed_only_from_the_other_side_shows_the_senate_bill(device)
 
 
 def test_group_watch_button_watches_every_bill_then_unwatches_all(device):
-    page = device.open("#all?bill=HB110")
+    page = device.open("#bill?id=HB110")
     button = companion_section(page).locator(".companion-watch")
     expect(button).to_have_text("☆ Watch all 2")
     expect(button).to_have_attribute("aria-pressed", "false")
@@ -73,7 +73,7 @@ def test_group_watch_button_watches_every_bill_then_unwatches_all(device):
     expect(page.locator("#toast")).to_have_text("Watching HB 110, HB 972")
     assert watched(device) == ["HB110", "HB972"]
     expect(page.locator("#nav-watch")).to_have_text("2")
-    # The drawer's own watch button reflects it too.
+    # The page's own watch button reflects it too.
     expect(page.locator(f"{DRAWER} [data-watch]")).to_have_text("★ Remove from watchlist")
     button.click()
     expect(button).to_have_text("☆ Watch all 2")
@@ -82,7 +82,7 @@ def test_group_watch_button_watches_every_bill_then_unwatches_all(device):
 
 
 def test_group_button_counts_those_already_watched(device):
-    page = device.open("#all?bill=HB110")
+    page = device.open("#bill?id=HB110")
     page.locator(f"{DRAWER} [data-watch]").click()  # watch only HB 110
     button = companion_section(page).locator(".companion-watch")
     expect(button).to_have_text("☆ Watch all 2 (1 watched)")
@@ -92,7 +92,7 @@ def test_group_button_counts_those_already_watched(device):
 
 
 def test_related_bills_block_links_to_each_related_bill(device):
-    page = device.open("#all?bill=HB110")
+    page = device.open("#bill?id=HB110")
     section = page.locator(f"{DRAWER} .related-section")
     expect(section.locator("h3")).to_have_text("Related bills")
     chips = section.locator("button.review-chip")
@@ -100,11 +100,11 @@ def test_related_bills_block_links_to_each_related_bill(device):
     expect(section).to_contain_text("computed automatically")
     chips.nth(2).click()
     expect(page.locator(".drawer-number")).to_have_text("90R / SB 295")
-    assert "bill=SB295" in page.url
+    assert page.url.endswith("#bill?id=SB295")
     expect(page.locator(f"{DRAWER} .drawer-pills .chamber-pill").first).to_have_text("Senate")
 
 
 def test_bill_with_a_single_related_entry(device):
-    page = device.open("#all?bill=HB381")
+    page = device.open("#bill?id=HB381")
     chips = page.locator(f"{DRAWER} .related-section button.review-chip")
     expect(chips).to_have_text(["HB1032"])

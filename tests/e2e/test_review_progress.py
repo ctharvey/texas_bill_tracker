@@ -90,8 +90,8 @@ def test_chips_open_the_bill_and_tagged_chips_are_marked(device):
     chip = page.locator(".review-group").first.locator('.review-chip[data-open="HB1011"]')
     expect(chip).to_have_count(1)
     chip.click()
-    expect(page.locator("#detail-drawer .drawer-number")).to_have_text("90R / HB 1011")
-    page.keyboard.press("Escape")
+    expect(page.locator("#bill-page .drawer-number")).to_have_text("90R / HB 1011")
+    page.locator("#bill-back").click()
     tagged = page.locator(".review-group").first.locator(".review-chip.tagged")
     untagged = page.locator(".review-group").first.locator(".review-chip:not(.tagged)")
     assert tagged.count() > 0 and untagged.count() > 0

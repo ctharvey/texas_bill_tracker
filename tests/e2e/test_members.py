@@ -96,8 +96,8 @@ def test_new_member_shows_newcomer_tag(device):
 
 
 def test_drawer_author_links_to_member_page(device):
-    page = device.open("#all?bill=HB717")
-    link = page.locator("#detail-drawer a.member-name", has_text="Landgraf")
+    page = device.open("#bill?id=HB717")
+    link = page.locator("#bill-page a.member-name", has_text="Landgraf")
     expect(link).to_have_attribute("href", f"#member?code={LANDGRAF}")
     link.click()
     expect(page.locator("#dynamic-content h2")).to_have_text("Rep. Brooks Landgraf")

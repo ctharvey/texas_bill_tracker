@@ -85,10 +85,10 @@ def main() -> int:
                 page.goto(site.base + f"#{view}", wait_until="networkidle")
             statute_pages, member_pages = [], []
             for bill in bills:
-                page.goto(site.base + f"#all?bill={bill}", wait_until="networkidle")
+                page.goto(site.base + f"#bill?id={bill}", wait_until="networkidle")
                 page.wait_for_timeout(500)
                 statute_pages += page.eval_on_selector_all("#drawer-statutes a[href^='#statute']", "a=>a.map(x=>x.getAttribute('href'))")[:2]
-                member_pages += page.eval_on_selector_all("#detail-drawer a[href^='#member']", "a=>a.map(x=>x.getAttribute('href'))")[:1]
+                member_pages += page.eval_on_selector_all("#bill-page a[href^='#member']", "a=>a.map(x=>x.getAttribute('href'))")[:1]
                 show = page.locator(".bill-text-section button", has_text="Show bill text")
                 if show.count():
                     # networkidle returns before the click's fetches start; wait for the text itself.

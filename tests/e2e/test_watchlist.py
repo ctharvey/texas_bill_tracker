@@ -1,4 +1,4 @@
-"""Watchlist: star from a card and from the drawer, nav count, the Watchlist view, persistence, file export/import."""
+"""Watchlist: star from a card and from the bill page, nav count, the Watchlist view, persistence, file export/import."""
 
 import json
 
@@ -39,9 +39,9 @@ def test_star_from_card_updates_nav_count_toast_and_storage(device):
     assert json.loads(device.storage()[WATCH_KEY]) == []
 
 
-def test_star_from_drawer(device):
-    page = device.open("#all?bill=HB110")
-    drawer = page.locator("#detail-drawer")
+def test_star_from_the_bill_page(device):
+    page = device.open("#bill?id=HB110")
+    drawer = page.locator("#bill-page")
     expect(drawer).to_be_visible()
     btn = drawer.locator("[data-watch]")
     expect(btn).to_have_text("☆ Follow this bill")

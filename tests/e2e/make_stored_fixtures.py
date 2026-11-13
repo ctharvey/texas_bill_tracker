@@ -67,8 +67,8 @@ def main() -> int:
 
         # Watchlist: star bills from their drawers, in order.
         for bill in WATCH:
-            go(f"#all?bill={bill}")
-            page.locator(f"#detail-drawer [data-watch='{bill}']").first.click()
+            go(f"#bill?id={bill}")
+            page.locator(f"#bill-page [data-watch='{bill}']").first.click()
             page.wait_for_function(f"JSON.parse(localStorage.getItem('tx-bill-atlas-watch-90r')||'[]').includes('{bill}')")
 
         # Follows: from each legislator's own page.

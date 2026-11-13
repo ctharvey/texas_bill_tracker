@@ -159,7 +159,7 @@ def test_followed_legislator_with_no_bills_says_so(device):
 
 
 def test_drawer_author_offers_a_member_link_but_no_follow_button(device):
-    page = device.open("#all?bill=HB717")
-    drawer = page.locator("#detail-drawer")
+    page = device.open("#bill?id=HB717")
+    drawer = page.locator("#bill-page")
     expect(drawer.locator("a.member-name", has_text="Landgraf")).to_have_attribute("href", f"#member?code={LANDGRAF}")
     expect(drawer.locator("[data-follow]")).to_have_count(0)
