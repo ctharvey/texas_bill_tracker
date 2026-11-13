@@ -85,10 +85,11 @@ def bill_text(bundle: dict) -> str:
 
 
 def scope_hash(bundle: dict) -> str:
-    """What the scope decision is bound to: the verified review and the text's content (text_hash, which an
-    identical re-render keeps)."""
-    return hashlib.sha256(_canonical({"review": review_input(bundle),
-                                      "text_hash": bundle["document"].get("text_hash")}).encode("utf-8")).hexdigest()
+    """What the scope decision is bound to: the verified review, the text's content (text_hash, which an identical
+    re-render keeps) and the prompt, so votes asked under an earlier wording never pair with new ones."""
+    prompt = hashlib.sha256((ROOT / "scripts/topic_suggestions_prompt.txt").read_bytes()).hexdigest()
+    return hashlib.sha256(_canonical({"review": review_input(bundle), "text_hash": bundle["document"].get("text_hash"),
+                                      "prompt": prompt}).encode("utf-8")).hexdigest()
 
 
 def _alnum(text: str) -> str:

@@ -24,10 +24,14 @@ topic. Use a short title-case name of at most four words. For each suggestion gi
 belongs under it, and the closest current topic or null. Return no suggestions when the current topics already
 cover the bill; that is the usual answer.
 
-ALL STATE AGENCIES: true only when the bill's own current text makes a substantive, operative provision for
-state agencies in general: a duty, restriction, power, program or employment rule whose subject is every state
-agency, or every agency in the executive branch of state government (for example "each state agency shall
-...", "a state agency may not ..."). Answer false when the only agency-wide language is any of these:
+ALL STATE AGENCIES: true when the bill's own current text makes a substantive, operative provision for state
+agencies in general: a duty, restriction, power, program or employment rule whose subject is every state agency,
+or every agency in the executive branch of state government. Wording that binds state agencies as a class ("each
+state agency shall ...", "every state agency must ...", "all state agencies ...", "a state agency may not ...")
+is the strongest sign: when current text has it, answer true unless every such clause falls under an exception
+below. A condition that most agencies can meet does not limit the class: "each state agency that uses artificial
+intelligence", "that maintains a website", "that employs staff" or "that is governed by a board" is still state
+agencies in general. Answer false when the only agency-wide language is any of these:
 - a federal waiver or authorization clause ("If before implementing any provision of this Act a state agency
   determines that a waiver or authorization from a federal agency is necessary ...");
 - a savings, construction, applicability, transition or effective-date clause;
@@ -36,9 +40,9 @@ agency, or every agency in the executive branch of state government (for example
   cooperate with, assist or supply information to a task force, committee, study or commission;
 - a class that also covers local government ("governmental body", "governmental entity", "political
   subdivision") unless the bill separately binds state agencies in general;
-- a limited class (agencies that license occupations, procure construction, run benefit programs, employ
-  peace officers) or named agencies only;
+- a limited class defined by a specialized function only some agencies have (agencies that license
+  occupations, procure construction, run benefit programs, employ peace officers) or named agencies only;
 - deleted text (inside <del>) or statewide geographic reach.
 When true, give one sentence of explanation and up to 3 exact, contiguous quotes of current (not deleted) bill
 text that establish it, each long enough to show the operative clause. When false, give an empty explanation
-and no quotes. False is the usual answer.
+and no quotes.

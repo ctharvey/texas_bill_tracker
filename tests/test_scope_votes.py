@@ -115,6 +115,26 @@ class VoteTests(SuggestionCase):
         current = topic_suggestions.scope_hash(json.loads(review.read_text('utf-8')))
         self.assertEqual({e['scope']['input_sha256'] for e in self.record()['votes'].values()}, {current})
 
+    def test_votes_asked_under_an_earlier_prompt_never_count(self):
+        # Old prompt: false, false. After a prompt change, vote 1 is due again (its request changed); the old vote 2
+        # must not pair with it, so a new true, true publishes true instead of an old false outvoting it.
+        self.answers = {1: FALSE, 2: FALSE}
+        self.start()
+        self.assertFalse(self.marker()['applies'])
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            prompt = Path(tmp) / 'scripts' / 'topic_suggestions_prompt.txt'
+            prompt.parent.mkdir()
+            prompt.write_text((topic_suggestions.ROOT / 'scripts' / 'topic_suggestions_prompt.txt')
+                              .read_text('utf-8') + '\nA revised rule.\n', 'utf-8')
+            with patch.object(topic_suggestions, 'ROOT', Path(tmp)):
+                # Mixed with the old vote 2 (false), the new vote 1 would split and vote 3 (false) would decide.
+                self.answers = {1: TRUE, 2: TRUE, 3: FALSE}
+                mark = len(self.sdk.requests)
+                self.second_pass_only()
+                self.assertEqual(self.votes_sent(mark), 2)
+                self.assertTrue(self.marker()['applies'])
+
     def test_each_vote_is_its_own_request_and_vote_1_is_unchanged(self):
         self.answers = {1: TRUE, 2: TRUE}
         self.start()
