@@ -12,5 +12,18 @@ const IDS = new Set(THEMES.map(t => t.id));
 // A saved theme id, or the default for anything else (a removed theme, a hand-edited value, a missing field).
 export const cleanTheme = value => (typeof value === 'string' && IDS.has(value) ? value : DEFAULT_THEME);
 
+// Light or dark: the reader's choice, or 'system' to follow the device. Device-only; it is not synced or exported.
+export const DEFAULT_MODE = 'system';
+export const MODES = [
+  {id: 'system', name: 'Match device'},
+  {id: 'light', name: 'Light'},
+  {id: 'dark', name: 'Dark'},
+];
+export const cleanMode = value => (MODES.some(m => m.id === value) ? value : DEFAULT_MODE);
+// The mode the page shows: 'light' or 'dark'.
+export const shownMode = (mode, deviceDark) => { const m = cleanMode(mode); return m === 'system' ? (deviceDark ? 'dark' : 'light') : m; };
+const asPrefs = prefs => (prefs && typeof prefs === 'object' && !Array.isArray(prefs) ? prefs : {});
+export const withMode = (prefs, mode) => ({...asPrefs(prefs), mode: cleanMode(mode)});
+
 // prefs-v1 with its theme set; other fields (remembered filters) are kept.
 export const withTheme = (prefs, theme) => ({...(prefs && typeof prefs === 'object' && !Array.isArray(prefs) ? prefs : {}), theme: cleanTheme(theme)});

@@ -10,8 +10,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Every theme's faces in one request; browsers download only the faces the active theme uses. -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Public+Sans:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Libre+Franklin:wght@600;800&family=Zilla+Slab:wght@600&display=swap" rel="stylesheet">
-  <!-- The saved colour theme, set before first paint (src/features/theme/model.js lists the same ids). -->
-  <script>try{var t=(JSON.parse(localStorage.getItem('tx-bill-atlas-prefs-v1')||'null')||{}).theme;if(['granite','lone-star','bluebonnet','ranch'].indexOf(t)>=0)document.documentElement.dataset.palette=t}catch(e){}</script>
+  <!-- The saved colour theme and light or dark, set before first paint (src/features/theme/model.js lists the same ids).
+       Without storage the device's preference still decides light or dark. -->
+  <script>(function(){var d=document.documentElement,p={};try{p=JSON.parse(localStorage.getItem('tx-bill-atlas-prefs-v1')||'null')||{}}catch(e){}var t=p.theme;if(['granite','lone-star','bluebonnet','ranch'].indexOf(t)>=0)d.dataset.palette=t;var m=p.mode;if(m!=='light'&&m!=='dark')try{m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}catch(e){m='light'}d.dataset.mode=m})()</script>
   <link rel="alternate" type="text/markdown" href="https://agent.bills.ctharvey.me/index.md" title="Texas Bill Atlas for AI agents (Markdown and JSON, no JavaScript)">
   <link rel="stylesheet" href="./src/styles.css">
   <script type="module" src="./src/app.js"></script>
@@ -59,7 +60,7 @@
         <p id="overview" class="overview-line" aria-label="At a glance"></p>
         <section id="dynamic-content" class="dynamic-content"></section>
       </main>
-      <footer class="site-footer">Built for public scrutiny. <span>Official filings remain the authoritative record.</span> <button type="button" class="footer-link" id="disclaimer-open">Disclaimer</button> <button type="button" class="footer-link" id="privacy-open">Privacy</button><a class="footer-link" href="https://agent.bills.ctharvey.me/">For AI agents</a> <label class="theme-pick">Colours <select id="theme-select"></select></label><noscript><p>This tracker needs JavaScript. The same information is available without it, as Markdown and JSON, at <a href="https://agent.bills.ctharvey.me/">agent.bills.ctharvey.me</a>.</p></noscript><span class="footer-right" id="footer-timestamp"></span></footer>
+      <footer class="site-footer">Built for public scrutiny. <span>Official filings remain the authoritative record.</span> <button type="button" class="footer-link" id="disclaimer-open">Disclaimer</button> <button type="button" class="footer-link" id="privacy-open">Privacy</button><a class="footer-link" href="https://agent.bills.ctharvey.me/">For AI agents</a> <label class="theme-pick">Colours <select id="theme-select"></select></label> <label class="theme-pick">Light or dark <select id="mode-select"></select></label><noscript><p>This tracker needs JavaScript. The same information is available without it, as Markdown and JSON, at <a href="https://agent.bills.ctharvey.me/">agent.bills.ctharvey.me</a>.</p></noscript><span class="footer-right" id="footer-timestamp"></span></footer>
     </div>
   </div>
   <div id="toast" role="status" aria-live="polite"></div>

@@ -5,7 +5,7 @@ import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex
   STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
 import {fillDrawerBrackets} from './features/brackets/view.js';
-import {setupThemePicker, setTheme, savedTheme} from './features/theme/view.js';
+import {setupThemePicker, setupModePicker, setTheme, savedTheme} from './features/theme/view.js';
 import {state} from './core/state.js';
 import {$, esc, toast} from './core/dom.js';
 import {timeoutSignal} from './core/net.js';
@@ -132,6 +132,7 @@ async function init(){
   const syncKey=applyLocation(true);
   setupDisclaimer();
   setupThemePicker(id=>{if(sync.linked?.mode==='edit')sync.record('theme',id)});
+  setupModePicker();
   setupSync(syncKey);
   if(state.bills.length)loadStatutes();
   // Keep the progress view current while it is open; other views never refetch.
@@ -411,7 +412,7 @@ async function handleSaveClick(target){
   const hit=sel=>target.closest(sel);
   if(hit('#copy-view-link')){persistState();return copyText(location.href,'Link to this view')}
   if(hit('#share-watch'))return copyText(siteBase()+buildHash('all',{},{list:[...state.watch]}),'Share link');
-  if(hit('#export-watch')){download('texas-bill-atlas-saved.json',profileFile({watch:state.watch,follows:state.follow,searches:state.searches,theme:savedTheme()}),'application/json');return toast('Watchlist, followed legislators, saved searches and colours exported')}
+  if(hit('#export-watch')){download('texas-bill-atlas-saved.json',profileFile({watch:state.watch,follows:state.follow,searches:state.searches,theme:savedTheme()}),'application/json');return toast('Watchlist, followed legislators and saved searches exported')}
   if(hit('#import-watch')){$('#import-watch-file').click();return}
   if(hit('#shared-add')){const before=state.watch.size;changeWatch('add',state.sharedList);refreshWatch();return toast(`Added ${state.watch.size-before} bills to your watchlist`)}
   if(hit('#shared-close')){Object.assign(state,{sharedList:null,sharedMode:null,sharedSyncKey:null,visibleCount:30});return renderContent()}
@@ -430,7 +431,7 @@ async function importWatchlist(file){
   try{
     if(file.size>1024*1024)throw Error('Select a file smaller than 1 MB');
     const {bills,follows,searches,theme}=parseProfileFile(await file.text()),before=state.watch.size,followed=state.follow.length;
-    if(theme)setTheme(theme);
+    if(theme){const id=setTheme(theme);if(sync.linked?.mode==='edit')sync.record('theme',id)}  // Like the bills below, a linked device syncs it.
     changeWatch('add',bills);changeFollow('follow',follows);
     const known=new Set(state.searches.map(s=>s.id)),added=searches.filter(s=>!known.has(s.id)).slice(0,Math.max(0,MAX_SEARCHES-state.searches.length));
     for(const s of added)changeSearch('save-search',s);
@@ -1240,8 +1241,8 @@ function savingMarkup(){
     ['02','Remembered filters','Your last filters and sort order are remembered on this device and come back the next time you visit.'],
     ['03','Links to any view','The address bar always describes what you are looking at: the page, filters, sort and any open bill. Use <strong>Copy link</strong> above the results, or bookmark the page, to return to it or send it to someone.'],
     ['04','Share links','On the Watchlist, <strong>Copy share link</strong> makes a link to your bills. Whoever opens it sees a read-only list and can add those bills to their own watchlist. It is a snapshot: later changes to your list are not included.'],
-    ['05','Export and import a file','<strong>Export file</strong> saves your watchlist, followed legislators and saved searches as one small file you can keep or email. <strong>Import file</strong> adds them from that file (or an older watchlist export), or from any text or spreadsheet export that mentions bill numbers such as “HB 5” or “SJR 9”. Importing only adds; it never removes bills.'],
-    ['06','Private sync links','<strong>Create sync link</strong> on the Watchlist keeps your watchlist, followed legislators and saved searches the same on your phone, laptop and work computer, with no account. Open the <strong>edit link</strong> on each device; treat it like a password, because anyone with it can change the list. The <strong>view-only link</strong> is safe to share: it shows your watchlist’s bills only, never who you follow or what you saved, and stays current as you edit. You can stop syncing one device, or delete the link for every device.'],
+    ['05','Export and import a file','<strong>Export file</strong> saves your watchlist, followed legislators, saved searches and colour theme as one small file you can keep or email. <strong>Import file</strong> adds them from that file (or an older watchlist export), or from any text or spreadsheet export that mentions bill numbers such as “HB 5” or “SJR 9”. Importing only adds; it never removes bills.'],
+    ['06','Private sync links','<strong>Create sync link</strong> on the Watchlist keeps your watchlist, followed legislators, saved searches and colour theme the same on your phone, laptop and work computer, with no account. Light or dark stays a choice for each device. Open the <strong>edit link</strong> on each device; treat it like a password, because anyone with it can change the list. The <strong>view-only link</strong> is safe to share: it shows your watchlist’s bills only, never who you follow or what you saved, and stays current as you edit. You can stop syncing one device, or delete the link for every device.'],
     ['07','RSS feeds','Each bill’s details include an <strong>RSS feed</strong> of its recorded actions, for Outlook or any feed reader. A synced watchlist also has one feed for all of its bills, linked from the Watchlist. Each legislator has a feed too, linked from their member page.'],
     ['08','Followed legislators','<strong>Follow</strong> a legislator on their member page or in Near you, and their bills appear under <strong>Following</strong>. Follows are kept in this browser like the watchlist, and go into exported files and sync links. Share links and view-only links never include them.'],
     ['09','Saved searches','On the Bill explorer, <strong>Save search</strong> keeps the current search words and filters under <strong>Following</strong>, with how many bills have new actions since you last opened it. Saved searches go into exported files and sync links like follows; share and view-only links never include them.']
