@@ -242,6 +242,9 @@ body[data-sel="flag"] .card[aria-selected="true"]::after{content:"\2605";positio
 .flag-intro::after{content:"\2605";position:absolute;left:0;top:0;bottom:0;width:17px;display:grid;place-items:center;
   font-size:14px;line-height:1;color:#fff;animation:bob 2.8s .3s ease-in-out 1}
 .flag-intro.out{opacity:0}
+/* While the flag shows, the card's border is flag navy too, then fades back to the accent with the flag */
+body[data-sel="star"] .card[aria-selected="true"]{transition:border-color .7s ease}
+body[data-sel="star"] .card.intro[aria-selected="true"]{border-color:#002868}
 @keyframes ripple-intro{to{background-position:68px 0,0 0,17px 0}}
 /* Lift: the card rises with a soft shadow; the rest of the list steps back slightly */
 body[data-sel~="lift"] .card{transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s,opacity .2s}
@@ -589,11 +592,11 @@ const reduced=matchMedia('(prefers-reduced-motion: reduce)');
 const showMotion=()=>{document.getElementById('motion-grp').hidden=!reduced.matches};
 showMotion();reduced.addEventListener?.('change',showMotion);
 // First load: flag on the selected card, then the standard Star band. Skipped under reduced motion; any click ends it.
-const endIntro=()=>document.querySelectorAll('.flag-intro').forEach(f=>f.remove());
+const endIntro=()=>{document.querySelectorAll('.flag-intro').forEach(f=>f.remove());document.querySelectorAll('.card.intro').forEach(c=>c.classList.remove('intro'))};
 if(!reduced.matches&&document.body.dataset.sel==='star'){
   const card=document.querySelector('.card[aria-selected="true"]');
-  if(card){const f=document.createElement('span');f.className='flag-intro';f.setAttribute('aria-hidden','true');card.append(f);
-    setTimeout(()=>f.classList.add('out'),3300);setTimeout(()=>f.remove(),4100)}
+  if(card){const f=document.createElement('span');f.className='flag-intro';f.setAttribute('aria-hidden','true');card.append(f);card.classList.add('intro');
+    setTimeout(()=>{f.classList.add('out');card.classList.remove('intro')},3300);setTimeout(()=>f.remove(),4100)}
 }
 document.addEventListener('click',endIntro,true);
 const press=(sel,attr,val)=>document.querySelectorAll(sel).forEach(b=>b.setAttribute('aria-pressed',String(b.getAttribute(attr)===val)));
