@@ -47,6 +47,14 @@ test('pass rows: full review counts bills not started; later passes use the stat
   ]);
 });
 
+test('pass rows: the full review uses the worker count of bills still owed a first pass when the status has one', () => {
+  const counted = {...status, pass: 'review', passes: {...status.passes, review: {due: 712, checked: 41}}};
+  const [review] = passRows(counted, summary, runState(counted, NOW));
+  assert.deepEqual([review.due, review.checked, review.now, review.known, review.estimate], [712, 41, true, true, false]);
+  const [fallback] = passRows(status, summary, runState(status, NOW));
+  assert.deepEqual([fallback.due, fallback.estimate], [1, true]);
+});
+
 test('bill numbers as typed', () => {
   for (const text of ['HB474', 'hb 474', 'H.B. 474', ' hb0474 ']) assert.equal(billKey(text), 'HB474', text);
   assert.equal(billKey('SJR 9'), 'SJR9');

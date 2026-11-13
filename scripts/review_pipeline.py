@@ -1467,6 +1467,12 @@ def _key_fn(budget):
     return cache, (cache.key if cache is not None else ResponseCache.key)
 
 
+def answered(cache_dir: Path, key: str | None) -> bool:
+    """The response cache holds a returned answer for this request: sending it again costs nothing."""
+    entry = _read_json(cache_dir / "responses" / (key + ".json")) if isinstance(key, str) and key else None
+    return isinstance(entry, dict) and entry.get("state") == "returned"
+
+
 def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
     """Second pass: topic suggestions (private) plus headline and search terms (published via extras.json)."""
     refused = RefusedBills(args.cache_dir, "Topic suggestions")
@@ -1755,6 +1761,38 @@ def main():
         status_path = args.publish_tags.parent / "status.json" if args.publish_tags and args.execute else None
         progress = {"run_started_at": utc_stamp(), "pass_name": "review", "passes": {}}
 
+        def first_pass_due(bill_id: str, registry: list[dict], key_of) -> bool:
+            """The review pass still owes this bill a paid first pass: a new bill, a new or revised version, or a
+            request with no stored answer (e.g. after a prompt change). A bill with no posted text is not counted;
+            the page lists it as failed. Mirrors `fetch_and_review`'s choice of request."""
+            plan = visit_plan(bill_id)
+            try:
+                document = load_markdown_document(bill_id, text_dir, plan["code"] if plan else "I")
+            except Exception:  # noqa: BLE001 - no text to review
+                return False
+            review_path = args.cache_dir / "reviews" / (bill_id + ".json")
+            if (plan["review"] in ("first", "update")) if plan else not review_path.exists():
+                return True
+            stored = read_json(review_path) or {}
+            if plan and plan["review"] == "revisit" and stored.get("version_update"):
+                key = stored.get("first_pass_request_key")  # the revisit rebuilds the identical update request
+            else:
+                key = key_of(classification.build_request(document, registry))
+            return not answered(args.cache_dir, key)
+
+        # Bills the review pass still owes a first pass, counted once here and removed as each review lands, so the
+        # progress page shows exactly what is left (not only never-seen bills).
+        review_left: set[str] | None = None
+        if status_path is not None and args.input == "markdown" and not args.bill_id:
+            try:
+                registry_now, (_, key_of) = detailed.load_registry(), _key_fn(budget)
+                review_left = {b for b in ids if first_pass_due(b, registry_now, key_of)}
+                progress["passes"]["review"] = {"due": len(review_left), "checked": 0}
+                print("Full review: %d bills still need a first pass" % len(review_left), flush=True)
+            except Exception as error:  # noqa: BLE001 - progress display only; never stops a run
+                print("Pass count failed: review", type(error).__name__, flush=True)
+                review_left = None
+
         def publish(**kwargs) -> None:
             try_publish_status(status_path, queue, **progress, **kwargs)
 
@@ -2011,6 +2049,10 @@ def main():
                     queue["cursor"] += 1
                 atomic_json(queue_path, queue)
                 print(bill_id, status, flush=True)
+                if review_left is not None and "result" in bundle and bill_id in review_left:
+                    review_left.discard(bill_id)
+                    counted = progress["passes"]["review"]
+                    counted["due"], counted["checked"] = len(review_left), counted["checked"] + 1
                 stop_run = bundle.get("stop_run")
                 if stop_run and stop_run.startswith("CapacityUnavailable"):
                     defer_for_capacity(bill_id, bundle.get("retry_after") or 0)

@@ -40,14 +40,18 @@ export function runState(status, now) {
     updatedAt: Number.isFinite(updated) ? updated : null, waitingUntil: kind === 'waiting' ? waiting : null, nextRun};
 }
 
-// One row per pass: {key, label, note, due, checked, now, known}. `due` for the full review is the bills not yet
-// picked up; for later passes it is what the status reports, or null when the status file has no count for it.
+// One row per pass: {key, label, note, due, checked, now, known, estimate}. `due` is what the status reports: for
+// the full review, every bill still owed a first pass (new bills, new versions, and reviews redone after a prompt
+// change). A status file without that count falls back to the bills not yet picked up (`estimate`: true). Later
+// passes are null when the status file has no count for them.
 export function passRows(status, summary, run) {
   const passes = status?.passes && typeof status.passes === 'object' ? status.passes : {};
   return PASSES.map(p => {
-    const counted = p.key === 'review' ? {due: summary.notStarted.length, checked: null} : passes[p.key];
-    const known = p.key === 'review' || Boolean(counted && Number.isFinite(counted.due));
-    return {...p, known, due: known ? counted.due : null,
+    const reported = passes[p.key] && Number.isFinite(passes[p.key].due) ? passes[p.key] : null;
+    const estimate = p.key === 'review' && !reported;
+    const counted = estimate ? {due: summary.notStarted.length, checked: null} : reported;
+    const known = Boolean(counted);
+    return {...p, known, estimate, due: known ? counted.due : null,
       checked: known && Number.isFinite(counted.checked) ? counted.checked : null,
       now: run.pass === p.key};
   });

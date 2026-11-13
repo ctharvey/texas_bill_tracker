@@ -394,6 +394,66 @@ class BreakerTests(StagesCase):
         self.assertNotIn('changes', review)
 
 
+class ReviewLeftCountTests(StagesCase):
+    """The status's passes.review.due: every bill the review pass still owes a paid first pass, live."""
+
+    def setUp(self):
+        super().setUp()
+        self.seed(['HB1', 'HB2', 'HB3'])
+        self.dues = []
+        publish = pipeline.try_publish_status
+
+        def record(out, queue, **kwargs):
+            review = (kwargs.get('passes') or {}).get('review')
+            if review and (not self.dues or self.dues[-1] != (review['due'], review['checked'])):
+                self.dues.append((review['due'], review['checked']))
+            publish(out, queue, **kwargs)
+        p = patch.object(pipeline, 'try_publish_status', side_effect=record); p.start(); self.addCleanup(p.stop)
+
+    def status(self):
+        return json.loads((self.live / 'luna' / 'status.json').read_text('utf-8'))
+
+    def test_new_bills_count_down_to_zero(self):
+        out = self.run_main()
+        self.assertIn('Full review: 3 bills still need a first pass', out)
+        self.assertEqual(self.dues, [(3, 0), (2, 1), (1, 2), (0, 3)])
+        self.assertEqual(self.status()['passes']['review'], {'due': 0, 'checked': 3})
+
+    def test_answered_bills_are_not_counted_on_a_revisit(self):
+        self.run_main()
+        self.dues.clear()
+        self.assertIn('Full review: 0 bills still need a first pass', self.run_main())
+        self.assertEqual(self.dues, [(0, 0)])
+
+    def test_a_prompt_change_counts_every_reviewed_bill_until_each_is_redone(self):
+        # Counterexample for the old page: after a prompt change every bill is already "seen", so a count of
+        # unseen bills said 0 while the run re-reviewed all of them.
+        self.run_main()
+        real = classification.build_request
+
+        def changed_prompt(document, registry):
+            request = real(document, registry)
+            request['input'][0]['content'][0]['text'] += '\nREVISED PROMPT'
+            return request
+        self.dues.clear()
+        mark = len(self.sdk.requests)
+        with patch.object(classification, 'build_request', side_effect=changed_prompt):
+            out = self.run_main()
+        self.assertIn('Full review: 3 bills still need a first pass', out)
+        self.assertEqual(self.sent_since(mark), [(b, CLASSIFY) for b in ('HB1', 'HB2', 'HB3')])
+        self.assertEqual(self.dues, [(3, 0), (2, 1), (1, 2), (0, 3)])
+
+    def test_a_new_version_counts_and_its_cached_revisit_does_not(self):
+        self.run_main()
+        self.put('HB2', 'H', md_h('HB2'))
+        self.assertIn('Full review: 1 bills still need a first pass', self.run_main())
+        self.assertIn('Full review: 0 bills still need a first pass', self.run_main())  # rebuilt update: cached
+
+    def test_a_bill_with_no_posted_text_is_not_counted(self):
+        self.snap.write_text(json.dumps({'bills': [{'id': i} for i in self.ids + ['HB9']]}), 'utf-8')
+        self.assertIn('Full review: 3 bills still need a first pass', self.run_main())
+
+
 class ParserTests(unittest.TestCase):
     def test_stages_without_markdown_input_is_a_usage_error(self):
         with tempfile.TemporaryDirectory() as tmp:
