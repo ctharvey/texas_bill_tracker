@@ -363,3 +363,4 @@ mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;
 .preview-step{justify-content:space-between;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
 .bill-card.previewed{outline:2px solid var(--navy);outline-offset:-1px}
 @media(max-width:1199px){.bill-preview{display:none}}
+.bill-headline.card{margin:0 0 10px}

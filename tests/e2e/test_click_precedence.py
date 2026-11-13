@@ -61,7 +61,7 @@ def test_watch_button_in_a_card_toggles_the_watch_and_does_not_open_the_bill_pag
 def test_card_body_opens_the_preview_when_wide_and_the_bill_page_on_a_phone(device):
     page = device.open("#all")
     bill, number = first_bill(page)
-    card(page, bill).locator(".bill-description").click()
+    card(page, bill).locator(".bill-filed").click()
     expect_card_opened(page, bill, number)
 
 
@@ -108,7 +108,7 @@ def test_companion_tag_in_a_card_opens_the_companion_not_the_card(device):
 def test_selecting_text_in_a_card_does_not_open_the_bill_page(device):
     page = device.open("#all")
     bill, number = first_bill(page)
-    body = card(page, bill).locator(".bill-description")
+    body = card(page, bill).locator(".bill-filed")
     # A programmatic click leaves the selection in place, like releasing a drag-selection inside the card.
     body.evaluate("e=>{const r=document.createRange();r.selectNodeContents(e);const s=getSelection();s.removeAllRanges();s.addRange(r);e.click()}")
     page.wait_for_timeout(200)
@@ -123,10 +123,10 @@ def test_selecting_text_in_a_card_does_not_open_the_bill_page(device):
 def test_modified_click_on_a_card_does_not_open_the_bill_page(device):
     page = device.open("#all")
     bill, number = first_bill(page)
-    card(page, bill).locator(".bill-description").click(modifiers=["Control"])
+    card(page, bill).locator(".bill-filed").click(modifiers=["Control"])
     page.wait_for_timeout(200)
     expect(page.locator("#bill-page")).to_be_hidden()
-    card(page, bill).locator(".bill-description").click(modifiers=["Shift"])
+    card(page, bill).locator(".bill-filed").click(modifiers=["Shift"])
     page.wait_for_timeout(200)
     expect(page.locator("#bill-page")).to_be_hidden()
     expect(page.locator("#bill-preview")).to_be_hidden()

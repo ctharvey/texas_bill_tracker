@@ -173,7 +173,9 @@ def test_every_sort_option_is_selectable_and_recorded(device):
     # Most agencies really is ordered by agency links: the top card has the most, and later ones never have more
     pick(page, "#sort-order", "Most agencies")
     expect(page.locator(".bill-card .bill-number").first).to_have_text("HB 805")
-    links = [int(t.split()[0]) for t in page.locator(".bill-card .bill-meta span:last-child").all_inner_texts()]
+    # A card with no agency link shows no count (D5), which reads as 0.
+    links = [int(c.locator(".bill-links").inner_text().split()[0]) if c.locator(".bill-links").count() else 0
+             for c in page.locator(".bill-card").all()]
     # Only the head is checked: companion bills are pulled next to each other, which reorders later rows.
     assert links[0] == 7 and links[:10] == sorted(links[:10], reverse=True)
 
