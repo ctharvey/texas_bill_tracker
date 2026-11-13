@@ -347,4 +347,4 @@ mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;
 .review-lookup-result{margin:0;font-size:13px;min-height:1.4em;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .review-lookup-hint{color:var(--muted)}
 .review-side .review-group{margin-bottom:0}
-@media(max-width:760px){.review-columns{grid-template-columns:1fr}.review-side{order:-1}}
+@media(max-width:760px){.review-columns{grid-template-columns:minmax(0,1fr)}.review-side{order:-1}}
