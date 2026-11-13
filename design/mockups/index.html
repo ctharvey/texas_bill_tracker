@@ -184,6 +184,22 @@ body[data-sel="pointer"] .card[aria-selected="true"]::after{content:"";position:
   border:9px solid transparent;border-left:12px solid var(--accent);border-right:0}
 body[data-sel="pointer"] .card[aria-selected="true"] .num{color:var(--accent)}
 body[data-sel="pointer"] .preview{box-shadow:inset 0 3px 0 var(--accent)}
+/* Star: a shimmering ring spins around the card while a star runs laps along its edge. Cheesy on purpose. */
+@property --spin{syntax:"<angle>";inherits:false;initial-value:0deg}
+@keyframes spin{to{--spin:360deg}}
+@keyframes lap{to{offset-distance:100%}}
+@keyframes twinkle{50%{scale:1.35;filter:drop-shadow(0 0 6px var(--mark))}}
+body[data-sel="star"] .card[aria-selected="true"]{z-index:2;border-color:transparent}
+body[data-sel="star"] .card[aria-selected="true"]::before{content:"";position:absolute;inset:-4px;border-radius:calc(var(--radius) + 4px);padding:3px;
+  background:conic-gradient(from var(--spin),var(--accent),var(--mark),#fff6c8,var(--mark),var(--accent),var(--p,var(--accent)),var(--accent));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
+  animation:spin 2.4s linear infinite;pointer-events:none}
+body[data-sel="star"] .card[aria-selected="true"]::after{content:"\2605";position:absolute;left:0;top:0;font-size:20px;line-height:1;color:var(--mark);
+  text-shadow:0 0 8px #fff,0 0 12px var(--mark);offset-path:inset(-3px round calc(var(--radius) + 3px));offset-rotate:0deg;
+  animation:lap 4s linear infinite,twinkle .8s ease-in-out infinite;pointer-events:none}
+body[data-sel="star"] .card[aria-selected="true"] .title a{color:var(--accent)}
+@media (prefers-reduced-motion:reduce){body:not([data-motion="on"])[data-sel="star"] .card[aria-selected="true"]::before,
+  body:not([data-motion="on"])[data-sel="star"] .card[aria-selected="true"]::after{animation:none}}
 /* Lift: the card rises with a soft shadow; the rest of the list steps back slightly */
 body[data-sel~="lift"] .card{transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s,opacity .2s}
 body[data-sel="lift"] .list:has(.card[aria-selected="true"]) .card:not([aria-selected="true"]){opacity:.62}
@@ -312,6 +328,7 @@ body[data-sel~="lift"] .card[aria-selected="true"]{z-index:2;transform:translate
     <button data-setsel="pointer" aria-pressed="false">Pointer</button>
     <button data-setsel="lift" aria-pressed="false">Lift</button>
     <button data-setsel="fill lift" aria-pressed="false">Fill + Lift</button>
+    <button data-setsel="star" aria-pressed="false">&#9733; Star</button>
   </div>
   <div class="grp" id="motion-grp" hidden><span class="lbl" style="color:#f0b45a">Your system asks for reduced motion</span>
     <button id="motion-toggle" aria-pressed="false">Play motion anyway</button>
