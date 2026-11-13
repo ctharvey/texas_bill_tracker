@@ -32,7 +32,7 @@ test('newly added agencies use the register name', () => {
     'sos', 'tceq', 'tdcj', 'tdem', 'tdi', 'tdlr', 'tea', 'thc', 'thecb', 'tmb', 'tob', 'tpwd', 'trs', 'tsc', 'tss', 'twc', 'twdb',
     'txdmv', 'txdot', 'tdhca', 'tvc', 'tcole', 'texas-ethics', 'tac', 'tbpe', 'sbec', 'tbc', 'tsbvi', 'tsd', 'tsbp', 'tbn',
     'tsbpa', 'tba', 'tfc', 'veterans-land', 'ut-system', 'tamu-system', 'tx-juvenile', 'tpfa', 'tswcb']);
-  for (const a of register.agencies) if (!earlier.has(a.id)) assert.equal(AGENCY_NAME[a.id], a.name, a.id);
+  for (const a of register.agencies) if (!earlier.has(a.id)) assert.equal(AGENCY_NAME[a.id], a.atlas_name || a.name, a.id);
 });
 
 test('ids are lower-case slugs', () => {

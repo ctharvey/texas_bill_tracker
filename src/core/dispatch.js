@@ -1,6 +1,6 @@
 // Page clicks are resolved in one fixed order: the check order of the original handleClick. A feature registers its
 // handler under one of these names, so a click resolves the same way whatever order modules load in.
-export const CLICK_ORDER = ['agency-option', 'agency-combobox', 'agency-dismiss', 'nav', 'open-bill', 'copy-ai',
+export const CLICK_ORDER = ['agency-sort', 'agency-option', 'agency-combobox', 'agency-dismiss', 'nav', 'open-bill', 'copy-ai',
   'near-locate', 'near-forget', 'near-change', 'near-county-use', 'near-numbers-use', 'near-more', 'follow',
   'save-search', 'search-open', 'search-rename', 'search-delete', 'follow-more', 'law-compare', 'law-show',
   'member-more', 'copy-page-ai', 'today-topic', 'today-more', 'today-topics-toggle', 'save-tools', 'watch-group',

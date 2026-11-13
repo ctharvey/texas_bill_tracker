@@ -172,7 +172,8 @@
   {
    "number": "301",
    "name": "Governor – Executive",
-   "id": "governor"
+   "id": "governor",
+   "atlas_name": "Office of the Governor"
   },
   {
    "number": "302",
@@ -1127,5 +1128,6 @@
    "id": "tx-courts",
    "name": "Texas Judicial Branch"
   }
- ]
+ ],
+ "atlas_name_note": "atlas_name: the name the atlas shows where the register's accounting label reads poorly."
 }

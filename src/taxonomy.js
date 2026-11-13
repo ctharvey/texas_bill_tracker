@@ -109,7 +109,7 @@ export const AGENCIES = [
   ['scjc', 'State Commission on Judicial Conduct'],
   ['law-library', 'State Law Library'],
   ['governor-fiscal', 'Governor – Fiscal'],
-  ['governor', 'Governor – Executive'],
+  ['governor', 'Office of the Governor'],
   ['sao', 'State Auditor'],
   ['comptroller-treasury', 'Comptroller – Treasury Fiscal'],
   ['dir', 'Department of Information Resources'],
@@ -255,6 +255,14 @@ export const AGENCIES = [
 ].filter((v, i, a) => a.findIndex(x => x[0] === v[0]) === i).map(([id,name]) => ({id,name}));
 
 export const AGENCY_NAME = Object.fromEntries(AGENCIES.map(a => [a.id, a.name]));
+
+// Agency dropdown order: the all-agencies tag first, then A-Z ('name') or most bills first ('count', ties A-Z).
+export function sortAgencyIds(ids, nameOf, counts, mode = 'name') {
+  const count = id => counts.get(id) || 0;
+  const byName = (a, b) => nameOf(a).localeCompare(nameOf(b));
+  return [...ids].sort((a, b) => a === SCOPE_AGENCY_ID ? -1 : b === SCOPE_AGENCY_ID ? 1
+    : mode === 'count' ? count(b) - count(a) || byName(a, b) : byName(a, b));
+}
 
 export const POLICY_AREAS = [
   {name:'Education', pattern:/\b(school|student|teacher|education|curricul|voucher|scholarship|classroom)\b/i},

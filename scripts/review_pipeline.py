@@ -15,6 +15,7 @@ import re
 import threading
 import time
 import traceback
+import unicodedata
 from collections import Counter, deque
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from urllib.request import Request, urlopen
@@ -756,12 +757,62 @@ def generic_agency_id(agency: dict, document: dict, names: dict[str, str]) -> st
     return registry_id if registry_id in names else None
 
 
+# Publish-time only: other names for registry agencies (the office's own title, its governing body, a common
+# acronym), each with its source. Registry names themselves are matched without an entry.
+AGENCY_NAME_ALIASES = Path(__file__).with_name("agency_name_aliases.json")
+_name_tables: dict = {}
+
+
+def agency_name_key(name: str) -> str:
+    """Comparison form of an agency name: no accents, case or punctuation, "&" as "and", and a leading "the" or
+    "Texas" and a trailing "of Texas" ignored ("Railroad Commission of Texas" = "railroad commission")."""
+    s = re.sub("['‘’ʼ]", "", name or "")  # "Auditor's" = "Auditors", whichever apostrophe
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower().replace("&", " and ")
+    s = re.sub(r"[^a-z0-9]+", " ", s).strip()
+    s = re.sub(r"^the ", "", s)
+    s = re.sub(r"^(?:state of texas|texas) ", "", s)
+    return re.sub(r" of (?:the state of )?texas$", "", s)
+
+
+def _name_table(names: dict[str, str]) -> dict[str, str]:
+    key = tuple(sorted(names.items()))
+    if key not in _name_tables:
+        seen: dict[str, set] = {}
+        for registry_id, name in names.items():
+            seen.setdefault(agency_name_key(name), set()).add(registry_id)
+        for entry in json.loads(AGENCY_NAME_ALIASES.read_text("utf-8")):
+            if entry["registry_id"] in names:
+                seen.setdefault(agency_name_key(entry["alias"]), set()).add(entry["registry_id"])
+        # A name that fits two agencies is ambiguous and maps to neither.
+        _name_tables[key] = {k: next(iter(ids)) for k, ids in seen.items() if k and len(ids) == 1}
+    return _name_tables[key]
+
+
+def named_agency_id(agency: dict, names: dict[str, str]) -> str | None:
+    """Registry ID whose name (or a listed alias) is the agency's name; None when no single agency has it.
+    Luna leaves registry_id empty for agencies it did not see in the request's registry (as with every bill
+    reviewed before the registry grew), so this catches them without a new paid review."""
+    return _name_table(names).get(agency_name_key(agency.get("name") or ""))
+
+
+def agency_id_for(agency: dict, document: dict, names: dict[str, str] | None) -> str | None:
+    """Registry ID a published label gets in place of Luna's: for an unmapped agency, by generic term and then
+    by name; for a mapped one, only when its name is a different listed agency's (Luna once filed "Texas
+    Department of Family and Protective Services" under DPS when DFPS was not yet in its registry)."""
+    if not names:
+        return None
+    named = named_agency_id(agency, names)
+    if agency.get("registry_id") is not None:
+        return named if named and named != agency["registry_id"] else None
+    return generic_agency_id(agency, document, names) or named
+
+
 def public_agencies(kept: list[dict], document: dict, names: dict[str, str] | None) -> list[dict]:
-    """Published agency labels; with `names` (registry id -> name), generic names are mapped by
-    generic_agency_id and a mapped label whose agency is already listed is dropped."""
+    """Published agency labels; with `names` (registry id -> name), unmapped agencies are mapped by
+    agency_id_for and a mapped label whose agency is already listed is dropped."""
     out = []
     for a in kept:
-        mapped = generic_agency_id(a, document, names) if names else None
+        mapped = agency_id_for(a, document, names)
         if mapped and any(x["id"] == mapped for x in out + [{"id": k.get("registry_id")} for k in kept]):
             continue
         out.append({"id": mapped or a["registry_id"], "name": names[mapped] if mapped else a["name"],
@@ -945,7 +996,7 @@ def highlight_entry(bundle: dict, reviewed_at: str, markdown: str, version_code:
             claim = {"kind": HIGHLIGHT_KINDS[field], "explanation": item.get("explanation"), "agency_id": None,
                      "impact": None, "effect": None, "key_point": False}
             if field == "agencies":
-                mapped = generic_agency_id(item, document, names) if names else None
+                mapped = agency_id_for(item, document, names)
                 claim.update(label=names[mapped] if mapped else item.get("name"),
                              agency_id=mapped or item.get("registry_id"), impact=item.get("impact"),
                              key_point=item.get("impact") == "direct")
