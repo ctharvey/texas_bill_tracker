@@ -184,11 +184,13 @@ body[data-sel="pointer"] .card[aria-selected="true"]::after{content:"";position:
   border:9px solid transparent;border-left:12px solid var(--accent);border-right:0}
 body[data-sel="pointer"] .card[aria-selected="true"] .num{color:var(--accent)}
 body[data-sel="pointer"] .preview{box-shadow:inset 0 3px 0 var(--accent)}
-/* Star: a plain accent border all round (the party bar gives way to it) and a Texas flag star centred on the left edge.
-   Padding grows to keep the text where it sits on an unselected card (1px border + 4px party bar before, 2px all round now). */
-body[data-sel="star"] .card[aria-selected="true"]{z-index:2;border:2px solid var(--accent);padding:13px 13px 13px 18px}
-body[data-sel="star"] .card[aria-selected="true"]::after{content:"\2605";position:absolute;left:-14px;top:50%;translate:0 -50%;font-size:24px;line-height:1;color:#fff;
-  -webkit-text-stroke:2px #0f1c33;paint-order:stroke fill;filter:drop-shadow(0 1px 1.5px #0006);pointer-events:none}
+/* Star: the selected card's left edge becomes a flag hoist, a 28px band in the accent with a white star centred in it,
+   in place of the party bar. Text starts 36px in on every card in this style (4 + 32 unselected, 28 + 8 selected), so
+   selecting a card does not shift it. */
+body[data-sel="star"] .card{padding-left:32px}
+body[data-sel="star"] .card[aria-selected="true"]{z-index:2;border:2px solid var(--accent);border-left-width:28px;padding:13px 13px 13px 8px}
+body[data-sel="star"] .card[aria-selected="true"]::after{content:"\2605";position:absolute;left:-28px;top:0;bottom:0;width:28px;
+  display:grid;place-items:center;font-size:19px;line-height:1;color:#fff;pointer-events:none}
 body[data-sel="star"] .card[aria-selected="true"] .title a{color:var(--accent)}
 /* Lift: the card rises with a soft shadow; the rest of the list steps back slightly */
 body[data-sel~="lift"] .card{transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s,opacity .2s}
