@@ -170,7 +170,9 @@ class PublicStatusTests(WorkerLoopTests):
         self.assertEqual(final['reviewed'], queue['seen'])
         self.assertEqual(final['failed'], {'HB3': 'download'})  # Stage only; no error reasons.
         self.assertEqual(set(final), {'format', 'updated_at', 'running', 'current', 'in_progress', 'upcoming',
-                                      'waiting_until', 'reviewed', 'retry', 'failed'})
+                                      'waiting_until', 'reviewed', 'retry', 'failed', 'run_started_at', 'pass',
+                                      'passes'})
+        self.assertEqual((seen['HB2']['pass'], final['pass']), ('review', None))
         self.assertEqual((seen['HB2']['in_progress'], final['in_progress']), (['HB2'], []))
 
     def test_parallel_status_lists_every_bill_in_flight_and_drops_finished_ones(self):
@@ -201,6 +203,39 @@ class PublicStatusTests(WorkerLoopTests):
         self.assertTrue(all(len(h) <= 2 for h in snapshots))
         final = self.read()
         self.assertEqual((final['running'], final['in_progress'], final['current']), (False, [], None))
+
+    def topic_pass(self, during):
+        """--suggest-topics with its jobs and runner faked: due HB1 (two votes) and HB2; `during` runs mid-pass."""
+        fake_jobs = lambda *a: iter([('HB1', None, None), ('HB1', None, None), ('HB2', None, None)])
+        def run(*a):
+            during(self.read())
+            return 1
+        return patch.object(pipeline, 'topic_jobs', side_effect=fake_jobs), \
+            patch.object(pipeline, 'suggest_topics', side_effect=run)
+
+    def test_status_stays_running_through_a_second_pass_and_counts_it(self):
+        # Counterexample for the old status: the first pass's end published running=false while topics ran.
+        seen = []
+        jobs, run = self.topic_pass(seen.append)
+        with jobs, run:
+            self.run_main(lambda b, r: {'bill_id': b}, lambda doc, *a, **k: bundle(doc['bill_id']),
+                          '--publish-tags', str(self.tags), '--suggest-topics')
+        [during] = seen
+        self.assertEqual((during['running'], during['pass'], during['current']), (True, 'topics', None))
+        self.assertEqual(during['passes'], {'topics': {'due': 2, 'checked': 0}})  # bills, not votes
+        final = self.read()
+        self.assertEqual((final['running'], final['pass']), (False, None))
+        self.assertEqual(final['passes'], {'topics': {'due': 2, 'checked': 1}})
+        self.assertEqual(final['run_started_at'], during['run_started_at'])
+
+    def test_a_stop_inside_a_second_pass_still_publishes_stopped_status(self):
+        def stop(status):
+            raise SystemExit(2)
+        jobs, run = self.topic_pass(stop)
+        with jobs, run, self.assertRaises(SystemExit):
+            self.run_main(lambda b, r: {'bill_id': b}, lambda doc, *a, **k: bundle(doc['bill_id']),
+                          '--publish-tags', str(self.tags), '--suggest-topics')
+        self.assertEqual((self.read()['running'], self.read()['pass']), (False, None))
 
     def test_crash_still_publishes_stopped_status(self):
         def run_document(doc, *a, **k): raise RuntimeError('unexpected')

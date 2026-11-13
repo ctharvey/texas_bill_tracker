@@ -1194,15 +1194,19 @@ def utc_stamp(seconds_from_now: float = 0) -> str:
 
 
 def publish_status(out: Path, queue: dict, *, current: str | None, upcoming: list[str], running: bool,
-                   waiting_until: str | None = None, in_progress: list[str] | None = None) -> None:
-    # Public progress view: bill ids and states only, never costs, reasons or review content.
+                   waiting_until: str | None = None, in_progress: list[str] | None = None,
+                   run_started_at: str | None = None, pass_name: str | None = None,
+                   passes: dict | None = None) -> None:
+    # Public progress view: bill ids, states and counts only, never costs, reasons or review content.
     # `in_progress`: every bill a worker holds now (several with --workers); `current` stays for older readers.
+    # `pass`: review, entities, topics or audit while one runs; `passes`: {name: {due, checked}} bill counts.
     active = list(dict.fromkeys(in_progress if in_progress is not None else ([current] if current else [])))
     atomic_json(out, {"format": "texas-bill-luna-status-v1", "updated_at": utc_stamp(),
                       "running": running, "current": current,
                       "in_progress": active, "upcoming": upcoming, "waiting_until": waiting_until,
                       "reviewed": list(queue.get("seen", [])), "retry": list(queue.get("retry", [])),
-                      "failed": {k: v.get("stage") for k, v in queue.get("failed", {}).items()}})
+                      "failed": {k: v.get("stage") for k, v in queue.get("failed", {}).items()},
+                      "run_started_at": run_started_at, "pass": pass_name, "passes": passes or {}})
     os.chmod(out, 0o644)
 
 
@@ -1400,6 +1404,11 @@ def _key_fn(budget):
 
 def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
     """Second pass: topic suggestions (private) plus headline and search terms (published via extras.json)."""
+    refused = RefusedBills(args.cache_dir, "Topic suggestions")
+    return _second_pass("Topic suggestions", topic_jobs(args, queue, budget, refused), args, deadline, refused)
+
+
+def topic_jobs(args, queue: dict, budget, refused: "RefusedBills"):
     import topic_suggestions
     topics, registry = classification.load_policy_tags(), detailed.load_registry()
     cache, key_fn = _key_fn(budget)
@@ -1409,8 +1418,6 @@ def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
         for path in sorted((args.cache_dir / "reviews").glob("*.json"), reverse=args.order == "reverse"):
             if topic_suggestions.BILL_RE.fullmatch(path.stem):
                 yield path.stem, path
-
-    refused = RefusedBills(args.cache_dir, "Topic suggestions")
 
     def jobs():
         # Bills refused for capacity in an earlier run go after all others, votes included, so they hold up nobody.
@@ -1447,11 +1454,15 @@ def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
                 after = _read_json(out / (bill_id + ".json"))
                 if after == record:
                     break  # not saved (capacity, a skip or a per-bill refusal): leave it for a later run
-    return _second_pass("Topic suggestions", jobs(), args, deadline, refused)
+    return jobs()
 
 
 def audit_reviews(args, queue: dict, budget, deadline: float) -> int:
     """Lowest priority of all: the ~2% spot-check sample, each against the exact text version it reviewed."""
+    return _second_pass("Review audit", audit_jobs(args, queue, budget), args, deadline)
+
+
+def audit_jobs(args, queue: dict, budget):
     import review_audit
     import review_stages
     registry = detailed.load_registry()
@@ -1482,11 +1493,15 @@ def audit_reviews(args, queue: dict, budget, deadline: float) -> int:
                                                                    cache=cache),
                    lambda report, b=bundle, i=bill_id: atomic_json(out / (i + ".json"),
                                                                    review_audit.record_for(b, report)))
-    return _second_pass("Review audit", jobs(), args, deadline)
+    return jobs()
 
 
 def scan_entities(args, queue: dict, budget, deadline: float) -> int:
     """Related-entities pass: one list-free Luna read per reviewed text, for bodies the review did not list."""
+    return _second_pass("Related entities", entity_jobs(args, queue, budget), args, deadline)
+
+
+def entity_jobs(args, queue: dict, budget):
     import related_entities
     import review_stages
     registry = detailed.load_registry()
@@ -1517,7 +1532,13 @@ def scan_entities(args, queue: dict, budget, deadline: float) -> int:
                                                                        cache=cache),
                    lambda report, i=bill_id, d=document: atomic_json(out / (i + ".json"),
                                                                      related_entities.record_for(i, d, report)))
-    return _second_pass("Related entities", jobs(), args, deadline)
+    return jobs()
+
+
+def due_bills(jobs) -> int:
+    """Bills a second pass would still work on: walks its own job selection without calling a job (a topics vote
+    that is not saved ends that bill's votes, so each bill is counted once)."""
+    return len({bill_id for bill_id, _call, _save in jobs})
 
 
 def publish_related(args, live: set[str] | None = None) -> None:
@@ -1648,6 +1669,11 @@ def main():
         deadline = time.monotonic() + args.max_minutes * 60
         new_failures = 0
         status_path = args.publish_tags.parent / "status.json" if args.publish_tags and args.execute else None
+        progress = {"run_started_at": utc_stamp(), "pass_name": "review", "passes": {}}
+
+        def publish(**kwargs) -> None:
+            try_publish_status(status_path, queue, **progress, **kwargs)
+
         stopped = False  # the main loop ended on a stop outcome or the time limit, not on an empty queue
         try:
             pending, cooling, capacity_waits, redo = deque(candidates), [], 0, set()
@@ -1656,8 +1682,8 @@ def main():
 
             def pause(seconds: float, current: str | None) -> None:
                 held = list(dict.fromkeys(([current] if current else []) + list(running.values())))
-                try_publish_status(status_path, queue, current=current, upcoming=list(pending)[:5], running=True,
-                                   waiting_until=utc_stamp(seconds), in_progress=held)
+                publish(current=current, upcoming=list(pending)[:5], running=True,
+                        waiting_until=utc_stamp(seconds), in_progress=held)
                 time.sleep(seconds)
 
             def defer_for_capacity(bill_id: str, retry_after: float) -> None:
@@ -1911,7 +1937,7 @@ def main():
                     bill_id = next_bill()
                     if bill_id is None:
                         break
-                    try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5], running=True)
+                    publish(current=bill_id, upcoming=list(pending)[:5], running=True)
                     if handle(bill_id, *work(bill_id, asks_questions(bill_id), visit_plan(bill_id))):
                         stopped = True; break
             else:
@@ -1930,8 +1956,8 @@ def main():
                                 stopping = stopping or not running
                                 break
                             running[pool.submit(work, bill_id, asks_questions(bill_id), visit_plan(bill_id))] = bill_id
-                            try_publish_status(status_path, queue, current=bill_id, upcoming=list(pending)[:5],
-                                               running=True, in_progress=list(running.values()))
+                            publish(current=bill_id, upcoming=list(pending)[:5], running=True,
+                                    in_progress=list(running.values()))
                         if not running:
                             break
                         ready_at = min((when for when, _ in cooling), default=None)
@@ -1945,19 +1971,43 @@ def main():
                                 stopping = stopped = True
                         if done:  # a finished bill leaves the progress view now, not when the next one starts
                             active = list(running.values())
-                            try_publish_status(status_path, queue, current=active[-1] if active else None,
-                                               upcoming=list(pending)[:5], running=True, in_progress=active)
+                            publish(current=active[-1] if active else None, upcoming=list(pending)[:5],
+                                    running=True, in_progress=active)
+            # Entities before topics: the topics backlog used the whole run time limit (13 Nov), leaving later
+            # passes none. The status stays running, naming the pass, until the run ends.
+            second = [(name, run, jobs) for name, on, run, jobs in (
+                ("entities", args.related_entities and args.input == "markdown", scan_entities, entity_jobs),
+                ("topics", args.suggest_topics, suggest_topics,
+                 lambda a, q, b: topic_jobs(a, q, b, RefusedBills(a.cache_dir, "Topic suggestions"))),
+                ("audit", args.audit_sample and args.input == "markdown", audit_reviews, audit_jobs)) if on]
+
+            def recount(name: str, jobs) -> None:
+                if status_path is None:
+                    return
+                try:
+                    due = due_bills(jobs(args, queue, budget))
+                except Exception as error:  # noqa: BLE001 - progress display only; never stops a run
+                    print("Pass count failed:", name, type(error).__name__, flush=True)
+                    return
+                progress["passes"][name] = {"due": due, "checked": progress["passes"].get(name, {}).get("checked", 0)}
+
+            for name, _run, jobs in second:
+                recount(name, jobs)
+            for name, run, jobs in second:
+                if stopped or halt.is_set():
+                    break
+                progress["pass_name"] = name
+                publish(current=None, upcoming=[], running=True)
+                checked = run(args, queue, budget, deadline)
+                recount(name, jobs)
+                if name in progress["passes"]:
+                    progress["passes"][name]["checked"] = checked
+            progress["pass_name"] = None
+            print("New model spending this run: $%.6f" % budget.run_spent)
+            publish_luna(args, network_ok=not halt.is_set())
         finally:
-            try_publish_status(status_path, queue, current=None, upcoming=[], running=False)
-        # Entities before topics: the topics backlog used the whole run time limit (13 Nov), leaving later passes none.
-        if args.related_entities and args.input == "markdown" and not stopped and not halt.is_set():
-            scan_entities(args, queue, budget, deadline)
-        if args.suggest_topics and not stopped and not halt.is_set():
-            suggest_topics(args, queue, budget, deadline)
-        if args.audit_sample and args.input == "markdown" and not stopped and not halt.is_set():
-            audit_reviews(args, queue, budget, deadline)
-        print("New model spending this run: $%.6f" % budget.run_spent)
-        publish_luna(args, network_ok=not halt.is_set())
+            progress["pass_name"] = None
+            publish(current=None, upcoming=[], running=False)
 
 
 def publish_after_stop(args, error) -> bool:
