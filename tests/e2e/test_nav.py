@@ -2,7 +2,7 @@
 
 from playwright.sync_api import expect
 
-BAR = ["Home", "Bill search", "Watchlist", "More"]
+BAR = ["Home", "Bill explorer", "Watchlist", "More"]
 
 
 def test_groups_and_today_leaving_the_nav(device, viewport):
