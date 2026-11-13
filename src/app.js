@@ -22,9 +22,13 @@ const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last ac
 const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
 const reviews = new Map();
 loadSaved();
-// The visit before this one, read once per page load (null on a first visit or without storage).
-const visit=nextVisit(readJson(visitKey),chicagoDate(new Date()));
-if(STORAGE_OK)writeJson(visitKey,visit.store);
+// The dashboard visit before this one: read, and today stamped, the first time the dashboard is drawn in this page
+// load, so other pages never add the key. null on a first visit or without storage.
+let visit=null;
+function previousVisit(){
+  if(!visit){visit=nextVisit(readJson(visitKey),chicagoDate(new Date()));if(STORAGE_OK)writeJson(visitKey,visit.store)}
+  return visit.prev;
+}
 
 const shortDate = iso => iso ? new Date(`${String(iso).slice(0,10)}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}) : '';
 const dateText = iso => iso ? new Date(`${String(iso).slice(0,10)}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}) : 'Not available';
@@ -324,10 +328,10 @@ function followedMarkup(){
 }
 function setWatch(ids){state.watch=new Set(ids);saveWatchLocal()}
 const FOLLOW_VIEWS=new Set(['following','member','local']);
-function refreshWatch(){renderOverview();if(state.view==='all'||state.view==='watchlist'||state.view==='home'||FOLLOW_VIEWS.has(state.view))renderContent()}
+function refreshWatch(){renderOverview();if(state.view==='home')refreshHome();else if(state.view==='all'||state.view==='watchlist'||FOLLOW_VIEWS.has(state.view))renderContent()}
 // `sections` from sync: {follows, searches}, each the link's copy or null when the server did not say.
 const onSynced=(watch,error,sections)=>{if(error){toast(`Sync: ${error.message}`);return}setWatch(watch);const moved=adoptFollows(sections?.follows)|adoptSearches(sections?.searches);renderOverview();
-  if(state.view==='all'||state.view==='watchlist')renderResults();else if(state.view==='home'||moved&&FOLLOW_VIEWS.has(state.view))renderContent()};
+  if(state.view==='all'||state.view==='watchlist')renderResults();else if(state.view==='home')refreshHome();else if(moved&&FOLLOW_VIEWS.has(state.view))renderContent()};
 function changeWatch(op,ids){
   for(const id of ids){if(op==='add'?state.watch.has(id):!state.watch.has(id))continue;op==='add'?state.watch.add(id):state.watch.delete(id);sync.record(op,id,onSynced)}
   saveWatchLocal();
@@ -339,7 +343,7 @@ async function setupSync(key){
   else if(sync.linked)await pullSync(false);
   window.addEventListener('focus',()=>{if(Date.now()-lastPull>30000)pullSync(false)});
   persistState();
-  if(state.view==='watchlist'||state.view==='saving'||state.view==='home')renderContent();
+  if(state.view==='home')refreshHome();else if(state.view==='watchlist'||state.view==='saving')renderContent();
 }
 
 async function openSyncLink(key){
@@ -531,7 +535,7 @@ function explorerMarkup(){
   const topics=unique([...POLICY_AREAS.map(t=>t.name),...state.bills.flatMap(b=>b.topics)]).sort();
   const popular=['Education','Healthcare','Elections','Taxes','Immigration','Data centers','Local government','Energy & utilities'];
   return `${sharedBanner()}${state.view==='watchlist'?watchTools():''}
-    <div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" maxlength="200" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><button class="outline-button" id="clear-filters">Clear filters</button><button class="outline-button" id="copy-view-link" title="Copy a link to this view, with its filters">Copy link</button>${state.view==='all'&&!state.sharedList?'<button class="outline-button" id="save-search" title="Keep this search and its filters under Following">Save search</button>':''}<button class="primary-button" id="export-csv">↓ Export results</button></div><details class="search-help"><summary>What search looks at</summary><p>Every word you type has to appear somewhere in the bill, in any order. It looks in: ${SEARCH_FIELDS.map(f=>esc(f.label)).join(', ')}. Luna's search terms are words it added to help find a bill; they are not shown on the card, so each result says which field matched.</p><p>Put words in "double quotes" to keep them together. A plural also finds the singular ("wages" finds "wage"). A section number such as <em>Penal Code 46.06</em> finds the bills that change it.</p><p class="search-examples">Try: ${SEARCH_EXAMPLES.map(x=>`<button type="button" class="topic-chip" data-search-example="${esc(x)}">${esc(x)}</button>`).join('')}</p></details>
+    <div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" maxlength="200" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><button class="outline-button" id="clear-filters">Clear filters</button><button class="outline-button" id="copy-view-link" title="Copy a link to this view, with its filters">Copy link</button>${state.view==='all'&&!state.sharedList?'<button class="outline-button" id="save-search" title="Keep this search and its filters under Following">Save search</button>':''}<button class="primary-button" id="export-csv">↓ Export results</button></div><details class="search-help"><summary>What search looks at</summary><p>Every word you type has to appear somewhere in the bill, in any order. It looks in: ${SEARCH_FIELDS.map(f=>esc(f.label)).join(', ')}. Luna's search terms are words it added to help find a bill; they are not shown on the card, so each result says which field matched.</p><p>Put words in "double quotes" to keep them together. A plural also finds the singular ("wages" finds "wage"). A section number such as <em>Penal Code 46.06</em> finds the bills that change it.</p><p class="search-examples">Try: ${SEARCH_EXAMPLES.map(x=>`<button type="button" class="search-example" data-search-example="${esc(x)}">${esc(x)}</button>`).join('')}</p></details>
     <div class="filter-row"><select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><div class="agency-combobox" id="agency-combobox"><input aria-label="Affected agency" aria-controls="agency-options" aria-expanded="false" aria-autocomplete="list" role="combobox" id="filter-agency" placeholder="All affected agencies" value="${esc(state.agency?agencyName(state.agency):'')}" autocomplete="off"><span class="agency-chevron" aria-hidden="true">⌄</span><div class="agency-panel" id="agency-panel" hidden><div class="agency-sort" role="group" aria-label="Sort agencies">${agencySortButtons()}</div><div class="agency-options" id="agency-options" role="listbox" hidden>${agencyOptionsMarkup()}</div></div></div><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Author party" id="filter-party" title="Republican or Democratic: the primary author's party, with no author or coauthor from the other party. Bipartisan: authors or coauthors from both parties.">${options(Object.keys(PARTY_FILTERS),state.party,'Any party')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted'],state.stage,'Any stage')}</select><select aria-label="Hearing status" id="filter-outlook">${options([NO_HEARING,'Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><select aria-label="Last action" id="filter-action">${options(unique([...LAST_ACTION_TYPES.map(t=>t.label),'Other action']).filter(l=>l===state.action||state.bills.some(b=>lastActionInfo(b).label===l)),state.action,'Any last action')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></div>
     <div class="topic-strip" aria-label="Quick topic filters"><button class="topic-chip ${state.topic===''?'selected':''}" data-topic="">All topics</button>${popular.map(t=>`<button class="topic-chip ${state.topic===t?'selected':''}" data-topic="${esc(t)}">${esc(t)}</button>`).join('')}</div>
     <div class="results-header"><div><strong id="result-count">—</strong><span id="result-note"></span></div><select id="sort-order" aria-label="Sort bills">${options(Object.values(SORTS),SORTS[state.sort],'Sort by')}</select></div><div class="bill-list" id="bill-list"></div><div class="explorer-bottom" id="results-bottom"></div>`;
@@ -645,7 +649,7 @@ function renderResults(){
   const shown=[];let shownCount=0;
   for(const g of companionGroups([...list,...extras.values()],companionCache.index)){if(shownCount>=state.visibleCount)break;shown.push(g);shownCount+=g.filter(b=>!extras.has(b.id)).length}
   const why=reasonFor();
-  const card=b=>billCard(b,extras.has(b.id),why(b));
+  const card=b=>billCard(b,extras.has(b.id),extras.has(b.id)?null:why(b));
   const groupMarkup=g=>{
     const ids=new Set(g.map(b=>b.id));
     const relations=[...new Set(g.flatMap(b=>companionsOf(b.id).filter(c=>ids.has(c.id)).map(relationText)))];
@@ -672,7 +676,14 @@ function billCard(b,unwatchedCompanion=false,reasons=null){
 // ---- Home: the dashboard. Search first, then what changed on your bills, the latest day's actions, hearings and reviews.
 const HOME_ROWS=5;
 function homeMarkup(){
-  const today=todayDay(),prev=visit.prev;
+  return `<form class="home-search" id="home-search-form" role="search"><label for="home-search">Search every bill</label><div class="home-search-row"><input id="home-search" name="query" maxlength="200" placeholder="Bill number, author, subject, agency or keyword…" autocomplete="off"><button class="primary-button" type="submit">Search</button></div><p class="tools-note">Or <a class="text-link" href="#all" data-view="all">browse all ${state.bills.length.toLocaleString()} bills</a>.</p></form>
+    <div class="calendar-mini home-milestone"><div class="calendar-eyebrow">UPCOMING MILESTONE</div><div class="calendar-date">JAN 12 <span>2027</span></div><div class="calendar-desc">90th regular session convenes</div><div class="calendar-progress"><span></span></div></div>
+    <div class="home-grid">${homeCards()}</div>`;
+}
+// Redraws the dashboard's cards only, so a sync or watch change never clears what is typed in its search box.
+function refreshHome(){const grid=$('.home-grid');if(grid)grid.innerHTML=homeCards();else renderContent()}
+function homeCards(){
+  const today=todayDay(),prev=previousVisit();
   const more=(href,view,label)=>`<a class="text-link home-more" href="${esc(href)}"${view?` data-view="${view}"`:''}>${label} →</a>`;
   const card=(title,count,body)=>`<section class="home-card"><h2>${title}${count?` <span>${count.toLocaleString()}</span>`:''}</h2>${body}</section>`;
   const datedRow=({bill,day})=>todayRow({bill,actions:(activityOn([bill],day)[0]?.actions||[lastActionInfo(bill).text]).map(t=>`${shortDate(day)} · ${t}`)});
@@ -696,9 +707,7 @@ function homeMarkup(){
   const reviewed=newestReviewed(state.bills);
   const reviewBody=reviewed.length?reviewed.slice(0,HOME_ROWS).map(b=>todayRow({bill:b,actions:[`Reviewed ${dateText(b.luna.reviewed_at)}`]})).join('')+more('#review','review','Review progress')
     :'<p class="tools-note">Luna has not reviewed any bills yet.</p>';
-  return `<form class="home-search" id="home-search-form" role="search"><label for="home-search">Search every bill</label><div class="home-search-row"><input id="home-search" name="query" maxlength="200" placeholder="Bill number, author, subject, agency or keyword…" autocomplete="off"><button class="primary-button" type="submit">Search</button></div><p class="tools-note">Or <a class="text-link" href="#all" data-view="all">browse all ${state.bills.length.toLocaleString()} bills</a>.</p></form>
-    <div class="calendar-mini home-milestone"><div class="calendar-eyebrow">UPCOMING MILESTONE</div><div class="calendar-date">JAN 12 <span>2027</span></div><div class="calendar-desc">90th regular session convenes</div><div class="calendar-progress"><span></span></div></div>
-    <div class="home-grid">${card(yoursTitle,changed.length,yours)}${card(day===today?'Today at the Lege':`Most recent activity, ${esc(shortDate(day))}`,rows.length,dayBody)}${card('Upcoming hearings',hearings.length,hearingBody)}${card('Newly reviewed by Luna',0,reviewBody)}</div>`;
+  return `${card(yoursTitle,changed.length,yours)}${card(day===today?'Today at the Lege':`Most recent activity, ${esc(shortDate(day))}`,rows.length,dayBody)}${card('Upcoming hearings',hearings.length,hearingBody)}${card('Newly reviewed by Luna',0,reviewBody)}`;
 }
 
 // Remove this line once the Legislature is in session and the view has real floor and hearing content.

@@ -57,3 +57,11 @@ def test_a_new_day_moves_the_visit_stamp_and_loading_leaves_prefs_alone(device_f
     stamp = json.loads(device.storage()[VISIT_KEY])
     assert stamp["prev"] == "2020-01-01" and stamp["day"] != "2020-01-01"
     assert json.loads(device.storage()[PREFS_KEY]) == prefs
+
+
+def test_only_the_dashboard_stamps_a_visit(device):
+    device.open("#all")
+    device.open("#watchlist")
+    assert VISIT_KEY not in device.storage()  # other pages never add a key on load
+    device.open("#home")
+    assert VISIT_KEY in device.storage()
