@@ -120,6 +120,7 @@ async function init(){
     if(event.target.id==='filter-agency')showAgencyChoices('');
   });
   document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&preview.id&&!$('#bill-preview')?.hidden){closePreview();return}
     if(event.key==='Escape'&&$('.sidebar').classList.contains('nav-open')){setNavOpen(false);$('#nav-more').focus()}
     if(event.target.id==='filter-agency'&&handleAgencyKeydown(event))return;
   });
@@ -452,6 +453,7 @@ function setView(view,push=false){
   state.view=view;
   if(view!=='bill')state.openBill=null;
   setNavOpen(false);
+  preview.id=null;
   document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===view));
   const [title,subtitle]=viewHeading(view);
   $('#page-title').innerHTML=title;$('#page-subtitle').textContent=subtitle;
@@ -544,7 +546,7 @@ function explorerMarkup(){
     <div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" maxlength="200" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><button class="outline-button" id="clear-filters">Clear filters</button><button class="outline-button" id="copy-view-link" title="Copy a link to this view, with its filters">Copy link</button>${state.view==='all'&&!state.sharedList?'<button class="outline-button" id="save-search" title="Keep this search and its filters under Following">Save search</button>':''}<button class="primary-button" id="export-csv">↓ Export results</button></div><details class="search-help"><summary>What search looks at</summary><p>Every word you type has to appear somewhere in the bill, in any order. It looks in: ${SEARCH_FIELDS.map(f=>esc(f.label)).join(', ')}. Luna's search terms are words it added to help find a bill; they are not shown on the card, so each result says which field matched.</p><p>Put words in "double quotes" to keep them together. A plural also finds the singular ("wages" finds "wage"). A section number such as <em>Penal Code 46.06</em> finds the bills that change it.</p><p class="search-examples">Try: ${SEARCH_EXAMPLES.map(x=>`<button type="button" class="search-example" data-search-example="${esc(x)}">${esc(x)}</button>`).join('')}</p></details>
     <div class="filter-row"><select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><div class="agency-combobox" id="agency-combobox"><input aria-label="Affected agency" aria-controls="agency-options" aria-expanded="false" aria-autocomplete="list" role="combobox" id="filter-agency" placeholder="All affected agencies" value="${esc(state.agency?agencyName(state.agency):'')}" autocomplete="off"><span class="agency-chevron" aria-hidden="true">⌄</span><div class="agency-panel" id="agency-panel" hidden><div class="agency-sort" role="group" aria-label="Sort agencies">${agencySortButtons()}</div><div class="agency-options" id="agency-options" role="listbox" hidden>${agencyOptionsMarkup()}</div></div></div><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Author party" id="filter-party" title="Republican or Democratic: the primary author's party, with no author or coauthor from the other party. Bipartisan: authors or coauthors from both parties.">${options(Object.keys(PARTY_FILTERS),state.party,'Any party')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted'],state.stage,'Any stage')}</select><select aria-label="Hearing status" id="filter-outlook">${options([NO_HEARING,'Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><select aria-label="Last action" id="filter-action">${options(unique([...LAST_ACTION_TYPES.map(t=>t.label),'Other action']).filter(l=>l===state.action||state.bills.some(b=>lastActionInfo(b).label===l)),state.action,'Any last action')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></div>
     <div class="topic-strip" aria-label="Quick topic filters"><button class="topic-chip ${state.topic===''?'selected':''}" data-topic="">All topics</button>${popular.map(t=>`<button class="topic-chip ${state.topic===t?'selected':''}" data-topic="${esc(t)}">${esc(t)}</button>`).join('')}</div>
-    <div class="results-header"><div><strong id="result-count">—</strong><span id="result-note"></span></div><select id="sort-order" aria-label="Sort bills">${options(Object.values(SORTS),SORTS[state.sort],'Sort by')}</select></div><div class="bill-list" id="bill-list"></div><div class="explorer-bottom" id="results-bottom"></div>`;
+    <div class="results-header"><div><strong id="result-count">—</strong><span id="result-note"></span></div><select id="sort-order" aria-label="Sort bills">${options(Object.values(SORTS),SORTS[state.sort],'Sort by')}</select></div><div class="explorer-results" id="explorer-results"><div class="bill-list" id="bill-list"></div><aside class="bill-preview" id="bill-preview" aria-labelledby="preview-title" hidden></aside></div><div class="explorer-bottom" id="results-bottom"></div>`;
 }
 
 const companionCache={bills:null,index:new Map()};
@@ -664,7 +666,55 @@ function renderResults(){
   $('#bill-list').innerHTML=statuteHintMarkup(state.sharedList?[]:lawKeysFor(state.query))+(list.length?shown.map(g=>g.length>1?groupMarkup(g):card(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p></div>`);
   $('#results-bottom').innerHTML=`${list.length>shownCount?`<button class="outline-button" id="load-more">Load 30 more · showing ${shownCount} of ${list.length}</button><div style="height:12px"></div>`:''}${esc(state.meta?.coverage_note||'Check the official record for authoritative status.')}`;
   persistState();
+  syncPreview();
 }
+
+// ---- Preview (D2-B): a short look at one bill beside the results, for triage. Wide screens only; it holds no
+// sections and no text, and every link in it still goes to the bill page.
+const PREVIEW_WIDE=typeof matchMedia==='function'?matchMedia('(min-width: 1200px)'):{matches:false,addEventListener(){}};
+const preview={id:null};
+const previewing=()=>Boolean(preview.id)&&PREVIEW_WIDE.matches&&Boolean($('#bill-preview'));
+function previewMarkup(b){
+  const h=assessHearing(b),last=lastActionInfo(b),watched=state.watch.has(b.id),real=realAgencies(b);
+  const cards=[...document.querySelectorAll('#bill-list .bill-card')],at=cards.findIndex(c=>c.dataset.billId===b.id);
+  const summary=b.luna?.summary?{label:'Luna summary',text:b.luna.summary}:{label:'Caption',text:b.caption};
+  return `<div class="preview-head">${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><button type="button" class="preview-close" id="preview-close" aria-label="Close preview">×</button></div>
+    <h2 class="preview-title" id="preview-title" tabindex="-1">${esc(b.title)}</h2>
+    ${headlineLine(b,'drawer')}
+    <section class="preview-summary"><h3>${summary.label}</h3><p>${esc(summary.text)}</p></section>
+    <dl class="preview-facts">
+      <div><dt>Last action</dt><dd>${esc(last.label)}${last.chamber?` · ${esc(last.chamber)}`:''}${last.date?` · ${esc(dateText(last.date))}`:''}<small>${esc(last.text)}</small></dd></div>
+      <div><dt>Hearing progress</dt><dd>${esc(h.label)}</dd></div>
+      <div><dt>Filed by</dt><dd>${authorHtml(b,b.author)}</dd></div>
+      ${real.length?`<div><dt>Agencies</dt><dd>${real.slice(0,3).map(a=>esc(agencyName(a.id))).join(' · ')}${real.length>3?` · +${real.length-3} more`:''}</dd></div>`:''}
+    </dl>
+    ${b.topics.length?`<div class="bill-tags">${b.topics.slice(0,4).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`:''}
+    <div class="preview-actions"><button type="button" class="primary-button" data-open="${esc(b.id)}">Open bill →</button><button type="button" class="outline-button" data-watch="${esc(b.id)}" aria-pressed="${watched}">${watched?'★ Watching':'☆ Watch'}</button></div>
+    <div class="preview-step"><button type="button" class="outline-button" data-preview-step="-1"${at<=0?' disabled':''}>← Previous</button><span>${at>=0?`${at+1} of ${cards.length} shown`:'Not in the list now'}</span><button type="button" class="outline-button" data-preview-step="1"${at<0||at>=cards.length-1?' disabled':''}>Next →</button></div>`;
+}
+// Draws the preview for preview.id, or hides it; marks the previewed card.
+function syncPreview(){
+  const aside=$('#bill-preview');
+  if(!aside)return;
+  const b=previewing()?state.bills.find(x=>x.id===preview.id):null;
+  document.querySelectorAll('#bill-list .bill-card.previewed').forEach(c=>c.classList.remove('previewed'));
+  $('#explorer-results')?.classList.toggle('previewing',Boolean(b));
+  if(!b){aside.hidden=true;aside.innerHTML='';return}
+  $(`#bill-list .bill-card[data-bill-id="${CSS.escape(b.id)}"]`)?.classList.add('previewed');
+  aside.innerHTML=previewMarkup(b);aside.hidden=false;
+}
+function showPreview(id){preview.id=id;syncPreview();$('#preview-title')?.focus({preventScroll:true})}
+function closePreview(){
+  const id=preview.id;preview.id=null;syncPreview();
+  if(id)$(`#bill-list .bill-card[data-bill-id="${CSS.escape(id)}"] .bill-title-link`)?.focus({preventScroll:true});
+}
+function stepPreview(by){
+  const cards=[...document.querySelectorAll('#bill-list .bill-card')],at=cards.findIndex(c=>c.dataset.billId===preview.id);
+  const next=cards[at+by];
+  if(at<0||!next)return;
+  next.scrollIntoView({block:'nearest'});showPreview(next.dataset.billId);
+}
+PREVIEW_WIDE.addEventListener('change',()=>syncPreview());
 
 function billCard(b,unwatchedCompanion=false,reasons=null){
   const h=assessHearing(b);const watched=state.watch.has(b.id);const influence=authorInfluence(b);
@@ -1452,11 +1502,17 @@ function registerClicks(){
   clickOn('import-trigger','#import-trigger',()=>$('#import-file').click());
   clickOn('nav-more','#nav-more',()=>setNavOpen(!$('.sidebar').classList.contains('nav-open')));
   clickOn('bill-back','#bill-back',()=>leaveBillPage());
+  clickOn('preview-close','#preview-close',()=>closePreview());
+  clickOn('preview-step','[data-preview-step]',step=>stepPreview(Number(step.dataset.previewStep)));
   clickOn('bill-jump','[data-bill-jump]',jump=>{const group=$(`#bill-g-${jump.dataset.billJump}`);if(group){group.scrollIntoView({block:'start'});group.querySelector('h2')?.focus?.({preventScroll:true})}});
   // Empty space on a card opens its bill page, unless the click was on a control or the reader is selecting text.
+  // In the explorer on a wide screen it opens the preview instead; links and buttons still go to the page.
   onClick('card',e=>{
     const card=e.target.closest('[data-bill-id]');
-    if(card&&cardClickOpens({interactive:Boolean(e.target.closest(CARD_CONTROLS)),selection:window.getSelection?.().toString()||'',button:e.button,metaKey:e.metaKey,ctrlKey:e.ctrlKey,shiftKey:e.shiftKey,altKey:e.altKey}))openBillPage(card.dataset.billId,true);
+    if(card&&cardClickOpens({interactive:Boolean(e.target.closest(CARD_CONTROLS)),selection:window.getSelection?.().toString()||'',button:e.button,metaKey:e.metaKey,ctrlKey:e.ctrlKey,shiftKey:e.shiftKey,altKey:e.altKey})){
+      if(card.matches('#bill-list .bill-card')&&PREVIEW_WIDE.matches)showPreview(card.dataset.billId);
+      else openBillPage(card.dataset.billId,true);
+    }
     return true;
   });
 }

@@ -19,6 +19,22 @@ def first_bill(page):
     return first.get_attribute("data-bill-id"), first.locator(".bill-number").inner_text().replace(chr(10), " ")
 
 
+def wide(page):
+    """At 1200px and up a card body opens the preview beside the results; below it, the bill page."""
+    return page.viewport_size["width"] >= 1200
+
+
+def expect_card_opened(page, bill, number):
+    if wide(page):
+        expect(page.locator("#bill-preview")).to_be_visible()
+        expect(page.locator("#bill-preview .bill-number")).to_have_text(number)
+        expect(page.locator("#bill-page")).to_have_count(0)
+    else:
+        expect(page.locator("#bill-page")).to_be_visible()
+        expect(page.locator("#bill-page .drawer-number")).to_have_text(f"90R / {number}")
+        assert f"#bill?id={bill}" in page.url
+
+
 def watch_keys(device):
     return {k: v for k, v in device.storage().items() if "watch" in k.lower() and "disclaimer" not in k.lower()}
 
@@ -42,20 +58,18 @@ def test_watch_button_in_a_card_toggles_the_watch_and_does_not_open_the_bill_pag
     expect(page.locator("#bill-page")).to_be_hidden()
 
 
-def test_card_body_opens_the_bill_page(device):
+def test_card_body_opens_the_preview_when_wide_and_the_bill_page_on_a_phone(device):
     page = device.open("#all")
     bill, number = first_bill(page)
     card(page, bill).locator(".bill-description").click()
-    expect(page.locator("#bill-page")).to_be_visible()
-    expect(page.locator("#bill-page .drawer-number")).to_have_text(f"90R / {number}")
-    assert f"#bill?id={bill}" in page.url
+    expect_card_opened(page, bill, number)
 
 
 def test_plain_tags_inside_a_card_are_not_controls(device):
     page = device.open("#all")
     bill, number = first_bill(page)
     card(page, bill).locator(".action-tag").click()
-    expect(page.locator("#bill-page .drawer-number")).to_have_text(f"90R / {number}")
+    expect_card_opened(page, bill, number)
 
 
 def test_bill_details_button_number_and_title_each_open_the_bill_page(device):
@@ -99,10 +113,11 @@ def test_selecting_text_in_a_card_does_not_open_the_bill_page(device):
     body.evaluate("e=>{const r=document.createRange();r.selectNodeContents(e);const s=getSelection();s.removeAllRanges();s.addRange(r);e.click()}")
     page.wait_for_timeout(200)
     expect(page.locator("#bill-page")).to_be_hidden()
+    expect(page.locator("#bill-preview")).to_be_hidden()
     # Once nothing is selected the same click opens it.
     page.evaluate("getSelection().removeAllRanges()")
     body.evaluate("e=>e.click()")
-    expect(page.locator("#bill-page")).to_be_visible()
+    expect_card_opened(page, bill, number)
 
 
 def test_modified_click_on_a_card_does_not_open_the_bill_page(device):
@@ -114,6 +129,7 @@ def test_modified_click_on_a_card_does_not_open_the_bill_page(device):
     card(page, bill).locator(".bill-description").click(modifiers=["Shift"])
     page.wait_for_timeout(200)
     expect(page.locator("#bill-page")).to_be_hidden()
+    expect(page.locator("#bill-preview")).to_be_hidden()
 
 
 # ---- nav ----

@@ -5,7 +5,7 @@ export const CLICK_ORDER = ['agency-sort', 'agency-option', 'agency-combobox', '
   'save-search', 'search-open', 'search-rename', 'search-delete', 'follow-more', 'law-compare', 'law-show',
   'member-more', 'copy-page-ai', 'today-topic', 'today-more', 'today-topics-toggle', 'save-tools', 'watch-group',
   'watch', 'search-example', 'topic', 'agency-pick', 'clear-filters', 'watch-filter', 'load-more', 'export-csv', 'import-trigger',
-  'nav-more', 'bill-back', 'bill-jump', 'card'];
+  'nav-more', 'bill-back', 'preview-close', 'preview-step', 'bill-jump', 'card'];
 
 const handlers = new Map();
 

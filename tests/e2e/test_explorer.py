@@ -288,10 +288,10 @@ def test_only_watched_with_nothing_watched_is_empty(device):
     expect(page.locator("#bill-list")).to_contain_text("Nothing matches yet")
 
 
-def test_clicking_a_card_opens_the_bill_page_and_back_keeps_the_search(device):
+def test_clicking_a_card_title_opens_the_bill_page_and_back_keeps_the_search(device):
     page = device.open("#all?query=HB110")
     expect(page.locator("#result-count")).to_have_text("1 bill")
-    page.locator('.bill-card[data-bill-id="HB110"] .bill-description').click()
+    page.locator('.bill-card[data-bill-id="HB110"] .bill-title-link').click()
     expect(page.locator("#bill-page")).to_be_visible()
     expect(page.locator("#bill-page")).to_contain_text("HB 110")
     expect(page.locator("#bill-page")).to_contain_text("minimum wage")
