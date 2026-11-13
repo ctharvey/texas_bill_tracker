@@ -181,13 +181,6 @@ def test_loading_does_not_rewrite_stored_values(saved_device):
     for key, value in LOCAL.items():
         if key == "tx-bill-atlas-disclaimer-v1":
             assert now[key] == value  # a timestamp, never rewritten once seen
-        elif key == "tx-bill-atlas-prefs-v1":
-            # A filter added after the capture (e.g. party) is re-saved at its empty default; captured ones keep theirs.
-            old, new = json.loads(value), json.loads(now[key])
-            assert set(new) == set(old), key
-            added = set(new["filters"]) - set(old["filters"])
-            assert {k: new["filters"][k] for k in old["filters"]} == old["filters"], key
-            assert all(new["filters"][k] in ("", False) for k in added), (key, added)
         else:
             assert json.loads(now[key]) == json.loads(value), key
     assert saved_device.page.evaluate("document.getElementById('disclaimer').open") is False

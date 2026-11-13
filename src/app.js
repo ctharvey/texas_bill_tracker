@@ -9,7 +9,7 @@ import {registerHooks} from './core/hooks.js';
 import {registerView, setFallbackView, viewHeading, renderView} from './core/router.js';
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
 import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
-import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
+import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
   cleanSearches, applySearchOps, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
 import {createSyncClient} from './sync.js';
 import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, followedBills, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
@@ -217,7 +217,7 @@ function persistState(push=false){
   const hash=currentHash();
   let pushed=false;
   if(location.hash!==hash)try{if(push){history.pushState(null,'',hash);pushed=true}else history.replaceState(null,'',hash)}catch{}
-  if(state.view==='all'&&filtersFor==='all'&&!state.sharedList)writeJson(prefsKey,{filters:pickFilters(state)});
+  if(state.view==='all'&&filtersFor==='all'&&!state.sharedList&&!(readJson(prefsKey)?.filters&&sameFilters(readJson(prefsKey).filters,state)))writeJson(prefsKey,{filters:pickFilters(state)});
   return pushed;
 }
 

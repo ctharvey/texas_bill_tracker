@@ -31,6 +31,10 @@ export function cleanFilters(raw) {
 }
 
 export const pickFilters = state => Object.fromEntries(FILTER_NAMES.map(name => [name, state[name]]));
+// Whether remembered filters already say the same as `filters`. The page rewrites them only when this is false, so a
+// filter added in a later version (held at its default) never rewrites an older save just by loading it.
+export const sameFilters = (saved, filters) =>
+  JSON.stringify(pickFilters({...FILTER_DEFAULTS, ...cleanFilters(saved)})) === JSON.stringify(pickFilters(filters));
 
 export function parseHash(hash) {
   const raw = String(hash || '').replace(/^#/, '');

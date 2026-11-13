@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-13
+- Remembered filters are no longer rewritten on page load when they mean the same thing (the party filter had
+  added `party: ""` to every older save on each visit). Explorer and Watchlist views now come from a view registry
+  and clicks from an ordered handler registry under `src/core/`; behavior is unchanged.
+
 ## 2026-11-12
 - Review worker errors are actionable: stopped, failed, held and deferred lines end with the next step (never the
   provider's error text), an unexpected stop names the code location, and an unknown-outcome stop names the pending
