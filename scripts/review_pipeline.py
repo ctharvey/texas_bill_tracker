@@ -1949,10 +1949,11 @@ def main():
                                                upcoming=list(pending)[:5], running=True, in_progress=active)
         finally:
             try_publish_status(status_path, queue, current=None, upcoming=[], running=False)
-        if args.suggest_topics and not stopped and not halt.is_set():
-            suggest_topics(args, queue, budget, deadline)
+        # Entities before topics: the topics backlog used the whole run time limit (13 Nov), leaving later passes none.
         if args.related_entities and args.input == "markdown" and not stopped and not halt.is_set():
             scan_entities(args, queue, budget, deadline)
+        if args.suggest_topics and not stopped and not halt.is_set():
+            suggest_topics(args, queue, budget, deadline)
         if args.audit_sample and args.input == "markdown" and not stopped and not halt.is_set():
             audit_reviews(args, queue, budget, deadline)
         print("New model spending this run: $%.6f" % budget.run_spent)
