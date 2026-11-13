@@ -132,11 +132,15 @@ class WorkerLoopTests(unittest.TestCase):
         self.assertIn('HB2 failed KeyError - unexpected error at test_review_worker_loop.py:', out.getvalue())
         self.assertIn('the bill waits at the end of the queue', out.getvalue())
         self.assertNotIn('sk-secret', out.getvalue())
+        at = queue['failed']['HB2'].pop('at')
         self.assertEqual(queue['failed'], {'HB2': {'count': 1, 'stage': 'processing', 'reason': 'KeyError'}})
         self.assertEqual(queue['seen'], [b for b in self.ids if b != 'HB2'])
-        queue['seen'].remove('HB8')  # parked after new work and every known bill
-        self.assertEqual(pipeline.queue_candidates(self.ids, queue)[0], 'HB8')
-        self.assertEqual(pipeline.queue_candidates(self.ids, queue)[-1], 'HB2')
+        queue['failed']['HB2']['at'] = at
+        self.assertNotIn('HB2', pipeline.queue_candidates(self.ids, queue))  # not visited again for six hours
+        queue['seen'].remove('HB8')  # then after new work and every known bill
+        later = at + pipeline.PARK_RETRY_S
+        self.assertEqual(pipeline.queue_candidates(self.ids, queue, now=later)[0], 'HB8')
+        self.assertEqual(pipeline.queue_candidates(self.ids, queue, now=later)[-1], 'HB2')
 
     def test_an_error_with_an_unresolved_ledger_row_still_stops(self):
         # Fails closed: an unexpected error while a call has no recorded outcome says nothing about one bill.

@@ -1274,16 +1274,25 @@ def record_failure(queue: dict, bill_id: str, stage: str, error: Exception) -> N
     # Store only the type: messages can carry request or transport details.
     count = queue['failed'].get(bill_id, {}).get('count', 0) + 1
     queue['failed'][bill_id] = {'count': count, 'stage': stage, 'reason': type(error).__name__}
+    if stage in PARKED_STAGES:
+        queue['failed'][bill_id]['at'] = time.time()
 
 
 PARKED_STAGES = ('held', 'processing')
+PARK_RETRY_S = 6 * 3600
 
 
-def queue_candidates(ids: list[str], queue: dict, limit: int | None = None, first_pass_first: bool = False) -> list[str]:
+def queue_candidates(ids: list[str], queue: dict, limit: int | None = None, first_pass_first: bool = False,
+                     now: float | None = None) -> list[str]:
     failed = queue.get('failed', {})
-    # Bills failed on a held call or an unexpected error go last of all: a revisit never resends a held call (the
-    # cache refuses it), but it lets a released call or a fixed error bring the bill back.
-    parked = [x for x in ids if (failed.get(x) or {}).get('stage') in PARKED_STAGES]
+    # Bills failed on a held call or a bill-specific error (e.g. a provider rejection) are parked: left out for
+    # PARK_RETRY_S after each failure, then visited after every other bill. A revisit never resends a held call (the
+    # cache refuses it); it lets a released call or a fixed error bring the bill back, at most every six hours.
+    now = time.time() if now is None else now
+    parked_all = {x for x in ids if (failed.get(x) or {}).get('stage') in PARKED_STAGES}
+    at = lambda x: failed[x].get('at') if isinstance(failed[x].get('at'), (int, float)) else 0
+    parked = [x for x in ids if x in parked_all and now - at(x) >= PARK_RETRY_S]
+    ids = [x for x in ids if x not in parked_all or x in parked]
     if first_pass_first:
         # Every unseen bill's first pass comes before any follow-up questions (the retry list).
         unseen = [x for x in ids if x not in queue['seen'] and x not in failed]

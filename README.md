@@ -85,7 +85,8 @@ their reservation and block new calls until reconciled. Under `--transport flex`
 the client (a timeout or a 5xx after sending) is instead **held**: booked at its upper bound, never resent, and only
 its bill waits while the other lanes keep going; three held calls within 30 minutes, or ten within 24 hours, refuse
 every new call until they age out (see "Held calls" below). A crash mid-call leaves a pending row that refuses every
-call until the next run's start holds it (at most six a day; past that an operator decides). A worker lock
+call until the next run's start holds it (at most six in 24 hours; past that the rows stay pending until older
+crash holds age out or an operator runs `--hold`). A worker lock
 prevents concurrent spending races.
 Cache hits make no provider call. When Flex capacity is unavailable (first pass or a review question), the bill
 is set aside until the provider's retry-after (about 300 s in practice) and the run continues immediately with
@@ -524,7 +525,8 @@ Call reduction and cache rules:
   entry blocks resubmission until its outcome is reconciled. Do not delete uncertain entries merely to retry:
   inspect the private request/time and provider logs first. Known capacity rejections have a cooldown.
 - Held calls (flex): the journal prints `<bill> held UncertainOutcome - request <key>; ...` and the bill is listed in the
-  queue's `failed` (stage `held`, visited after every other bill) or keeps a held question (not retried early).
+  queue's `failed` (stage `held`: left out for six hours after each failure, then visited after every other bill) or
+  keeps a held question (not retried early).
   Revisits make no call. To reconcile, check the
   provider usage log for the request time, then, with no run active, as the service user:
   `python scripts/flex_boundary.py --cache-dir <cache> [--release <key>]` lists held calls or releases one. A release
@@ -533,7 +535,8 @@ Call reduction and cache rules:
   then refused as `AlreadyBilled`.
 - Stops: every stopped/failed/held/deferred line ends with `- <next step>`, built from the error type and request
   keys only (never the provider's error text). An unexpected error fails only its bill (`failed`, stage
-  `processing`, visited after every other bill); five new failures in a row stop the run. Only worker-wide errors stop
+  `processing`, parked like a held bill, so a rejected request is not resent every run); five new failures in a row
+  stop the run. Only worker-wide errors stop
   it at once (exit 2): quota, billing or key (later starts then wait an hour; delete `<cache>/account_stop.json` to
   retry sooner), a missing dependency, or an unknown outcome with no held mark, which prints
   `Unknown request outcome; worker stopped after <type>. Pending request <key>`. The next run's start books that row

@@ -148,8 +148,14 @@ class OutageTests(FlexLoopCase):
         self.assertEqual(len(self.sdk.calls), pipeline.OUTAGE_LIMIT)  # one send each, never retried
         self.assertEqual(queue['seen'], [])
         self.assertEqual(set(queue['failed']), set(self.ids[:pipeline.OUTAGE_LIMIT]))
-        self.assertEqual(queue['failed']['HB1'], {'count': 1, 'stage': 'processing', 'reason': 'ApiRejected'})
+        self.assertEqual({k: v for k, v in queue['failed']['HB1'].items() if k != 'at'},
+                         {'count': 1, 'stage': 'processing', 'reason': 'ApiRejected'})
         self.assertNotIn('pending', [r['state'] for r in self.ledger_rows()])
+        # The next run (two minutes later under the continuous timer) does not send the rejected bills again.
+        self.sdk.handler = lambda bill, n: OK
+        queue = self.run_main()
+        self.assertEqual(self.sdk.calls[pipeline.OUTAGE_LIMIT:], self.ids[pipeline.OUTAGE_LIMIT:])
+        self.assertEqual(set(queue['failed']), set(self.ids[:pipeline.OUTAGE_LIMIT]))
 
     def test_successful_first_pass_marks_every_bill_seen(self):
         queue = self.run_main()

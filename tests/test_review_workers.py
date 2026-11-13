@@ -105,7 +105,19 @@ class ConcurrentWorkerTests(FlexLoopCase):
         self.assertEqual(self.sdk.calls.count('HB1'), 1)
         self.assertEqual(queue['failed']['HB1']['stage'], 'held')
         self.assertEqual(sorted(queue['seen']), sorted(self.ids[1:]))
-        self.assertEqual(pipeline.queue_candidates(self.ids, queue)[-1], 'HB1')  # parked after every other bill
+        self.assertNotIn('HB1', pipeline.queue_candidates(self.ids, queue))  # parked: not visited for six hours
+        later = queue['failed']['HB1']['at'] + pipeline.PARK_RETRY_S
+        self.assertEqual(pipeline.queue_candidates(self.ids, queue, now=later)[-1], 'HB1')  # then after all others
+        # The operator checks the usage log and releases the call: HB1's next visit sends it once more.
+        [(_, key, _row)] = flex_boundary.FlexBoundary(self.cache, None, None).held()
+        flex_boundary.FlexBoundary(self.cache, None, None).release_held(key)
+        queue['failed']['HB1']['at'] -= pipeline.PARK_RETRY_S
+        (self.cache / 'queue.json').write_text(json.dumps(queue), 'utf-8')
+        self.sdk.handler = lambda bill, n: OK
+        queue = self.run_workers(workers=1)
+        self.assertEqual(self.sdk.calls.count('HB1'), 2)
+        self.assertNotIn('HB1', queue['failed'])
+        self.assertIn('HB1', queue['seen'])
 
     def test_deadline_stops_new_bills_but_in_flight_ones_finish_and_are_recorded(self):
         self.fake_time()
