@@ -11,12 +11,16 @@ Give each body's full official name (for example "Texas Department of Transporta
 uses only a generic term ("the department", "the commission") and the text defines it, give the defined body's
 name; when the text does not say which body it means, keep the term as written.
 
-Set impact to "direct" when the bill gives the body a duty, power, program, rule, fee, report or funding change,
-and to "inferred" when the body is affected only as a consequence of the bill's other changes. Explain the
+List a body when the bill gives it any role. A role is: a duty, power or program; a duty to report; appointing,
+confirming or removing officials; being consulted; presiding, hearing cases or reviewing; administering payments
+or agreements; or a fee, rule or funding change. Do not list a body whose only mention is as a recipient of a
+report, notice, copy, information or other submission; receiving something is not a role. A body that another body
+must only coordinate or work with has no role of its own unless the bill also requires something of it or requires
+that it be consulted. Decide this for each body on its own text.
+
+Set impact to "direct" when the bill gives the body a role, and to "inferred" when the body is affected only as a
+consequence of the bill's other changes. Explain the
 relationship in one sentence. Quote the bill text that shows it: an exact excerpt copied character for character
 from BILL TEXT without the <ins>/<del> tags, and without "...".
-
-Do not list a body that only receives a report, notice, copy or submission under the bill; list it only when the
-bill also gives it a duty, power, program, rule, fee or funding change.
 
 List each body once. Do not list a body only because it relates to the subject, and do not judge the bill's merits.
