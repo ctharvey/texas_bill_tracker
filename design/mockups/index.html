@@ -196,8 +196,10 @@ body[data-sel="star"] .card[aria-selected="true"]::after{content:"\2605";positio
   animation:star-in .65s .12s cubic-bezier(.3,1.5,.5,1) backwards}
 /* One-time entrance on select, then still: the band sweeps in, a shine crosses it once, the star spins in and settles.
    The band and shine are a ::before over the border area, so the card's own border stays the resting state. */
-body[data-sel="star"] .card[aria-selected="true"]::before{content:"";position:absolute;left:-2px;top:-2px;bottom:-2px;width:28px;
-  border-radius:var(--radius) 0 0 var(--radius);pointer-events:none;
+/* Inside the border (left/top/bottom 0), not over it: at fractional screen scaling the browser snaps the 2px border to
+   device pixels but not an overlay, so an overlay stepped about 1px above the top border. 2px border + 26px = 28px band. */
+body[data-sel="star"] .card[aria-selected="true"]::before{content:"";position:absolute;left:0;top:0;bottom:0;width:26px;
+  border-radius:calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px);pointer-events:none;
   background:linear-gradient(100deg,transparent 30%,#ffffff8c 50%,transparent 70%) -40px 0/40px 100% no-repeat,var(--accent);
   animation:band-in .3s ease-out backwards,shine .7s .25s ease-in-out forwards}
 @keyframes band-in{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
