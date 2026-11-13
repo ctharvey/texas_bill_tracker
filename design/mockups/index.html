@@ -6,7 +6,7 @@
 <title>Texas Bill Atlas mock-ups</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Manrope:wght@600;800&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Manrope:wght@600;800&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&family=Libre+Franklin:wght@600;800&family=Zilla+Slab:wght@600&display=swap" rel="stylesheet">
 <style>
 /* Static mock-up. Sample data. Not wired to the app. */
 *{box-sizing:border-box}
@@ -42,6 +42,34 @@ body[data-dir="c"]{
   --mark:#16191f;--radius:4px;--radius-s:4px;
   --font-ui:"IBM Plex Sans",system-ui,sans-serif;--font-head:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;--font-title:"IBM Plex Sans",system-ui,sans-serif;
   --head-weight:600;--title-weight:500;--title-size:16px;--h1-size:26px;
+}
+/* ---------- Direction D: Lone Star flag (navy leads; red stays small so it never reads as a party colour) ---------- */
+body[data-dir="d"]{
+  --bg:#f5f6f8;--surface:#fff;--ink:#0f1c33;--muted:#4f5b6e;--line:#d6dbe3;
+  --accent:#002868;--accent-ink:#fff;--accent-soft:#e3e9f5;
+  --nav-bg:#002868;--nav-ink:#fff;--nav-muted:#a9b8dc;--nav-active:#1b3f86;
+  --mark:#bf0a30;--radius:6px;--radius-s:4px;
+  --font-ui:"Public Sans",system-ui,sans-serif;--font-head:"Libre Franklin","Public Sans",sans-serif;--font-title:"Libre Franklin","Public Sans",sans-serif;
+  --head-weight:800;--title-weight:600;--title-size:16px;--h1-size:28px;
+}
+body[data-dir="d"] .side{border-right:6px solid #bf0a30}
+/* ---------- Direction E: bluebonnet and limestone ---------- */
+body[data-dir="e"]{
+  --bg:#f4efe4;--surface:#fffdf8;--ink:#1f2a3a;--muted:#5c6472;--line:#ddd4c3;
+  --accent:#2f55a4;--accent-ink:#fff;--accent-soft:#e3eaf7;
+  --nav-bg:#e9e1d0;--nav-ink:#1f2a3a;--nav-muted:#6b6556;--nav-active:#d9cdb4;
+  --mark:#b3282d;--radius:8px;--radius-s:5px;
+  --font-ui:"Public Sans",system-ui,sans-serif;--font-head:"Newsreader",Georgia,serif;--font-title:"Newsreader",Georgia,serif;
+  --head-weight:600;--title-weight:600;--title-size:18px;--h1-size:30px;
+}
+/* ---------- Direction F: ranch, saddle leather and brass ---------- */
+body[data-dir="f"]{
+  --bg:#f5f1ea;--surface:#fffcf7;--ink:#2a211b;--muted:#665a4f;--line:#e0d6c8;
+  --accent:#8c3b1f;--accent-ink:#fff;--accent-soft:#f3e3da;
+  --nav-bg:#3b2a1f;--nav-ink:#f6eee4;--nav-muted:#c4ae97;--nav-active:#5a4232;
+  --mark:#a8781f;--radius:4px;--radius-s:3px;
+  --font-ui:"Public Sans",system-ui,sans-serif;--font-head:"Zilla Slab",Georgia,serif;--font-title:"Zilla Slab",Georgia,serif;
+  --head-weight:600;--title-weight:600;--title-size:18px;--h1-size:30px;
 }
 body{background:var(--bg);color:var(--ink);font-family:var(--font-ui)}
 :root{--dem:#2b62b8;--rep:#b8322b}
@@ -186,6 +214,9 @@ h1{font-family:var(--font-head);font-weight:var(--head-weight);font-size:var(--h
     <button data-setdir="a" aria-pressed="true">A Current, refined</button>
     <button data-setdir="b" aria-pressed="false">B Granite</button>
     <button data-setdir="c" aria-pressed="false">C Docket</button>
+    <button data-setdir="d" aria-pressed="false">D Lone Star flag</button>
+    <button data-setdir="e" aria-pressed="false">E Bluebonnet</button>
+    <button data-setdir="f" aria-pressed="false">F Ranch</button>
   </div>
   <div class="grp"><b>Screen</b>
     <button data-setscreen="explorer" aria-pressed="true">Bills list</button>
