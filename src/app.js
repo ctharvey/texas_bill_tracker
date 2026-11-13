@@ -6,6 +6,8 @@ import {state} from './core/state.js';
 import {$, esc, toast} from './core/dom.js';
 import {timeoutSignal} from './core/net.js';
 import {registerHooks} from './core/hooks.js';
+import {registerView, setFallbackView, viewHeading, renderView} from './core/router.js';
+import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
 import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
   cleanSearches, applySearchOps, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
@@ -31,6 +33,8 @@ const normalized=normalizeBill;
 
 async function init(){
   registerHooks({renderContent, renderOverview, showDrawer, toast});
+  registerViews();
+  registerClicks();
   const now=new Date();
   $('.day-box').textContent=new Intl.DateTimeFormat('en-US',{day:'2-digit',timeZone:'America/Chicago'}).format(now);
   $('.heading-date strong').textContent=new Intl.DateTimeFormat('en-US',{month:'short',year:'numeric',timeZone:'America/Chicago'}).format(now).toUpperCase();
@@ -92,7 +96,7 @@ async function init(){
   }catch(error){
     state.meta={data_mode:'unavailable',coverage_note:'The current dataset could not be loaded. Use Data & imports to load a local CSV or JSON file.'};
   }
-  document.addEventListener('click',handleClick);
+  document.addEventListener('click',dispatchClick);
   document.addEventListener('change',handleChange);
   document.addEventListener('input',handleInput);
   document.addEventListener('submit',e=>{if(e.target.id==='near-address-form'){e.preventDefault();nearAddress($('#near-address')?.value)}
@@ -409,8 +413,8 @@ function setView(view){
   switchFilters(view);
   state.view=view;
   document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===view));
-  const heads={all:['See what’s moving.<br><em>Know what it changes.</em>','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],watchlist:['Your watchlist.<br><em>Keep the signal.</em>','Bills you starred on this device, with a clear view of their movement.'],following:['Following.<br><em>The people behind the bills.</em>','Legislators you follow on this device, and every bill they file or sign onto.'],today:['Today at the Lege.<br><em>What moved, by topic.</em>','Bills with a recorded action today, grouped by type of action. Dates follow Texas time.'],local:['Near you.<br><em>Your legislators, your bills.</em>','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],member:['One legislator.<br><em>Every bill they’re on.</em>','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],statute:['One section of law.<br><em>Every bill that changes it.</em>','The bills that would amend, add or repeal this section of Texas law, with their wording side by side.'],agencies:['Follow the agencies.<br><em>Not just the bills.</em>','Explore where legislation might land across Texas government.'],review:['Full-text review.<br><em>Bill by bill.</em>','Which bills Luna has read in full, which it is working on, and what is still waiting.'],method:['The scoring method.<br><em>No black boxes.</em>','Signals and uncertainty are displayed separately from verified legislative actions.'],saving:['Save your work.<br><em>No account needed.</em>','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],data:['Behind the tracker.<br><em>Follow the source.</em>','Understand coverage, refreshes, and how to load or export bill data.']};
-  $('#page-title').innerHTML=heads[view][0];$('#page-subtitle').textContent=heads[view][1];
+  const [title,subtitle]=viewHeading(view);
+  $('#page-title').innerHTML=title;$('#page-subtitle').textContent=subtitle;
   $('#overview').hidden=!['all','watchlist'].includes(view);
   renderNotice();renderOverview();renderContent();persistState();
 }
@@ -451,20 +455,23 @@ function renderOverview(){
   $('#nav-review').textContent=progress.reviewed.length+progress.inProgress.length;
 }
 
-function renderContent(){
-  const el=$('#dynamic-content');
-  if(state.view==='all'||state.view==='watchlist')el.innerHTML=explorerMarkup();
-  else if(state.view==='following')el.innerHTML=followingMarkup();
-  else if(state.view==='today')el.innerHTML=todayMarkup();
-  else if(state.view==='local')el.innerHTML=nearMarkup();
-  else if(state.view==='member')el.innerHTML=memberMarkup();
-  else if(state.view==='statute')el.innerHTML=statuteMarkup();
-  else if(state.view==='agencies')el.innerHTML=agenciesMarkup();
-  else if(state.view==='review')el.innerHTML=reviewMarkup();
-  else if(state.view==='method')el.innerHTML=methodMarkup();
-  else if(state.view==='saving')el.innerHTML=savingMarkup();
-  else el.innerHTML=dataMarkup();
-  if(state.view==='all'||state.view==='watchlist')renderResults();
+function renderContent(){renderView(state.view,$('#dynamic-content'))}
+
+// Each view's heading and content. Features take theirs over as they move into src/features/.
+function registerViews(){
+  registerView('all',{heading:['See what’s moving.<br><em>Know what it changes.</em>','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:explorerMarkup,after:renderResults});
+  registerView('watchlist',{heading:['Your watchlist.<br><em>Keep the signal.</em>','Bills you starred on this device, with a clear view of their movement.'],render:explorerMarkup,after:renderResults});
+  registerView('following',{heading:['Following.<br><em>The people behind the bills.</em>','Legislators you follow on this device, and every bill they file or sign onto.'],render:followingMarkup});
+  registerView('today',{heading:['Today at the Lege.<br><em>What moved, by topic.</em>','Bills with a recorded action today, grouped by type of action. Dates follow Texas time.'],render:todayMarkup});
+  registerView('local',{heading:['Near you.<br><em>Your legislators, your bills.</em>','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],render:nearMarkup});
+  registerView('member',{heading:['One legislator.<br><em>Every bill they’re on.</em>','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],render:memberMarkup});
+  registerView('statute',{heading:['One section of law.<br><em>Every bill that changes it.</em>','The bills that would amend, add or repeal this section of Texas law, with their wording side by side.'],render:statuteMarkup});
+  registerView('agencies',{heading:['Follow the agencies.<br><em>Not just the bills.</em>','Explore where legislation might land across Texas government.'],render:agenciesMarkup});
+  registerView('review',{heading:['Full-text review.<br><em>Bill by bill.</em>','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:reviewMarkup});
+  registerView('method',{heading:['The scoring method.<br><em>No black boxes.</em>','Signals and uncertainty are displayed separately from verified legislative actions.'],render:methodMarkup});
+  registerView('saving',{heading:['Save your work.<br><em>No account needed.</em>','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],render:savingMarkup});
+  registerView('data',{heading:['Behind the tracker.<br><em>Follow the source.</em>','Understand coverage, refreshes, and how to load or export bill data.'],render:dataMarkup});
+  setFallbackView('data');
 }
 
 function options(values,selected,placeholder){return `<option value="">${esc(placeholder)}</option>`+values.map(v=>`<option value="${esc(v)}" ${v===selected?'selected':''}>${esc(v)}</option>`).join('')}
@@ -1237,71 +1244,74 @@ function handleAgencyKeydown(event){
   return true;
 }
 
-function handleClick(e){
-  const agencyOption=e.target.closest('[data-agency-option]');
-  if(agencyOption){pickAgency(agencyOption.dataset.agencyOption);return}
-  if(e.target.closest('#agency-combobox')){
+// handleClick's checks as named handlers; core/dispatch.js runs them in that original order.
+function registerClicks(){
+  clickOn('agency-option','[data-agency-option]',el=>pickAgency(el.dataset.agencyOption));
+  clickOn('agency-combobox','#agency-combobox',(el,e)=>{
     const input=$('#filter-agency');
     if(e.target!==input)input.focus();
     if($('#agency-options').hidden)showAgencyChoices('');
-    return;
-  }
-  hideAgencyChoices();
-  const nav=e.target.closest('[data-view]');if(nav){e.preventDefault();location.hash=nav.dataset.view;setView(nav.dataset.view);return}
-  const open=e.target.closest('[data-open]');if(open){
+  });
+  // Every other click closes the agency list, then goes on to the handlers below.
+  onClick('agency-dismiss',()=>{hideAgencyChoices();return false});
+  clickOn('nav','[data-view]',(nav,e)=>{e.preventDefault();location.hash=nav.dataset.view;setView(nav.dataset.view)});
+  clickOn('open-bill','[data-open]',(open,e)=>{
     // A modified or non-primary click on a link keeps the browser's own behavior (new tab, new window).
     if(open.tagName!=='A'||cardClickOpens({button:e.button,metaKey:e.metaKey,ctrlKey:e.ctrlKey,shiftKey:e.shiftKey,altKey:e.altKey})){e.preventDefault();showDrawer(open.dataset.open,true)}
-    return}
-  const copyAi=e.target.closest('[data-copy-ai]');if(copyAi){copyForAi(copyAi);return}
-  if(e.target.closest('#near-locate')){nearLocate();return}
-  if(e.target.closest('#near-forget')){saveNear(null);toast('Your districts were removed from this device');return}
-  if(e.target.closest('#near-change')){state.near=null;state.nearError='';renderContent();return}
-  if(e.target.closest('#near-county-use')){const c=countyDistricts(state.nearGeo?.tables,state.nearPick);if(c)saveNear({county:state.nearPick,source:'county',
-    house:$('#near-house-pick')?.value||c.house[0]?.district,senate:$('#near-senate-pick')?.value||c.senate[0]?.district,near:c.house.length>1||c.senate.length>1});return}
-  if(e.target.closest('#near-numbers-use')){const near=cleanNear({house:$('#near-house-num')?.value,senate:$('#near-senate-num')?.value,source:'district'},state.nearGeo?.tables);
-    if(!near){state.nearError='Enter a House district from 1 to 150, a Senate district from 1 to 31, or both.';renderContent();return}saveNear(near);return}
-  const nearMore=e.target.closest('[data-near-more]');if(nearMore){state.nearShow[nearMore.dataset.nearMore]+=30;renderContent();return}
-  const follow=e.target.closest('[data-follow]');if(follow){toggleFollow(follow.dataset.follow);return}
-  if(e.target.closest('#save-search')){saveCurrentSearch();return}
+  });
+  clickOn('copy-ai','[data-copy-ai]',copyAi=>copyForAi(copyAi));
+  clickOn('near-locate','#near-locate',()=>nearLocate());
+  clickOn('near-forget','#near-forget',()=>{saveNear(null);toast('Your districts were removed from this device')});
+  clickOn('near-change','#near-change',()=>{state.near=null;state.nearError='';renderContent()});
+  clickOn('near-county-use','#near-county-use',()=>{const c=countyDistricts(state.nearGeo?.tables,state.nearPick);if(c)saveNear({county:state.nearPick,source:'county',
+    house:$('#near-house-pick')?.value||c.house[0]?.district,senate:$('#near-senate-pick')?.value||c.senate[0]?.district,near:c.house.length>1||c.senate.length>1})});
+  clickOn('near-numbers-use','#near-numbers-use',()=>{const near=cleanNear({house:$('#near-house-num')?.value,senate:$('#near-senate-num')?.value,source:'district'},state.nearGeo?.tables);
+    if(!near){state.nearError='Enter a House district from 1 to 150, a Senate district from 1 to 31, or both.';renderContent();return}saveNear(near)});
+  clickOn('near-more','[data-near-more]',nearMore=>{state.nearShow[nearMore.dataset.nearMore]+=30;renderContent()});
+  clickOn('follow','[data-follow]',follow=>toggleFollow(follow.dataset.follow));
+  clickOn('save-search','#save-search',()=>saveCurrentSearch());
   // Opening a saved search marks it seen today; the link itself navigates to the explorer with its filters.
-  const openSearch=e.target.closest('[data-search-open]');if(openSearch){const s=state.searches.find(x=>x.id===openSearch.dataset.searchOpen);
-    if(s&&s.seen!==todayDay())changeSearch('save-search',{...s,seen:todayDay()});return}
-  const rename=e.target.closest('[data-search-rename]');if(rename){state.renamingSearch=rename.dataset.searchRename;renderContent();
-    const input=$(`[data-search-rename-form="${state.renamingSearch}"] input`);input?.focus();input?.select();return}
-  const del=e.target.closest('[data-search-delete]');if(del){
+  clickOn('search-open','[data-search-open]',openSearch=>{const s=state.searches.find(x=>x.id===openSearch.dataset.searchOpen);
+    if(s&&s.seen!==todayDay())changeSearch('save-search',{...s,seen:todayDay()})});
+  clickOn('search-rename','[data-search-rename]',rename=>{state.renamingSearch=rename.dataset.searchRename;renderContent();
+    const input=$(`[data-search-rename-form="${state.renamingSearch}"] input`);input?.focus();input?.select()});
+  clickOn('search-delete','[data-search-delete]',del=>{
     if(del.dataset.armed!=='1'){del.dataset.armed='1';del.textContent='Click again to delete';return}
     const s=state.searches.find(x=>x.id===del.dataset.searchDelete);changeSearch('delete-search',del.dataset.searchDelete);
-    renderOverview();renderContent();toast(s?`Deleted “${s.name}”`:'Deleted');return}
-  if(e.target.closest('#follow-more')){state.followShow+=30;renderContent();return}
-  const lawCompare=e.target.closest('[data-law-compare]');if(lawCompare){
+    renderOverview();renderContent();toast(s?`Deleted “${s.name}”`:'Deleted')});
+  clickOn('follow-more','#follow-more',()=>{state.followShow+=30;renderContent()});
+  clickOn('law-compare','[data-law-compare]',lawCompare=>{
     const c=state.statuteCompare;c.right=lawCompare.dataset.lawCompare;if(!c.left||c.left===c.right)c.left='law';
-    renderContent();$('.law-compare-wrap')?.scrollIntoView({behavior:'smooth',block:'start'});return}
-  const lawShow=e.target.closest('[data-law-show]');if(lawShow){state.statuteShow=lawShow.dataset.lawShow;renderContent();return}
-  const memberMore=e.target.closest('[data-member-more]');if(memberMore){const role=memberMore.dataset.memberMore;state.memberShow[role]=(state.memberShow[role]||30)+30;renderContent();return}
-  const copyPage=e.target.closest('#copy-page-ai');if(copyPage){copyPageForAi(copyPage);return}
-  const todayTopic=e.target.closest('[data-today-topic]');if(todayTopic){state.todayTopic=todayTopic.dataset.todayTopic;state.todayLimit=100;renderContent();return}
-  if(e.target.closest('#today-more')){state.todayLimit+=100;renderContent();return}
-  if(e.target.closest('#today-topics-toggle')){state.todayAllTopics=!state.todayAllTopics;renderContent();return}
-  if(e.target.closest('#copy-view-link,#share-watch,#export-watch,#import-watch,#shared-add,#shared-close,[id^="sync-"]')){handleSaveClick(e.target);return}
-  const group=e.target.closest('[data-watch-group]');if(group){
+    renderContent();$('.law-compare-wrap')?.scrollIntoView({behavior:'smooth',block:'start'})});
+  clickOn('law-show','[data-law-show]',lawShow=>{state.statuteShow=lawShow.dataset.lawShow;renderContent()});
+  clickOn('member-more','[data-member-more]',memberMore=>{const role=memberMore.dataset.memberMore;state.memberShow[role]=(state.memberShow[role]||30)+30;renderContent()});
+  clickOn('copy-page-ai','#copy-page-ai',copyPage=>copyPageForAi(copyPage));
+  clickOn('today-topic','[data-today-topic]',todayTopic=>{state.todayTopic=todayTopic.dataset.todayTopic;state.todayLimit=100;renderContent()});
+  clickOn('today-more','#today-more',()=>{state.todayLimit+=100;renderContent()});
+  clickOn('today-topics-toggle','#today-topics-toggle',()=>{state.todayAllTopics=!state.todayAllTopics;renderContent()});
+  clickOn('save-tools','#copy-view-link,#share-watch,#export-watch,#import-watch,#shared-add,#shared-close,[id^="sync-"]',(el,e)=>{handleSaveClick(e.target)});
+  clickOn('watch-group','[data-watch-group]',group=>{
     const known=new Set(state.bills.map(b=>b.id));const ids=group.dataset.watchGroup.split(',').filter(id=>known.has(id));
     if(!ids.length)return;
     const op=ids.every(id=>state.watch.has(id))?'remove':'add';changeWatch(op,ids);
     renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(!$('#detail-drawer').hidden&&state.openBill)showDrawer(state.openBill);
     const names=ids.map(id=>state.bills.find(b=>b.id===id)?.number||id).join(', ');
-    toast(op==='add'?`Watching ${names}`:`Removed ${names} from your watchlist`);return}
-  const star=e.target.closest('[data-watch]');if(star){const id=star.dataset.watch;changeWatch(state.watch.has(id)?'remove':'add',[id]);renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(!$('#detail-drawer').hidden)showDrawer(id);toast(state.watch.has(id)?`${id} added to your watchlist`:`${id} removed from your watchlist`);return}
-  const topic=e.target.closest('[data-topic]');if(topic){state.topic=topic.dataset.topic;state.visibleCount=30;renderContent();return}
-  const pick=e.target.closest('[data-agency-pick]');if(pick){switchFilters('all');state.agency=pick.dataset.agencyPick;state.visibleCount=30;state.view='all';location.hash='all';setView('all');return}
-  if(e.target.closest('#clear-filters')){Object.assign(state,{query:'',topic:'',agency:'',chamber:'',party:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30});renderContent();return}
-  if(e.target.closest('#watch-filter')){state.onlyWatch=!state.onlyWatch;state.visibleCount=30;renderContent();return}
-  if(e.target.closest('#load-more')){state.visibleCount+=30;renderResults();return}
-  if(e.target.closest('#export-csv')){exportCsv();return}
-  if(e.target.closest('#import-trigger')){$('#import-file').click();return}
-  if(e.target.closest('#drawer-close')){closeDrawer();return}
+    toast(op==='add'?`Watching ${names}`:`Removed ${names} from your watchlist`)});
+  clickOn('watch','[data-watch]',star=>{const id=star.dataset.watch;changeWatch(state.watch.has(id)?'remove':'add',[id]);renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(!$('#detail-drawer').hidden)showDrawer(id);toast(state.watch.has(id)?`${id} added to your watchlist`:`${id} removed from your watchlist`)});
+  clickOn('topic','[data-topic]',topic=>{state.topic=topic.dataset.topic;state.visibleCount=30;renderContent()});
+  clickOn('agency-pick','[data-agency-pick]',pick=>{switchFilters('all');state.agency=pick.dataset.agencyPick;state.visibleCount=30;state.view='all';location.hash='all';setView('all')});
+  clickOn('clear-filters','#clear-filters',()=>{Object.assign(state,{query:'',topic:'',agency:'',chamber:'',party:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30});renderContent()});
+  clickOn('watch-filter','#watch-filter',()=>{state.onlyWatch=!state.onlyWatch;state.visibleCount=30;renderContent()});
+  clickOn('load-more','#load-more',()=>{state.visibleCount+=30;renderResults()});
+  clickOn('export-csv','#export-csv',()=>exportCsv());
+  clickOn('import-trigger','#import-trigger',()=>$('#import-file').click());
+  clickOn('drawer-close','#drawer-close',()=>closeDrawer());
   // Empty space on a card opens its drawer, unless the click was on a control or the reader is selecting text.
-  const card=e.target.closest('[data-bill-id]');
-  if(card&&cardClickOpens({interactive:Boolean(e.target.closest(CARD_CONTROLS)),selection:window.getSelection?.().toString()||'',button:e.button,metaKey:e.metaKey,ctrlKey:e.ctrlKey,shiftKey:e.shiftKey,altKey:e.altKey}))showDrawer(card.dataset.billId,true);
+  onClick('card',e=>{
+    const card=e.target.closest('[data-bill-id]');
+    if(card&&cardClickOpens({interactive:Boolean(e.target.closest(CARD_CONTROLS)),selection:window.getSelection?.().toString()||'',button:e.button,metaKey:e.metaKey,ctrlKey:e.ctrlKey,shiftKey:e.shiftKey,altKey:e.altKey}))showDrawer(card.dataset.billId,true);
+    return true;
+  });
 }
 const CARD_CONTROLS='a,button,input,select,textarea,label,summary,[data-topic],[data-today-topic],[data-open],[data-watch],[data-watch-group]';
 
