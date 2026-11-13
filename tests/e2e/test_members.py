@@ -27,7 +27,7 @@ def section_titles(page):
 def test_house_member_profile(device):
     page = device.open(f"#member?code={LANDGRAF}")
     expect(page.locator("#dynamic-content h2")).to_have_text("Rep. Brooks Landgraf")
-    expect(page.locator("#page-title")).to_contain_text("Every bill they")
+    expect(page.locator("#page-title")).to_contain_text("One legislator.")
     profile = page.locator(".member-profile")
     expect(profile).to_contain_text("Texas House · District 81")
     expect(profile).to_contain_text("Republican · HD 81 · 12 years served · since 2015")

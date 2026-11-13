@@ -451,23 +451,21 @@ function renderNotice(){
   const fileName=state.meta?.source_file||String(state.meta?.coverage_note||'').replace(/^Local file:\s*/,'').replace(/\.\s*Imported rows.*$/,'');
   const copy=unavailable?'<strong>Dataset unavailable.</strong> '+esc(state.meta.coverage_note):curated?'<strong>Curated opening-day snapshot.</strong> This is a selection of confirmed filings, not the full 90R docket. Automated official bulk-feed sync is prepared but not yet verified.':imported?`<strong>Local file, not official data.</strong> Showing rows imported from ${esc(fileName)}; they have not been verified against the legislature’s published files.`:fallback?`<strong>Showing the bundled copy.</strong> The live dataset could not be loaded, so this is the bundled snapshot generated ${esc(stampText(state.meta.generated_at))}; it may be out of date.${staleCopy}`:stale?`<strong>Bulk-data snapshot may be out of date.</strong> Generated ${esc(stampText(state.meta.generated_at))}.${staleCopy}`:'<strong>Bulk-data snapshot.</strong> Derived from the legislature’s published files; changes may lag the official record.';
   const warn=unavailable||imported||fallback||stale;
-  $('#source-notice').className=`source-notice${warn?' warn':''}`;
-  $('#source-notice').innerHTML=`<span class="notice-icon">${curated?'◷':warn?'!':'✓'}</span><div>${copy} <a href="#data" data-view="data">Coverage & sources →</a></div>`;
+  // A healthy live snapshot gets one slim line; anything to be careful about keeps the full box.
+  const slim=!warn&&!curated;
+  $('#source-notice').className=`source-notice${warn?' warn':''}${slim?' slim':''}`;
+  $('#source-notice').innerHTML=`<span class="notice-icon">${curated?'◷':warn?'!':'✓'}</span><div>${slim?'<strong>Bulk-data snapshot</strong> from the legislature’s published files; it may lag the official record.':copy} <a href="#data" data-view="data">Coverage & sources →</a></div>`;
   $('#footer-timestamp').textContent=`${imported?'Imported':'Snapshot'}: ${stampText(state.meta?.generated_at)}`;
 }
 
 function renderOverview(){
   const bills=state.view==='watchlist'?state.bills.filter(b=>state.watch.has(b.id)):state.bills;
-  const agencies=unique(bills.flatMap(b=>b.agencies.map(a=>a.id))).filter(id=>id!=='all-state-agencies').length;
   const scheduled=bills.filter(b=>assessHearing(b).level===3).length;
   const today=bills.filter(b=>b.filed_at===new Date().toLocaleDateString('sv-SE',{timeZone:'America/Chicago'})).length;
-  const cards=[
-    ['Bills in view',bills.length,'▦',state.meta?.data_mode==='curated'?'Curated sample, not session total':'Imported dataset'],
-    ['Agencies connected',agencies,'◈','Explicit + possible impact tags','accent'],
-    ['Filed today',today,'↗','According to imported filing dates','gold'],
-    ['Hearings scheduled',scheduled,'◷','Confirmed by recorded actions','violet']
-  ];
-  $('#overview').innerHTML=cards.map(([label,count,icon,foot,accent])=>`<div class="stat-card"><div class="stat-top"><span>${label}</span><span class="stat-icon">${icon}</span></div><div class="stat-value ${accent||''}">${count.toLocaleString()}</div><div class="stat-foot">${foot}</div></div>`).join('');
+  const part=(n,one,many,title)=>`<span title="${title}"><strong>${n.toLocaleString()}</strong> ${n===1?one:many}</span>`;
+  $('#overview').innerHTML=[part(bills.length,'bill in view','bills in view',state.meta?.data_mode==='curated'?'Curated sample, not the session total':'Bills in this snapshot'),
+    part(today,'filed today','filed today','According to the filing dates in the data'),
+    part(scheduled,'hearing scheduled','hearings scheduled','Confirmed by recorded actions')].join('<span aria-hidden="true">·</span>');
   $('#nav-all').textContent=state.bills.length;
   $('#nav-watch').textContent=state.watch.size;
   $('#nav-follow').textContent=state.follow.length+state.searches.length;
@@ -479,19 +477,19 @@ function renderContent(){renderView(state.view,$('#dynamic-content'))}
 
 // Each view's heading and content. Features take theirs over as they move into src/features/.
 function registerViews(){
-  registerView('all',{heading:['See what’s moving.<br><em>Know what it changes.</em>','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:explorerMarkup,after:renderResults});
-  registerView('watchlist',{heading:['Your watchlist.<br><em>Keep the signal.</em>','Bills you starred on this device, with a clear view of their movement.'],render:explorerMarkup,after:renderResults});
-  registerView('following',{heading:['Following.<br><em>The people behind the bills.</em>','Legislators you follow on this device, and every bill they file or sign onto.'],render:followingMarkup});
-  registerView('today',{heading:['Today at the Lege.<br><em>What moved, by topic.</em>','Bills with a recorded action today, grouped by type of action. Dates follow Texas time.'],render:todayMarkup});
-  registerView('local',{heading:['Near you.<br><em>Your legislators, your bills.</em>','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],render:nearMarkup});
-  registerView('member',{heading:['One legislator.<br><em>Every bill they’re on.</em>','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],render:memberMarkup});
-  registerView('statute',{heading:['One section of law.<br><em>Every bill that changes it.</em>','The bills that would amend, add or repeal this section of Texas law, with their wording side by side.'],render:statuteMarkup});
+  registerView('all',{heading:['See what’s moving.','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:explorerMarkup,after:renderResults});
+  registerView('watchlist',{heading:['Your watchlist.','Bills you starred on this device, with a clear view of their movement.'],render:explorerMarkup,after:renderResults});
+  registerView('following',{heading:['Following.','Legislators you follow on this device, and every bill they file or sign onto.'],render:followingMarkup});
+  registerView('today',{heading:['Today at the Lege.','Bills with a recorded action today, grouped by type of action. Dates follow Texas time.'],render:todayMarkup});
+  registerView('local',{heading:['Near you.','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],render:nearMarkup});
+  registerView('member',{heading:['One legislator.','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],render:memberMarkup});
+  registerView('statute',{heading:['One section of law.','The bills that would amend, add or repeal this section of Texas law, with their wording side by side.'],render:statuteMarkup});
   registerView('bill',{heading:['One bill.','Its summary, text, changes to law, people, agencies and sources.'],render:()=>'<article class="bill-page" id="bill-page" aria-label="Bill details"></article>',after:fillBillPage});
-  registerView('agencies',{heading:['Follow the agencies.<br><em>Not just the bills.</em>','Explore where legislation might land across Texas government.'],render:agenciesMarkup});
-  registerView('review',{heading:['Full-text review.<br><em>Bill by bill.</em>','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:reviewMarkup});
-  registerView('method',{heading:['The scoring method.<br><em>No black boxes.</em>','Signals and uncertainty are displayed separately from verified legislative actions.'],render:methodMarkup});
-  registerView('saving',{heading:['Save your work.<br><em>No account needed.</em>','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],render:savingMarkup});
-  registerView('data',{heading:['Behind the tracker.<br><em>Follow the source.</em>','Understand coverage, refreshes, and how to load or export bill data.'],render:dataMarkup});
+  registerView('agencies',{heading:['Follow the agencies.','Explore where legislation might land across Texas government.'],render:agenciesMarkup});
+  registerView('review',{heading:['Full-text review.','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:reviewMarkup});
+  registerView('method',{heading:['The scoring method.','Signals and uncertainty are displayed separately from verified legislative actions.'],render:methodMarkup});
+  registerView('saving',{heading:['Save your work.','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],render:savingMarkup});
+  registerView('data',{heading:['Behind the tracker.','Understand coverage, refreshes, and how to load or export bill data.'],render:dataMarkup});
   setFallbackView('data');
 }
 
@@ -518,8 +516,7 @@ function agencySortButtons(){
 function explorerMarkup(){
   const topics=unique([...POLICY_AREAS.map(t=>t.name),...state.bills.flatMap(b=>b.topics)]).sort();
   const popular=['Education','Healthcare','Elections','Taxes','Immigration','Data centers','Local government','Energy & utilities'];
-  return `<div class="section-head"><div><div class="section-overline">EXPLORE LEGISLATION</div><h2>${state.view==='watchlist'?'Watched bills':'Bill explorer'}</h2></div><span class="subtitle">90R · House & Senate · All bill types</span></div>
-    ${sharedBanner()}${state.view==='watchlist'?watchTools():''}
+  return `${sharedBanner()}${state.view==='watchlist'?watchTools():''}
     <div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" maxlength="200" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><button class="outline-button" id="clear-filters">Clear filters</button><button class="outline-button" id="copy-view-link" title="Copy a link to this view, with its filters">Copy link</button>${state.view==='all'&&!state.sharedList?'<button class="outline-button" id="save-search" title="Keep this search and its filters under Following">Save search</button>':''}<button class="primary-button" id="export-csv">↓ Export results</button></div>
     <div class="filter-row"><select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><div class="agency-combobox" id="agency-combobox"><input aria-label="Affected agency" aria-controls="agency-options" aria-expanded="false" aria-autocomplete="list" role="combobox" id="filter-agency" placeholder="All affected agencies" value="${esc(state.agency?agencyName(state.agency):'')}" autocomplete="off"><span class="agency-chevron" aria-hidden="true">⌄</span><div class="agency-panel" id="agency-panel" hidden><div class="agency-sort" role="group" aria-label="Sort agencies">${agencySortButtons()}</div><div class="agency-options" id="agency-options" role="listbox" hidden>${agencyOptionsMarkup()}</div></div></div><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Author party" id="filter-party" title="Republican or Democratic: the primary author's party, with no author or coauthor from the other party. Bipartisan: authors or coauthors from both parties.">${options(Object.keys(PARTY_FILTERS),state.party,'Any party')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted'],state.stage,'Any stage')}</select><select aria-label="Hearing status" id="filter-outlook">${options([NO_HEARING,'Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><select aria-label="Last action" id="filter-action">${options(unique([...LAST_ACTION_TYPES.map(t=>t.label),'Other action']).filter(l=>l===state.action||state.bills.some(b=>lastActionInfo(b).label===l)),state.action,'Any last action')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></div>
     <div class="topic-strip" aria-label="Quick topic filters"><button class="topic-chip ${state.topic===''?'selected':''}" data-topic="">All topics</button>${popular.map(t=>`<button class="topic-chip ${state.topic===t?'selected':''}" data-topic="${esc(t)}">${esc(t)}</button>`).join('')}</div>
