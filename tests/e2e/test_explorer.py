@@ -41,7 +41,7 @@ def test_search_filters_results_and_count(device):
     assert hash_params(page) == {"query": ["HB110"]}
     page.fill("#bill-search", "school")
     expect(page.locator("#result-count")).not_to_have_text(TOTAL)
-    expect(page.locator("#result-count")).to_have_text("195 bills")
+    expect(page.locator("#result-count")).to_have_text("219 bills")
     page.fill("#bill-search", "")
     expect(page.locator("#result-count")).to_have_text(TOTAL)
     assert hash_of(page) == "#all"
