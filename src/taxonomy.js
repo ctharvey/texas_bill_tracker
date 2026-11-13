@@ -851,7 +851,7 @@ export function groupByActionType(rows) {
 
 // ---- "Copy page for AI": the view on screen as text an AI assistant can follow ----
 export const AI_LIST_LIMIT = 50;
-const VIEW_PAGES = {agencies: ['Agency index', 'agencies/index.md'], review: ['Full-text review progress', 'review-progress.md'],
+const VIEW_PAGES = {home: ['Home', 'index.md'], agencies: ['Agency index', 'agencies/index.md'], review: ['Full-text review progress', 'review-progress.md'],
   method: ['Scoring method', 'llms.txt'], saving: ['Saving your info', 'saving.md'], data: ['Data & imports', 'llms.txt']};
 
 // ctx: {view, label, pageUrl, bill, bills, filters:{query,topic,agency,chamber}, agencyName, day,

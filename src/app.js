@@ -1,3 +1,4 @@
+import {nextVisit, changedSince, newestReviewed} from './features/home/model.js';
 import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal,
   STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
@@ -9,7 +10,7 @@ import {timeoutSignal} from './core/net.js';
 import {registerHooks} from './core/hooks.js';
 import {registerView, setFallbackView, viewHeading, renderView} from './core/router.js';
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
-import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
+import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, visitKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
   cleanSearches, applySearchOps, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
 import {createSyncClient} from './sync.js';
@@ -20,6 +21,9 @@ const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last ac
 const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
 const reviews = new Map();
 loadSaved();
+// The visit before this one, read once per page load (null on a first visit or without storage).
+const visit=nextVisit(readJson(visitKey),chicagoDate(new Date()));
+if(STORAGE_OK)writeJson(visitKey,visit.store);
 
 const shortDate = iso => iso ? new Date(`${String(iso).slice(0,10)}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}) : '';
 const dateText = iso => iso ? new Date(`${String(iso).slice(0,10)}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}) : 'Not available';
@@ -101,6 +105,7 @@ async function init(){
   document.addEventListener('change',handleChange);
   document.addEventListener('input',handleInput);
   document.addEventListener('submit',e=>{if(e.target.id==='near-address-form'){e.preventDefault();nearAddress($('#near-address')?.value)}
+    if(e.target.id==='home-search-form'){e.preventDefault();location.hash=buildHash('all',{query:$('#home-search').value.trim()})}
     const form=e.target.closest?.('[data-search-rename-form]');
     if(form){e.preventDefault();const s=state.searches.find(x=>x.id===form.dataset.searchRenameForm),name=form.elements.name.value.trim().slice(0,80);
       if(s&&name&&name!==s.name)changeSearch('save-search',{...s,name});state.renamingSearch=null;renderContent()}});
@@ -317,10 +322,10 @@ function followedMarkup(){
 }
 function setWatch(ids){state.watch=new Set(ids);saveWatchLocal()}
 const FOLLOW_VIEWS=new Set(['following','member','local']);
-function refreshWatch(){renderOverview();if(state.view==='all'||state.view==='watchlist'||FOLLOW_VIEWS.has(state.view))renderContent()}
+function refreshWatch(){renderOverview();if(state.view==='all'||state.view==='watchlist'||state.view==='home'||FOLLOW_VIEWS.has(state.view))renderContent()}
 // `sections` from sync: {follows, searches}, each the link's copy or null when the server did not say.
 const onSynced=(watch,error,sections)=>{if(error){toast(`Sync: ${error.message}`);return}setWatch(watch);const moved=adoptFollows(sections?.follows)|adoptSearches(sections?.searches);renderOverview();
-  if(state.view==='all'||state.view==='watchlist')renderResults();else if(moved&&FOLLOW_VIEWS.has(state.view))renderContent()};
+  if(state.view==='all'||state.view==='watchlist')renderResults();else if(state.view==='home'||moved&&FOLLOW_VIEWS.has(state.view))renderContent()};
 function changeWatch(op,ids){
   for(const id of ids){if(op==='add'?state.watch.has(id):!state.watch.has(id))continue;op==='add'?state.watch.add(id):state.watch.delete(id);sync.record(op,id,onSynced)}
   saveWatchLocal();
@@ -332,7 +337,7 @@ async function setupSync(key){
   else if(sync.linked)await pullSync(false);
   window.addEventListener('focus',()=>{if(Date.now()-lastPull>30000)pullSync(false)});
   persistState();
-  if(state.view==='watchlist'||state.view==='saving')renderContent();
+  if(state.view==='watchlist'||state.view==='saving'||state.view==='home')renderContent();
 }
 
 async function openSyncLink(key){
@@ -477,6 +482,7 @@ function renderContent(){renderView(state.view,$('#dynamic-content'))}
 
 // Each view's heading and content. Features take theirs over as they move into src/features/.
 function registerViews(){
+  registerView('home',{heading:['This session, at a glance.','What changed on your bills, what moved today, upcoming hearings and Luna’s newest reviews.'],render:homeMarkup});
   registerView('all',{heading:['See what’s moving.','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:explorerMarkup,after:renderResults});
   registerView('watchlist',{heading:['Your watchlist.','Bills you starred on this device, with a clear view of their movement.'],render:explorerMarkup,after:renderResults});
   registerView('following',{heading:['Following.','Legislators you follow on this device, and every bill they file or sign onto.'],render:followingMarkup});
@@ -642,6 +648,37 @@ function billCard(b,unwatchedCompanion=false){
   const viaTag=via?`<span class="tag agency via-companion" title="${esc(`Not tagged with ${agencyName(state.agency)} itself; listed because its companion ${via.map(id=>companionLabel({id})).join(', ')} is.`)}">via companion ${esc(via.map(id=>companionLabel({id})).join(', '))}</span>`:'';
   const actionTag=`<span class="tag action-tag action-${esc(last.key)}" title="${esc(`Last action${last.chamber?` (${last.chamber})`:''}: ${last.text}`)}">${esc(last.label)}${last.chamber&&last.key!=='filed'?` · ${esc(last.chamber)}`:''}${last.date?` · ${esc(shortDate(last.date))}`:''}</span>`;
   return `<article class="bill-card party-${party.tint}${unwatchedCompanion?' unwatched-companion':''}" data-bill-id="${esc(b.id)}"><div class="bill-left"><div class="bill-head">${unwatchedCompanion?'<span class="unwatched-pill">Companion · not watched</span>':''}${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><span class="party-pill party-${party.tint}" title="${esc(party.detail)}">${esc(party.label)}</span>${influencePill(influence)}${b.luna?`<span class="luna-pill" title="Tags from the bill's full text, reviewed ${esc(dateText(b.luna.reviewed_at))}">Luna · full text</span>`:''}</div><h3 class="bill-title">${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</h3><p class="bill-description">${esc(b.caption)}</p>${headlineLine(b,'card')}<div class="bill-tags">${actionTag}${viaTag}${companionTags}${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${agencyTags}${real.length>2?`<span class="tag agency">+${real.length-2} agencies</span>`:''}</div><div class="bill-meta"><span>By <b>${authorHtml(b,b.authors[0]||b.author)}</b></span><span>${b.authors.length?`${b.authors.length} ${b.authors.length===1?'author':'authors'}`:'Authors not reported'}</span><span>${b.coauthors===null?'Coauthors not reported':`${b.coauthors.length} ${b.coauthors.length===1?'coauthor':'coauthors'}`}</span><span>${b.cosponsors===null?'Cosponsors not reported':`${b.cosponsors.length} ${b.cosponsors.length===1?'cosponsor':'cosponsors'}`}</span><span>Filed ${dateText(b.filed_at)}</span><span>${real.length} agency ${real.length===1?'link':'links'}</span></div></div><div class="bill-right"><button class="watch-button" data-watch="${b.id}" aria-label="${watched?'Remove from':'Add to'} watchlist" aria-pressed="${watched}">${watched?'★':'☆'}</button><div><div class="outlook-label">Hearing progress</div><div class="outlook-value">${esc(h.label)}</div><button class="bill-open" data-open="${b.id}">Bill details →</button></div></div></article>`;
+}
+
+// ---- Home: the dashboard. Search first, then what changed on your bills, the latest day's actions, hearings and reviews.
+const HOME_ROWS=5;
+function homeMarkup(){
+  const today=todayDay(),prev=visit.prev;
+  const more=(href,view,label)=>`<a class="text-link home-more" href="${esc(href)}"${view?` data-view="${view}"`:''}>${label} →</a>`;
+  const card=(title,count,body)=>`<section class="home-card"><h2>${title}${count?` <span>${count.toLocaleString()}</span>`:''}</h2>${body}</section>`;
+  const datedRow=({bill,day})=>todayRow({bill,actions:(activityOn([bill],day)[0]?.actions||[lastActionInfo(bill).text]).map(t=>`${shortDate(day)} · ${t}`)});
+  // Your bills: watched, and those of legislators you follow.
+  const followed=state.roster&&state.follow.length?followedBills(state.bills,state.roster,state.follow).map(r=>r.bill):[];
+  const mine=[...new Map([...state.bills.filter(b=>state.watch.has(b.id)),...followed].map(b=>[b.id,b])).values()];
+  const changed=changedSince(mine,prev,today);
+  const searches=state.searches.map(s=>({s,...searchCounts(s)})).filter(x=>x.fresh);
+  const searchList=searches.length?`<ul class="home-searches">${searches.map(({s,fresh})=>`<li><a class="text-link" href="${esc(buildHash('all',s.filters))}" data-search-open="${esc(s.id)}">${esc(s.name)}</a> · ${fresh.toLocaleString()} with new actions</li>`).join('')}</ul>`:'';
+  const yours=!mine.length&&!state.searches.length
+    ?`<p class="tools-note">Star bills, follow legislators or save a search, and what changes for them shows up here.</p>`
+    :`${changed.length?changed.slice(0,HOME_ROWS).map(datedRow).join(''):`<p class="tools-note">No new actions on your ${mine.length.toLocaleString()} ${mine.length===1?'bill':'bills'}${prev?` since ${esc(dateText(prev))}`:''}.</p>`}${changed.length>HOME_ROWS?`<p class="tools-note">And ${(changed.length-HOME_ROWS).toLocaleString()} more on your <a class="text-link" href="#watchlist" data-view="watchlist">watchlist</a> and under <a class="text-link" href="#following" data-view="following">Following</a>.</p>`:''}${searchList}`;
+  const yoursTitle=prev?`Since your last visit, ${esc(shortDate(prev))}`:'Latest on your bills';
+  // The latest day with activity, as on the Today page (unfiltered by its topic chips).
+  const {day,rows}=todayData();
+  const counts=groupByActionType(rows).map(g=>`<span><strong>${g.rows.length.toLocaleString()}</strong> ${esc(g.label.toLowerCase())}</span>`).join('');
+  const dayBody=rows.length?`<p class="home-counts">${counts}</p>${rows.slice(0,HOME_ROWS).map(todayRow).join('')}${more('#today','today','The whole day, by topic')}`:'<p class="tools-note">No recorded activity yet.</p>';
+  const hearings=state.bills.filter(b=>assessHearing(b).level===3);
+  const hearingBody=hearings.length?hearings.slice(0,HOME_ROWS).map(b=>todayRow({bill:b,actions:[lastActionInfo(b).text]})).join('')+(hearings.length>HOME_ROWS?more(buildHash('all',{outlook:'Scheduled'}),'','All scheduled hearings'):'')
+    :'<p class="tools-note">No hearings are scheduled yet. Committees post them once the session is under way.</p>';
+  const reviewed=newestReviewed(state.bills);
+  const reviewBody=reviewed.length?reviewed.slice(0,HOME_ROWS).map(b=>todayRow({bill:b,actions:[`Reviewed ${dateText(b.luna.reviewed_at)}`]})).join('')+more('#review','review','Review progress')
+    :'<p class="tools-note">Luna has not reviewed any bills yet.</p>';
+  return `<form class="home-search" id="home-search-form" role="search"><label for="home-search">Search every bill</label><div class="home-search-row"><input id="home-search" name="query" maxlength="200" placeholder="Bill number, author, subject, agency or keyword…" autocomplete="off"><button class="primary-button" type="submit">Search</button></div><p class="tools-note">Or <a class="text-link" href="#all" data-view="all">browse all ${state.bills.length.toLocaleString()} bills</a>.</p></form>
+    <div class="home-grid">${card(yoursTitle,changed.length,yours)}${card(day===today?'Today at the Lege':`Most recent activity, ${esc(shortDate(day))}`,rows.length,dayBody)}${card('Upcoming hearings',hearings.length,hearingBody)}${card('Newly reviewed by Luna',0,reviewBody)}</div>`;
 }
 
 // Remove this line once the Legislature is in session and the view has real floor and hearing content.
@@ -1374,7 +1411,7 @@ async function copyToClipboard(text){
 async function copyPageForAi(button){
   const bill=state.openBill?state.bills.find(x=>x.id===state.openBill):null;
   const member=state.view==='member'?memberByCode(state.roster,state.memberCode):null;
-  const labels={all:'Bill explorer',watchlist:'Watchlist',following:'Following',today:'Today',local:'Near you',member:member?`Bills by ${memberTitle(member)}`:'Member'};
+  const labels={home:'Home',all:'Bill explorer',watchlist:'Watchlist',following:'Following',today:'Today',local:'Near you',member:member?`Bills by ${memberTitle(member)}`:'Member'};
   const today=state.view==='today'?todayData():null;
   const text=pageAiText({view:state.view,label:labels[state.view]||state.view,pageUrl:location.href,bill,agencyName,
     companions:companionsOf,via:state.view==='today'||state.view==='member'?null:agencyVia(),

@@ -4,7 +4,7 @@ const FILTER_NAMES = Object.keys(FILTER_DEFAULTS);
 // Renamed filter values, so old links, saved searches and remembered filters keep working (taxonomy.NO_HEARING).
 const RENAMED = {outlook: {'Not rated': 'No hearing yet'}};
 const current = (name, value) => RENAMED[name]?.[value] ?? value;
-export const VIEWS = ['all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'bill', 'agencies', 'review', 'method', 'saving', 'data'];
+export const VIEWS = ['home', 'all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'bill', 'agencies', 'review', 'method', 'saving', 'data'];
 const LAW_CODE = /^[A-Z]{2}$/;
 const LAW_SECTION = /^\d+[A-Z]?(?:\.\d+[A-Z]?)+$/;  // The statute index's section numbers (build_feeds.SECTION_NUM).
 export const MAX_LIST = 500;
@@ -52,7 +52,8 @@ export function parseHash(hash) {
   const sync = params.get('sync') || '';
   const member = String(params.get('code') || '').trim().toUpperCase();
   const law = String(params.get('law') || '').toUpperCase(), sec = String(params.get('sec') || '').toUpperCase();
-  return {view: VIEWS.includes(view) ? view : 'all', filters, hasFilters: Object.keys(filters).length > 0,
+  // A bare address is the dashboard; an unknown view (or `#?query=` and the like) is the explorer.
+  return {view: raw === '' ? 'home' : VIEWS.includes(view) ? view : 'all', filters, hasFilters: Object.keys(filters).length > 0,
     list: list && list.length ? list : null, bill: isBillId(bill) ? bill : null, sync: SYNC_KEY.test(sync) ? sync : null,
     member: view === 'member' && MEMBER_CODE.test(member) ? member : null,
     statute: view === 'statute' && LAW_CODE.test(law) && LAW_SECTION.test(sec) && sec.length <= 16 ? `${law} ${sec}` : null};
