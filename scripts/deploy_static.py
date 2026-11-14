@@ -15,6 +15,9 @@ from pathlib import Path
 ROOT = Path('/var/www/html/texas-bill-atlas')
 STATE = Path('/var/lib/texas-bill-atlas')
 REPOSITORY = STATE / 'repository.git'
+# GitHub main is fetched here first. refs/heads/main, which the data, members and agent units run code from, moves
+# only once that commit is published, so a refused commit never runs beside a site that is still on the old one.
+CANDIDATE = 'refs/deploy/candidate'
 # Published besides index.html and everything under src/. bills.json is the bundled fallback snapshot, validated below.
 DATA_FILES = ('data/members.json', 'data/geo/districts.json', 'data/geo/house.json', 'data/geo/senate.json',
               'data/geo/counties.json', 'data/bills.json')
@@ -84,12 +87,12 @@ def main() -> None:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if not REPOSITORY.exists():
             subprocess.run(['git', 'init', '--bare', str(REPOSITORY)], check=True, timeout=30)
-        git('fetch', '--depth=1', 'https://github.com/ctharvey/texas_bill_tracker.git',
-            '+refs/heads/main:refs/heads/main')
-        commit = git('rev-parse', 'refs/heads/main').decode().strip()
+        git('fetch', '--depth=1', 'https://github.com/ctharvey/texas_bill_tracker.git', f'+refs/heads/main:{CANDIDATE}')
+        commit = git('rev-parse', '--verify', f'{CANDIDATE}^{{commit}}').decode().strip()
         release = ROOT / 'releases' / commit
         current = ROOT / 'current'
         if current.is_symlink() and current.resolve() == release:
+            git('update-ref', 'refs/heads/main', commit)  # also heals a crash between publishing and this update
             print('Already current:', commit)
             return
         bundle = {name: git('show', f'{commit}:{name}') for name in release_files(commit_files(commit))}
@@ -125,6 +128,7 @@ def main() -> None:
         finally:
             if staging.exists():
                 shutil.rmtree(staging)
+        git('update-ref', 'refs/heads/main', commit)
         print('Published:', commit, 'records:', len(bills), 'snapshot:', snapshot['generated_at'])
         prune(release.parent, current.resolve())
 
