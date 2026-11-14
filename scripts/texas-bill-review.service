@@ -20,6 +20,10 @@ ExecStartPre=/usr/bin/timeout 120 /usr/bin/env GIT_TERMINAL_PROMPT=0 /usr/bin/gi
 ExecStart=/var/lib/texas-bill-review/venv/bin/python scripts/review_pipeline.py --cache-dir /var/lib/texas-bill-review/cache --no-spending-cap --transport flex --input markdown --stages --suggest-topics --related-entities --audit-sample --related-bills --workers 6 --order reverse --restart-on-update --execute --snapshot /var/www/html/texas-bill-atlas/live/bills.json --publish-tags /var/www/html/texas-bill-atlas/live/luna/tags.json
 # No start timeout: killing a run mid-request strands its billing reservation and blocks later calls.
 TimeoutStartSec=infinity
+# SIGTERM only asks the worker to stop: no new bill starts and bills in flight finish, so their calls settle. One
+# call may take its full 900 s SDK timeout plus 90 s of resends; a kill after this still leaves pending calls, which
+# the next run holds (CRASH_HOLD_LIMIT a day).
+TimeoutStopSec=20min
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

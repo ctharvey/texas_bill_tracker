@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import threading
 import time
@@ -88,6 +89,16 @@ def unresolved_keys(budget) -> list[str] | None:
                       if isinstance(row, dict) and row.get("state") == "pending")
     except Exception:  # noqa: BLE001 - unreadable counts as unresolved (fails closed)
         return None
+
+
+# Set by SIGTERM (systemctl stop, shutdown). No new bill, pass or pause starts; bills in flight finish and are
+# recorded, so their calls settle instead of being left pending for the next run to hold (CRASH_HOLD_LIMIT
+# a day). test_review_stop.py covers it.
+STOP_REQUESTED = threading.Event()
+
+
+def request_stop(signum, frame) -> None:
+    STOP_REQUESTED.set()  # only sets a flag: never raises or prints in the middle of a send or settle
 
 
 def stops_run(error: BaseException, budget) -> bool:
@@ -1406,8 +1417,8 @@ def _second_pass(label: str, jobs, args, deadline: float, refused: RefusedBills 
     budget stop, unresolved outcome or dry run ends the pass."""
     done, rejections, errors = set(), 0, 0  # bills, not calls: one bill may take several (scope votes)
     for bill_id, call, save in jobs:
-        if time.monotonic() > deadline:
-            print(f"{label}: run time limit; the rest wait for a later run", flush=True)
+        if time.monotonic() > deadline or STOP_REQUESTED.is_set():
+            print(f"{label}: run time limit or stop requested; the rest wait for a later run", flush=True)
             break
         try:
             report = call()
@@ -1693,6 +1704,9 @@ def main():
     with worker:
         # Runs before the lock is released (LIFO), on every exit; acts only on a stop.
         worker.push(lambda exc_type, error, tb: publish_after_stop(args, error))
+        STOP_REQUESTED.clear()
+        if threading.current_thread() is threading.main_thread():
+            worker.callback(signal.signal, signal.SIGTERM, signal.signal(signal.SIGTERM, request_stop))
         limits = (None, None) if args.no_spending_cap else (args.daily_budget, args.run_budget)
         stop = _read_json(args.cache_dir / ACCOUNT_STOP)
         if (args.execute and not args.bill_id and isinstance(stop, dict)
@@ -1833,7 +1847,10 @@ def main():
         update = CodeUpdate(ROOT) if args.restart_on_update and args.execute and not args.bill_id else None
 
         def out_of_time() -> bool:
-            """Checked before each new bill: the time limit, or newer code to restart on."""
+            """Checked before each new bill: a stop request, the time limit, or newer code to restart on."""
+            if STOP_REQUESTED.is_set():
+                print("Stopped: stop requested; finishing bills in progress, remaining work stays queued", flush=True)
+                return True
             if time.monotonic() > deadline:
                 print("Stopped: run time limit; remaining work stays queued", flush=True)
                 return True
@@ -1852,7 +1869,8 @@ def main():
                 held = list(dict.fromkeys(([current] if current else []) + list(running.values())))
                 publish(current=current, upcoming=list(pending)[:5], running=True,
                         waiting_until=utc_stamp(seconds), in_progress=held)
-                time.sleep(seconds)
+                if not STOP_REQUESTED.is_set():  # a pause blocks only with no call in flight, or for <= 60 s
+                    time.sleep(seconds)
 
             def defer_for_capacity(bill_id: str, retry_after: float) -> None:
                 # Only provably unbilled rejections reach here: Budget released the reservation and the
@@ -1878,6 +1896,8 @@ def main():
                     return pending.popleft()
                 if block and cooling and cooling[0][0] < deadline:
                     pause(max(0, cooling[0][0] - time.monotonic()), cooling[0][1])
+                    if STOP_REQUESTED.is_set():
+                        return None  # the cooled bill stays queued (on the retry list) for the next run
                     return cooling.pop(0)[1]
                 return None
 
@@ -2174,7 +2194,7 @@ def main():
             for name, _run, jobs in second:
                 recount(name, jobs)
             for name, run, jobs in second:
-                if stopped or halt.is_set():
+                if stopped or halt.is_set() or STOP_REQUESTED.is_set():
                     break
                 progress["pass_name"] = name
                 publish(current=None, upcoming=[], running=True)
@@ -2184,7 +2204,7 @@ def main():
                     progress["passes"][name]["checked"] = checked
             progress["pass_name"] = None
             print("New model spending this run: $%.6f" % budget.run_spent)
-            publish_luna(args, network_ok=not halt.is_set())
+            publish_luna(args, network_ok=not halt.is_set() and not STOP_REQUESTED.is_set())
         finally:
             progress["pass_name"] = None
             publish(current=None, upcoming=[], running=False)
