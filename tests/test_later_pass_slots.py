@@ -166,7 +166,7 @@ class Slots(SlotCase):
         self.assertLessEqual(len(started), 5)
         self.assertGreaterEqual(len(started), 3)
         self.assertLess(len(started), len(BILLS))
-        self.assertEqual(out.count('capacity unavailable 3 times with no answer between'), 1)
+        self.assertEqual(out.count('capacity unavailable 3 times in a row with no answer between'), 1)
         self.assertEqual(self.ledger_pending(), [])
 
     def test_an_answer_between_refusals_resets_the_count(self):
@@ -192,6 +192,49 @@ class Slots(SlotCase):
         for bill in started:
             self.assertEqual([v for b, v in self.calls if b == bill], [1])  # no further vote after the stop
             self.assertIsNotNone(self.record(bill))
+        self.assertEqual(self.ledger_pending(), [])
+
+    def test_bills_refused_in_an_earlier_run_start_only_after_every_other_bill_is_done(self):
+        self.prepare(BILLS[:4])
+        (self.cache / pipeline.RefusedBills.FILE).write_text(
+            json.dumps({'bills': {'Topic suggestions': ['HB1']}}), 'utf-8')
+        self.answers = {1: FALSE, 2: FALSE}
+        self.later('--later-workers', '3')
+        first_hb1 = self.calls.index(('HB1', 1))
+        self.assertEqual({b for b, _ in self.calls[:first_hb1]}, {'HB2', 'HB3', 'HB4'})
+        self.assertEqual(len(self.calls[:first_hb1]), 6)  # all their votes, before HB1 starts
+        self.assertEqual(self.calls[first_hb1:], [('HB1', 1), ('HB1', 2)])
+        self.assertEqual(json.loads((self.cache / pipeline.RefusedBills.FILE).read_text('utf-8'))
+                         ['bills']['Topic suggestions'], [])
+
+    def test_an_unknown_outcome_holds_only_its_bill(self):
+        self.prepare(BILLS[:4])
+        self.gather = 3
+        self.answers = {1: FALSE, 2: FALSE, 'HB2': TimeoutError('unknown submission outcome')}
+        out = self.later('--later-workers', '3')
+        self.assertIn('HB2 topic suggestions held', out)
+        self.assertEqual([v for b, v in self.calls if b == 'HB2'], [1])  # never resent
+        self.assertIsNone(self.record('HB2'))
+        for bill in ('HB1', 'HB3', 'HB4'):
+            self.assertEqual(self.marker(bill), {'applies': False, 'explanation': ''})
+        self.assertEqual(self.ledger_pending(), [])
+
+    def test_the_run_deadline_starts_nothing_new_and_saves_calls_in_flight(self):
+        self.prepare(BILLS)
+        self.gather = 3
+
+        def slow(b, text):
+            out = self.reply(b, text)
+            time.sleep(3.5)  # outlives --max-minutes 0.05 (3 s)
+            return out
+        self.overrides[SUGGEST] = slow
+        out = self.later('--later-workers', '3', '--max-minutes', '0.05')
+        started = {b for b, _ in self.calls}
+        self.assertEqual(len(started), 3)
+        for bill in started:
+            self.assertEqual([v for b, v in self.calls if b == bill], [1])
+            self.assertIsNotNone(self.record(bill))
+        self.assertIn('run time limit or stop requested', out)
         self.assertEqual(self.ledger_pending(), [])
 
     def test_slots_default_to_workers_capped_at_3_and_only_on_flex(self):

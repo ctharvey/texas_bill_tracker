@@ -1512,8 +1512,10 @@ def _slot_pass(label: str, units, args, deadline: float, slots: int, refused: Re
     (call, save) jobs in order (topics: vote 1, then its scope votes), advanced on this thread only after the previous
     job was saved, so one bill's calls never overlap and its next job sees the saved record. Pool threads run only
     `call()`; this thread saves, applies the stop rules and is the only writer. A job that is not saved ends its
-    bill for this run. A stop (time, SIGTERM, capacity or failures in a row, a pass-ending refusal, a worker-wide
-    error) starts nothing new; calls in flight finish and their answers are saved, then a worker-wide error exits."""
+    bill for this run. A None unit is a barrier: nothing after it starts until every bill before it has finished
+    (topics: bills refused in an earlier run go after all others, votes included). A stop (time, SIGTERM, capacity
+    or failures in a row, a pass-ending refusal, a worker-wide error) starts nothing new; calls in flight finish and
+    their answers are saved, then a worker-wide error exits."""
     done, rejections, errors = set(), 0, 0
     units = iter(units)
     running: dict = {}  # future -> (bill_id, steps, save)
@@ -1539,11 +1541,18 @@ def _slot_pass(label: str, units, args, deadline: float, slots: int, refused: Re
             running[pool.submit(call)] = (bill_id, steps, save)
             return True
 
-        exhausted = False
+        exhausted = barrier = False
         while True:
-            while not exhausted and len(running) < slots and may_start():
-                for bill_id, steps in units:
-                    if submit(bill_id, steps):
+            if barrier and not running:
+                barrier = False
+            while not exhausted and not barrier and len(running) < slots and may_start():
+                for unit in units:
+                    if unit is None:
+                        barrier = bool(running)
+                        if barrier:
+                            break
+                        continue
+                    if submit(*unit):
                         break
                 else:
                     exhausted = True
@@ -1562,7 +1571,7 @@ def _slot_pass(label: str, units, args, deadline: float, slots: int, refused: Re
                     if not known:
                         rejections += 1
                         if rejections >= 3:
-                            end("capacity unavailable 3 times with no answer between; the rest wait for a later run")
+                            end("capacity unavailable 3 times in a row with no answer between; the rest wait for a later run")
                     continue
                 except (CacheCoolingDown, CacheBusy, OSError, ValueError) as error:
                     print(bill_id, f"{label.lower()} skipped:", type(error).__name__, "-", next_step(error), flush=True)
@@ -1574,6 +1583,9 @@ def _slot_pass(label: str, units, args, deadline: float, slots: int, refused: Re
                     if stops_run(error, budget):
                         if exit_error is None:
                             exit_error = stop_worker(error, args.cache_dir, bill_id, f" ({label.lower()})")
+                        else:
+                            print(bill_id, "stopped", type(error).__name__ + f" ({label.lower()})", "-",
+                                  next_step(error), flush=True)
                         end("worker stopped; saving the answers already in flight")
                         continue
                     print(bill_id, f"{label.lower()} failed:", type(error).__name__, "-", next_step(error), flush=True)
@@ -1609,7 +1621,8 @@ def flex_crash_allowance() -> int:
 
 def later_slots(args) -> int:
     """Bills a later pass works on at once: --later-workers, else min(--workers, 3). Flex only (the legacy budget
-    allows one call in flight). Later passes run after the first pass, so calls in flight never exceed --workers."""
+    allows one call in flight). Later passes run after the first pass's pool closes, so calls in flight are at most
+    max(--workers, slots); main() caps --later-workers at the crash-hold allowance."""
     if args.transport != "flex":
         return 1
     return args.later_workers if args.later_workers is not None else min(args.workers, 3)
@@ -1705,7 +1718,9 @@ def topic_jobs(args, queue: dict, budget, refused: "RefusedBills", per_bill: boo
 
     def units():
         # Slots: a bill's vote 1 and then its scope votes, back to back, so its marker is decided in one visit.
-        for group in groups():
+        for n, group in enumerate(groups()):
+            if n:
+                yield None  # barrier: earlier-refused bills start only once every other bill is done
             for bill_id, path in group:
                 yield bill_id, (job for jobs_ in (first_job(bill_id, path), vote_jobs(bill_id, path)) for job in jobs_)
 
