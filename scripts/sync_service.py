@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import traceback
 import secrets
+import sys
 import socket
 import sqlite3
 import threading
@@ -43,6 +44,9 @@ DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 OPTIONAL_SECTIONS = ("follows", "searches", "theme")
 THEME_ID = re.compile(r"[a-z][a-z-]{0,23}")
 MAX_LISTS = 100_000
+# New links across all visitors per rolling day. Per-address limits alone let someone with many IPv6 /64s fill
+# MAX_LISTS in an hour and keep creation closed for everyone until retention frees rows (a year).
+DAILY_CREATES = 1000
 RETENTION_SECONDS = 365 * 86400
 FEED_ITEMS = 300
 TEXT_FILTERS = {"view", "query", "topic", "agency", "chamber", "party", "stage", "action", "outlook", "sort"}
@@ -154,6 +158,7 @@ class Store:
                            data TEXT NOT NULL, version INTEGER NOT NULL, created_at INTEGER NOT NULL,
                            updated_at INTEGER NOT NULL, seen_at INTEGER NOT NULL)""")
         self.db.execute("CREATE INDEX IF NOT EXISTS lists_seen ON lists(seen_at)")
+        self.db.execute("CREATE INDEX IF NOT EXISTS lists_created ON lists(created_at)")
         self.purged_at = 0.0
 
     def create(self, data: dict, now: float) -> str:
@@ -163,6 +168,10 @@ class Store:
                 self.purged_at = now
             if self.db.execute("SELECT COUNT(*) FROM lists").fetchone()[0] >= MAX_LISTS:
                 raise Rejected(503, "sync storage is full")
+            if self.db.execute("SELECT COUNT(*) FROM lists WHERE created_at > ?",
+                               (int(now - 86400),)).fetchone()[0] >= DAILY_CREATES:
+                print("sync: daily create budget reached", DAILY_CREATES, file=sys.stderr, flush=True)
+                raise Rejected(503, "too many new sync links today; try again tomorrow", retry_after=3600)
             edit_key = secrets.token_urlsafe(16)
             self.db.execute("INSERT INTO lists VALUES (?, ?, ?, 1, ?, ?, ?)",
                             (key_hash(edit_key), key_hash(view_key_for(edit_key)), json.dumps(data),
