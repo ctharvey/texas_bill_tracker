@@ -252,10 +252,10 @@ a.bill-number:hover{text-decoration:underline}
 .law-picks{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .law-pick{display:grid;gap:4px;font-size:var(--fs-xs);color:var(--muted);min-width:0}
 .law-pick select{font:inherit;font-size:var(--fs-sm);color:var(--ink);padding:7px 8px;border:1px solid var(--line);border-radius:calc(6px*var(--rs));background:var(--white);min-width:0;width:100%}
-.law-legend{font-size:var(--fs-xs);color:var(--muted);line-height:1.55}
+.law-legend{font-size:var(--fs-xs);color:var(--muted);line-height:1.7;margin:12px 0}
 mark.law-out{background:var(--red-soft);color:#7d2f25;text-decoration:line-through;text-decoration-color:rgba(179,90,78,.55);border-radius:calc(2px*var(--rs))}
 mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;text-decoration-color:rgba(8,125,122,.55);border-radius:calc(2px*var(--rs))}
-.law-legend mark{text-decoration:none}
+.law-legend mark{text-decoration:none;padding:1px 4px}
 .law-toggle{display:none;gap:6px;margin:0 0 8px}
 .law-toggle .active{background:var(--navy);color:var(--nav-ink);border-color:var(--navy)}
 .law-compare{border:1px solid var(--line);border-radius:calc(8px*var(--rs));overflow:hidden;background:var(--white)}
