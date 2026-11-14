@@ -32,5 +32,8 @@ export const withMode = (prefs, mode) => ({...asPrefs(prefs), mode: cleanMode(mo
 export const fliesAcross = (theme, reducedMotion, {picked = true, flewThisSession = false} = {}) =>
   cleanTheme(theme) === 'warbler' && !reducedMotion && (picked || !flewThisSession);
 
+// Where a bird released from the theme dot flies: a percentage down the screen, 10 to 80, from a 0..1 random number.
+export const skyTop = random => Math.round(10 + Math.min(Math.max(Number(random) || 0, 0), 1) * 70);
+
 // prefs-v1 with its theme set; other fields (remembered filters) are kept.
 export const withTheme = (prefs, theme) => ({...(prefs && typeof prefs === 'object' && !Array.isArray(prefs) ? prefs : {}), theme: cleanTheme(theme)});

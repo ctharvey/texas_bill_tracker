@@ -1,5 +1,5 @@
 // The top bar's colour and light-or-dark pickers. index.html applies the saved theme before first paint; this keeps it in step afterwards.
-import {THEMES, DEFAULT_THEME, cleanTheme, withTheme, MODES, cleanMode, shownMode, withMode, fliesAcross} from './model.js';
+import {THEMES, DEFAULT_THEME, cleanTheme, withTheme, MODES, cleanMode, shownMode, withMode, fliesAcross, skyTop} from './model.js';
 import {$, esc} from '../../core/dom.js';
 import {prefsKey, readJson, writeJson} from '../../core/storage.js';
 
@@ -76,19 +76,33 @@ const REDUCED_MOTION = typeof matchMedia === 'function' ? matchMedia('(prefers-r
 const FLEW_KEY = 'tx-bill-atlas-warbler-flew';
 const flewThisSession = () => { try { return sessionStorage.getItem(FLEW_KEY) === '1'; } catch { return false; } };
 
-// The easter egg: one warbler crosses the middle of the screen, then is removed. It never takes clicks or focus.
-export function warblerFlight(theme, picked = false) {
-  if (!fliesAcross(theme, REDUCED_MOTION?.matches, {picked, flewThisSession: flewThisSession()})
-      || document.querySelector('.warbler-sky')) return false;
-  try { sessionStorage.setItem(FLEW_KEY, '1'); } catch { /* still flies; it may fly again next load */ }
+// One warbler crosses the screen at `topPercent` of its height, then is removed. It never takes clicks or focus.
+function launchWarbler(topPercent) {
   const sky = document.createElement('div');
   sky.className = 'warbler-sky';
   sky.setAttribute('aria-hidden', 'true');
   sky.innerHTML = `<div class="warbler-flight"><div class="warbler-bob">${WARBLER_SVG}</div></div>`;
+  sky.firstElementChild.style.top = `${topPercent}%`;
   sky.firstElementChild.addEventListener('animationend', event => {
     if (event.animationName === 'warbler-cross') sky.remove();
   });
   document.body.appendChild(sky);
+}
+
+// The warbler theme's easter egg: one bird across the middle of the screen.
+export function warblerFlight(theme, picked = false) {
+  if (!fliesAcross(theme, REDUCED_MOTION?.matches, {picked, flewThisSession: flewThisSession()})
+      || document.querySelector('.warbler-sky')) return false;
+  try { sessionStorage.setItem(FLEW_KEY, '1'); } catch { /* still flies; it may fly again next load */ }
+  launchWarbler(42);
+  return true;
+}
+
+// The yellow dot in the theme pill, in any theme: each press sends a warbler from the left at a random height.
+const MAX_BIRDS = 6;
+export function releaseWarbler(random = Math.random) {
+  if (REDUCED_MOTION?.matches || document.querySelectorAll('.warbler-sky').length >= MAX_BIRDS) return false;
+  launchWarbler(skyTop(random()));
   return true;
 }
 
@@ -96,6 +110,7 @@ export function warblerFlight(theme, picked = false) {
 export function setupThemePicker(onChange = () => {}) {
   const select = $('#theme-select');
   if (!select) return;
+  $('#warbler-dot')?.addEventListener('click', () => releaseWarbler());
   const current = applyTheme(readJson(prefsKey)?.theme);
   warblerFlight(current);
   select.innerHTML = THEMES.map(t => `<option value="${esc(t.id)}"${t.id === current ? ' selected' : ''}>${esc(t.name)}</option>`).join('');

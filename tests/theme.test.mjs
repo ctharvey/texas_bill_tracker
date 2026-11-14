@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {THEMES, DEFAULT_THEME, cleanTheme, withTheme, MODES, DEFAULT_MODE, cleanMode, shownMode, withMode, fliesAcross} from '../src/features/theme/model.js';
+import {THEMES, DEFAULT_THEME, cleanTheme, withTheme, MODES, DEFAULT_MODE, cleanMode, shownMode, withMode, fliesAcross, skyTop} from '../src/features/theme/model.js';
 
 const read = name => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
 const others = THEMES.map(t => t.id).filter(id => id !== DEFAULT_THEME);
@@ -72,4 +72,12 @@ test('the warbler flies only for the warbler theme, and never under reduced moti
   assert.equal(fliesAcross('warbler', true, {picked: true}), false);
   for (const id of [...THEMES.map(t => t.id).filter(id => id !== 'warbler'), 'nope', undefined]) assert.equal(fliesAcross(id, false), false, id);
   assert.match(read('src/styles.css'), /\.warbler-sky\{position:fixed;inset:0;overflow:hidden;pointer-events:none/);
+});
+
+test('a warbler from the theme dot flies between 10% and 80% down the screen', () => {
+  assert.equal(skyTop(0), 10);
+  assert.equal(skyTop(1), 80);
+  assert.equal(skyTop(0.5), 45);
+  for (const odd of [-1, 2, NaN, undefined]) assert.ok(skyTop(odd) >= 10 && skyTop(odd) <= 80, String(odd));
+  assert.match(read('index.html'), /<button type="button" class="theme-dot" id="warbler-dot"/);
 });
