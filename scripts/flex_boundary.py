@@ -39,8 +39,11 @@ MAX_REQUEST_BYTES = 272000  # longer requests need long-context pricing review (
 LEDGER_ZONE = "America/Chicago"
 # Legacy send_request: three sends 30 s then 60 s apart; a wait over 60 s (including a provider hint, honoured in
 # full) hands the bill back to the worker's cooling list instead of sleeping.
+# A 5xx the provider proved it did not process (500-503, 505-519) is resent the same way, so a brief provider error
+# no longer parks the bill for PARK_RETRY_S; a maybe-processed 5xx (504, 520-527) is never resent (retry_uncertain
+# stays off) and is held as before.
 TEXAS_POLICY = RetryPolicy(capacity_attempts=3, rate_limit_attempts=3, base_s=30, cap_s=60, jitter=False,
-                           max_hint_s=7 * 24 * 3600, defer_over_s=60)
+                           max_hint_s=7 * 24 * 3600, defer_over_s=60, retry_server_errors=True, server_attempts=3)
 
 # Outage breaker. A held call (unknown outcome, booked at its upper bound) holds only its bill; HELD_LIMIT of them
 # within HELD_WINDOW_S, or HELD_DAY_LIMIT within a day, refuse every new call. Holds age out of both windows, so
@@ -219,7 +222,7 @@ class FlexBoundary:
 
             def on_event(event) -> None:
                 if event.kind == "retry":
-                    self._log(f"Flex capacity unavailable; retrying in {event.wait_s:g} seconds")
+                    self._log(f"Flex request not processed ({event.label}); retrying in {event.wait_s:g} seconds")
 
             self._client = FlexClient(openai_responses_sender(sdk), policy=TEXAS_POLICY, require_tier="flex",
                                       require_completed=True, sleep=self._sleep, on_event=on_event)

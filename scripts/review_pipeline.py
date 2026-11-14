@@ -2044,8 +2044,8 @@ def main():
                         atomic_json(queue_path, queue)
                         print(bill_id, "failed", type(error).__name__, "-", next_step(error), flush=True)
                         if new_failures >= OUTAGE_LIMIT:
-                            print("Stopped: repeated new failures; storage may be unavailable or a code change "
-                                  "broke reviews", flush=True)
+                            print("Stopped: repeated new failures; the model provider or storage may be failing, or a "
+                                  "code change broke reviews", flush=True)
                             return True
                         return False
                     # Only this bill waits for an operator (its call is never resent); other bills go on.
