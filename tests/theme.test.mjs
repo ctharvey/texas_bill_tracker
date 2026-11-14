@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {THEMES, DEFAULT_THEME, cleanTheme, withTheme, MODES, DEFAULT_MODE, cleanMode, shownMode, withMode} from '../src/features/theme/model.js';
+import {THEMES, DEFAULT_THEME, cleanTheme, withTheme, MODES, DEFAULT_MODE, cleanMode, shownMode, withMode, fliesAcross} from '../src/features/theme/model.js';
 
 const read = name => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
 const others = THEMES.map(t => t.id).filter(id => id !== DEFAULT_THEME);
@@ -60,4 +60,11 @@ test('every theme has dark base tokens, and dark mode sets color-scheme', () => 
     for (const token of ['--bg', '--surface', '--ink', '--muted', '--line', '--accent', '--accent-ink', '--nav-bg', '--nav-ink', '--mark'])
       assert.ok(body.includes(`${token}:`), `${id} dark is missing ${token}`);
   assert.match(css, /:root\[data-mode="dark"\]\{color-scheme:dark;/);
+});
+
+test('the warbler flies only for the warbler theme, and never under reduced motion', () => {
+  assert.equal(fliesAcross('warbler', false), true);
+  assert.equal(fliesAcross('warbler', true), false);
+  for (const id of [...THEMES.map(t => t.id).filter(id => id !== 'warbler'), 'nope', undefined]) assert.equal(fliesAcross(id, false), false, id);
+  assert.match(read('src/styles.css'), /\.warbler-sky\{position:fixed;inset:0;overflow:hidden;pointer-events:none/);
 });
