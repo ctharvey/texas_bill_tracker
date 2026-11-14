@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {AREAS, AREA_GROUPS, AREA_BY_ID, subjectMatches, areaMatch, billAreas, inArea, areaCounts, topAgencies} from '../src/features/areas/model.js';
+import {AREAS, AREA_GROUPS, AREA_BY_ID, subjectMatches, subjectLabels, areaMatch, billAreas, inArea, areaCounts, topAgencies} from '../src/features/areas/model.js';
 import {POLICY_AREAS} from '../src/taxonomy.js';
 import {parseHash, buildHash, cleanFilters, searchName, FILTER_DEFAULTS} from '../src/prefs.js';
 
@@ -77,4 +77,13 @@ test('the area filter round-trips through the address, remembered filters and sa
   assert.equal(buildHash('all', FILTER_DEFAULTS), '#all');
   assert.deepEqual(cleanFilters({area: 'privacy'}), {area: 'privacy'});
   assert.equal(searchName({area: 'privacy', chamber: 'Senate'}, id => id, id => AREA_BY_ID.get(id).name), 'Privacy & personal data \u00b7 Senate');
+});
+
+test('an area lists each subject family once, by name, marked (all)', () => {
+  const labels = subjectLabels(AREA_BY_ID.get('agency-operations'));
+  assert.equal(labels.filter(l => l === 'Sunset (all)').length, 1);
+  assert.ok(labels.includes('State Finances (all)'));
+  assert.ok(labels.includes('SUNSET ADVISORY COMMISSION'));
+  assert.ok(subjectLabels(AREA_BY_ID.get('property-tax-homeowners')).includes('Taxation--Property (all)'));
+  for (const a of AREAS) for (const l of subjectLabels(a)) assert.doesNotMatch(l, /[-\u2014]$/, l);
 });

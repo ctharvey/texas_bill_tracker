@@ -2,7 +2,7 @@ import {SEARCH_FIELDS, searchFields, searchText, matchReasons} from './features/
 import {nextVisit, changedSince, newestReviewed} from './features/home/model.js';
 import {runState, passRows, passJobs, lookup, RUN_LIMIT_MINUTES} from './features/review/model.js';
 import {recentChanges, updateEntries, changeText} from './features/review/updates.js';
-import {AREAS, AREA_GROUPS, AREA_BY_ID, billAreas, inArea, areaCounts, topAgencies} from './features/areas/model.js';
+import {AREAS, AREA_GROUPS, AREA_BY_ID, billAreas, inArea, areaCounts, topAgencies, subjectLabels} from './features/areas/model.js';
 import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal,
   STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
@@ -325,7 +325,7 @@ function saveCurrentSearch(){
   renderOverview();toast(`Saved “${name}” · find it under Following`);
 }
 function searchSummary(f){
-  const parts=[f.query&&`Search “${f.query}”`,f.topic&&`Topic: ${f.topic}`,f.agency&&`Agency: ${agencyName(f.agency)}`,f.chamber,f.party&&`Party: ${f.party} authors`,f.stage&&`Stage: ${f.stage}`,
+  const parts=[f.query&&`Search “${f.query}”`,f.area&&`Area: ${areaName(f.area)}`,f.topic&&`Topic: ${f.topic}`,f.agency&&`Agency: ${agencyName(f.agency)}`,f.chamber,f.party&&`Party: ${f.party} authors`,f.stage&&`Stage: ${f.stage}`,
     f.outlook&&`Hearing: ${f.outlook}`,f.action&&`Last action: ${f.action}`,f.onlyWatch&&'Watched bills only',f.sort&&f.sort!=='newest'&&`Sorted by ${SORTS[f.sort]||f.sort}`].filter(Boolean);
   return parts.join(' · ')||'All bills';
 }
@@ -603,11 +603,16 @@ function areaHeaderMarkup(){
   return `<h2>${esc(area.name)}</h2><p class="area-audience">For ${esc(area.audience.charAt(0).toLowerCase()+area.audience.slice(1))}.</p>`
     +`<p class="home-counts"><span><strong>${bills.length.toLocaleString()}</strong> ${bills.length===1?'bill':'bills'}</span><span><strong>${(row?.moved||0).toLocaleString()}</strong> with an action in the last 7 days</span>${status}</p>`
     +(agencies?`<p class="area-agencies"><span>Agencies these bills name most:</span> ${agencies}</p>`:'')
-    +`<details class="area-rule"><summary>What puts a bill in this area</summary><p>A bill is here when the Legislative Council files it under one of these official subjects, or its title or caption uses one of the area's key terms. Areas are a reading aid built from the subject index, not a legal classification.</p><div class="bill-tags">${area.subjects.map(x=>`<span class="tag subject-tag">${esc(x.replace(/(--|\u2014)$/,' (all)'))}</span>`).join('')}</div></details>`
+    +`<details class="area-rule"><summary>What puts a bill in this area</summary><p>A bill is here when the Legislative Council files it under one of these official subjects, or its title or caption uses one of the area's key terms. Areas are a reading aid built from the subject index, not a legal classification.</p><div class="bill-tags">${subjectLabels(area).map(x=>`<span class="tag subject-tag">${esc(x)}</span>`).join('')}</div></details>`
     +`<p class="tools-note">To follow this area, use <strong>Share / save</strong> then <strong>Save search</strong>.</p>`;
 }
+// Redrawn only when the area, view or bills change, so an open "What puts a bill" stays open while results update.
+let areaHeaderShown={box:null,area:null,view:null,bills:null};
 function renderAreaHeader(){
   const box=$('#area-header');if(!box)return;
+  const now={box,area:state.area,view:state.view,bills:state.bills};
+  if(Object.keys(now).every(k=>now[k]===areaHeaderShown[k]))return;
+  areaHeaderShown=now;
   const html=areaHeaderMarkup();box.hidden=!html;box.innerHTML=html;
 }
 function explorerMarkup(){
@@ -1709,7 +1714,7 @@ async function importFile(file){
     const profiles=!Array.isArray(data)&&data.author_profiles&&typeof data.author_profiles==='object'?data.author_profiles:null;
     const valid=rows.filter(r=>r&&typeof r==='object').map(raw=>normalized(raw,profiles)).filter(Boolean).map(b=>attachMembers(b,state.roster));
     if(!valid.length)throw Error('No valid Texas bill numbers found');
-    const previous={bills:state.bills,meta:state.meta,topic:state.topic,agency:state.agency,chamber:state.chamber,party:state.party,stage:state.stage,action:state.action,outlook:state.outlook,query:state.query,visibleCount:state.visibleCount,view:state.view};
+    const previous={bills:state.bills,meta:state.meta,topic:state.topic,area:state.area,agency:state.agency,chamber:state.chamber,party:state.party,stage:state.stage,action:state.action,outlook:state.outlook,query:state.query,visibleCount:state.visibleCount,view:state.view};
     try{
       state.bills=valid;state.meta={session:'90R',data_mode:'local import',source_file:file.name,generated_at:new Date().toISOString(),coverage_note:`Local file: ${file.name}. Imported rows are visible only during this session.`};
       switchFilters('all');Object.assign(state,{topic:'',area:'',agency:'',chamber:'',party:'',stage:'',action:'',outlook:'',query:'',visibleCount:30});setView('all');

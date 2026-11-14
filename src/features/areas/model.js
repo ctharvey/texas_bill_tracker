@@ -132,6 +132,8 @@ export const AREA_BY_ID = new Map(AREAS.map(a => [a.id, a]));
 
 const family = rule => rule.endsWith('-') || rule.endsWith('\u2014');
 export const subjectMatches = (rule, subject) => family(rule) ? subject.startsWith(rule) : subject === rule;
+// An area's subject rules as readers see them: a family as its name plus "(all)", each label once.
+export const subjectLabels = area => [...new Set(area.subjects.map(r => family(r) ? `${r.replace(/[-\u2014]+$/, '')} (all)` : r))];
 
 // Why a bill is in an area: which of its official subjects belong to it, and whether its title or caption has one of
 // the area's keywords.
