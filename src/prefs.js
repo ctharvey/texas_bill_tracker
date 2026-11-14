@@ -1,5 +1,5 @@
 // Saving choices without accounts: URL state, remembered filters, profile and watchlist files, and sync merging.
-export const FILTER_DEFAULTS = {query: '', topic: '', agency: '', chamber: '', party: '', stage: '', action: '', outlook: '', sort: 'newest', onlyWatch: false};
+export const FILTER_DEFAULTS = {query: '', topic: '', area: '', agency: '', chamber: '', party: '', stage: '', action: '', outlook: '', sort: 'newest', onlyWatch: false};
 const FILTER_NAMES = Object.keys(FILTER_DEFAULTS);
 // Renamed filter values, so old links, saved searches and remembered filters keep working (taxonomy.NO_HEARING).
 const RENAMED = {outlook: {'Not rated': 'No hearing yet'}};
@@ -147,9 +147,9 @@ export function newSearchId(random = n => crypto.getRandomValues(new Uint8Array(
   return [...random(10)].map(b => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');
 }
 // A readable default name from the filters that are set.
-export function searchName(filters, agencyName = id => id) {
+export function searchName(filters, agencyName = id => id, areaName = id => id) {
   const f = cleanFilters(filters);
-  const parts = [f.query && `“${f.query.trim()}”`, f.topic, f.agency && agencyName(f.agency), f.chamber, f.party && `${f.party} authors`, f.stage, f.outlook,
+  const parts = [f.query && `“${f.query.trim()}”`, f.area && areaName(f.area), f.topic, f.agency && agencyName(f.agency), f.chamber, f.party && `${f.party} authors`, f.stage, f.outlook,
     f.action, f.onlyWatch && 'Watched only'].filter(Boolean);
   return (parts.join(' · ') || 'All bills').slice(0, 80);
 }

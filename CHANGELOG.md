@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-14
+- Reader areas (#13): 29 areas built around who follows them (cybersecurity & IT, procurement, accessibility,
+  children & youth, courts, ...), from the Legislative Council's official subjects plus title/caption keywords
+  (`src/features/areas/model.js`). The explorer has an Area filter (`#all?area=<id>`) with a header for the chosen
+  area, the dashboard a "Browse by area" card, and bill pages link their areas. Kept apart from `POLICY_AREAS`, so
+  Luna's requests and cached reviews are unchanged. The sync server accepts the new `area` filter.
+
 ## 2026-11-13
 - Remembered filters are no longer rewritten on page load when they mean the same thing (the party filter had
   added `party: ""` to every older save on each visit). Explorer and Watchlist views now come from a view registry
