@@ -15,6 +15,9 @@ export const BIRD_BILLS = ['HB 309', 'HB 433'];
 export const asksForWarbler = query =>
   /^\s*(?:h\.?\s*b\.?\s*-?\s*(?:309|433)|(?:golden[\s-]*cheeked\s+)?warblers?|state\s+bird)\s*$/i.test(String(query ?? ''));
 
+// A search for the mockingbird, the state bird those bills would replace (a dropped g still counts).
+export const asksForMockingbird = query => /^\s*(?:northern\s+)?mockin(?:g)?birds?\s*$/i.test(String(query ?? ''));
+
 // Bluebonnets bloom in March and April.
 export const isBluebonnetSeason = (now = new Date()) => [3, 4].includes(Number(austinDate(now).slice(5, 7)));
 

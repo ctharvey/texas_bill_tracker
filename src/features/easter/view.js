@@ -1,7 +1,7 @@
 // Easter eggs: a tumbleweed on empty results, sine die petals, the gavel on the star, a visiting armadillo and spring
 // bluebonnets. Every one is decoration: aria-hidden, never takes clicks or focus, and stays still under reduced motion.
-import {warblerAcross} from '../theme/view.js';
-import {isSineDieDay, asksSineDie, asksForWarbler, BIRD_BILLS, isBluebonnetSeason, gavelPress, armadilloVisits, armadilloDelayMs} from './model.js';
+import {warblerAcross, mockingbirdAcross} from '../theme/view.js';
+import {isSineDieDay, asksSineDie, asksForWarbler, asksForMockingbird, BIRD_BILLS, isBluebonnetSeason, gavelPress, armadilloVisits, armadilloDelayMs} from './model.js';
 import {toast} from '../../core/dom.js';
 
 const REDUCED_MOTION = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
@@ -43,15 +43,20 @@ export function sineDie() {
 }
 
 // Each fires once when the search box turns into its words, not on every re-render while it stays that way.
-let askedSineDie = false, askedWarbler = false;
+let askedSineDie = false, askedWarbler = false, askedMockingbird = false;
 export function noticeSearch(query) {
-  const sine = asksSineDie(query), bird = asksForWarbler(query);
+  const sine = asksSineDie(query), bird = asksForWarbler(query), mocker = asksForMockingbird(query);
   if (sine && !askedSineDie) sineDie();
   if (bird && !askedWarbler) {
     warblerAcross();
     toast(`${BIRD_BILLS.join(' and ')} would make the golden-cheeked warbler the state bird.`);
   }
+  if (mocker && !askedMockingbird) {
+    mockingbirdAcross();
+    toast(`The mockingbird has been the state bird since 1927. ${BIRD_BILLS.join(' and ')} would replace it.`);
+  }
   askedSineDie = sine;
+  askedMockingbird = mocker;
   askedWarbler = bird;
 }
 

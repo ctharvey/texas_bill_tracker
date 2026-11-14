@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {SINE_DIE, austinDate, isSineDieDay, asksSineDie, isBluebonnetSeason, gavelPress, GAVEL_WINDOW_MS,
-  armadilloVisits, armadilloDelayMs, asksForWarbler, BIRD_BILLS} from '../src/features/easter/model.js';
+  armadilloVisits, armadilloDelayMs, asksForWarbler, asksForMockingbird, BIRD_BILLS} from '../src/features/easter/model.js';
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
@@ -61,4 +61,10 @@ test('searching for the bird bills or the bird sends the warbler', () => {
     assert.equal(asksForWarbler(q), true, q);
   for (const q of ['HB 3090', 'HB 30', 'SB 309', 'warbler habitat', 'bird', '', undefined]) assert.equal(asksForWarbler(q), false, String(q));
   assert.deepEqual(BIRD_BILLS, ['HB 309', 'HB 433']);
+});
+
+test('searching for the mockingbird sends the mockingbird', () => {
+  for (const q of ['mockingbird', 'Mockingbirds', 'northern mockingbird', 'mockinbird']) assert.equal(asksForMockingbird(q), true, q);
+  for (const q of ['mocking', 'mockingbird habitat', 'bird', '', undefined]) assert.equal(asksForMockingbird(q), false, String(q));
+  assert.equal(asksForWarbler('mockingbird'), false);
 });

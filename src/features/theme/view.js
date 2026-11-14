@@ -100,11 +100,13 @@ export function warblerFlight(theme, picked = false) {
 }
 
 // A search for the bird bills: one warbler across the middle of the screen, in any theme.
-export function warblerAcross() {
+export function warblerAcross(svg = WARBLER_SVG) {
   if (REDUCED_MOTION?.matches || document.querySelector('.warbler-sky')) return false;
-  launchWarbler(42);
+  launchWarbler(42, svg);
   return true;
 }
+// A search for the mockingbird: the same flight with the bird it would replace.
+export const mockingbirdAcross = () => warblerAcross(MOCKINGBIRD_SVG);
 
 // The yellow dot in the theme pill, in any theme: each press sends a warbler from the left at a random height.
 const MAX_BIRDS = 6;
