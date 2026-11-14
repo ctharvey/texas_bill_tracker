@@ -4,7 +4,6 @@ Description=Check GitHub main for Texas Bill Atlas updates every two minutes
 [Timer]
 OnBootSec=30
 OnUnitActiveSec=120
-Persistent=true
 
 [Install]
 WantedBy=timers.target

@@ -5,7 +5,7 @@
 import {mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync, chmodSync} from 'node:fs';
 import {dirname, join, relative, sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {AGENCY_NAME, LAST_ACTION_TYPES, NO_HEARING, applyLunaTags, assessHearing, attachMembers, authorInfluence, authorshipParty,
+import {AGENCY_NAME, NO_HEARING, applyLunaTags, assessHearing, attachMembers, authorInfluence, authorshipParty,
   companionIndex, lastActionInfo, memberSummary, normalizeBill, officialUrl, reviewProgress} from '../src/taxonomy.js';
 import {buildHash} from '../src/prefs.js';
 

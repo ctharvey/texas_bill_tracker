@@ -44,7 +44,7 @@ its committee witness list as `witnesses-<H|S>.json` (`texas-bill-witnesses-v1`:
 witness's name, organization, for/against/on and whether they testified). Downloads skip unchanged files by FTP
 modification time and stop at `--max-docs` (200) per run; a missing witness list is normal, not a failure.
 
-The first verified official import read 1,059 bill histories on November 9, 2026. GitHub Actions is scheduled hourly, at minute 17 UTC (GitHub may delay scheduled jobs). Each snapshot records its actual generation time and coverage; it is a dated bulk snapshot rather than a real-time feed. When nothing changed, the importer keeps the previous `generated_at` (so no commit is made) until it is six hours old, then writes a heartbeat; a snapshot more than eight hours old therefore means the refresh has stopped. Concurrent pushes to `main` are rebased and retried up to five times.
+The first verified official import read 1,059 bill histories on November 9, 2026. The server's data unit refreshes the live snapshot; the GitHub workflow `refresh-bills.yml` is manual only and refreshes the bundled fallback. Each snapshot records its actual generation time and coverage; it is a dated bulk snapshot rather than a real-time feed. When nothing changed, the importer keeps the previous `generated_at` (so no commit is made) until it is six hours old, then writes a heartbeat; a snapshot more than eight hours old therefore means the refresh has stopped. Concurrent pushes to `main` are rebased and retried up to five times.
 
 ### Automated private review and highlighted evidence
 

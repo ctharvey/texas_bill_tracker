@@ -10,7 +10,6 @@ import {TUMBLEWEED, noticeSearch, setupEasterEggs} from './features/easter/view.
 import {state} from './core/state.js';
 import {$, esc, toast} from './core/dom.js';
 import {timeoutSignal} from './core/net.js';
-import {registerHooks} from './core/hooks.js';
 import {registerView, setFallbackView, viewHeading, renderView} from './core/router.js';
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
 import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, visitKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
@@ -18,7 +17,7 @@ import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFi
   cleanSearches, applySearchOps, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
 import {createSyncClient} from './sync.js';
 import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, followedBills, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
-import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, autoTagBill, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, memberNames, matchAuthorProfile, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, sortAgencyIds, searchTerms, textMatches, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
+import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, sortAgencyIds, searchTerms, textMatches, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
 
 const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last action',actionstage:'Last action stage',number:'Bill number',agencies:'Most agencies',hearing:'Hearing progress',influence:'Author influence'};
 const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
@@ -56,7 +55,6 @@ const NAME_TO_AGENCY_ID = new Map(AGENCIES.flatMap(a=>[[a.name.toLowerCase(),a.i
 const normalized=normalizeBill;
 
 async function init(){
-  registerHooks({renderContent, renderOverview, openBillPage, toast});
   registerViews();
   registerClicks();
   const now=new Date();
@@ -487,21 +485,20 @@ function setView(view,push=false){
 }
 
 function renderNotice(){
-  const curated=state.meta?.data_mode==='curated';
   const unavailable=state.meta?.data_mode==='unavailable';
   const imported=state.meta?.data_mode==='local import';
   const fallback=state.meta?.loaded_from==='Bundled fallback snapshot';
-  const age=curated||unavailable||imported?null:snapshotAgeHours(state.meta?.generated_at);
+  const age=unavailable||imported?null:snapshotAgeHours(state.meta?.generated_at);
   const stale=age!==null&&age>8;
   const ageText=age>=48?`${Math.floor(age/24)} days`:`${Math.floor(age)} hours`;
   const staleCopy=stale?` <strong>Stale: this snapshot is ${ageText} old.</strong> The automated refresh may have stopped; check the official record for current status.`:'';
   const fileName=state.meta?.source_file||String(state.meta?.coverage_note||'').replace(/^Local file:\s*/,'').replace(/\.\s*Imported rows.*$/,'');
-  const copy=unavailable?'<strong>Dataset unavailable.</strong> '+esc(state.meta.coverage_note):curated?'<strong>Curated opening-day snapshot.</strong> This is a selection of confirmed filings, not the full 90R docket. Automated official bulk-feed sync is prepared but not yet verified.':imported?`<strong>Local file, not official data.</strong> Showing rows imported from ${esc(fileName)}; they have not been verified against the legislature’s published files.`:fallback?`<strong>Showing the bundled copy.</strong> The live dataset could not be loaded, so this is the bundled snapshot generated ${esc(stampText(state.meta.generated_at))}; it may be out of date.${staleCopy}`:stale?`<strong>Bulk-data snapshot may be out of date.</strong> Generated ${esc(stampText(state.meta.generated_at))}.${staleCopy}`:'<strong>Bulk-data snapshot.</strong> Derived from the legislature’s published files; changes may lag the official record.';
+  const copy=unavailable?'<strong>Dataset unavailable.</strong> '+esc(state.meta.coverage_note):imported?`<strong>Local file, not official data.</strong> Showing rows imported from ${esc(fileName)}; they have not been verified against the legislature’s published files.`:fallback?`<strong>Showing the bundled copy.</strong> The live dataset could not be loaded, so this is the bundled snapshot generated ${esc(stampText(state.meta.generated_at))}; it may be out of date.${staleCopy}`:stale?`<strong>Bulk-data snapshot may be out of date.</strong> Generated ${esc(stampText(state.meta.generated_at))}.${staleCopy}`:'<strong>Bulk-data snapshot.</strong> Derived from the legislature’s published files; changes may lag the official record.';
   const warn=unavailable||imported||fallback||stale;
   // A healthy live snapshot gets one slim line; anything to be careful about keeps the full box.
-  const slim=!warn&&!curated;
+  const slim=!warn;
   $('#source-notice').className=`source-notice${warn?' warn':''}${slim?' slim':''}`;
-  $('#source-notice').innerHTML=`<span class="notice-icon">${curated?'◷':warn?'!':'✓'}</span><div>${slim?'<strong>Bulk-data snapshot</strong> from the legislature’s published files; it may lag the official record.':copy} <a href="#data" data-view="data">Coverage & sources →</a></div>`;
+  $('#source-notice').innerHTML=`<span class="notice-icon">${warn?'!':'✓'}</span><div>${slim?'<strong>Bulk-data snapshot</strong> from the legislature’s published files; it may lag the official record.':copy} <a href="#data" data-view="data">Coverage & sources →</a></div>`;
   $('#footer-timestamp').textContent=`${imported?'Imported':'Snapshot'}: ${stampText(state.meta?.generated_at)}`;
 }
 
@@ -511,7 +508,7 @@ function renderOverview(){
   const day=new Date().toLocaleDateString('sv-SE',{timeZone:'America/Chicago'});
   const today=bills.filter(b=>b.filed_at===day).length;
   const part=(n,one,many,title)=>`<span title="${title}"><strong>${n.toLocaleString()}</strong> ${n===1?one:many}</span>`;
-  $('#overview').innerHTML=[part(bills.length,'bill in view','bills in view',state.meta?.data_mode==='curated'?'Curated sample, not the session total':'Bills in this snapshot'),
+  $('#overview').innerHTML=[part(bills.length,'bill in view','bills in view','Bills in this snapshot'),
     part(today,'filed today','filed today','According to the filing dates in the data'),
     part(scheduled,'hearing scheduled','hearings scheduled','Confirmed by recorded actions')].join('<span aria-hidden="true">·</span>');
   $('#nav-all').textContent=state.bills.length;
@@ -688,7 +685,7 @@ function filteredBills(f=state){
 function renderResults(){
   const list=filteredBills();
   $('#result-count').textContent=`${list.length} ${list.length===1?'bill':'bills'}`;
-  $('#result-note').textContent=state.meta?.data_mode==='curated'?' · within curated sample':' · matching filters';
+  $('#result-note').textContent=' · matching filters';
   // Companions that are both in the results are pulled together and drawn as one joined block.
   // Paging counts whole groups, so a group is never split across "Load more".
   companionsOf('');  // Refreshes the index when the bill list changed.

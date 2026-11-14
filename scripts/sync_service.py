@@ -16,6 +16,7 @@ import ipaddress
 import json
 from pathlib import Path
 import re
+import traceback
 import secrets
 import socket
 import sqlite3
@@ -44,7 +45,7 @@ THEME_ID = re.compile(r"[a-z][a-z-]{0,23}")
 MAX_LISTS = 100_000
 RETENTION_SECONDS = 365 * 86400
 FEED_ITEMS = 300
-TEXT_FILTERS = {"view", "query", "topic", "agency", "chamber", "stage", "action", "outlook", "sort"}
+TEXT_FILTERS = {"view", "query", "topic", "agency", "chamber", "party", "stage", "action", "outlook", "sort"}
 BOOL_FILTERS = {"onlyWatch"}
 LIMITS = {"create": (10, 3600), "write": (300, 3600), "read": (1200, 3600), "search": (1200, 3600)}
 
@@ -425,6 +426,7 @@ def make_handler(app: App):
                 if "retry_after" in extra:
                     headers["Retry-After"] = str(extra["retry_after"])
             except Exception:
+                traceback.print_exc()  # journald; the client sees only "internal"
                 status, headers, payload = 500, {"Content-Type": "application/json"}, b'{"error": "internal"}'
             self.send_response(status)
             for name, value in {**headers, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",

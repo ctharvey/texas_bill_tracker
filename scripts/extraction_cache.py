@@ -74,16 +74,19 @@ def canonical_hash(value: object) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def atomic_json(path: Path, value: object) -> None:
+def atomic_json(path: Path, value: object, mode: int | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
                                          prefix=".extraction-", suffix=".tmp", delete=False) as handle:
             temporary = Path(handle.name)
-            json.dump(value, handle, ensure_ascii=False, allow_nan=False)
+            # ASCII-escaped, as in the vendored cache: a lone surrogate in a reply can never fail the write.
+            json.dump(value, handle, ensure_ascii=True, allow_nan=False)
             handle.flush()
             os.fsync(handle.fileno())
+        if mode is not None:
+            os.chmod(temporary, mode)  # before the rename, so readers never see the file unreadable
         os.replace(temporary, path)
     finally:
         if temporary is not None:

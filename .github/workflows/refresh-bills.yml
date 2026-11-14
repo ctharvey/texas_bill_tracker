@@ -38,12 +38,12 @@ jobs:
                 echo "Rebase failed on attempt $attempt"
                 git rebase --abort || true
                 git reset --hard origin/main
-                echo "::error::Rebase conflicted (likely data/bills.json); discarding this import. The next scheduled run will import again."
+                echo "::error::Rebase conflicted (likely data/bills.json); discarding this import. Run the workflow again to retry."
                 exit 1
               fi
               echo "Push attempt $attempt failed; retrying"
               sleep $((attempt * 5))
             done
-            echo "::error::Could not push after 5 attempts; the next scheduled run will import again."
+            echo "::error::Could not push after 5 attempts; run the workflow again to retry."
             exit 1
           fi

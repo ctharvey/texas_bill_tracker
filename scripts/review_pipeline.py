@@ -919,10 +919,6 @@ def served_text_dir(publish_tags: Path) -> Path:
     return publish_tags.parent.parent / "text"
 
 
-def matches_served_markdown(bill_id: str, bundle: dict, served: Path) -> bool:
-    return served_markdown(bill_id, bundle, served) is not None
-
-
 def served_markdown(bill_id: str, bundle: dict, served: Path) -> str | None:
     """The served Markdown, only for a review read from Markdown whose exact text is a version the site serves
     now: the review's hash, the served index entry and the served file's bytes must all agree. Else None."""
@@ -987,8 +983,8 @@ def publish_tags(cache_dir: Path, out: Path, registry: list[dict], live: set[str
             bills[path.stem] = entry
     atomic_json(out, {"format": "texas-bill-luna-tags-v1", "model": classification.MODEL,
                       "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
-                      "agencies": {a["id"]: a["name"] for a in registry}, "bills": bills})
-    os.chmod(out, 0o644)  # Served publicly; the worker's UMask=0077 would otherwise hide it.
+                      "agencies": {a["id"]: a["name"] for a in registry}, "bills": bills},
+                mode=0o644)  # Served publicly; the worker's UMask=0077 would otherwise hide it.
     return len(bills)
 
 
@@ -1250,8 +1246,7 @@ def publish_status(out: Path, queue: dict, *, current: str | None, upcoming: lis
                       "in_progress": active, "upcoming": upcoming, "waiting_until": waiting_until,
                       "reviewed": list(queue.get("seen", [])), "retry": list(queue.get("retry", [])),
                       "failed": {k: v.get("stage") for k, v in queue.get("failed", {}).items()},
-                      "run_started_at": run_started_at, "pass": pass_name, "passes": passes or {}})
-    os.chmod(out, 0o644)
+                      "run_started_at": run_started_at, "pass": pass_name, "passes": passes or {}}, mode=0o644)
 
 
 def try_publish_status(out: Path | None, queue: dict, **kwargs) -> None:
@@ -2234,27 +2229,26 @@ def publish_luna(args, *, network_ok: bool) -> None:
         except OSError as error:
             print("Tag publish failed:", type(error).__name__, flush=True)
             raise SystemExit(3)
-        if args.snapshot:
+        try:
+            print("Published Luna highlights for",
+                  publish_highlights(args.cache_dir, served, args.publish_tags.parent / "highlights", live),
+                  "bills", flush=True)
+        except Exception as error:
+            print("Highlight publish failed:", type(error).__name__, flush=True)
+        if args.related_bills and args.execute and network_ok:
             try:
-                print("Published Luna highlights for",
-                      publish_highlights(args.cache_dir, served, args.publish_tags.parent / "highlights", live),
-                      "bills", flush=True)
+                publish_related(args, live)
             except Exception as error:
-                print("Highlight publish failed:", type(error).__name__, flush=True)
-            if args.related_bills and args.execute and network_ok:
+                print("Related bills not updated:", type(error).__name__, flush=True)
+        if args.stages:
+            for name, folder, publish in (("changes", "changes", publish_changes),
+                                          ("fiscal checks", "fiscal", publish_fiscal)):
                 try:
-                    publish_related(args, live)
+                    print("Published Luna", name, "for",
+                          publish(args.cache_dir, args.publish_tags.parent / folder, live), "bills",
+                          flush=True)
                 except Exception as error:
-                    print("Related bills not updated:", type(error).__name__, flush=True)
-            if args.stages:
-                for name, folder, publish in (("changes", "changes", publish_changes),
-                                              ("fiscal checks", "fiscal", publish_fiscal)):
-                    try:
-                        print("Published Luna", name, "for",
-                              publish(args.cache_dir, args.publish_tags.parent / folder, live), "bills",
-                              flush=True)
-                    except Exception as error:
-                        print("Publishing", name, "failed:", type(error).__name__, flush=True)
+                    print("Publishing", name, "failed:", type(error).__name__, flush=True)
         for flag, name, module, filename in ((args.suggest_topics, "extras", "topic_suggestions", "extras.json"),
                                              (args.audit_sample, "audit counts", "review_audit", "audit.json")):
             if not flag:

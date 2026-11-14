@@ -397,7 +397,11 @@ def main(argv=None) -> int:
                 print("No pending request", args.hold, file=sys.stderr)
                 return 1
         if args.release:
-            print("Released", args.release, "(booked cost kept as", boundary.release_held(args.release) + ")")
+            try:
+                print("Released", args.release, "(booked cost kept as", boundary.release_held(args.release) + ")")
+            except KeyError:
+                print("No held request", args.release, "(the ledger has no held row for it)", file=sys.stderr)
+                return 1
         for day, key, row in boundary.pending_rows():
             print(day, key, "pending (no recorded outcome; settle with --hold %s)" % key)
         for day, key, row in boundary.held():
