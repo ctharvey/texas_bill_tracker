@@ -76,3 +76,11 @@ export function lookup(text, summary, ids) {
   if (failed) return {id, state: 'failed', label: failed.stage ? `Review failed at ${failed.stage}; retried next run` : 'Review failed; retried next run'};
   return {id, state: 'notstarted', label: 'Not started yet'};
 }
+
+// The active later pass's bills in flight, one per slot: [{id, job}] (job: a step name such as "scope vote 2", or
+// null). Empty unless a run is live in a later pass; status files from before slots have no `pass_jobs`.
+export function passJobs(status, run) {
+  if (!run.pass || run.pass === 'review' || !Array.isArray(status?.pass_jobs)) return [];
+  return status.pass_jobs.filter(j => j && typeof j.bill === 'string')
+    .map(j => ({id: j.bill, job: typeof j.job === 'string' && j.job ? j.job : null}));
+}

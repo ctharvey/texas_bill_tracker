@@ -1,6 +1,6 @@
 import {SEARCH_FIELDS, searchFields, searchText, matchReasons} from './features/search/model.js';
 import {nextVisit, changedSince, newestReviewed} from './features/home/model.js';
-import {runState, passRows, lookup, RUN_LIMIT_MINUTES} from './features/review/model.js';
+import {runState, passRows, passJobs, lookup, RUN_LIMIT_MINUTES} from './features/review/model.js';
 import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal,
   STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
@@ -1206,12 +1206,14 @@ function reviewMarkup(){
   const live=run.kind==='running'||run.kind==='waiting';
   const rows=passRows(status,s,run);
   const current=rows.find(r=>r.now);
+  const jobs=passJobs(status,run);
+  const jobList=jobs.length?`<div class="pass-jobs"><small>${jobs.length>1?`${jobs.length} bills at once`:'Working on'}</small>${jobs.map(j=>`<span class="pass-job">${chip(j.id,j.job||'')}${j.job?`<span>${esc(j.job)}</span>`:''}</span>`).join('')}</div>`:'';
   const runTitle={running:current?`Working on: ${current.label}`:'Reviewing now',waiting:'Waiting for Luna capacity',idle:'Idle',
     quiet:'No recent run',stale:'May have stopped',unavailable:'Status unavailable'}[run.kind];
   const runDetail=live?[run.startedAt?`Started ${clockText(run.startedAt)}`:'',run.minutesUsed!==null?`${Math.min(run.minutesUsed,RUN_LIMIT_MINUTES)} of ${RUN_LIMIT_MINUTES} minutes used`:'',
       run.waitingUntil?`retrying at ${clockText(run.waitingUntil)}`:''].filter(Boolean).join(' · ')
     :`Next run about ${clockText(run.nextRun)}`;
-  const passes=`<ol class="review-passes" aria-label="Review passes, in run order">${rows.map((r,i)=>`<li class="review-pass${r.now?' now':''}${r.known&&r.due===0?' clear':''}"${r.now?' aria-current="step"':''}><span class="pass-step" aria-hidden="true">${i+1}</span><div class="pass-name"><strong>${r.label}</strong><small>${r.note}</small></div><div class="pass-count">${r.known?`<strong>${r.due.toLocaleString()}</strong><span>${r.estimate?'not started':'bills left'}</span>`:'<strong>—</strong><span>counted after the next run</span>'}${r.checked?`<span class="pass-checked">${r.checked.toLocaleString()} done this run</span>`:''}</div></li>`).join('')}</ol>`;
+  const passes=`<ol class="review-passes" aria-label="Review passes, in run order">${rows.map((r,i)=>`<li class="review-pass${r.now?' now':''}${r.known&&r.due===0?' clear':''}"${r.now?' aria-current="step"':''}><span class="pass-step" aria-hidden="true">${i+1}</span><div class="pass-name"><strong>${r.label}</strong><small>${r.note}</small></div><div class="pass-count">${r.known?`<strong>${r.due.toLocaleString()}</strong><span>${r.estimate?'not started':'bills left'}</span>`:'<strong>—</strong><span>counted after the next run</span>'}${r.checked?`<span class="pass-checked">${r.checked.toLocaleString()} done this run</span>`:''}</div>${r.now?jobList:''}</li>`).join('')}</ol>`;
   const runCard=`<section class="review-run ${run.kind}" aria-label="Review worker"><div class="review-run-state">${live?'<span class="review-pulse" aria-hidden="true"></span>':'<span class="review-run-dot" aria-hidden="true"></span>'}<div><strong>${esc(runTitle)}</strong><span>${esc(runDetail)}</span></div></div>${passes}</section>`;
   const now=s.active.length&&run.kind!=='stale'?`<div class="review-now"><span class="review-pulse" aria-hidden="true"></span><div><small>${run.kind==='waiting'?'Waiting to retry':'Reviewing now'}</small>${s.active.map(id=>chip(id)).join('')}</div>${s.upcoming.length?`<div><small>Up next</small>${s.upcoming.map(id=>chip(id)).join('')}</div>`:''}</div>`:'';
   const auditText=auditLine(state.audit);

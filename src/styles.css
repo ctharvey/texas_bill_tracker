@@ -343,6 +343,7 @@ mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;
 .pass-name{min-width:0}.pass-name strong{display:block;font-size:var(--fs-sm);color:var(--ink)}.pass-name small{display:block;font-size:var(--fs-xs);color:var(--muted)}
 .pass-count{display:flex;flex-wrap:wrap;gap:2px 6px;align-items:baseline;font-size:var(--fs-xs);color:var(--muted)}
 .pass-count strong{font-size:18px;color:var(--ink)}.pass-checked{flex-basis:100%}
+.pass-jobs{grid-column:1/-1;display:flex;flex-direction:column;gap:4px;margin-top:4px;padding-top:6px;border-top:1px dashed var(--line);min-width:0}.pass-jobs small{font-size:var(--fs-xs);color:var(--muted);font-weight:700;letter-spacing:.03em;text-transform:uppercase}.pass-job{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:var(--fs-xs);color:var(--muted)}
 .review-columns{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px;align-items:start;margin-top:6px}
 .review-recent h3{margin:0 0 8px;font-size:var(--fs-lg)}
 .review-side{display:grid;gap:10px;min-width:0}

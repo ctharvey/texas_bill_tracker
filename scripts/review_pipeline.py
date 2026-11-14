@@ -921,6 +921,26 @@ def public_agencies(kept: list[dict], document: dict, names: dict[str, str] | No
     return out
 
 
+def review_time(cache_dir: Path, bundle, path: Path) -> str:
+    """When Luna last answered for this review (UTC, ...Z): the newest provider reply among its first-pass request and
+    its follow-up answers, from the response cache, which records `returned_at` only for a real reply. Every run
+    rewrites a known bill's review file on a free cache-hit revisit, so the file's time says when it was last
+    visited, not reviewed; it is only the fallback when no reply time is readable."""
+    keys = []
+    if isinstance(bundle, dict):
+        keys.append(bundle.get("first_pass_request_key"))
+        keys += [r.get("request_key") for r in bundle.get("resolutions") or [] if isinstance(r, dict)]
+    times = []
+    for key in keys:
+        if not isinstance(key, str) or not re.fullmatch(r"[0-9A-Za-z_-]{8,128}", key):
+            continue
+        entry = _read_json(cache_dir / "responses" / (key + ".json"))
+        if isinstance(entry, dict) and entry.get("state") == "returned" and isinstance(entry.get("returned_at"), (int, float)):
+            times.append(entry["returned_at"])
+    when = max(times) if times else path.stat().st_mtime
+    return dt.datetime.fromtimestamp(when, dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 def public_entry(bundle: dict, reviewed_at: str, scope: dict | None = None,
                  names: dict[str, str] | None = None, entities: list[dict] | None = None) -> dict | None:
     """Verified claims only; a field whose every claim failed verification is omitted (caption fallback).
@@ -1021,7 +1041,7 @@ def publish_tags(cache_dir: Path, out: Path, registry: list[dict], live: set[str
             bundle = json.loads(path.read_text("utf-8"))
         except (OSError, ValueError):
             continue
-        stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
+        stamp = review_time(cache_dir, bundle, path)
         scope = (topic_suggestions.read_scope(cache_dir, path.stem, bundle)
                  if isinstance(bundle, dict) and bundle.get("bill_id") == path.stem else None)
         entities = (related_entities.verified_entities(cache_dir, path.stem, bundle)
@@ -1191,8 +1211,8 @@ def publish_highlights(cache_dir: Path, text_dir: Path, out_dir: Path, live: dic
                 if not source.is_file():
                     continue
                 markdown = source.read_text("utf-8")
-            stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
-            entry = highlight_entry(bundle, stamp.replace("+00:00", "Z"), markdown, code,
+            stamp = review_time(cache_dir, bundle, path)
+            entry = highlight_entry(bundle, stamp, markdown, code,
                                     topic_suggestions.read_scope(cache_dir, path.stem, bundle), names)
             payload = (json.dumps(entry, sort_keys=False, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
             target = out_dir / (path.stem + ".json")
@@ -1236,8 +1256,7 @@ def _current_reviews(cache_dir: Path, live: set[str] | None = None):
         except (OSError, ValueError):
             continue
         if isinstance(bundle, dict) and bundle.get("bill_id") == path.stem and isinstance(bundle.get("result"), dict):
-            stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
-            yield path.stem, bundle, stamp.replace("+00:00", "Z")
+            yield path.stem, bundle, review_time(cache_dir, bundle, path)
 
 
 def publish_changes(cache_dir: Path, out_dir: Path, live: set[str] | None = None) -> int:
@@ -1285,17 +1304,22 @@ def utc_stamp(seconds_from_now: float = 0) -> str:
 def publish_status(out: Path, queue: dict, *, current: str | None, upcoming: list[str], running: bool,
                    waiting_until: str | None = None, in_progress: list[str] | None = None,
                    run_started_at: str | None = None, pass_name: str | None = None,
-                   passes: dict | None = None) -> None:
+                   passes: dict | None = None, pass_jobs: list | None = None) -> None:
     # Public progress view: bill ids, states and counts only, never costs, reasons or review content.
     # `in_progress`: every bill a worker holds now (several with --workers); `current` stays for older readers.
     # `pass`: review, entities, topics or audit while one runs; `passes`: {name: {due, checked}} bill counts.
+    # `pass_jobs`: the later pass's bills in flight, [{"bill", "job"}], one per slot; job is a fixed step name.
+    # Written only while non-empty; readers treat a missing field as none.
     active = list(dict.fromkeys(in_progress if in_progress is not None else ([current] if current else [])))
-    atomic_json(out, {"format": "texas-bill-luna-status-v1", "updated_at": utc_stamp(),
+    status = {"format": "texas-bill-luna-status-v1", "updated_at": utc_stamp(),
                       "running": running, "current": current,
                       "in_progress": active, "upcoming": upcoming, "waiting_until": waiting_until,
                       "reviewed": list(queue.get("seen", [])), "retry": list(queue.get("retry", [])),
                       "failed": {k: v.get("stage") for k, v in queue.get("failed", {}).items()},
-                      "run_started_at": run_started_at, "pass": pass_name, "passes": passes or {}}, mode=0o644)
+                      "run_started_at": run_started_at, "pass": pass_name, "passes": passes or {}}
+    if pass_jobs:
+        status["pass_jobs"] = list(pass_jobs)
+    atomic_json(out, status, mode=0o644)
 
 
 def try_publish_status(out: Path | None, queue: dict, **kwargs) -> None:
@@ -1450,6 +1474,24 @@ class RefusedBills:
             self.bills.discard(bill_id); self._save()
 
 
+# Set by main while later passes run: called with ([(bill id, step name or None)], bills done so far this pass)
+# whenever the bills in flight change.
+LATER_PROGRESS = None
+
+
+def set_later_progress(callback) -> None:
+    global LATER_PROGRESS
+    LATER_PROGRESS = callback
+
+
+def _show_in_flight(items, done: int) -> None:
+    if LATER_PROGRESS is not None:
+        try:
+            LATER_PROGRESS(list(items), done)
+        except Exception as error:  # noqa: BLE001 - progress display only; never stops a run
+            print("Status publish failed:", type(error).__name__, flush=True)
+
+
 def _second_pass(label: str, jobs, args, deadline: float, refused: RefusedBills | None = None, budget=None) -> int:
     """Run one lowest-priority pass (main thread, after the review queue emptied). `jobs` yields due
     (bill_id, call, save) items. Capacity skips a bill (three in a row end the pass; with `refused`, a bill already
@@ -1461,6 +1503,7 @@ def _second_pass(label: str, jobs, args, deadline: float, refused: RefusedBills 
         if time.monotonic() > deadline or STOP_REQUESTED.is_set():
             print(f"{label}: run time limit or stop requested; the rest wait for a later run", flush=True)
             break
+        _show_in_flight([(bill_id, None)], len(done))
         try:
             report = call()
         except CapacityUnavailable:
@@ -1502,6 +1545,7 @@ def _second_pass(label: str, jobs, args, deadline: float, refused: RefusedBills 
         if refused is not None:
             refused.discard(bill_id)
         done.add(bill_id); rejections = errors = 0
+    _show_in_flight([], len(done))
     print(label, "checked for", len(done), "bills", flush=True)
     return len(done)
 
@@ -1511,7 +1555,8 @@ def _slot_pass(label: str, units, args, deadline: float, slots: int, refused: Re
     """`_second_pass` with `slots` bills at once. `units` yields (bill_id, steps); `steps` yields that bill's
     (call, save) jobs in order (topics: vote 1, then its scope votes), advanced on this thread only after the previous
     job was saved, so one bill's calls never overlap and its next job sees the saved record. Pool threads run only
-    `call()`; this thread saves, applies the stop rules and is the only writer. A job that is not saved ends its
+    `call()`; this thread saves, applies the stop rules and is the only writer. A job may carry a third item, its
+    step name for the progress page. A job that is not saved ends its
     bill for this run. A None unit is a barrier: nothing after it starts until every bill before it has finished
     (topics: bills refused in an earlier run go after all others, votes included). A stop (time, SIGTERM, capacity
     or failures in a row, a pass-ending refusal, a worker-wide error) starts nothing new; calls in flight finish and
@@ -1537,8 +1582,9 @@ def _slot_pass(label: str, units, args, deadline: float, slots: int, refused: Re
             job = next(steps, None)
             if job is None:
                 return False
-            call, save = job
-            running[pool.submit(call)] = (bill_id, steps, save)
+            call, save, step = (*job, None)[:3]
+            running[pool.submit(call)] = (bill_id, steps, save, step)
+            _show_in_flight(((b, st) for b, _s, _v, st in running.values()), len(done))
             return True
 
         exhausted = barrier = False
@@ -1560,7 +1606,7 @@ def _slot_pass(label: str, units, args, deadline: float, slots: int, refused: Re
                 break
             finished, _ = wait(running, return_when=FIRST_COMPLETED)
             for future in finished:
-                bill_id, steps, save = running.pop(future)
+                bill_id, steps, save, _step = running.pop(future)
                 try:
                     report = future.result()
                 except CapacityUnavailable:
@@ -1607,6 +1653,8 @@ def _slot_pass(label: str, units, args, deadline: float, slots: int, refused: Re
                 done.add(bill_id); rejections = errors = 0
                 if may_start():
                     submit(bill_id, steps)  # this bill's next job, in the same slot
+            _show_in_flight(((b, st) for b, _s, _v, st in running.values()), len(done))
+    _show_in_flight([], len(done))
     print(label, "checked for", len(done), "bills", flush=True)
     if exit_error is not None:
         raise exit_error
@@ -1731,7 +1779,8 @@ def topic_jobs(args, queue: dict, budget, refused: "RefusedBills", per_bill: boo
         yield (lambda b=bundle: topic_suggestions.suggest(b, topics, registry, args.cache_dir,
                                                           execute=args.execute, sender=budget.send, cache=cache),
                lambda report, b=bundle, i=bill_id: atomic_json(
-                   out / (i + ".json"), topic_suggestions.record_for(b, report, _read_json(out / (i + ".json")))))
+                   out / (i + ".json"), topic_suggestions.record_for(b, report, _read_json(out / (i + ".json")))),
+               "headline and scope vote 1")
 
     def vote_jobs(bill_id, path):
         # The record is re-read after each saved vote, so vote 3 goes only when 1 and 2 split.
@@ -1746,17 +1795,18 @@ def topic_jobs(args, queue: dict, budget, refused: "RefusedBills", per_bill: boo
                                                                       execute=args.execute, sender=budget.send,
                                                                       cache=cache, vote=v),
                    lambda report, b=bundle, r=record, v=vote, i=bill_id: atomic_json(
-                       out / (i + ".json"), topic_suggestions.with_vote(b, r, v, report)))
+                       out / (i + ".json"), topic_suggestions.with_vote(b, r, v, report)),
+                   "scope vote %d" % vote)
             if _read_json(out / (bill_id + ".json")) == record:
                 return  # not saved (capacity, a skip or a per-bill refusal): leave it for a later run
 
     def group_jobs(group):
         # Vote 1 (extras, suggestions, first scope vote) for every due bill first, so headlines are not held back.
         for bill_id, path in group:
-            for call, save in first_job(bill_id, path):
+            for call, save, _step in first_job(bill_id, path):
                 yield bill_id, call, save
         for bill_id, path in group:
-            for call, save in vote_jobs(bill_id, path):
+            for call, save, _step in vote_jobs(bill_id, path):
                 yield bill_id, call, save
     return units() if per_bill else jobs()
 
@@ -2011,7 +2061,7 @@ def main():
         deadline = time.monotonic() + args.max_minutes * 60
         new_failures = 0
         status_path = args.publish_tags.parent / "status.json" if args.publish_tags and args.execute else None
-        progress = {"run_started_at": utc_stamp(), "pass_name": "review", "passes": {}}
+        progress = {"run_started_at": utc_stamp(), "pass_name": "review", "passes": {}, "pass_jobs": []}
 
         def first_pass_due(bill_id: str, registry: list[dict], key_of) -> bool:
             """The review pass still owes this bill a paid first pass: a new bill, a new or revised version, or a
@@ -2407,7 +2457,18 @@ def main():
                     break
                 progress["pass_name"] = name
                 publish(current=None, upcoming=[], running=True)
-                checked = run(args, queue, budget, deadline)
+
+                def later_progress(items, done, name=name):
+                    progress["pass_jobs"] = [{"bill": b, "job": step} for b, step in items]
+                    if name in progress["passes"]:
+                        progress["passes"][name]["checked"] = done
+                    publish(current=None, upcoming=[], running=True)
+                set_later_progress(later_progress)
+                try:
+                    checked = run(args, queue, budget, deadline)
+                finally:
+                    set_later_progress(None)
+                    progress["pass_jobs"] = []
                 recount(name, jobs)
                 if name in progress["passes"]:
                     progress["passes"][name]["checked"] = checked
@@ -2416,6 +2477,7 @@ def main():
             publish_luna(args, network_ok=not halt.is_set() and not STOP_REQUESTED.is_set())
         finally:
             progress["pass_name"] = None
+            progress["pass_jobs"] = []
             publish(current=None, upcoming=[], running=False)
 
 
