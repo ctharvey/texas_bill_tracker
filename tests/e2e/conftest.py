@@ -79,11 +79,14 @@ if os.environ.get("TBA_E2E") == "1":
     class Device:
         """One browser profile: its own localStorage, like one person's phone or laptop."""
 
-        def __init__(self, browser, site, viewport, captured_at, accept_disclaimer=True, storage=None):
+        def __init__(self, browser, site, viewport, captured_at, accept_disclaimer=True, storage=None, enforce_csp=False):
             self.site = site
             self.errors: list[str] = []
+            # Playwright's string predicates (wait_for_function) evaluate code in the page, which the site's CSP
+            # refuses like eval; test_csp.py keeps the policy enforced for the site itself.
             self.context = browser.new_context(viewport=VIEWPORTS[viewport], locale="en-US",
-                                               timezone_id="America/Chicago", storage_state=storage)
+                                               timezone_id="America/Chicago", storage_state=storage,
+                                               bypass_csp=not enforce_csp)
             self.context.clock.set_fixed_time(captured_at)
             self.context.route("https://fonts.googleapis.com/**",
                                lambda r: r.fulfill(status=200, body="", content_type="text/css"))
