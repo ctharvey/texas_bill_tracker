@@ -11,6 +11,7 @@ import sys
 import tempfile
 import threading
 import types
+import warnings
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -147,8 +148,23 @@ def reveal(page, selector, timeout=5000):
         page.locator(selector).first.wait_for(state="attached", timeout=timeout)
     except Exception:
         return
-    page.evaluate("s => { const d = document.querySelector(s)?.closest('details:not([open])'); if (d) d.querySelector('summary').click(); }",
-                  selector)
+    # A menu can still be open here with its close pending (the Share / save menu closes on a timer after one of its
+    # buttons is used), so opening only "if closed now" can lose the race. Re-open while the menu keeps closing.
+    for _ in range(3):
+        before = page.evaluate("s => { const el = document.querySelector(s); const d = el?.closest('details:not([open])');"
+                               " if (d) { d.querySelector('summary').click(); return 'opened'; }"
+                               " return el?.closest('details') ? 'open' : 'none'; }", selector)
+        if before == "none":
+            return
+        try:
+            page.locator(selector).first.wait_for(state="visible", timeout=1000)
+            return
+        except Exception:
+            closed = page.evaluate("s => !!document.querySelector(s)?.closest('details:not([open])')", selector)
+            if not closed:
+                return  # hidden for some other reason; leave it to the test
+            if before == "open":
+                warnings.warn(f"reveal({selector!r}): its menu was open, then closed before use; re-opened it")
 
 
 def click(page, selector, **kwargs):
