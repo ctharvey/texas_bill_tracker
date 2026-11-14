@@ -2,6 +2,7 @@
 Description=Build the agent edition (Markdown/JSON) of Texas Bill Atlas for agent.bills.ctharvey.me
 Requires=docker.service
 After=docker.service
+OnFailure=texas-bill-alert@%n.service
 
 [Service]
 Type=oneshot

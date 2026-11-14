@@ -2,6 +2,7 @@
 Description=Refresh the live Texas legislator roster (capitol.texas.gov identity, LRL party and tenure)
 Wants=network-online.target
 After=network-online.target
+OnFailure=texas-bill-alert@%n.service
 
 [Service]
 Type=oneshot

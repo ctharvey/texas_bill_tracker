@@ -1,0 +1,22 @@
+[Unit]
+Description=Report a failed Texas Bill Atlas unit (%i)
+
+[Service]
+Type=oneshot
+# Every Texas Bill Atlas service names this in OnFailure=. It always logs at priority crit and appends to
+# /var/lib/texas-bill-alerts/failures.log. To also be told, put ALERT_WEBHOOK_URL=<url> in /etc/texas-bill-alert.env
+# (root-only, mode 0600); the JSON body carries the message as both "text" and "content" for common chat webhooks.
+EnvironmentFile=-/etc/texas-bill-alert.env
+StateDirectory=texas-bill-alerts
+StateDirectoryMode=0700
+ExecStart=/bin/sh -c 'msg="Texas Bill Atlas: %i failed at $$(date -u +%%Y-%%m-%%dT%%H:%%M:%%SZ); see journalctl -u %i"; \
+  echo "$$msg" | systemd-cat -t texas-bill-alert -p crit; \
+  echo "$$msg" >> "$$STATE_DIRECTORY/failures.log"; \
+  if [ -n "$${ALERT_WEBHOOK_URL:-}" ]; then \
+    curl -fsS -m 20 -H "Content-Type: application/json" --data "{\\\"text\\\":\\\"$$msg\\\",\\\"content\\\":\\\"$$msg\\\"}" "$$ALERT_WEBHOOK_URL" >/dev/null \
+      || echo "alert webhook failed for %i" | systemd-cat -t texas-bill-alert -p err; \
+  fi'
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true

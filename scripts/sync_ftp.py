@@ -1093,6 +1093,9 @@ def sync_witnesses(conn, histories: dict, out_dir: Path, max_lists: int) -> dict
 
 
 HEARTBEAT = dt.timedelta(hours=6)
+# More failed transfers than this share: publish what was read, but keep the previous generated_at so a refresh
+# that keeps failing shows as stale on the site, and report it as a failure (exit 1 via --failures-file).
+INCOMPLETE_SHARE = 0.10
 
 
 def choose_generated_at(previous: dict | None, new_payload: dict, now: dt.datetime) -> str:
@@ -1158,7 +1161,11 @@ def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000, histories
         bill.pop('events', None)
         bill.pop('documents', None)
     snapshot['generated_at'] = choose_generated_at(prior, snapshot, dt.datetime.now(dt.timezone.utc))
-    return snapshot, {'listed':len(paths),'parsed':len(parsed),'combined':len(merged),'transfer_errors':len(errors)}
+    incomplete = len(errors) > INCOMPLETE_SHARE * len(paths)
+    if incomplete and prior.get('generated_at'):
+        snapshot['generated_at'] = prior['generated_at']
+    return snapshot, {'listed':len(paths),'parsed':len(parsed),'combined':len(merged),'transfer_errors':len(errors),
+                      'incomplete':incomplete}
 
 
 def main() -> int:
@@ -1170,7 +1177,11 @@ def main() -> int:
     parser.add_argument('--history-dir',type=Path,default=None)
     parser.add_argument('--documents-dir',type=Path,default=None)
     parser.add_argument('--max-docs',type=int,default=200)
+    parser.add_argument('--failures-file',type=Path,default=None,
+                        help='Write the secondary stages that failed here, one per line (the unit fails on a non-empty file '
+                             'after building feeds); the snapshot itself is still written')
     args=parser.parse_args()
+    failures=[]
     prior=json.loads(args.out.read_text(encoding='utf-8')) if args.out.exists() else {'bills':[]}
     with ftplib.FTP(HOST,timeout=55) as conn:
         conn.login('anonymous','legislative-research@example.invalid')
@@ -1180,11 +1191,14 @@ def main() -> int:
     temp.write_text(json.dumps(snapshot,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     os.replace(temp,args.out)
     print(json.dumps(stats,indent=2))
+    if stats.get('incomplete'):
+        failures.append(f"incomplete read: {stats['transfer_errors']} of {stats['listed']} transfers failed")
     try:
         history_counts=sync_history(histories,args.history_dir or args.out.parent/'history')
         print(json.dumps({'history':history_counts},indent=2))
     except Exception as exc:  # History files are secondary; never fail a written snapshot.
         print(f"HISTORY SYNC FAILED, snapshot unaffected: {exc}",file=sys.stderr)
+        failures.append(f"history: {exc}")
     try:
         with ftplib.FTP(HOST,timeout=55) as conn:
             conn.login('anonymous','legislative-research@example.invalid')
@@ -1192,6 +1206,7 @@ def main() -> int:
         print(json.dumps({'texts':text_counts},indent=2))
     except Exception as exc:  # Text files are secondary; never fail a written snapshot.
         print(f"TEXT SYNC FAILED, snapshot unaffected: {exc}",file=sys.stderr)
+        failures.append(f"texts: {exc}")
     try:
         documents_dir=args.documents_dir or args.out.parent/'history'
         with ftplib.FTP(HOST,timeout=55) as conn:
@@ -1202,6 +1217,9 @@ def main() -> int:
             print(json.dumps({'witnesses':witness_counts},indent=2))
     except Exception as exc:  # Documents and witness lists are secondary; never fail a written snapshot.
         print(f"DOCUMENT SYNC FAILED, snapshot unaffected: {exc}",file=sys.stderr)
+        failures.append(f"documents: {exc}")
+    if args.failures_file is not None:
+        args.failures_file.write_text(''.join(f"{line}\n" for line in failures),encoding='utf-8')
     return 0
 
 

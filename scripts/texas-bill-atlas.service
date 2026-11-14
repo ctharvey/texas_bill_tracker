@@ -2,6 +2,7 @@
 Description=Publish Texas Bill Atlas from GitHub main
 Wants=network-online.target
 After=network-online.target
+OnFailure=texas-bill-alert@%n.service
 
 [Service]
 Type=oneshot

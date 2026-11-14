@@ -2,6 +2,7 @@
 Description=Private Texas Bill Atlas classification and review
 Wants=network-online.target
 After=network-online.target
+OnFailure=texas-bill-alert@%n.service
 
 [Service]
 Type=oneshot
@@ -11,7 +12,11 @@ WorkingDirectory=/var/lib/texas-bill-review/repository
 EnvironmentFile=/etc/texas-bill-review.env
 Environment=TZ=America/Chicago
 UMask=0077
-ExecStartPre=/usr/bin/git pull --ff-only
+# Bounded: TimeoutStartSec=infinity covers the run, so a stalled fetch from GitHub would otherwise hold the unit
+# forever. A failed pull fails the start (visible, and alerted by OnFailure) rather than reviewing on stale code
+# while --restart-on-update keeps seeing the newer commit. Only fast-forwards apply: a force-pushed rollback needs a
+# manual reset of this checkout.
+ExecStartPre=/usr/bin/timeout 120 /usr/bin/env GIT_TERMINAL_PROMPT=0 /usr/bin/git pull --ff-only
 ExecStart=/var/lib/texas-bill-review/venv/bin/python scripts/review_pipeline.py --cache-dir /var/lib/texas-bill-review/cache --no-spending-cap --transport flex --input markdown --stages --suggest-topics --related-entities --audit-sample --related-bills --workers 6 --order reverse --restart-on-update --execute --snapshot /var/www/html/texas-bill-atlas/live/bills.json --publish-tags /var/www/html/texas-bill-atlas/live/luna/tags.json
 # No start timeout: killing a run mid-request strands its billing reservation and blocks later calls.
 TimeoutStartSec=infinity
