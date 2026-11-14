@@ -7,6 +7,7 @@ says so. Filters: chamber, topic, agency, location, party, reviewed, filed_from,
 from __future__ import annotations
 
 import difflib
+import functools
 import json
 from pathlib import Path
 import re
@@ -19,6 +20,9 @@ WORD = re.compile(r"[a-z0-9]+")
 BILL_REF = re.compile(r"\b(hb|sb|hjr|sjr|hcr|scr|hr|sr)\s*([1-9]\d{0,4})\b")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 MAX_QUERY, DEFAULT_LIMIT, MAX_LIMIT = 200, 50, 200
+# CPU bounds per request: each alternative is a full scan, and each fuzzy word runs difflib over the whole
+# vocabulary. Without them one 200-character query cost about half a second of the sync service's single CPU.
+MAX_ALTERNATIVES, MAX_FUZZY_WORDS = 8, 3
 DISCLAIMER = ("Unofficial, independent open-source project; not a state website. Bill data comes from the Texas "
               "Legislative Council bulk files and can lag or contain errors. Topic, agency and impact tags are automated "
               "(caption rules or the Luna model reading the full text) and can be wrong. Not legal advice. Confirm on "
@@ -54,6 +58,7 @@ LABELS = {"title": "title/caption", "subjects": "official subjects", "topics": "
           "impacts": "impacts", "actions": "actions"}
 
 
+@functools.lru_cache(maxsize=65536)  # pure; search calls it per field per bill per term
 def stem(word: str) -> str:
     if len(word) > 4 and word.endswith("ies"):
         return word[:-3] + "y"
@@ -188,8 +193,9 @@ def term_hit(alternatives: list[str], tokens: dict, lowered: dict) -> tuple[int,
     best, where = 0, set()
     for alt in alternatives:
         parts = words(alt)
+        phrase, single = (" ".join(parts), None) if len(parts) > 1 else (None, stem(parts[0]))
         for name, weight in FIELDS:
-            hit = (" ".join(parts) in lowered[name]) if len(parts) > 1 else stem(parts[0]) in tokens[name]
+            hit = (phrase in lowered[name]) if phrase is not None else single in tokens[name]
             if hit:
                 where.add(name)
                 best = max(best, weight if alt == alternatives[0] else weight - 1)
@@ -242,6 +248,8 @@ def parse_params(query_string: str) -> dict:
     q = raw.get("q", "")
     if len(q) > MAX_QUERY or any(len(raw.get(k, "")) > 100 for k in FILTERS):
         raise BadQuery(f"q is limited to {MAX_QUERY} characters and filters to 100")
+    if len(parse_query(q)[1]) > MAX_ALTERNATIVES:
+        raise BadQuery(f"q is limited to {MAX_ALTERNATIVES} alternatives joined with OR")
     for k in ("filed_from", "filed_to"):
         if raw.get(k) and not DATE.fullmatch(raw[k]):
             raise BadQuery(f"{k} must be YYYY-MM-DD")
@@ -372,7 +380,7 @@ def search(index: Index, params: dict) -> dict:
     if not results:
         unmatched += [w for p in phrases for w in p.split()]
     seen = set(index.vocab)
-    for w in dict.fromkeys(unmatched):
+    for w in list(dict.fromkeys(unmatched))[:MAX_FUZZY_WORDS]:
         if w in index.members:
             continue
         for name in difflib.get_close_matches(w, list(index.members), n=2, cutoff=0.8):
