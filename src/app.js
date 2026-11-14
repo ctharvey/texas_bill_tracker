@@ -32,8 +32,20 @@ function previousVisit(){
   return visit.prev;
 }
 
-const shortDate = iso => iso ? new Date(`${String(iso).slice(0,10)}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}) : '';
-const dateText = iso => iso ? new Date(`${String(iso).slice(0,10)}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}) : 'Not available';
+// One formatter each, remembered per day: search formats two dates for every bill on every keystroke, and building a
+// formatter per call (toLocaleDateString with options) was most of the typing cost on a slow CPU.
+const dayFormat = (options, empty) => {
+  const format = new Intl.DateTimeFormat('en-US', {...options, timeZone: 'UTC'}), seen = new Map();
+  return iso => {
+    if (!iso) return empty;
+    const day = String(iso).slice(0,10);
+    let text = seen.get(day);
+    if (text === undefined) { text = format.format(new Date(`${day}T12:00:00Z`)); seen.set(day, text); }
+    return text;
+  };
+};
+const shortDate = dayFormat({month:'short',day:'numeric'}, '');
+const dateText = dayFormat({month:'short',day:'numeric',year:'numeric'}, 'Not available');
 const stampText = iso => iso ? new Date(iso).toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Chicago'})+' CT' : 'Unknown';
 const unique = a => [...new Set(a)];
 
@@ -496,7 +508,8 @@ function renderNotice(){
 function renderOverview(){
   const bills=state.view==='watchlist'?state.bills.filter(b=>state.watch.has(b.id)):state.bills;
   const scheduled=bills.filter(b=>assessHearing(b).level===3).length;
-  const today=bills.filter(b=>b.filed_at===new Date().toLocaleDateString('sv-SE',{timeZone:'America/Chicago'})).length;
+  const day=new Date().toLocaleDateString('sv-SE',{timeZone:'America/Chicago'});
+  const today=bills.filter(b=>b.filed_at===day).length;
   const part=(n,one,many,title)=>`<span title="${title}"><strong>${n.toLocaleString()}</strong> ${n===1?one:many}</span>`;
   $('#overview').innerHTML=[part(bills.length,'bill in view','bills in view',state.meta?.data_mode==='curated'?'Curated sample, not the session total':'Bills in this snapshot'),
     part(today,'filed today','filed today','According to the filing dates in the data'),

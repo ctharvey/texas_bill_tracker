@@ -673,8 +673,21 @@ export function searchTerms(query) {
 const singular = w => w.length > 4 && w.endsWith('ies') ? w.slice(0, -3) + 'y'
   : w.length > 4 && /(s|x|z|ch|sh)es$/.test(w) ? w.slice(0, -2)
   : w.length > 3 && /[^su]s$/.test(w) ? w.slice(0, -1) : '';
+// Folded bill texts, remembered: search folds every bill's text on every keystroke, and the texts rarely change.
+// Keyed by the text itself, so changed data is simply a new key; cleared when it grows past any one snapshot.
+const folded = new Map();
+const foldedText = text => {
+  const key = String(text || '');
+  let hay = folded.get(key);
+  if (hay === undefined) {
+    if (folded.size > 20000) folded.clear();
+    hay = foldText(key);
+    folded.set(key, hay);
+  }
+  return hay;
+};
 export function textMatches(text, q) {
-  const hay = foldText(text);
+  const hay = foldedText(text);
   return (q.match(/"[^"]*"?|\S+/g) || []).every(term => {
     const w = term.replace(/^"|"$/g, '').trim();
     return !w || hay.includes(w) || (singular(w) && hay.includes(singular(w)));
