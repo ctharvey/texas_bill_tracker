@@ -24,6 +24,11 @@ TEXTS = {
 CANDIDATES = {'HB2', 'HB4'}
 
 
+def pipeline_suggest():
+    from test_later_pass_slots import SUGGEST
+    return SUGGEST
+
+
 class ScopeFirst(SlotCase):
     def prepare_texts(self):
         self.seed(list(TEXTS))
@@ -56,6 +61,20 @@ class ScopeFirst(SlotCase):
         self.assertEqual(passes['scope'], {'due': 0, 'checked': 2})
         self.assertEqual(passes['topics'], {'due': 0, 'checked': 2})
         self.assertEqual(self.ledger_pending(), [])
+
+    def test_topics_is_recounted_when_it_starts_so_the_candidates_already_voted_are_not_in_it(self):
+        self.prepare_texts()
+        self.answers = {1: FALSE, 2: FALSE}
+        seen = {}
+        reply = self.reply
+
+        def watch(bill, text):
+            status = self.status()
+            seen.setdefault(status['pass'], status['passes'][status['pass']]['due'])
+            return reply(bill, text)
+        self.overrides[pipeline_suggest()] = watch
+        self.later('--scope-first', '--later-workers', '2')
+        self.assertEqual(seen, {'scope': 2, 'topics': 2})  # not 4: HB2 and HB4 were decided in the scope pass
 
     def test_one_slot_keeps_the_same_order(self):
         self.prepare_texts()

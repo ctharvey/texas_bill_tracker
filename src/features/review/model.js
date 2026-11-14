@@ -53,9 +53,12 @@ export function passRows(status, summary, run) {
     const estimate = p.key === 'review' && !reported;
     const counted = estimate ? {due: summary.notStarted.length, checked: null} : reported;
     const known = Boolean(counted);
-    return {...p, known, estimate, due: known ? counted.due : null,
-      checked: known && Number.isFinite(counted.checked) ? counted.checked : null,
-      now: run.pass === p.key};
+    const now = run.pass === p.key, due = known ? counted.due : null;
+    const checked = known && Number.isFinite(counted.checked) ? counted.checked : null;
+    // `left`: what the page shows. A later pass's due is counted when it starts and again when it ends, so while it
+    // runs the bills done so far come off it; the full review's count is already live.
+    const left = known && now && p.key !== 'review' && checked ? Math.max(0, due - checked) : due;
+    return {...p, known, estimate, due, checked, left, now};
   });
 }
 

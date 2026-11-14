@@ -2481,6 +2481,9 @@ def main():
                 if stopped or halt.is_set() or STOP_REQUESTED.is_set():
                     break
                 progress["pass_name"] = name
+                # Again at its start: an earlier pass this run may have done some of its bills (the all-agencies
+                # pass does topics' candidates), and the page takes the bills done so far off this count.
+                recount(name, jobs)
                 publish(current=None, upcoming=[], running=True)
 
                 def later_progress(items, done, name=name):
