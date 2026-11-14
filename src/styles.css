@@ -106,6 +106,7 @@ button[disabled]{opacity:.5;cursor:not-allowed}
 .filter-row .agency-option:hover,.filter-row .agency-option.active{background:color-mix(in srgb,var(--accent) 8%,var(--surface));color:color-mix(in srgb,var(--accent) 87%,var(--ink))}
 .filter-row .agency-option[aria-selected=true]{font-weight:800;color:var(--teal)}
 .agency-option-count{flex-shrink:0;color:color-mix(in srgb,var(--ink) 50%,var(--surface));font-size:var(--fs-xs)}
+.agency-group-label{margin-top:6px;padding:8px 10px 4px;border-top:1px solid color-mix(in srgb,var(--ink) 7%,var(--surface));color:color-mix(in srgb,var(--ink) 54%,var(--surface));font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
 .agency-no-results{padding:12px 10px;color:color-mix(in srgb,var(--ink) 54%,var(--surface));font-size:var(--fs-xs);margin:0}
 @media(max-width:760px){.agency-combobox{flex:1 1 calc(50% - 6px);min-width:calc(50% - 6px)}}
 

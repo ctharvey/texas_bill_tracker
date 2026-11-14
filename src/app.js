@@ -17,7 +17,7 @@ import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFi
   cleanSearches, applySearchOps, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
 import {createSyncClient} from './sync.js';
 import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, followedBills, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
-import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, sortAgencyIds, searchTerms, textMatches, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
+import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, sortAgencyIds, groupAgencyIds, searchTerms, textMatches, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
 
 const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last action',actionstage:'Last action stage',number:'Bill number',agencies:'Most agencies',hearing:'Hearing progress',influence:'Author influence'};
 const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
@@ -550,9 +550,10 @@ function agencySortMode(){
 function agencyOptionsMarkup(){
   const agencyCounts=new Map();
   for(const bill of state.bills)for(const agency of bill.agencies)agencyCounts.set(agency.id,(agencyCounts.get(agency.id)||0)+1);
-  const agencies=sortAgencyIds(unique([...AGENCIES.map(a=>a.id),...Object.keys(state.luna?.agencies||{})]),agencyName,agencyCounts,agencySortMode());
-  const agencyOpts=agencies.map((id,i)=>`<div id="agency-option-${i+1}" role="option" class="agency-option" data-agency-option="${esc(id)}" data-agency-label="${esc(agencyName(id))}" aria-selected="${state.agency===id}"><span>${esc(agencyName(id))}</span><span class="agency-option-count">${agencyCounts.get(id)||0}</span></div>`).join('');
-  return `<div id="agency-option-0" role="option" class="agency-option" data-agency-option="" data-agency-label="All affected agencies" aria-selected="${!state.agency}"><span>All affected agencies</span></div>${agencyOpts}<p class="agency-no-results" id="agency-no-results" hidden>No matching agencies</p>`;
+  const {withBills,withoutBills}=groupAgencyIds(unique([...AGENCIES.map(a=>a.id),...Object.keys(state.luna?.agencies||{})]),agencyName,agencyCounts,agencySortMode());
+  const option=(id,i)=>`<div id="agency-option-${i+1}" role="option" class="agency-option" data-agency-option="${esc(id)}" data-agency-label="${esc(agencyName(id))}" aria-selected="${state.agency===id}"><span>${esc(agencyName(id))}</span><span class="agency-option-count">${agencyCounts.get(id)||0}</span></div>`;
+  const emptyGroup=withoutBills.length?`<div role="group" aria-labelledby="agency-group-empty" data-agency-group><div class="agency-group-label" id="agency-group-empty" role="presentation">No bills in this snapshot</div>${withoutBills.map((id,i)=>option(id,withBills.length+i)).join('')}</div>`:'';
+  return `<div id="agency-option-0" role="option" class="agency-option" data-agency-option="" data-agency-label="All affected agencies" aria-selected="${!state.agency}"><span>All affected agencies</span></div>${withBills.map(option).join('')}${emptyGroup}<p class="agency-no-results" id="agency-no-results" hidden>No matching agencies</p>`;
 }
 function agencySortButtons(){
   const mode=agencySortMode();
@@ -1423,6 +1424,7 @@ function showAgencyChoices(query=''){
     if(!option.hidden)visible++;
     option.classList.remove('active');
   });
+  popup.querySelectorAll('[data-agency-group]').forEach(group=>{group.hidden=!group.querySelector('[data-agency-option]:not([hidden])')});
   $('#agency-no-results').hidden=visible!==0;
   popup.hidden=false;
   $('#agency-panel').hidden=false;

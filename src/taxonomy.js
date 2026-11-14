@@ -264,6 +264,14 @@ export function sortAgencyIds(ids, nameOf, counts, mode = 'name') {
     : mode === 'count' ? count(b) - count(a) || byName(a, b) : byName(a, b));
 }
 
+// The dropdown's two groups: agencies with bills in this snapshot (in the chosen order), then the rest A-Z. The
+// all-agencies marker stays first whatever its count, as in sortAgencyIds.
+export function groupAgencyIds(ids, nameOf, counts, mode = 'name') {
+  const sorted = sortAgencyIds(ids, nameOf, counts, mode);
+  const has = id => id === SCOPE_AGENCY_ID || (counts.get(id) || 0) > 0;
+  return {withBills: sorted.filter(has), withoutBills: sortAgencyIds(sorted.filter(id => !has(id)), nameOf, counts, 'name')};
+}
+
 export const POLICY_AREAS = [
   {name:'Education', pattern:/\b(school|student|teacher|education|curricul|voucher|scholarship|classroom)\b/i},
   {name:'School choice', pattern:/education savings account|school voucher|charter school|school choice/i},
