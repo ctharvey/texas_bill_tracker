@@ -6,6 +6,8 @@ export const RUN_MINUTE = 35;         // the hourly timer starts runs at :35 (wh
 // Passes in run order. `review` is the first pass; the rest come from status.passes, published from 13 Nov 2026.
 export const PASSES = [
   {key: 'review', label: 'Full review', note: 'reads each bill in full'},
+  // Only when the worker runs it (--scope-first) and reports it.
+  {key: 'scope', label: 'All-agencies votes', note: 'bills whose text names state agencies, voted first', optional: true},
   {key: 'entities', label: 'Agencies', note: 'agencies and other bodies the review did not list'},
   {key: 'topics', label: 'Topics and scope votes', note: 'headline, search terms and the all-agencies vote'},
   {key: 'audit', label: 'Spot check', note: 'an independent re-check of a small sample'},
@@ -46,7 +48,7 @@ export function runState(status, now) {
 // passes are null when the status file has no count for them.
 export function passRows(status, summary, run) {
   const passes = status?.passes && typeof status.passes === 'object' ? status.passes : {};
-  return PASSES.map(p => {
+  return PASSES.filter(p => !p.optional || passes[p.key] || run.pass === p.key).map(p => {
     const reported = passes[p.key] && Number.isFinite(passes[p.key].due) ? passes[p.key] : null;
     const estimate = p.key === 'review' && !reported;
     const counted = estimate ? {due: summary.notStarted.length, checked: null} : reported;

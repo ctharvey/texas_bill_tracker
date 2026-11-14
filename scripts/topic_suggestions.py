@@ -96,11 +96,35 @@ def _alnum(text: str) -> str:
     return re.sub(r"[^0-9a-z]", "", text.lower())
 
 
-def check_scope(scope: dict, document: dict) -> dict:
-    """True only when every quote is current (not deleted) bill text long enough to carry a clause."""
+def current_text(document: dict) -> str:
+    """The bill text as it would read if passed: deleted text dropped, inserted text kept."""
     import review_audit
     current = re.sub(r"<del>.*?</del>", " ", review_audit.marked_text(document), flags=re.S)
-    current = _alnum(re.sub(r"</?ins>", "", current))
+    return re.sub(r"</?ins>", "", current)
+
+
+# Text that can carry an all-agencies quote. Measured 14 Nov 2026 on 1,493 reviewed bills: 346 match, including all 34
+# with an earlier verified true scope vote. It orders work only (candidates are voted first); it never skips a bill.
+AGENCY_TEXT = re.compile("|".join((
+    r"state\s+agenc", r"\b(each|every|all|any)\s+(state\s+)?agenc",
+    r"agenc(y|ies)\s+(or\s+\w+\s+)?(of|in)\s+(this|the)\s+state", r"governmental\s+bod(y|ies)",
+    r"governmental\s+entit", r"state\s+entit", r"state\s+(officer|employee|official)s?\b",
+    r"units?\s+of\s+state\s+government", r"(this\s+)?state\s+or\s+(its\s+|a\s+)?political\s+subdivision",
+    r"(action|actions)\s+(by|of)\s+this\s+state", r"executive\s+branch",
+    r"institutions?\s+of\s+higher\s+education")), re.I)
+
+
+def agency_candidate(bundle) -> bool:
+    """The bill's current text has wording an all-agencies quote could come from."""
+    try:
+        return bool(AGENCY_TEXT.search(" ".join(current_text(bundle["document"]).split())))
+    except (KeyError, TypeError, AttributeError):
+        return False
+
+
+def check_scope(scope: dict, document: dict) -> dict:
+    """True only when every quote is current (not deleted) bill text long enough to carry a clause."""
+    current = _alnum(current_text(document))
     quotes = [" ".join(q.split()) for q in scope["quotes"]]
     found = [len(_alnum(q)) >= MIN_QUOTE_ALNUM and _alnum(q) in current for q in quotes]
     applies = bool(scope["applies"])

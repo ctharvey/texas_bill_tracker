@@ -1418,7 +1418,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Bills reviewed at once (default 1). More than one needs --transport flex")
     parser.add_argument("--later-workers", type=int, default=None,
                         help="Bills the later passes (entities, topics, audit) work on at once; a bill's topic votes "
-                             "run back to back in one slot (default: --workers, at most 3). Flex only")
+                             "run back to back in one slot (default: --workers, at most the crash-hold allowance). "
+                             "Flex only")
     parser.add_argument("--stages", action="store_true",
                         help="Staged review (needs --input markdown): review a bill's newest text version, update a "
                              "review when a new version appears, and check fiscal notes and analyses")
@@ -1427,6 +1428,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--suggest-topics", action="store_true",
                         help="Second pass, only once this run's review queue is empty: one low-effort Luna call per "
                              "settled review suggesting topics the tracker lacks (private; see topic_suggestions.py)")
+    parser.add_argument("--scope-first", action="store_true",
+                        help="With --suggest-topics: before the other later passes, run the topics call and scope "
+                             "votes for bills whose text could carry an all-agencies quote, in at most half the time "
+                             "left (the all-state-agencies marker fills first)")
     parser.add_argument("--related-entities", action="store_true",
                         help="Supplemental pass after topic suggestions: one list-free Luna read per reviewed text "
                              "naming every related government body; names matching a listed agency the review lacks "
@@ -1668,12 +1673,12 @@ def flex_crash_allowance() -> int:
 
 
 def later_slots(args) -> int:
-    """Bills a later pass works on at once: --later-workers, else min(--workers, 3). Flex only (the legacy budget
-    allows one call in flight). Later passes run after the first pass's pool closes, so calls in flight are at most
-    max(--workers, slots); main() caps --later-workers at the crash-hold allowance."""
+    """Bills a later pass works on at once: --later-workers, else --workers, both capped at the crash-hold allowance.
+    Flex only (the legacy budget allows one call in flight). Later passes run after the first pass's pool closes, so
+    calls in flight are at most max(--workers, slots)."""
     if args.transport != "flex":
         return 1
-    return args.later_workers if args.later_workers is not None else min(args.workers, 3)
+    return args.later_workers if args.later_workers is not None else min(args.workers, flex_crash_allowance())
 
 
 def single_job_units(jobs):
@@ -1734,17 +1739,32 @@ def answered(cache_dir: Path, key: str | None) -> bool:
     return isinstance(entry, dict) and entry.get("state") == "returned"
 
 
-def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
+def suggest_topics(args, queue: dict, budget, deadline: float, label: str = "Topic suggestions",
+                   only_candidates: bool = False) -> int:
     """Second pass: topic suggestions (private) plus headline and search terms (published via extras.json)."""
     refused = RefusedBills(args.cache_dir, "Topic suggestions")
     slots = later_slots(args)
     if slots > 1:
-        return _slot_pass("Topic suggestions", topic_jobs(args, queue, budget, refused, per_bill=True), args, deadline,
-                          slots, refused, budget)
-    return _second_pass("Topic suggestions", topic_jobs(args, queue, budget, refused), args, deadline, refused, budget)
+        return _slot_pass(label, topic_jobs(args, queue, budget, refused, per_bill=True,
+                                            only_candidates=only_candidates), args, deadline, slots, refused, budget)
+    return _second_pass(label, topic_jobs(args, queue, budget, refused, only_candidates=only_candidates), args,
+                        deadline, refused, budget)
 
 
-def topic_jobs(args, queue: dict, budget, refused: "RefusedBills", per_bill: bool = False):
+SCOPE_SHARE = 0.5  # of the run time left when the all-agencies pass starts
+
+
+def scope_votes(args, queue: dict, budget, deadline: float) -> int:
+    """The topics jobs (vote 1, then scope votes) for bills whose text could carry an all-agencies quote, before
+    entities, so the marker fills first. At most SCOPE_SHARE of the time left, so the other passes still run; what
+    is left is still due in the topics pass."""
+    now = time.monotonic()
+    return suggest_topics(args, queue, budget, min(deadline, now + max(0.0, deadline - now) * SCOPE_SHARE),
+                          label="All-agencies votes", only_candidates=True)
+
+
+def topic_jobs(args, queue: dict, budget, refused: "RefusedBills", per_bill: bool = False,
+               only_candidates: bool = False):
     import topic_suggestions
     topics, registry = classification.load_policy_tags(), detailed.load_registry()
     cache, key_fn = _key_fn(budget)
@@ -1752,7 +1772,8 @@ def topic_jobs(args, queue: dict, budget, refused: "RefusedBills", per_bill: boo
 
     def paths():
         for path in sorted((args.cache_dir / "reviews").glob("*.json"), reverse=args.order == "reverse"):
-            if topic_suggestions.BILL_RE.fullmatch(path.stem):
+            if topic_suggestions.BILL_RE.fullmatch(path.stem) and (
+                    not only_candidates or topic_suggestions.agency_candidate(_read_json(path))):
                 yield path.stem, path
 
     def groups():
@@ -2433,8 +2454,12 @@ def main():
                             publish(current=active[-1] if active else None, upcoming=list(pending)[:5],
                                     running=True, in_progress=active)
             # Entities before topics: the topics backlog used the whole run time limit (13 Nov), leaving later
-            # passes none. The status stays running, naming the pass, until the run ends.
+            # passes none. All-agencies votes for candidate bills go first, bounded to a share of the time left
+            # (14 Nov). The status stays running, naming the pass, until the run ends.
             second = [(name, run, jobs) for name, on, run, jobs in (
+                ("scope", args.suggest_topics and args.scope_first, scope_votes,
+                 lambda a, q, b: topic_jobs(a, q, b, RefusedBills(a.cache_dir, "Topic suggestions"),
+                                            only_candidates=True)),
                 ("entities", args.related_entities and args.input == "markdown", scan_entities, entity_jobs),
                 ("topics", args.suggest_topics, suggest_topics,
                  lambda a, q, b: topic_jobs(a, q, b, RefusedBills(a.cache_dir, "Topic suggestions"))),

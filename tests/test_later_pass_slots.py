@@ -239,7 +239,9 @@ class Slots(SlotCase):
 
     def test_slots_default_to_workers_capped_at_3_and_only_on_flex(self):
         parse = lambda *a: pipeline.build_parser().parse_args(['--cache-dir', 'x', *a])
-        self.assertEqual(pipeline.later_slots(parse('--transport', 'flex', '--workers', '6')), 3)
+        self.assertEqual(pipeline.later_slots(parse('--transport', 'flex', '--workers', '6')), 6)  # 14 Nov: no 3 cap
+        self.assertEqual(pipeline.later_slots(parse('--transport', 'flex', '--workers', '9')),
+                         pipeline.flex_crash_allowance())
         self.assertEqual(pipeline.later_slots(parse('--transport', 'flex', '--workers', '2')), 2)
         self.assertEqual(pipeline.later_slots(parse('--transport', 'flex')), 1)
         self.assertEqual(pipeline.later_slots(parse('--transport', 'flex', '--later-workers', '5')), 5)
