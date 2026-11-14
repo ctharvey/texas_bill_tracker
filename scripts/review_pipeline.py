@@ -1392,6 +1392,9 @@ def build_parser() -> argparse.ArgumentParser:
                              "vendored cth.flex client, spend ledger and cache (flex); both use the same files")
     parser.add_argument("--workers", type=int, default=1,
                         help="Bills reviewed at once (default 1). More than one needs --transport flex")
+    parser.add_argument("--later-workers", type=int, default=None,
+                        help="Bills the later passes (entities, topics, audit) work on at once; a bill's topic votes "
+                             "run back to back in one slot (default: --workers, at most 3). Flex only")
     parser.add_argument("--stages", action="store_true",
                         help="Staged review (needs --input markdown): review a bill's newest text version, update a "
                              "review when a new version appears, and check fiscal notes and analyses")
@@ -1503,6 +1506,121 @@ def _second_pass(label: str, jobs, args, deadline: float, refused: RefusedBills 
     return len(done)
 
 
+def _slot_pass(label: str, units, args, deadline: float, slots: int, refused: RefusedBills | None = None,
+               budget=None) -> int:
+    """`_second_pass` with `slots` bills at once. `units` yields (bill_id, steps); `steps` yields that bill's
+    (call, save) jobs in order (topics: vote 1, then its scope votes), advanced on this thread only after the previous
+    job was saved, so one bill's calls never overlap and its next job sees the saved record. Pool threads run only
+    `call()`; this thread saves, applies the stop rules and is the only writer. A job that is not saved ends its
+    bill for this run. A stop (time, SIGTERM, capacity or failures in a row, a pass-ending refusal, a worker-wide
+    error) starts nothing new; calls in flight finish and their answers are saved, then a worker-wide error exits."""
+    done, rejections, errors = set(), 0, 0
+    units = iter(units)
+    running: dict = {}  # future -> (bill_id, steps, save)
+    ending, exit_error = None, None
+
+    def end(reason: str) -> None:
+        nonlocal ending
+        if ending is None:
+            ending = reason
+            print(f"{label}: {reason}", flush=True)
+
+    def may_start() -> bool:
+        if ending is None and (time.monotonic() > deadline or STOP_REQUESTED.is_set()):
+            end("run time limit or stop requested; the rest wait for a later run")
+        return ending is None
+
+    with ThreadPoolExecutor(slots, thread_name_prefix="later") as pool:
+        def submit(bill_id, steps) -> bool:
+            job = next(steps, None)
+            if job is None:
+                return False
+            call, save = job
+            running[pool.submit(call)] = (bill_id, steps, save)
+            return True
+
+        exhausted = False
+        while True:
+            while not exhausted and len(running) < slots and may_start():
+                for bill_id, steps in units:
+                    if submit(bill_id, steps):
+                        break
+                else:
+                    exhausted = True
+            if not running:
+                break
+            finished, _ = wait(running, return_when=FIRST_COMPLETED)
+            for future in finished:
+                bill_id, steps, save = running.pop(future)
+                try:
+                    report = future.result()
+                except CapacityUnavailable:
+                    known = refused is not None and bill_id in refused
+                    if refused is not None:
+                        refused.add(bill_id)
+                    print(f"{label}: capacity unavailable for", bill_id, flush=True)
+                    if not known:
+                        rejections += 1
+                        if rejections >= 3:
+                            end("capacity unavailable 3 times with no answer between; the rest wait for a later run")
+                    continue
+                except (CacheCoolingDown, CacheBusy, OSError, ValueError) as error:
+                    print(bill_id, f"{label.lower()} skipped:", type(error).__name__, "-", next_step(error), flush=True)
+                    continue
+                except Exception as error:  # noqa: BLE001 - classified as in _second_pass
+                    if held_outcome(error):
+                        print(bill_id, f"{label.lower()} held:", type(error).__name__, "-", next_step(error), flush=True)
+                        continue
+                    if stops_run(error, budget):
+                        if exit_error is None:
+                            exit_error = stop_worker(error, args.cache_dir, bill_id, f" ({label.lower()})")
+                        end("worker stopped; saving the answers already in flight")
+                        continue
+                    print(bill_id, f"{label.lower()} failed:", type(error).__name__, "-", next_step(error), flush=True)
+                    errors += 1
+                    if errors >= OUTAGE_LIMIT:
+                        end(f"{OUTAGE_LIMIT} failures in a row; the rest wait for a later run")
+                    continue
+                if report.get("action") == "not_submitted":
+                    if report.get("reason_type") not in PER_BILL_NOT_SUBMITTED:
+                        if args.execute and ending is None:
+                            print(f"{label} stopped:", report.get("reason_type"), "-", NOT_SUBMITTED_STEPS.get(
+                                report.get("reason_type"), "nothing more is sent this run; see the run's earlier lines"),
+                                flush=True)
+                        end("nothing more is sent this run")
+                    continue
+                save(report)
+                if refused is not None:
+                    refused.discard(bill_id)
+                done.add(bill_id); rejections = errors = 0
+                if may_start():
+                    submit(bill_id, steps)  # this bill's next job, in the same slot
+    print(label, "checked for", len(done), "bills", flush=True)
+    if exit_error is not None:
+        raise exit_error
+    return len(done)
+
+
+def flex_crash_allowance() -> int:
+    """Calls one stopped run may leave pending and still be auto-held at the next start (flex_boundary)."""
+    import flex_boundary
+    return flex_boundary.CRASH_HOLD_LIMIT
+
+
+def later_slots(args) -> int:
+    """Bills a later pass works on at once: --later-workers, else min(--workers, 3). Flex only (the legacy budget
+    allows one call in flight). Later passes run after the first pass, so calls in flight never exceed --workers."""
+    if args.transport != "flex":
+        return 1
+    return args.later_workers if args.later_workers is not None else min(args.workers, 3)
+
+
+def single_job_units(jobs):
+    """Units for passes with one job per bill."""
+    for bill_id, call, save in jobs:
+        yield bill_id, iter([(call, save)])
+
+
 def _read_json(path: Path):
     try:
         return json.loads(path.read_text("utf-8"))
@@ -1558,10 +1676,14 @@ def answered(cache_dir: Path, key: str | None) -> bool:
 def suggest_topics(args, queue: dict, budget, deadline: float) -> int:
     """Second pass: topic suggestions (private) plus headline and search terms (published via extras.json)."""
     refused = RefusedBills(args.cache_dir, "Topic suggestions")
+    slots = later_slots(args)
+    if slots > 1:
+        return _slot_pass("Topic suggestions", topic_jobs(args, queue, budget, refused, per_bill=True), args, deadline,
+                          slots, refused, budget)
     return _second_pass("Topic suggestions", topic_jobs(args, queue, budget, refused), args, deadline, refused, budget)
 
 
-def topic_jobs(args, queue: dict, budget, refused: "RefusedBills"):
+def topic_jobs(args, queue: dict, budget, refused: "RefusedBills", per_bill: bool = False):
     import topic_suggestions
     topics, registry = classification.load_policy_tags(), detailed.load_registry()
     cache, key_fn = _key_fn(budget)
@@ -1572,46 +1694,64 @@ def topic_jobs(args, queue: dict, budget, refused: "RefusedBills"):
             if topic_suggestions.BILL_RE.fullmatch(path.stem):
                 yield path.stem, path
 
-    def jobs():
+    def groups():
         # Bills refused for capacity in an earlier run go after all others, votes included, so they hold up nobody.
         bills = list(paths())
-        for group in ([b for b in bills if b[0] not in refused], [b for b in bills if b[0] in refused]):
+        return [b for b in bills if b[0] not in refused], [b for b in bills if b[0] in refused]
+
+    def jobs():
+        for group in groups():
             yield from group_jobs(group)
+
+    def units():
+        # Slots: a bill's vote 1 and then its scope votes, back to back, so its marker is decided in one visit.
+        for group in groups():
+            for bill_id, path in group:
+                yield bill_id, (job for jobs_ in (first_job(bill_id, path), vote_jobs(bill_id, path)) for job in jobs_)
+
+    def first_job(bill_id, path):
+        bundle = _read_json(path)
+        if not topic_suggestions.due(bundle, _read_json(out / (bill_id + ".json")), topics, retry, key_fn):
+            return
+        yield (lambda b=bundle: topic_suggestions.suggest(b, topics, registry, args.cache_dir,
+                                                          execute=args.execute, sender=budget.send, cache=cache),
+               lambda report, b=bundle, i=bill_id: atomic_json(
+                   out / (i + ".json"), topic_suggestions.record_for(b, report, _read_json(out / (i + ".json")))))
+
+    def vote_jobs(bill_id, path):
+        # The record is re-read after each saved vote, so vote 3 goes only when 1 and 2 split.
+        asked = set()  # one try per vote per run, even if its answer did not validate
+        while True:
+            bundle, record = _read_json(path), _read_json(out / (bill_id + ".json"))
+            vote = topic_suggestions.vote_due(bundle, record, retry)
+            if vote is None or vote in asked:
+                return
+            asked.add(vote)
+            yield (lambda b=bundle, v=vote: topic_suggestions.suggest(b, topics, registry, args.cache_dir,
+                                                                      execute=args.execute, sender=budget.send,
+                                                                      cache=cache, vote=v),
+                   lambda report, b=bundle, r=record, v=vote, i=bill_id: atomic_json(
+                       out / (i + ".json"), topic_suggestions.with_vote(b, r, v, report)))
+            if _read_json(out / (bill_id + ".json")) == record:
+                return  # not saved (capacity, a skip or a per-bill refusal): leave it for a later run
 
     def group_jobs(group):
         # Vote 1 (extras, suggestions, first scope vote) for every due bill first, so headlines are not held back.
         for bill_id, path in group:
-            bundle = _read_json(path)
-            if not topic_suggestions.due(bundle, _read_json(out / (bill_id + ".json")), topics, retry, key_fn):
-                continue
-            yield (bill_id,
-                   lambda b=bundle: topic_suggestions.suggest(b, topics, registry, args.cache_dir,
-                                                              execute=args.execute, sender=budget.send, cache=cache),
-                   lambda report, b=bundle, i=bill_id: atomic_json(
-                       out / (i + ".json"), topic_suggestions.record_for(b, report, _read_json(out / (i + ".json")))))
-        # Then the scope votes. The record is re-read after each saved vote, so vote 3 goes only when 1 and 2 split.
+            for call, save in first_job(bill_id, path):
+                yield bill_id, call, save
         for bill_id, path in group:
-            asked = set()  # one try per vote per run, even if its answer did not validate
-            while True:
-                bundle, record = _read_json(path), _read_json(out / (bill_id + ".json"))
-                vote = topic_suggestions.vote_due(bundle, record, retry)
-                if vote is None or vote in asked:
-                    break
-                asked.add(vote)
-                yield (bill_id,
-                       lambda b=bundle, v=vote: topic_suggestions.suggest(b, topics, registry, args.cache_dir,
-                                                                          execute=args.execute, sender=budget.send,
-                                                                          cache=cache, vote=v),
-                       lambda report, b=bundle, r=record, v=vote, i=bill_id: atomic_json(
-                           out / (i + ".json"), topic_suggestions.with_vote(b, r, v, report)))
-                after = _read_json(out / (bill_id + ".json"))
-                if after == record:
-                    break  # not saved (capacity, a skip or a per-bill refusal): leave it for a later run
-    return jobs()
+            for call, save in vote_jobs(bill_id, path):
+                yield bill_id, call, save
+    return units() if per_bill else jobs()
 
 
 def audit_reviews(args, queue: dict, budget, deadline: float) -> int:
     """Lowest priority of all: the ~2% spot-check sample, each against the exact text version it reviewed."""
+    slots = later_slots(args)
+    if slots > 1:
+        return _slot_pass("Review audit", single_job_units(audit_jobs(args, queue, budget)), args, deadline, slots,
+                          budget=budget)
     return _second_pass("Review audit", audit_jobs(args, queue, budget), args, deadline, budget=budget)
 
 
@@ -1651,6 +1791,10 @@ def audit_jobs(args, queue: dict, budget):
 
 def scan_entities(args, queue: dict, budget, deadline: float) -> int:
     """Related-entities pass: one list-free Luna read per reviewed text, for bodies the review did not list."""
+    slots = later_slots(args)
+    if slots > 1:
+        return _slot_pass("Related entities", single_job_units(entity_jobs(args, queue, budget)), args, deadline,
+                          slots, budget=budget)
     return _second_pass("Related entities", entity_jobs(args, queue, budget), args, deadline, budget=budget)
 
 
@@ -1721,6 +1865,11 @@ def main():
         parser.error("--max-minutes must be positive")
     if args.workers < 1:
         parser.error("--workers must be at least 1")
+    if args.later_workers is not None and not 1 <= args.later_workers <= flex_crash_allowance():
+        parser.error("--later-workers must be 1 to %d (one stopped run's calls must fit the crash-hold allowance)"
+                     % flex_crash_allowance())
+    if args.later_workers is not None and args.later_workers > 1 and args.transport != "flex":
+        parser.error("--later-workers above 1 needs --transport flex (the legacy budget allows one call in flight)")
     if args.allow_text_rereview < 0:
         parser.error("--allow-text-rereview must be 0 or more")
     if args.workers > 1 and args.transport != "flex":
