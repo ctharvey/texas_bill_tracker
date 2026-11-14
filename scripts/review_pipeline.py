@@ -91,10 +91,11 @@ def unresolved_keys(budget) -> list[str] | None:
         return None
 
 
-# Set by SIGTERM (systemctl stop, shutdown). No new bill, pass or pause starts; bills in flight finish and are
-# recorded, so their calls settle instead of being left pending for the next run to hold (CRASH_HOLD_LIMIT
-# a day). test_review_stop.py covers it.
+# Set by SIGTERM (systemctl stop, shutdown). No new bill or pass starts and a pause ends; bills in flight finish
+# and are recorded, so their calls settle instead of being left pending for the next run to hold
+# (CRASH_HOLD_LIMIT a day). test_review_stop.py covers it.
 STOP_REQUESTED = threading.Event()
+_REAL_SLEEP = time.sleep  # tests patch time.sleep to move a fake clock
 
 
 def request_stop(signum, frame) -> None:
@@ -1869,7 +1870,11 @@ def main():
                 held = list(dict.fromkeys(([current] if current else []) + list(running.values())))
                 publish(current=current, upcoming=list(pending)[:5], running=True,
                         waiting_until=utc_stamp(seconds), in_progress=held)
-                if not STOP_REQUESTED.is_set():  # a pause blocks only with no call in flight, or for <= 60 s
+                if STOP_REQUESTED.is_set():
+                    return
+                if time.sleep is _REAL_SLEEP:
+                    STOP_REQUESTED.wait(seconds)  # a stop ends the pause (it can last until the run time limit)
+                else:
                     time.sleep(seconds)
 
             def defer_for_capacity(bill_id: str, retry_after: float) -> None:
