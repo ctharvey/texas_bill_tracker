@@ -21,9 +21,12 @@ function layer(className, html, ms) {
 
 // Rolls once across the explorer's "Nothing matches" box (CSS only; app.js adds it to the empty state).
 export const TUMBLEWEED = '<div class="tumbleweed-lane" aria-hidden="true"><div class="tumbleweed">'
-  + '<svg viewBox="0 0 40 40" width="38" height="38" focusable="false"><g fill="none" stroke="#9c7a48" stroke-width="1.3" stroke-linecap="round">'
-  + '<path d="M20 4q8-1 12.5 6q5 7 1.5 14q-3 9-12 11q-10 1-14.5-7q-4-8-.5-15q5-9 13-9zM35 13l3.5-2.5M4 26l-3.5 2M27 35.5l2 3.5M12 4.5l-2.5-3.5M36 26l3 1.5"/><path d="M6 16q14-10 28 2M7 26q12 8 26-4M14 5q-6 15 4 30M26 5q8 14-3 30M5 21q15-4 30 0M11 9q14 4 18 23M29 9q-15 5-17 24"/></g>'
-  + '<path d="M10 13q10 2 20 14M30 13q-12 3-19 15M20 4v32" fill="none" stroke="#c4a06a" stroke-width=".8"/></svg></div></div>';
+  + '<svg viewBox="0 0 48 48" width="46" height="46" focusable="false"><g fill="none" stroke-linecap="round">'
+  + '<path d="M24 5q10-1 15 7q6 9 2 18q-3 11-15 13q-12 2-18-8q-5-9-1-18q5-11 17-12z" stroke="#8a6a3c" stroke-width="1.6"/>'
+  + '<path d="M7 18q17-12 34 3M8 31q15 10 32-5M16 6q-8 18 5 37M31 6q10 17-4 37M5 25q19-6 38 0M12 11q17 5 22 28M36 11q-18 6-21 29M10 37q12-24 30-27M14 9q18 2 27 29" stroke="#9c7a48" stroke-width="1.2"/>'
+  + '<path d="M18 15q8 4 12 18M30 16q-9 5-13 16M24 9q3 15-2 30M12 24q12 3 25-4" stroke="#c9a56d" stroke-width=".9"/>'
+  + '<path d="M41 15l4-3M44 27l3.5 1.5M33 42l2.5 4M14 42l-2 4M4 30l-3.5 1.5M6 14l-3.5-2.5M18 5l-1.5-4M31 4.5l2-4" stroke="#8a6a3c" stroke-width="1.1"/>'
+  + '</g></svg></div><span class="tumble-dust"></span></div>';
 
 // Sine die: bluebonnet petals drift down the screen and the session says goodbye.
 const PETALS = ['#2f4fb0', '#3d63c9', '#5274d8', '#2a3f8f', '#f4f3ee'];
@@ -55,8 +58,9 @@ function gavel(near) {
   if (still() || document.querySelector('.gavel-sky')) return;
   const sky = layer('gavel-sky', `<div class="gavel-at"><span class="gavel-thud"></span><span class="gavel">${GAVEL_SVG}</span></div>`, 2200);
   const box = near.getBoundingClientRect();
-  sky.firstElementChild.style.left = `${Math.round(box.right - 8)}px`;
-  sky.firstElementChild.style.top = `${Math.round(box.top + box.height / 2 - 28)}px`;
+  // Centred above the star so the head comes down on it, clear of the TEXAS BILL ATLAS text beside it.
+  sky.firstElementChild.style.left = `${Math.round(box.left + box.width / 2 - 20)}px`;
+  sky.firstElementChild.style.top = `${Math.round(Math.max(box.top - 26, 2))}px`;
 }
 
 // The nine-banded armadillo, Texas's official small mammal, ambling along the bottom of the screen.
@@ -64,13 +68,13 @@ const ARMADILLO_SVG = '<svg viewBox="0 0 64 34" width="84" height="45" focusable
   + '<path d="M9 22q-6 1-9 5q5-1 10-2z" fill="#8b7d6b"/>'
   + '<g class="dillo-step" fill="#6f6355"><rect x="15" y="22" width="5" height="9" rx="2"/><rect x="39" y="22" width="5" height="9" rx="2"/></g>'
   + '<g class="dillo-step dillo-step-b" fill="#5d5347"><rect x="22" y="22" width="5" height="9" rx="2"/><rect x="45" y="22" width="5" height="9" rx="2"/></g>'
-  + '<path d="M8 25q2-19 24-19q20 0 22 19z" fill="#a8977f"/>'
+  + '<path d="M8 25q2-19 24-19q20 0 22 19z" fill="#a8977f" stroke="#5d5347" stroke-width="1"/>'
   + '<path d="M20 9.5v15M26 7.3v17.7M32 6.5v18.5M38 7.3v17.7M44 9.8v15M8 25h46" stroke="#857560" stroke-width="1.4"/>'
   + '<path d="M51 15q7-2 10 3q2 3-1 4.5l-10 1z" fill="#b9a891"/><path d="M51.5 15l1.2-6.5 3 6z" fill="#a8977f"/>'
   + '<circle cx="56" cy="17.6" r=".95" fill="#2b2620"/></svg>';
 export function armadillo() {
   if (still() || document.querySelector('.dillo-sky')) return false;
-  layer('dillo-sky', `<div class="dillo-walk"><div class="dillo-bob">${ARMADILLO_SVG}</div></div>`, 17000);
+  layer('dillo-sky', `<div class="dillo-walk"><div class="dillo-bob">${ARMADILLO_SVG}</div></div>`, 10000);
   return true;
 }
 
