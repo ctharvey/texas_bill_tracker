@@ -1,6 +1,7 @@
 import {SEARCH_FIELDS, searchFields, searchText, matchReasons} from './features/search/model.js';
 import {nextVisit, changedSince, newestReviewed} from './features/home/model.js';
 import {runState, passRows, passJobs, lookup, RUN_LIMIT_MINUTES} from './features/review/model.js';
+import {recentChanges, updateEntries, changeText} from './features/review/updates.js';
 import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex, renderBillText, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal,
   STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
@@ -96,12 +97,13 @@ async function init(){
       }catch(error){console.warn(`Luna ${name} unavailable`,error.message);return null}
     };
     const isMap=o=>o&&typeof o==='object'&&!Array.isArray(o);
-    const [extras,related,audit]=await Promise.all([
+    const [extras,related,audit,updates]=await Promise.all([
       loadOptional('extras','texas-bill-luna-extras-v1',x=>isMap(x.bills)),
       loadOptional('related','texas-bill-related-v1',x=>isMap(x.bills)),
-      loadOptional('audit','texas-bill-luna-audit-v1',x=>true)]);
+      loadOptional('audit','texas-bill-luna-audit-v1',x=>true),
+      loadOptional('updates','texas-bill-luna-updates-v1',x=>Array.isArray(x.updates))]);
     if(extras)loadedBills=loadedBills.map(b=>Object.hasOwn(extras.bills,b.id)?applyLunaExtras(b,extras.bills[b.id]):b);
-    state.related=related;state.audit=audit;
+    state.related=related;state.audit=audit;state.lunaUpdates=updates;
     await loadReviewStatus();
     for(const url of ['./live/members.json','./data/members.json']){
       try{
@@ -810,10 +812,21 @@ function homeCards(){
   const hearings=state.bills.filter(b=>assessHearing(b).level===3);
   const hearingBody=hearings.length?hearings.slice(0,HOME_ROWS).map(b=>todayRow({bill:b,actions:[lastActionInfo(b).text]})).join('')+(hearings.length>HOME_ROWS?more(buildHash('all',{outlook:'Scheduled'}),'','All scheduled hearings'):'')
     :'<p class="tools-note">No hearings are scheduled yet. Committees post them once the session is under way.</p>';
+  // What Luna changed: overall counts, then each bill and what changed for it.
+  const lunaChanged=recentChanges(state.lunaUpdates,Date.now());
+  const changedBody=lunaChanged.bills.length?`${changeCounts(lunaChanged.counts)}${changeRows(lunaChanged.bills,HOME_ROWS)}${more('#review','review','Every change')}`
+    :'<p class="tools-note">Luna changed no published review in the last 24 hours.</p>';
   const reviewed=newestReviewed(state.bills);
   const reviewBody=reviewed.length?reviewed.slice(0,HOME_ROWS).map(b=>todayRow({bill:b,actions:[`Reviewed ${dateText(b.luna.reviewed_at)}`]})).join('')+more('#review','review','Review progress')
     :'<p class="tools-note">Luna has not reviewed any bills yet.</p>';
-  return `${card(yoursTitle,changed.length,yours)}${card(day===today?'Today at the Lege':`Most recent activity, ${esc(shortDate(day))}`,rows.length,dayBody)}${card('Upcoming hearings',hearings.length,hearingBody)}${card('Newly reviewed by Luna',0,reviewBody)}`;
+  return `${card(yoursTitle,changed.length,yours)}${card(day===today?'Today at the Lege':`Most recent activity, ${esc(shortDate(day))}`,rows.length,dayBody)}${card('What Luna changed, last 24 hours',lunaChanged.bills.length,changedBody)}${card('Upcoming hearings',hearings.length,hearingBody)}${card('Newly reviewed by Luna',0,reviewBody)}`;
+}
+// Luna change counts as one line, and bills with what changed for each (bills not in the snapshot are skipped).
+function changeCounts(counts){return `<p class="home-counts">${counts.map(c=>`<span><strong>${c.n.toLocaleString()}</strong> ${esc(c.label)}</span>`).join('')}</p>`}
+function changeRows(rows,limit){
+  const byId=new Map(state.bills.map(b=>[b.id,b]));
+  const shown=rows.filter(r=>byId.has(r.id));
+  return `<div class="today-list">${shown.slice(0,limit).map(r=>todayRow({bill:byId.get(r.id),actions:r.changes.map(changeText)})).join('')}</div>${shown.length>limit?`<p class="tools-note">And ${(shown.length-limit).toLocaleString()} more.</p>`:''}`;
 }
 
 // Remove this line once the Legislature is in session and the view has real floor and hearing content.
@@ -1189,6 +1202,12 @@ function reviewLookupHtml(text){
   const extra=found.state==='reviewed'||found.state==='questions'?(tagged[found.id]?` · tags published${reviewedAt?` ${esc(dateText(reviewedAt))}`:''}`:' · no verified tags published yet'):'';
   return `<button class="review-chip${tagged[found.id]?' tagged':''}" data-open="${esc(found.id)}">${esc(found.id)}</button> <span class="review-lookup-state ${found.state}">${esc(found.label)}${extra}</span>`;
 }
+// Each publish that changed something, newest first: when, the overall counts, then every bill it changed.
+function updatesSection(){
+  const entries=updateEntries(state.lunaUpdates).slice(0,8);
+  if(!entries.length)return '';
+  return `<section class="review-updates" aria-labelledby="review-updates-title"><h3 id="review-updates-title">What changed</h3>${entries.map((u,i)=>`<details class="review-update"${i?'':' open'}><summary><strong>${esc(stampText(u.at))}</strong> · ${u.bills.length.toLocaleString()} ${u.bills.length===1?'bill':'bills'}${changeCounts(u.counts)}</summary>${changeRows(u.bills,50)}</details>`).join('')}</section>`;
+}
 function reviewMarkup(){
   const {ids,status,tagged,summary:s,run}=reviewParts();
   const total=ids.length||1,pct=n=>Math.round(n/total*1000)/10;
@@ -1225,6 +1244,7 @@ function reviewMarkup(){
   <div class="review-bar" role="img" aria-label="${counts.map(([label,n])=>`${n} ${label.toLowerCase()}`).join(', ')} of ${ids.length}">${counts.map(([,n,cls])=>`<span class="seg ${cls}" style="width:${pct(n)}%"></span>`).join('')}</div>
   <div class="review-counts">${counts.map(([label,n,cls])=>`<div class="review-count ${cls}"><span class="dot"></span><strong>${n.toLocaleString()}</strong><span>${label} · ${pct(n)}%</span></div>`).join('')}</div>
   ${now}
+  ${updatesSection()}
   <div class="review-columns">
     <section class="review-recent" aria-labelledby="review-recent-title"><h3 id="review-recent-title">Recently reviewed</h3>${recent.length?`<div class="today-list">${recent.map(b=>todayRow({bill:b,actions:[`Reviewed ${dateText(b.luna.reviewed_at)}`]})).join('')}</div>`:'<p class="review-empty">No reviews published yet.</p>'}</section>
     <div class="review-side">

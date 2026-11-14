@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_later_pass_slots import FALSE, SlotCase  # noqa: E402
+from test_later_pass_slots import FALSE, TRUE, SlotCase  # noqa: E402
 from test_second_pass_scope import AGENCY_LINE, with_line  # noqa: E402
 from test_review_stages_pipeline import md_i, pipeline  # noqa: E402
 
@@ -75,6 +75,25 @@ class ScopeFirst(SlotCase):
         self.overrides[pipeline_suggest()] = watch
         self.later('--scope-first', '--later-workers', '2')
         self.assertEqual(seen, {'scope': 2, 'topics': 2})  # not 4: HB2 and HB4 were decided in the scope pass
+
+    def test_markers_decided_by_the_scope_pass_are_public_before_the_next_pass_starts(self):
+        self.prepare_texts()
+        self.answers = {1: TRUE, 2: TRUE}  # HB2's quote is its own text, so its two votes verify
+        before = json.loads(self.tags.read_text('utf-8'))['bills']['HB2'].get('all_state_agencies')
+        seen = {}
+        reply = self.reply
+
+        def watch(bill, text):
+            if self.status()['pass'] == 'topics' and 'tags' not in seen:
+                seen['tags'] = json.loads(self.tags.read_text('utf-8'))['bills']['HB2'].get('all_state_agencies')
+                log = self.tags.with_name('updates.json')
+                seen['log'] = json.loads(log.read_text('utf-8')) if log.exists() else None
+            return reply(bill, text)
+        self.overrides[pipeline_suggest()] = watch
+        self.later('--scope-first', '--later-workers', '2')
+        self.assertIsNone(before)
+        self.assertTrue(seen['tags']['applies'])  # published mid-run, while topics still had bills to do
+        self.assertIn({'kind': 'all_agencies'}, seen['log']['updates'][0]['bills']['HB2'])
 
     def test_one_slot_keeps_the_same_order(self):
         self.prepare_texts()

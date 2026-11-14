@@ -1050,10 +1050,16 @@ def publish_tags(cache_dir: Path, out: Path, registry: list[dict], live: set[str
                              entities)
         if entry and bundle.get("bill_id") == path.stem:
             bills[path.stem] = entry
-    atomic_json(out, {"format": "texas-bill-luna-tags-v1", "model": classification.MODEL,
-                      "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
-                      "agencies": {a["id"]: a["name"] for a in registry}, "bills": bills},
-                mode=0o644)  # Served publicly; the worker's UMask=0077 would otherwise hide it.
+    previous = _read_json(out)
+    payload = {"format": "texas-bill-luna-tags-v1", "model": classification.MODEL,
+               "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+               "agencies": {a["id"]: a["name"] for a in registry}, "bills": bills}
+    atomic_json(out, payload, mode=0o644)  # Served publicly; the worker's UMask=0077 would otherwise hide it.
+    try:
+        import luna_updates
+        luna_updates.record(out, previous, payload, payload["generated_at"])
+    except Exception as error:  # noqa: BLE001 - the change log is a view; the tags are already published
+        print("Change log not updated:", type(error).__name__, flush=True)
     return len(bills)
 
 
@@ -2500,6 +2506,10 @@ def main():
                 recount(name, jobs)
                 if name in progress["passes"]:
                     progress["passes"][name]["checked"] = checked
+                if checked and (name, run, jobs) != second[-1]:
+                    # What this pass decided goes public now, not when the run ends up to an hour later. The pass's
+                    # pool has closed, so this thread is the only one left; no calls (embeddings wait for the end).
+                    publish_luna(args, network_ok=False)
             progress["pass_name"] = None
             print("New model spending this run: $%.6f" % budget.run_spent)
             publish_luna(args, network_ok=not halt.is_set() and not STOP_REQUESTED.is_set())
