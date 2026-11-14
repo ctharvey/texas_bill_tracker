@@ -65,6 +65,11 @@ test('every theme has dark base tokens, and dark mode sets color-scheme', () => 
 test('the warbler flies only for the warbler theme, and never under reduced motion', () => {
   assert.equal(fliesAcross('warbler', false), true);
   assert.equal(fliesAcross('warbler', true), false);
+  // A page load flies once per browser session; picking the theme always flies.
+  assert.equal(fliesAcross('warbler', false, {picked: false, flewThisSession: false}), true);
+  assert.equal(fliesAcross('warbler', false, {picked: false, flewThisSession: true}), false);
+  assert.equal(fliesAcross('warbler', false, {picked: true, flewThisSession: true}), true);
+  assert.equal(fliesAcross('warbler', true, {picked: true}), false);
   for (const id of [...THEMES.map(t => t.id).filter(id => id !== 'warbler'), 'nope', undefined]) assert.equal(fliesAcross(id, false), false, id);
   assert.match(read('src/styles.css'), /\.warbler-sky\{position:fixed;inset:0;overflow:hidden;pointer-events:none/);
 });

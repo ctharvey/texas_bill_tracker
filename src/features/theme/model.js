@@ -27,9 +27,10 @@ export const shownMode = (mode, deviceDark) => { const m = cleanMode(mode); retu
 const asPrefs = prefs => (prefs && typeof prefs === 'object' && !Array.isArray(prefs) ? prefs : {});
 export const withMode = (prefs, mode) => ({...asPrefs(prefs), mode: cleanMode(mode)});
 
-// The warbler theme's easter egg: a golden-cheeked warbler crosses the screen when the theme loads, unless the
-// reader asked for reduced motion.
-export const fliesAcross = (theme, reducedMotion) => cleanTheme(theme) === 'warbler' && !reducedMotion;
+// The warbler theme's easter egg: a golden-cheeked warbler crosses the screen when the reader picks the theme, and on
+// the first page load of a browser session with it saved; never under reduced motion.
+export const fliesAcross = (theme, reducedMotion, {picked = true, flewThisSession = false} = {}) =>
+  cleanTheme(theme) === 'warbler' && !reducedMotion && (picked || !flewThisSession);
 
 // prefs-v1 with its theme set; other fields (remembered filters) are kept.
 export const withTheme = (prefs, theme) => ({...(prefs && typeof prefs === 'object' && !Array.isArray(prefs) ? prefs : {}), theme: cleanTheme(theme)});
