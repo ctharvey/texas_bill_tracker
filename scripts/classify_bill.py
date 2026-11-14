@@ -12,6 +12,7 @@ import extract_bill as detailed
 
 ROOT = detailed.ROOT
 MODEL = "gpt-6-luna"
+VALIDATOR_REVISION = 3  # bump when validate_result changes: every reviewed bill is then revisited under it
 
 
 def load_policy_tags(path: Path = ROOT / "src/taxonomy.js") -> list[str]:
@@ -196,7 +197,7 @@ def validate_result(result: dict, document: dict, registry: list[dict], schema: 
                     errors.append("Question targets an unknown claim")
                 if set(question["span_ids"]) - document["spans"].keys():
                     errors.append("Question cites an unknown bill span")
-    return {"validator_revision": 3, "errors": sorted(set(errors)), "review_reasons": sorted(set(reasons)),
+    return {"validator_revision": VALIDATOR_REVISION, "errors": sorted(set(errors)), "review_reasons": sorted(set(reasons)),
             "status": "needs_review" if errors or reasons else "pending_review", "publishable": False,
             "audit_recommended": bool(errors or reasons),
             "evidence_reverse_index": {k: sorted(v) for k, v in sorted(reverse.items())},

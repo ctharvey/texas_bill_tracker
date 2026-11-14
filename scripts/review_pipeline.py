@@ -1386,6 +1386,46 @@ def queue_candidates(ids: list[str], queue: dict, limit: int | None = None, firs
     return list(dict.fromkeys(retries + unseen + failing + known[offset:] + known[:offset] + parked))[:limit]
 
 
+QUIET_ROTATION = 6  # runs to revisit every quiet bill once (hourly runs: about every 6 hours)
+
+
+def quiet_group(bill_id: str) -> int:
+    """The bill's fixed turn in the quiet rotation."""
+    return hashlib.sha256(bill_id.encode("utf-8")).digest()[0] % QUIET_ROTATION
+
+
+def quiet_bills(args, queue: dict, candidates: list[str], plans: dict, text_dir: Path, registry: list[dict],
+                key_of) -> set[str]:
+    """Seen bills whose visit would only re-read their own cached answers: the same version and text as reviewed,
+    no fiscal check due, the first-pass request the current code builds already answered and stored, the current
+    validator, and not waiting in the retry, failed or text-blocked lists. Anything unreadable is not quiet."""
+    retry, failed = set(queue.get("retry", [])), set(queue.get("failed", {}))
+    blocked = set(queue.get("text_blocked") or [])
+    out = set()
+    for bill_id in candidates:
+        plan = plans.get(bill_id)
+        if (bill_id not in queue["seen"] or bill_id in retry or bill_id in failed or bill_id in blocked
+                or not plan or plan["review"] != "revisit" or plan["fiscal_due"]):
+            continue
+        stored = _read_json(args.cache_dir / "reviews" / (bill_id + ".json"))
+        if not isinstance(stored, dict) or not isinstance(stored.get("result"), dict):
+            continue
+        try:
+            document = load_markdown_document(bill_id, text_dir, plan["code"])
+            if document.get("text_sha256") != (stored.get("document") or {}).get("text_sha256"):
+                continue
+            key = stored.get("first_pass_request_key")
+            if not stored.get("version_update") and key != key_of(classification.build_request(document, registry)):
+                continue
+        except Exception:  # noqa: BLE001 - no readable text or request: visit it, as before
+            continue
+        if ((stored.get("validation") or {}).get("validator_revision") != classification.VALIDATOR_REVISION
+                or not answered(args.cache_dir, key)):
+            continue
+        out.add(bill_id)
+    return out
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cache-dir", type=Path, required=True, help="Private persistent directory outside web root")
@@ -2085,6 +2125,23 @@ def main():
                 candidates = list(dict.fromkeys(unseen + [b for b in ids if b in due] + candidates))
                 candidates = candidates[:args.max_bills]
                 print("Stage tasks due:", len(due), "bills", flush=True)
+            if first_pass_first and args.input == "markdown":
+                # A reviewed bill whose visit would only re-read its own cached answers waits its turn: each run
+                # revisits a 1/QUIET_ROTATION share of them (current validator, statute and question retries still
+                # reach every one within QUIET_ROTATION runs) instead of all ~1,500 (5.5 minutes, 14 Nov).
+                quiet = quiet_bills(args, queue, candidates, plans, text_dir, detailed.load_registry(),
+                                    _key_fn(budget)[1])
+                if quiet:
+                    # A fixed group per bill and a turn counter kept in the queue: each group's turn comes once
+                    # every QUIET_ROTATION runs, however many other bills a run visits or how early it stops.
+                    turn = queue.get("quiet_turn") if isinstance(queue.get("quiet_turn"), int) else 0
+                    keep = {b for b in quiet if quiet_group(b) == turn % QUIET_ROTATION}
+                    queue["quiet_turn"] = turn + 1
+                    if args.execute:
+                        atomic_json(queue_path, queue)
+                    candidates = [c for c in candidates if c not in quiet or c in keep]
+                    print("Full review: %d reviewed bills unchanged; revisiting %d of them this run (each at least "
+                          "every %d runs)" % (len(quiet), len(keep), QUIET_ROTATION), flush=True)
         deadline = time.monotonic() + args.max_minutes * 60
         new_failures = 0
         status_path = args.publish_tags.parent / "status.json" if args.publish_tags and args.execute else None
