@@ -1,6 +1,7 @@
 // Easter eggs: a tumbleweed on empty results, sine die petals, the gavel on the star, a visiting armadillo and spring
 // bluebonnets. Every one is decoration: aria-hidden, never takes clicks or focus, and stays still under reduced motion.
-import {isSineDieDay, asksSineDie, isBluebonnetSeason, gavelPress, armadilloVisits, armadilloDelayMs} from './model.js';
+import {warblerAcross} from '../theme/view.js';
+import {isSineDieDay, asksSineDie, asksForWarbler, BIRD_BILLS, isBluebonnetSeason, gavelPress, armadilloVisits, armadilloDelayMs} from './model.js';
 import {toast} from '../../core/dom.js';
 
 const REDUCED_MOTION = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
@@ -41,12 +42,17 @@ export function sineDie() {
   layer('petal-sky', petals.join(''), 7500);
 }
 
-// Fires once each time the search box turns into "sine die", not on every re-render while it stays that way.
-let askedSineDie = false;
+// Each fires once when the search box turns into its words, not on every re-render while it stays that way.
+let askedSineDie = false, askedWarbler = false;
 export function noticeSearch(query) {
-  const asked = asksSineDie(query);
-  if (asked && !askedSineDie) sineDie();
-  askedSineDie = asked;
+  const sine = asksSineDie(query), bird = asksForWarbler(query);
+  if (sine && !askedSineDie) sineDie();
+  if (bird && !askedWarbler) {
+    warblerAcross();
+    toast(`${BIRD_BILLS.join(' and ')} would make the golden-cheeked warbler the state bird.`);
+  }
+  askedSineDie = sine;
+  askedWarbler = bird;
 }
 
 // Five quick presses on the star: the gavel comes down beside it.

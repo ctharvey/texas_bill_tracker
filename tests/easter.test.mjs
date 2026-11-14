@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {SINE_DIE, austinDate, isSineDieDay, asksSineDie, isBluebonnetSeason, gavelPress, GAVEL_WINDOW_MS,
-  armadilloVisits, armadilloDelayMs} from '../src/features/easter/model.js';
+  armadilloVisits, armadilloDelayMs, asksForWarbler, BIRD_BILLS} from '../src/features/easter/model.js';
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
@@ -54,4 +54,11 @@ test('every easter egg layer ignores the pointer and stays still under reduced m
   assert.match(css, /\.petal-sky,\.gavel-sky,\.dillo-sky\{position:fixed;inset:0;overflow:hidden;pointer-events:none/);
   assert.match(css, /prefers-reduced-motion:reduce\)\{\.tumbleweed-lane,\.petal-sky,\.gavel-sky,\.dillo-sky\{display:none\}/);
   assert.match(read('src/app.js'), /state\.view==='watchlist'\?'':TUMBLEWEED/);
+});
+
+test('searching for the bird bills or the bird sends the warbler', () => {
+  for (const q of ['HB 309', 'hb309', 'H.B. 433', 'HB-433', 'warbler', 'Golden-cheeked warbler', 'golden cheeked warblers', 'state bird'])
+    assert.equal(asksForWarbler(q), true, q);
+  for (const q of ['HB 3090', 'HB 30', 'SB 309', 'warbler habitat', 'bird', '', undefined]) assert.equal(asksForWarbler(q), false, String(q));
+  assert.deepEqual(BIRD_BILLS, ['HB 309', 'HB 433']);
 });

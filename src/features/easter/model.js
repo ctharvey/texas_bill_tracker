@@ -10,6 +10,11 @@ export const isSineDieDay = (now = new Date()) => austinDate(now) === SINE_DIE;
 // A search for "sine die" (any case, spacing or hyphen) and nothing else.
 export const asksSineDie = query => /^\s*sine[\s-]*die\s*$/i.test(String(query ?? ''));
 
+// A search for the bird bills (HB 309 and HB 433 would make the golden-cheeked warbler the state bird) or the bird.
+export const BIRD_BILLS = ['HB 309', 'HB 433'];
+export const asksForWarbler = query =>
+  /^\s*(?:h\.?\s*b\.?\s*-?\s*(?:309|433)|(?:golden[\s-]*cheeked\s+)?warblers?|state\s+bird)\s*$/i.test(String(query ?? ''));
+
 // Bluebonnets bloom in March and April.
 export const isBluebonnetSeason = (now = new Date()) => [3, 4].includes(Number(austinDate(now).slice(5, 7)));
 
