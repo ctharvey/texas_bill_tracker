@@ -6,6 +6,7 @@ export const THEMES = [
   {id: 'lone-star', name: 'Lone Star'},
   {id: 'bluebonnet', name: 'Bluebonnet'},
   {id: 'ranch', name: 'Ranch'},
+  {id: 'warbler', name: 'Golden-cheeked warbler'},
 ];
 const IDS = new Set(THEMES.map(t => t.id));
 
