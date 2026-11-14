@@ -59,13 +59,13 @@ export function setupModePicker() {
 
 // A side-on golden-cheeked warbler: black crown, back and notched tail, golden cheek crossed by a black eye line,
 // white belly, and dark wings with the species' two white wing bars. The far wing flaps behind the body.
-const WING = '<path d="M38 19q-11-15-27-17q8 10 18 21z"/><path d="M33 15.5l-9-6M30 18l-8-5" stroke="#f4f1e6" stroke-width="1.1" stroke-linecap="round"/>';
-const WARBLER_SVG = '<svg viewBox="0 0 64 40" width="124" height="78" aria-hidden="true" focusable="false">'
+const WING = '<path d="M39 19q-9-14-23-16q7 10 15 20z"/><path d="M34 15.5l-8-5.5M31.5 18l-7-4.5" stroke="#f4f1e6" stroke-width="1.1" stroke-linecap="round"/>';
+const WARBLER_SVG = '<svg viewBox="6 0 54 40" width="106" height="78" aria-hidden="true" focusable="false">'
   + '<g class="warbler-wing warbler-far" fill="#1b1d1a">' + WING + '</g>'
-  + '<path d="M1 18.5l18 .5-1 5-17 1.5 5-3.5z" fill="#1b1d1a"/>'
-  + '<path d="M17 22q4-6 16-6q9 0 12 5q-3 7-14 7q-10 0-14-6z" fill="#454842"/>'
-  + '<path d="M19 24q11 7 25-2q-2 6-13 6q-8 0-12-4z" fill="#f4f1e6"/>'
-  + '<path d="M24 24.5l3-1.5M29 25.5l3-1.6M34 25.4l3-1.8" stroke="#2b2d29" stroke-width=".8" stroke-linecap="round"/>'
+  + '<path d="M8 18.8l15 .4-1 4.6-14 1.4 4-3.2z" fill="#1b1d1a"/>'
+  + '<path d="M22 22q3-6 12-6q8 0 11 5q-3 7-12 7q-8 0-11-6z" fill="#454842"/>'
+  + '<path d="M23.5 24q9 6 20.5-2q-2 6-11 6q-7 0-9.5-4z" fill="#f4f1e6"/>'
+  + '<path d="M27 24.6l2.6-1.4M31 25.5l2.6-1.5M35 25.4l2.6-1.7" stroke="#2b2d29" stroke-width=".8" stroke-linecap="round"/>'
   + '<circle cx="46" cy="18" r="6.5" fill="#1b1d1a"/>'
   + '<path d="M41 16.5q4-5.5 10-1q.5 5-4 6.5q-5 .5-6-5.5z" fill="#f2c230"/>'
   + '<path d="M43 17.2h7.5" stroke="#1b1d1a" stroke-width="1"/><circle cx="47.6" cy="17.2" r="1" fill="#1b1d1a"/>'
