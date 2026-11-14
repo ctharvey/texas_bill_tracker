@@ -77,6 +77,41 @@ ACCOUNT_STOP = "account_stop.json"
 ACCOUNT_BACKOFF_S = 3600
 
 
+# What an account stop means, by the provider's error code (cth_flex keeps a sanitized code token, never the message).
+# Matched exactly; a key ending in "_" matches as a prefix. Anything else gets ACCOUNT_UNKNOWN.
+ACCOUNT_PROBLEMS = (
+    ("insufficient_quota", "out of credits", "add credits to the OpenAI account"),
+    ("credit_balance_", "out of credits", "add credits to the OpenAI account"),
+    ("billing_hard_limit_reached", "spending limit reached", "raise the limit in the OpenAI usage settings"),
+    ("provider_quota_exhausted", "provider quota used up", "raise it or wait for it to reset"),
+    ("quota", "quota or billing refused", "check the OpenAI account's credits and limits"),
+    ("invalid_api_key", "API key refused", "check the key in /etc/texas-bill-review.env"),
+    ("auth", "API key or permissions refused", "check the key in /etc/texas-bill-review.env"),
+)
+ACCOUNT_UNKNOWN = ("account refused", "check the OpenAI account's credits, limits and API key")
+SAFE_CODE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,63}")
+
+
+def account_code(value) -> str | None:
+    """A provider error code fit to print (a short lowercase token), else None. Takes an error or a stored code."""
+    code = value if isinstance(value, str) else getattr(value, "code", None)
+    return code if isinstance(code, str) and SAFE_CODE.fullmatch(code) else None
+
+
+def account_problem(code: str | None) -> tuple[str, str]:
+    """(what is wrong, what to do) for a provider code."""
+    for key, problem, action in ACCOUNT_PROBLEMS:
+        if code is not None and (code == key or key.endswith("_") and code.startswith(key)):
+            return problem, action
+    return ACCOUNT_UNKNOWN
+
+
+def account_summary(code: str | None) -> str:
+    """E.g. 'OUT OF CREDITS (provider code insufficient_quota); add credits to the OpenAI account'."""
+    problem, action = account_problem(code)
+    return "%s%s; %s" % (problem.upper(), " (provider code %s)" % code if code else "", action)
+
+
 def account_error(error: BaseException) -> bool:
     return isinstance(error, ApiStopped) or getattr(error, "code", None) in (
         "insufficient_quota", "invalid_api_key", "billing_hard_limit_reached")
@@ -117,7 +152,8 @@ def stop_worker(error: BaseException, cache_dir: Path, bill_id: str, where: str 
     print(bill_id, "stopped", type(error).__name__ + where, "-", next_step(error), flush=True)
     if account_error(error):
         try:
-            atomic_json(cache_dir / ACCOUNT_STOP, {"stopped_at": time.time(), "reason": type(error).__name__})
+            atomic_json(cache_dir / ACCOUNT_STOP, {"stopped_at": time.time(), "reason": type(error).__name__,
+                                                   "code": account_code(error)})
         except OSError:
             pass
     return SystemExit(2)
@@ -140,7 +176,8 @@ def next_step(error: BaseException) -> str:
         return UNRESOLVED_STEP
     if isinstance(error, ApiStopped) or getattr(error, "code", None) in (
             "insufficient_quota", "invalid_api_key", "billing_hard_limit_reached"):
-        return "check the provider account (quota, billing or API key); runs keep stopping until it is fixed"
+        return ("provider account stop, %s. Nothing was billed; runs retry once an hour until it is fixed (delete "
+                "CACHE/%s to retry sooner)" % (account_summary(account_code(error)), ACCOUNT_STOP))
     if isinstance(error, MarkdownOnly):
         return "run with --input markdown"
     if isinstance(error, (OSError, ValueError)):
@@ -1713,8 +1750,11 @@ def main():
         if (args.execute and not args.bill_id and isinstance(stop, dict)
                 and isinstance(stop.get("stopped_at"), (int, float))
                 and time.time() - stop["stopped_at"] < ACCOUNT_BACKOFF_S):
-            print("The provider account stopped a run %d minutes ago (%s); waiting an hour between tries. Delete %s "
-                  "to try sooner" % ((time.time() - stop["stopped_at"]) // 60, stop.get("reason"), ACCOUNT_STOP),
+            code = account_code(stop.get("code"))
+            print("The provider account stopped a run %d minutes ago: %s. Not starting; waiting an hour between tries. "
+                  "Once it is fixed, delete %s to try sooner"
+                  % ((time.time() - stop["stopped_at"]) // 60,
+                     account_summary(code) if code or "code" in stop else stop.get("reason"), ACCOUNT_STOP),
                   flush=True)
             return 0
         if args.transport == "flex":
