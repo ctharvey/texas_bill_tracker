@@ -6,6 +6,7 @@ import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
 import {fillDrawerBrackets} from './features/brackets/view.js';
 import {setupThemePicker, setupModePicker, setTheme, savedTheme} from './features/theme/view.js';
+import {TUMBLEWEED, noticeSearch, setupEasterEggs} from './features/easter/view.js';
 import {state} from './core/state.js';
 import {$, esc, toast} from './core/dom.js';
 import {timeoutSignal} from './core/net.js';
@@ -133,6 +134,7 @@ async function init(){
   setupDisclaimer();
   setupThemePicker(id=>{if(sync.linked?.mode==='edit')sync.record('theme',id)});
   setupModePicker();
+  setupEasterEggs();
   setupSync(syncKey);
   if(state.bills.length)loadStatutes();
   // Keep the progress view current while it is open; other views never refetch.
@@ -694,7 +696,8 @@ function renderResults(){
     const relations=[...new Set(g.flatMap(b=>companionsOf(b.id).filter(c=>ids.has(c.id)).map(relationText)))];
     const names=g.map(b=>b.number).join(' + ');
     return `<div class="companion-group" role="group" aria-label="${esc(`${names}: companion bills`)}"><div class="companion-group-head"><span><span aria-hidden="true">⇄</span> Companion bills · ${esc(names)}${relations.length?` · ${esc(relations.join(', '))}`:''}</span>${groupWatchButton(g.map(b=>b.id))}</div>${g.map(card).join('')}</div>`};
-  $('#bill-list').innerHTML=statuteHintMarkup(state.sharedList?[]:lawKeysFor(state.query))+(list.length?shown.map(g=>g.length>1?groupMarkup(g):card(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p></div>`);
+  noticeSearch(state.query);
+  $('#bill-list').innerHTML=statuteHintMarkup(state.sharedList?[]:lawKeysFor(state.query))+(list.length?shown.map(g=>g.length>1?groupMarkup(g):card(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p>${state.view==='watchlist'?'':TUMBLEWEED}</div>`);
   $('#results-bottom').innerHTML=`${list.length>shownCount?`<button class="outline-button" id="load-more">Load 30 more · showing ${shownCount} of ${list.length}</button><div style="height:12px"></div>`:''}${esc(state.meta?.coverage_note||'Check the official record for authoritative status.')}`;
   persistState();
   syncPreview();
