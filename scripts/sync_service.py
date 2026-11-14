@@ -49,7 +49,7 @@ MAX_LISTS = 100_000
 DAILY_CREATES = 1000
 RETENTION_SECONDS = 365 * 86400
 FEED_ITEMS = 300
-TEXT_FILTERS = {"view", "query", "topic", "agency", "chamber", "party", "stage", "action", "outlook", "sort"}
+TEXT_FILTERS = {"view", "query", "topic", "area", "agency", "chamber", "party", "stage", "action", "outlook", "sort"}
 BOOL_FILTERS = {"onlyWatch"}
 LIMITS = {"create": (10, 3600), "write": (300, 3600), "read": (1200, 3600), "search": (1200, 3600)}
 
