@@ -532,3 +532,5 @@ summary:focus-visible,.disclaimer-ok:focus-visible,.footer-link:focus-visible{ou
   .filter-bar>.filter-row select{flex:0 0 auto;min-width:0;max-width:40vw;text-overflow:ellipsis}
   .bill-bar .drawer-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%}
   .bill-bar .drawer-actions>*{text-align:center;padding:8px 10px;font-size:var(--fs-xs)}}
+/* Phones: the bundled-copy notice keeps its lead and the Coverage link; the details are on the Data page. */
+@media(max-width:760px){.source-notice .notice-more{display:none}}

@@ -28,6 +28,7 @@
   The agency index has a filter box and no empty band in its cards. Method and Saving read as one column, card
   titles stop at 80 characters a line, and on phones the bill page shows Overview before the key facts and its
   four buttons in two rows. The page heading no longer shows a focus box after a view change.
+- On phones the bundled-copy notice reads just "Showing the bundled copy." and the Coverage & sources link.
 
 ## 2026-11-13
 - Remembered filters are no longer rewritten on page load when they mean the same thing (the party filter had
