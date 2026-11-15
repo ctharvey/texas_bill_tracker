@@ -174,6 +174,44 @@ class IdleGate(unittest.TestCase):
                     rp.main()
                 self.assertEqual(wait.call_count, expected, (env, bill))
 
+    def test_stop_during_wait_ends_it_at_once(self):
+        clock = Clock()
+        self.marker(clock.now)
+
+        def sleep(seconds):
+            clock.sleep(1)
+            rp.STOP_REQUESTED.set()
+
+        try:
+            self.assertEqual(rp.wait_while_idle(self.args, clock=clock, sleep=sleep), 1)
+        finally:
+            rp.STOP_REQUESTED.clear()
+
+    def test_stop_during_wait_exits_zero_without_taking_the_lock(self):
+        argv = ['review_pipeline.py', '--cache-dir', str(self.args.cache_dir), '--snapshot', str(self.args.snapshot),
+                '--publish-tags', str(self.args.publish_tags), '--execute']
+        with mock.patch.object(sys, "argv", argv), mock.patch.dict(os.environ, {"INVOCATION_ID": "x"}), \
+                mock.patch.object(rp, "wait_while_idle", side_effect=lambda a: rp.STOP_REQUESTED.set()), \
+                mock.patch.object(rp, "ResponseCache") as cache:
+            try:
+                self.assertEqual(rp.main(), 0)
+            finally:
+                rp.STOP_REQUESTED.clear()
+        cache.assert_not_called()
+
+    def test_operator_release_or_hold_clears_the_marker(self):
+        import flex_boundary
+        self.assertEqual(rp.IDLE_MARKER, "idle.json")  # the name flex_boundary removes
+        for flag in ("--release", "--hold"):
+            self.marker(1.0)
+            with mock.patch.object(flex_boundary, "FlexBoundary") as boundary:
+                boundary.return_value.release_held.return_value = "$0"
+                boundary.return_value.hold_pending.return_value = 0.0
+                boundary.return_value.pending_rows.return_value = []
+                boundary.return_value.held.return_value = []
+                flex_boundary.main(["--cache-dir", str(self.args.cache_dir), flag, "K"])
+            self.assertFalse((self.args.cache_dir / rp.IDLE_MARKER).exists(), flag)
+
     # settle_idle_marker
 
     def test_settle_writes_only_for_idle_unchanged_runs(self):

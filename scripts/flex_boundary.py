@@ -393,6 +393,10 @@ def main(argv=None) -> int:
         return 1
     try:
         boundary = FlexBoundary(args.cache_dir, None, None)
+        if args.hold or args.release:
+            # A released or newly held call changes what the next review run can do: it must not wait on an idle
+            # marker (review_pipeline.IDLE_MARKER) recorded before this change.
+            (Path(args.cache_dir) / "idle.json").unlink(missing_ok=True)
         if args.hold:
             try:
                 print("Held", args.hold, "(booked $%.6f; release it once reconciled)" % boundary.hold_pending(args.hold))

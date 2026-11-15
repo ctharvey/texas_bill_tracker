@@ -1556,6 +1556,7 @@ def _second_pass(label: str, jobs, args, deadline: float, refused: RefusedBills 
     error skips its bill (OUTAGE_LIMIT in a row end the pass); a worker-wide error (`stops_run`) stops the worker; a
     budget stop, unresolved outcome or dry run ends the pass."""
     done, rejections, errors = set(), 0, 0  # bills, not calls: one bill may take several (scope votes)
+    clean = False
     for bill_id, call, save in jobs:
         if time.monotonic() > deadline or STOP_REQUESTED.is_set():
             print(f"{label}: run time limit or stop requested; the rest wait for a later run", flush=True)
@@ -1577,11 +1578,11 @@ def _second_pass(label: str, jobs, args, deadline: float, refused: RefusedBills 
                 break
             continue
         except (CacheCoolingDown, CacheBusy, OSError, ValueError) as error:
-            print(bill_id, f"{label.lower()} skipped:", type(error).__name__, "-", next_step(error), flush=True)
+            RUN_TROUBLE.set(); print(bill_id, f"{label.lower()} skipped:", type(error).__name__, "-", next_step(error), flush=True)
             continue
         except Exception as error:
             if held_outcome(error):
-                print(bill_id, f"{label.lower()} held:", type(error).__name__, "-", next_step(error), flush=True)
+                RUN_TROUBLE.set(); print(bill_id, f"{label.lower()} held:", type(error).__name__, "-", next_step(error), flush=True)
                 continue
             if stops_run(error, budget):
                 raise stop_worker(error, args.cache_dir, bill_id, f" ({label.lower()})")
@@ -1602,6 +1603,10 @@ def _second_pass(label: str, jobs, args, deadline: float, refused: RefusedBills 
         if refused is not None:
             refused.discard(bill_id)
         done.add(bill_id); rejections = errors = 0
+    else:
+        clean = True
+    if not clean:
+        RUN_TROUBLE.set()  # the pass ended early (time, stop, refusals, failures, a not-submitted stop)
     _show_in_flight([], len(done))
     print(label, "checked for", len(done), "bills", flush=True)
     return len(done)
@@ -1625,6 +1630,7 @@ def _slot_pass(label: str, units, args, deadline: float, slots: int, refused: Re
 
     def end(reason: str) -> None:
         nonlocal ending
+        RUN_TROUBLE.set()  # whatever ends a pass early leaves work for a later run: that run is not idle
         if ending is None:
             ending = reason
             print(f"{label}: {reason}", flush=True)
@@ -1677,11 +1683,11 @@ def _slot_pass(label: str, units, args, deadline: float, slots: int, refused: Re
                             end("capacity unavailable 3 times in a row with no answer between; the rest wait for a later run")
                     continue
                 except (CacheCoolingDown, CacheBusy, OSError, ValueError) as error:
-                    print(bill_id, f"{label.lower()} skipped:", type(error).__name__, "-", next_step(error), flush=True)
+                    RUN_TROUBLE.set(); print(bill_id, f"{label.lower()} skipped:", type(error).__name__, "-", next_step(error), flush=True)
                     continue
                 except Exception as error:  # noqa: BLE001 - classified as in _second_pass
                     if held_outcome(error):
-                        print(bill_id, f"{label.lower()} held:", type(error).__name__, "-", next_step(error), flush=True)
+                        RUN_TROUBLE.set(); print(bill_id, f"{label.lower()} held:", type(error).__name__, "-", next_step(error), flush=True)
                         continue
                     if stops_run(error, budget):
                         if exit_error is None:
@@ -1752,11 +1758,16 @@ TAG_SHARDS = 32  # ~27 KB gzipped each at 1,500 bills; an hourly change of a few
 def publish_shards(out: Path, name: str, payload, shards: int) -> None:
     """The site's sharded copy of a published map (see luna_shards). A failure leaves the single file, which the
     site falls back to, so it is reported and never fails the publish."""
+    import luna_shards
     try:
-        import luna_shards
         luna_shards.publish(out.parent, name, payload, shards)
     except Exception as error:  # noqa: BLE001
-        print("Sharded %s not updated:" % name, type(error).__name__, flush=True)
+        RUN_TROUBLE.set()
+        print("Sharded %s not updated; the site reads the single file:" % name, type(error).__name__, flush=True)
+        try:
+            luna_shards.withdraw(out.parent, name)  # stale shards must not outrank the newer single file
+        except OSError as gone:
+            print("Sharded %s index not removed:" % name, type(gone).__name__, flush=True)
 
 
 def same_but_stamp(previous, payload: dict, stamp: str = "generated_at") -> bool:
@@ -1827,11 +1838,13 @@ def output_signature(luna_dir: Path) -> str:
 def wait_while_idle(args, *, clock=None, sleep=None) -> float:
     """A timer start after an idle run: wait (lock not held) until an input changes, the marker is removed or
     replaced, or it is IDLE_MAX_S old. Returns seconds waited. A stop signal ends the process as usual."""
-    clock, sleep = clock or time.time, sleep or _REAL_SLEEP
+    clock, sleep = clock or time.time, sleep or STOP_REQUESTED.wait  # a stop ends the sleep at once
     marker_path = args.cache_dir / IDLE_MARKER
     started = clock()
     first = True
     for _ in range(math.ceil(IDLE_MAX_S / IDLE_POLL_S) + 2):  # bounded even if the clock does not move
+        if STOP_REQUESTED.is_set():
+            return clock() - started
         marker = _read_json(marker_path)
         if not isinstance(marker, dict) or not isinstance(marker.get("at"), (int, float)):
             return clock() - started
@@ -2102,6 +2115,8 @@ def publish_related(args, live: set[str] | None = None) -> None:
     count, tokens = related_bills.publish(snapshot["bills"], {k: v for k, v in summaries.items() if v},
                                           args.cache_dir, args.publish_tags.parent / "related.json",
                                           embedder=RELATED_EMBEDDER or related_bills.openai_embedder)
+    if tokens:
+        RUN_TROUBLE.set()  # embeddings are paid outside run_spent: a run that sent any is not idle
     print("Published related bills for", count, "bills; embedded", tokens, "new tokens (~$%.6f)"
           % (tokens * related_bills.PRICE_PER_MILLION / 1e6), flush=True)
 
@@ -2138,8 +2153,20 @@ def main():
     # Timer-shaped runs only: started by systemd (INVOCATION_ID), executing, all bills. A shell, test, --bill-id or
     # dry run never waits and never records an idle marker.
     timer_run = bool(args.execute and not args.bill_id and args.publish_tags and os.environ.get("INVOCATION_ID"))
+    STOP_REQUESTED.clear()
     if timer_run:
-        wait_while_idle(args)
+        # A stop during the wait must end the run cleanly (exit 0): for Type=oneshot, systemd counts death by
+        # SIGTERM as a failure and would send the failure alert.
+        on_main = threading.current_thread() is threading.main_thread()
+        previous = signal.signal(signal.SIGTERM, request_stop) if on_main else None
+        try:
+            wait_while_idle(args)
+        finally:
+            if on_main:
+                signal.signal(signal.SIGTERM, previous)
+        if STOP_REQUESTED.is_set():
+            print("Stopped while waiting for new data or code", flush=True)
+            return 0
     worker = contextlib.ExitStack()
     try:
         worker.enter_context(ResponseCache(args.cache_dir / "worker-lock")._lock("worker"))
@@ -2150,7 +2177,6 @@ def main():
     with worker:
         # Runs before the lock is released (LIFO), on every exit; acts only on a stop.
         worker.push(lambda exc_type, error, tb: publish_after_stop(args, error))
-        STOP_REQUESTED.clear()
         RUN_TROUBLE.clear()
         held_any = False
         idle_inputs = luna_before = None
@@ -2468,11 +2494,11 @@ def main():
                     bundle["stop_run"], bundle["retry_after"] = "CapacityUnavailable (fiscal check)", error.retry_after
                     return
                 except (CacheCoolingDown, CacheBusy, OSError, ValueError) as error:
-                    print(bill_id, "fiscal check skipped:", type(error).__name__, "-", next_step(error), flush=True)
+                    RUN_TROUBLE.set(); print(bill_id, "fiscal check skipped:", type(error).__name__, "-", next_step(error), flush=True)
                     return  # retried on a later visit; never billed
                 except Exception as error:
                     if held_outcome(error):
-                        print(bill_id, "fiscal check held:", type(error).__name__, "-", next_step(error), flush=True)
+                        RUN_TROUBLE.set(); print(bill_id, "fiscal check held:", type(error).__name__, "-", next_step(error), flush=True)
                         return  # this check waits for an operator; never resent
                     if isinstance(error, BudgetExceeded) or stops_run(error, budget):
                         # Unknown outcome, quota or budget: the run stops after this bill's review is recorded.
@@ -2511,6 +2537,8 @@ def main():
                     waiting = (args.input == "markdown" and isinstance(value, FileNotFoundError) and text_dir.is_dir()
                                and bill_id not in queue["seen"] and not (text_dir / bill_id).exists())
                     new_failures += bill_id not in queue['failed'] and not waiting
+                    if not waiting:
+                        RUN_TROUBLE.set()  # a text that should be there and is not: not an idle run
                     record_failure(queue, bill_id, 'download', value)
                     atomic_json(queue_path, queue)
                     print(bill_id, "download_failed", type(value).__name__, "-",
@@ -2527,7 +2555,7 @@ def main():
                         if bill_id in queue['seen'] and bill_id not in queue['retry']:
                             queue['retry'].append(bill_id)
                         atomic_json(queue_path, queue)
-                        print(bill_id, "deferred", type(error).__name__, "-", next_step(error), flush=True)
+                        RUN_TROUBLE.set(); print(bill_id, "deferred", type(error).__name__, "-", next_step(error), flush=True)
                         return False
                     if isinstance(error, (BudgetExceeded, CapacityUnavailable)):
                         if bill_id in queue['seen'] and bill_id not in queue['retry']:
@@ -2536,7 +2564,7 @@ def main():
                         if isinstance(error, CapacityUnavailable):
                             defer_for_capacity(bill_id, error.retry_after)
                             return False
-                        print(bill_id, "deferred", type(error).__name__, "-", next_step(error), flush=True)
+                        RUN_TROUBLE.set(); print(bill_id, "deferred", type(error).__name__, "-", next_step(error), flush=True)
                         print("Deferred: budget/capacity guard", flush=True)
                         return True
                     if not held_outcome(error):
@@ -2545,7 +2573,7 @@ def main():
                         new_failures += bill_id not in queue['failed']
                         record_failure(queue, bill_id, 'processing', error)
                         atomic_json(queue_path, queue)
-                        print(bill_id, "failed", type(error).__name__, "-", next_step(error), flush=True)
+                        RUN_TROUBLE.set(); print(bill_id, "failed", type(error).__name__, "-", next_step(error), flush=True)
                         if new_failures >= OUTAGE_LIMIT:
                             print("Stopped: repeated new failures; the model provider or storage may be failing, or a "
                                   "code change broke reviews", flush=True)
@@ -2554,12 +2582,13 @@ def main():
                     # Only this bill waits for an operator (its call is never resent); other bills go on.
                     record_failure(queue, bill_id, 'held', error)
                     atomic_json(queue_path, queue)
-                    print(bill_id, "held", type(error).__name__, "-", next_step(error), flush=True)
+                    RUN_TROUBLE.set(); print(bill_id, "held", type(error).__name__, "-", next_step(error), flush=True)
                     return False
                 bundle = value
                 new_failures = 0
                 status = bundle["status"]
                 if status in ("deferred", "prepared"):
+                    RUN_TROUBLE.set()
                     # Nothing was reviewed: leave queue state and any earlier review untouched.
                     reason_type = bundle["first_pass"].get("reason_type", "")
                     print(bill_id, status, reason_type, *(("-", NOT_SUBMITTED_STEPS[reason_type])
@@ -2738,7 +2767,7 @@ def publish_luna(args, *, network_ok: bool) -> None:
     if not args.publish_tags:
         return
     if not served_text_dir(args.publish_tags).is_dir():
-        print("Live bill text directory missing; no Luna files published (earlier files kept)", flush=True)
+        RUN_TROUBLE.set(); print("Live bill text directory missing; no Luna files published (earlier files kept)", flush=True)
     else:
         # Only reviews of the exact Markdown the site serves are published, by every publisher below.
         served = served_text_dir(args.publish_tags)

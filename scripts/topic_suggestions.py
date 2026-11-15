@@ -353,11 +353,16 @@ EXTRAS_SHARDS = 8  # ~15 KB gzipped each
 
 def _publish_shards(out: Path, payload: dict) -> None:
     """The site's sharded copy (luna_shards); on failure the site reads the single file."""
+    import luna_shards
     try:
-        import luna_shards
         luna_shards.publish(out.parent, "extras", payload, EXTRAS_SHARDS)
     except Exception as error:  # noqa: BLE001
-        print("Sharded extras not updated:", type(error).__name__, flush=True)
+        print("Sharded extras not updated; the site reads the single file:", type(error).__name__, flush=True)
+        try:
+            luna_shards.withdraw(out.parent, "extras")  # stale shards must not outrank the newer single file
+        except OSError as gone:
+            print("Sharded extras index not removed:", type(gone).__name__, flush=True)
+        raise  # the caller reports it and marks the run as not idle
 
 
 def tally(cache_dir: Path, min_bills: int = 1) -> list[dict]:

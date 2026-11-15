@@ -16,35 +16,35 @@ function server(files) {
   return {fetchImpl, calls};
 }
 
-const index = {format: 'texas-bill-luna-shards-v1', of: FORMAT, model: 'm', generated_at: '2026-11-15T00:00:00Z',
-  agencies: {A: 'Agency'}, shards: ['aaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbb']};
+const index = {format: 'texas-bill-luna-shards-v2', of: FORMAT, model: 'm', generated_at: '2026-11-15T00:00:00Z',
+  agencies: {A: 'Agency'}, shards: ['aaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbb']};
 
 test('shards merge into the single-file shape, versioned and cache-first', async () => {
   const {fetchImpl, calls} = server({
     'L/tags-index.json': index,
-    'L/shards/tags-0.json': shard(0, {HB1: {summary: 'one'}}),
-    'L/shards/tags-1.json': shard(1, {SB2: {summary: 'two'}}),
+    'L/shards/tags-aaaaaaaaaaaaaaaaaaaa.json': shard(0, {HB1: {summary: 'one'}}),
+    'L/shards/tags-bbbbbbbbbbbbbbbbbbbb.json': shard(1, {SB2: {summary: 'two'}}),
   });
   const map = await loadShardedMap('L', 'tags', FORMAT, fetchImpl);
   assert.deepEqual(map, {model: 'm', generated_at: '2026-11-15T00:00:00Z', agencies: {A: 'Agency'}, format: FORMAT,
     bills: {HB1: {summary: 'one'}, SB2: {summary: 'two'}}});
   assert.deepEqual(calls.map(c => [c.url, c.cache]), [
     ['L/tags-index.json', 'no-cache'],
-    ['L/shards/tags-0.json?v=aaaaaaaaaaaaaaaa', 'force-cache'],
-    ['L/shards/tags-1.json?v=bbbbbbbbbbbbbbbb', 'force-cache']]);
+    ['L/shards/tags-aaaaaaaaaaaaaaaaaaaa.json', 'force-cache'],
+    ['L/shards/tags-bbbbbbbbbbbbbbbbbbbb.json', 'force-cache']]);
 });
 
 test('anything off about the shards throws so the caller falls back to the single file', async () => {
-  const good = {'L/tags-index.json': index, 'L/shards/tags-0.json': shard(0, {}), 'L/shards/tags-1.json': shard(1, {})};
+  const good = {'L/tags-index.json': index, 'L/shards/tags-aaaaaaaaaaaaaaaaaaaa.json': shard(0, {}), 'L/shards/tags-bbbbbbbbbbbbbbbbbbbb.json': shard(1, {})};
   const cases = [
     {...good, 'L/tags-index.json': undefined},
     {...good, 'L/tags-index.json': {...index, of: 'texas-bill-luna-extras-v1'}},
     {...good, 'L/tags-index.json': {...index, shards: []}},
     {...good, 'L/tags-index.json': {...index, shards: ['../x']}},
-    {...good, 'L/shards/tags-1.json': undefined},
-    {...good, 'L/shards/tags-1.json': shard(0, {})},
-    {...good, 'L/shards/tags-1.json': {...shard(1, {}), of: 'other'}},
-    {...good, 'L/shards/tags-1.json': shard(1, [])},
+    {...good, 'L/shards/tags-bbbbbbbbbbbbbbbbbbbb.json': undefined},
+    {...good, 'L/shards/tags-bbbbbbbbbbbbbbbbbbbb.json': shard(0, {})},
+    {...good, 'L/shards/tags-bbbbbbbbbbbbbbbbbbbb.json': {...shard(1, {}), of: 'other'}},
+    {...good, 'L/shards/tags-bbbbbbbbbbbbbbbbbbbb.json': shard(1, [])},
   ];
   for (const files of cases) {
     for (const k of Object.keys(files)) if (files[k] === undefined) delete files[k];
