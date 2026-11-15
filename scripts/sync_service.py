@@ -51,6 +51,7 @@ RETENTION_SECONDS = 365 * 86400
 FEED_ITEMS = 300
 TEXT_FILTERS = {"view", "query", "topic", "area", "agency", "chamber", "party", "stage", "action", "outlook", "sort"}
 BOOL_FILTERS = {"onlyWatch"}
+SORT_NAME = re.compile(r"[a-z]{1,20}")
 LIMITS = {"create": (10, 3600), "write": (300, 3600), "read": (1200, 3600), "search": (1200, 3600)}
 
 
@@ -125,6 +126,8 @@ def clean_filters(filters) -> dict:
         raise Rejected(400, "filters must be an object")
     kept = {}
     for name, value in filters.items():
+        if name == "sort" and isinstance(value, str) and not SORT_NAME.fullmatch(value):
+            continue  # Not a sort the site has ("__proto__" crashed it); dropped rather than failing the whole save.
         if name in TEXT_FILTERS and isinstance(value, str) and len(value) <= 200:
             kept[name] = value
         elif name in BOOL_FILTERS and isinstance(value, bool):

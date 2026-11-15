@@ -3,7 +3,11 @@ export const FILTER_DEFAULTS = {query: '', topic: '', area: '', agency: '', cham
 const FILTER_NAMES = Object.keys(FILTER_DEFAULTS);
 // Renamed filter values, so old links, saved searches and remembered filters keep working (taxonomy.NO_HEARING).
 const RENAMED = {outlook: {'Not rated': 'No hearing yet'}};
-const current = (name, value) => RENAMED[name]?.[value] ?? value;
+// Own keys only, so a value such as "__proto__" passes through as text instead of resolving to Object.prototype.
+// Sort names are plain words; anything else ("__proto__") is dropped wherever filters are read.
+const SORT_NAME = /^[a-z]{1,20}$/;
+const usable = (name, value) => name !== 'sort' || SORT_NAME.test(value);
+const current = (name, value) => Object.hasOwn(RENAMED, name) && Object.hasOwn(RENAMED[name], value) ? RENAMED[name][value] : value;
 export const VIEWS = ['home', 'all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'bill', 'agencies', 'review', 'method', 'saving', 'data'];
 const LAW_CODE = /^[A-Z]{2}$/;
 const LAW_SECTION = /^\d+[A-Z]?(?:\.\d+[A-Z]?)+$/;  // The statute index's section numbers (build_feeds.SECTION_NUM).
@@ -25,7 +29,7 @@ export function cleanFilters(raw) {
   if (!raw || typeof raw !== 'object') return out;
   for (const name of FILTER_NAMES) {
     const value = raw[name];
-    if (name === 'onlyWatch' ? typeof value === 'boolean' : typeof value === 'string' && value.length <= 200) out[name] = current(name, value);
+    if (name === 'onlyWatch' ? typeof value === 'boolean' : typeof value === 'string' && value.length <= 200 && usable(name, value)) out[name] = current(name, value);
   }
   return out;
 }
@@ -43,7 +47,7 @@ export function parseHash(hash) {
   const params = new URLSearchParams(at < 0 ? '' : raw.slice(at + 1));
   const filters = {};
   for (const name of FILTER_NAMES) {
-    if (!params.has(name)) continue;
+    if (!params.has(name) || !usable(name, params.get(name))) continue;
     filters[name] = name === 'onlyWatch' ? params.get(name) === '1' : current(name, params.get(name).slice(0, 200));
   }
   const list = params.has('list') ? uniqueIds(params.get('list').split(',')) : null;
@@ -124,7 +128,7 @@ export function cleanSearch(raw) {
   const name = typeof raw.name === 'string' ? raw.name.trim().slice(0, 80) : '';
   const filters = cleanFilters(raw.filters);
   if (!name || !searchFitsSync(filters)) return null;
-  return {id: raw.id, name, filters, seen: typeof raw.seen === 'string' && DAY.test(raw.seen) ? raw.seen : null};
+  return {id: raw.id, name, filters, seen: typeof raw.seen === 'string' && DAY.test(raw.seen) && !Number.isNaN(Date.parse(`${raw.seen}T00:00:00Z`)) ? raw.seen : null};
 }
 export function cleanSearches(raw) {
   const seen = new Set(), out = [];

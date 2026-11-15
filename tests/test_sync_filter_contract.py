@@ -22,6 +22,12 @@ class SyncFilterContract(unittest.TestCase):
         payload = {name: (True if is_bool else 'x') for name, is_bool in filters.items()}
         self.assertEqual(svc.clean_filters(payload), payload)
 
+    def test_prototype_sort_is_dropped_and_real_sorts_kept(self):
+        # Security audit 2026-11-15 (M2): "__proto__" as a sort crashed every client that loaded the saved search.
+        self.assertEqual(svc.clean_filters({'sort': '__proto__', 'chamber': 'House'}), {'chamber': 'House'})
+        for name in ('newest', 'latest', 'oldest', 'actionstage', 'number', 'agencies', 'hearing', 'influence'):
+            self.assertEqual(svc.clean_filters({'sort': name}), {'sort': name})
+
     def test_unknown_filter_is_still_rejected(self):
         with self.assertRaises(svc.Rejected):
             svc.clean_filters({'nonsense': 'x'})

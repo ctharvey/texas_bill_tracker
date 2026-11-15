@@ -1,6 +1,12 @@
 # Changelog
 
 ## 2026-11-15
+- Security audit fixes (`.agent/reviews/texas-bill-tracker-security-audit-results-2026-11-15.md`, M1 and M2):
+  an edit link now asks "Join this synced list?" before it adds this device's bills, legislators and saved
+  searches to someone's list or replaces this device's own link (a device with nothing saved still joins straight
+  away). A sort of `__proto__` from a link, a synced saved search or a profile file is dropped by the page and the
+  sync server instead of crashing the dashboard and Following page, and an impossible "last opened" date no longer
+  crashes Following. The sync server change needs the sync container redeployed.
 - Today is back in the nav (Browse, after Home; under More on phones), with a count when today itself has
   activity. Its rows put the action, who filed the bill ("by Rep. ...") and the tags on one line, and on phones the
   topic chips are one scrolling row so the first bill shows without scrolling.

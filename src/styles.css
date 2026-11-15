@@ -49,6 +49,7 @@ button[disabled]{opacity:.5;cursor:not-allowed}
 .privacy{max-height:calc(100dvh - 48px);overflow-y:auto}
 .privacy h3{margin:16px 0 6px;font-size:var(--fs-lg)}
 .disclaimer form{display:flex;justify-content:flex-end;margin-top:14px}
+.sync-join-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-top:16px}
 .disclaimer-ok{font:inherit;font-weight:700;font-size:var(--fs-md);border:0;border-radius:calc(8px*var(--rs));padding:10px 18px;background:var(--navy);color:var(--nav-ink);cursor:pointer}
 .disclaimer-ok:focus-visible,.footer-link:focus-visible{outline:2px solid #d29a2a;outline-offset:2px}
 .footer-link{font:inherit;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer}

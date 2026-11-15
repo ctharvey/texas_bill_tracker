@@ -42,7 +42,10 @@ const dayFormat = (options, empty) => {
     if (!iso) return empty;
     const day = String(iso).slice(0,10);
     let text = seen.get(day);
-    if (text === undefined) { text = format.format(new Date(`${day}T12:00:00Z`)); seen.set(day, text); }
+    if (text === undefined) {
+      const date = new Date(`${day}T12:00:00Z`);  // a malformed day ("2026-13-45") shows as empty, not a thrown RangeError
+      text = Number.isNaN(date.getTime()) ? empty : format.format(date); seen.set(day, text);
+    }
     return text;
   };
 };
@@ -159,7 +162,7 @@ const siteBase=()=>location.href.split('#')[0];
 
 function applyFilters(raw){
   const clean=cleanFilters(raw);
-  if(clean.sort&&!SORTS[clean.sort])delete clean.sort;
+  if(clean.sort&&!Object.hasOwn(SORTS,clean.sort))delete clean.sort;
   Object.assign(state,FILTER_DEFAULTS,clean,{visibleCount:30});
 }
 
@@ -355,10 +358,33 @@ async function openSyncLink(key){
     const found=await probe.pull();
     if(found.mode==='view'){Object.assign(state,{sharedList:found.watch,sharedMode:'sync-view',sharedSyncKey:key,visibleCount:30});setView('all');toast('Showing a shared watchlist (view-only)');return}
     const joining=sync.linked?.editKey!==key;
+    if(joining&&!await confirmJoin(Boolean(sync.linked))){toast('Sync link not opened');return}
     if(joining)sync.connect(key);
     await pullSync(joining);
     if(joining)toast('This device is now synced');
   }catch(error){toast(error.message)}
+}
+
+// An edit link can come from anyone, and joining adds this device's saved items to that list and keeps syncing them
+// there. A device with nothing saved and no link of its own joins straight away; otherwise it asks first.
+function confirmJoin(replacing){
+  const count=(n,one,many)=>n?`${n} ${n===1?one:many}`:'';
+  const items=[count(state.watch.size,'bill','bills'),count(state.follow.length,'legislator','legislators'),count(state.searches.length,'saved search','saved searches')].filter(Boolean);
+  if(!replacing&&!items.length)return Promise.resolve(true);
+  const dialog=document.createElement('dialog');
+  if(typeof dialog.showModal!=='function')return Promise.resolve(false);
+  const list=items.length>1?`${items.slice(0,-1).join(', ')} and ${items.at(-1)}`:items[0];
+  dialog.className='disclaimer';dialog.id='sync-join';dialog.setAttribute('aria-labelledby','sync-join-title');
+  dialog.innerHTML=`<h2 id="sync-join-title">Join this synced list?</h2>
+    ${items.length?`<p>This device’s ${esc(list)} will be added to the list, and anyone with its edit link will see them and every later change.</p>`:''}
+    ${replacing?'<p>This device will forget its current sync link. Copy its edit link first if you still need it.</p>':''}
+    <p>Only join links you got from yourself or someone you trust.</p>
+    <form method="dialog" class="sync-join-actions"><button class="outline-button" value="cancel" id="sync-join-cancel" autofocus>Cancel</button><button class="disclaimer-ok" value="join" id="sync-join-ok">Join this list</button></form>`;
+  document.body.append(dialog);
+  return new Promise(resolve=>{
+    dialog.addEventListener('close',()=>{resolve(dialog.returnValue==='join');dialog.remove()},{once:true});
+    dialog.showModal();
+  });
 }
 
 async function pullSync(mergeLocal){
@@ -810,7 +836,7 @@ function filteredBills(f=state){
     latest:(a,b)=>(la(b).date||'').localeCompare(la(a).date||'')||la(b).rank-la(a).rank||byNumber(a,b),
     oldest:(a,b)=>(la(a).date||'9').localeCompare(la(b).date||'9')||la(a).rank-la(b).rank||byNumber(a,b),
     actionstage:(a,b)=>la(b).rank-la(a).rank||(la(b).date||'').localeCompare(la(a).date||'')||byNumber(a,b),number:byNumber,agencies:(a,b)=>realAgencies(b).length-realAgencies(a).length||byNumber(a,b),hearing:(a,b)=>assessHearing(b).level-assessHearing(a).level||byNumber(a,b),influence:(a,b)=>authorInfluence(b).level-authorInfluence(a).level||byNumber(a,b)};
-  return list.sort(sorters[f.sort]||sorters.newest);
+  return list.sort(Object.hasOwn(sorters,f.sort)?sorters[f.sort]:sorters.newest);  // own keys only: "__proto__" is not a sort
 }
 
 function renderResults(){keepFocus(drawResults)}
