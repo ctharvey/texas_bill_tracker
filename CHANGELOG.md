@@ -1,6 +1,15 @@
 # Changelog
 
 ## 2026-11-15
+- Review fixes for the redundant-work changes (reports in `.agent/reviews/texas-bill-atlas-review-*-2026-11-15.md`):
+  Luna shards are immutable files named by their hash, so an index the edge cache still serves resolves to its own
+  map, the shards folder is world-readable under the worker's umask, and a failed shard publish removes the index
+  so the page reads the single file. A run counts as idle only if no pass was cut short and nothing was deferred,
+  held, skipped or failed (and no embeddings were bought); a stop during the idle wait exits cleanly, and
+  `flex_boundary --release/--hold` clears the marker. Unchanged bills' texts are still MDTM-checked once a day
+  and placeholders downloaded every 6 hours, in case TLC re-posts without moving a time stamp; only "213" MDTM
+  replies count. A damaged related-bills state falls back to the full computation. The agent site's review pace
+  counts back from the worker's status time.
 - Review service: idle runs stop repeating. It started a run two minutes after the last ended (about 230 a day at
   2.5 to 3 CPU-minutes each, $0 spent) and each rewrote the 4 MB `tags.json`, `extras.json` and `audit.json` with
   only a new time stamp. Now unchanged maps keep their file and ETag; related bills reuse the last run's lists
