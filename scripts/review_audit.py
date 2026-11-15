@@ -148,6 +148,13 @@ def publish(reviews, cache_dir: Path, out: Path) -> int:
                "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
                "checked": sum(counts.values()), "agree": counts["agree"],
                "minor_issues": counts["minor_issues"], "major_issues": counts["major_issues"]}
+    try:
+        previous = json.loads(out.read_text("utf-8"))
+    except (OSError, ValueError):
+        previous = None
+    if isinstance(previous, dict) and {k: v for k, v in previous.items() if k != "generated_at"} == \
+            {k: v for k, v in payload.items() if k != "generated_at"}:
+        return payload["checked"]  # Unchanged: keep the file and its ETag.
     out.parent.mkdir(parents=True, exist_ok=True)
     temporary = out.with_name(out.name + ".tmp")
     temporary.write_text(json.dumps(payload) + "\n", "utf-8")

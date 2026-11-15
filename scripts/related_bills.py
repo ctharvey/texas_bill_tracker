@@ -112,10 +112,10 @@ def companion_pairs(bills: list[dict]) -> set[frozenset]:
     return pairs
 
 
-def top_related(keys: dict[str, str], vectors: dict[str, list[float]], exclude: set[frozenset],
-                top: int = TOP, min_score: float = MIN_SCORE) -> dict[str, list[dict]]:
-    """Top cosine neighbours per bill. Bills with identical text (same key) and listed companions are skipped:
-    the drawer already shows companions, and duplicates would crowd out genuinely related bills."""
+def _top_raw(keys: dict[str, str], vectors: dict[str, list[float]], exclude: set[frozenset],
+             top: int = TOP, min_score: float = MIN_SCORE) -> dict[str, list[tuple[float, str]]]:
+    """Every bill's `top` largest (score, other) pairs, all pairs compared. Ranking by the whole (score, id) pair
+    makes the result independent of comparison order, which the incremental update below relies on."""
     ids = sorted(keys)
     best: dict[str, list] = {i: [] for i in ids}
     for a in range(len(ids)):
@@ -131,10 +131,61 @@ def top_related(keys: dict[str, str], vectors: dict[str, list[float]], exclude: 
                 heap = best[mine]
                 if len(heap) < top:
                     heapq.heappush(heap, (score, other))
-                elif score > heap[0][0]:
+                elif (score, other) > heap[0]:
                     heapq.heapreplace(heap, (score, other))
-    return {i: [{"id": other, "score": round(score, 3)} for score, other in sorted(heap, reverse=True)]
-            for i, heap in best.items() if heap}
+    return {i: sorted(heap, reverse=True) for i, heap in best.items()}
+
+
+def _format(raw: dict[str, list[tuple[float, str]]]) -> dict[str, list[dict]]:
+    return {i: [{"id": other, "score": round(score, 3)} for score, other in pairs] for i, pairs in raw.items() if pairs}
+
+
+def top_related(keys: dict[str, str], vectors: dict[str, list[float]], exclude: set[frozenset],
+                top: int = TOP, min_score: float = MIN_SCORE) -> dict[str, list[dict]]:
+    """Top cosine neighbours per bill. Bills with identical text (same key) and listed companions are skipped:
+    the drawer already shows companions, and duplicates would crowd out genuinely related bills."""
+    return _format(_top_raw(keys, vectors, exclude, top, min_score))
+
+
+def update_related(state: dict | None, keys: dict[str, str], vectors: dict[str, list[float]], exclude: set[frozenset],
+                   top: int = TOP, min_score: float = MIN_SCORE) -> tuple[dict[str, list[tuple[float, str]]], int]:
+    """_top_raw's exact result, reusing the last run's lists. Only bills whose text or companions changed are compared
+    with every bill; any other bill keeps its list unless it named a changed or removed bill (then its row is
+    recomputed), and otherwise only takes in the changed bills. Returns (lists, rows recomputed); -1 = everything."""
+    params = [MODEL, DIMENSIONS, top, min_score]
+    old_keys = (state or {}).get("keys") if isinstance(state, dict) and state.get("params") == params else None
+    if not isinstance(old_keys, dict) or not isinstance(state.get("best"), dict):
+        return _top_raw(keys, vectors, exclude, top, min_score), -1
+    old_exclude = {frozenset(p) for p in state.get("exclude") or [] if isinstance(p, list) and len(p) == 2}
+    changed = {i for i in keys if old_keys.get(i) != keys[i]}
+    for pair in old_exclude ^ exclude:
+        changed |= {i for i in pair if i in keys}
+    dirty = changed | (set(old_keys) - set(keys))
+    if len(dirty) * 3 > len(keys):
+        return _top_raw(keys, vectors, exclude, top, min_score), -1
+
+    def score(a: str, b: str) -> float | None:
+        if keys[a] == keys[b] or frozenset((a, b)) in exclude:
+            return None
+        value = sum(map(mul, vectors[keys[a]], vectors[keys[b]]))
+        return value if value >= min_score else None
+
+    def row(i: str) -> list[tuple[float, str]]:
+        found = ((score(i, o), o) for o in keys if o != i)
+        return heapq.nlargest(top, ((s, o) for s, o in found if s is not None))
+
+    best, recomputed = {}, 0
+    for i in sorted(keys):
+        previous = [(float(s), str(o)) for s, o in state["best"].get(i) or []]
+        if i in changed or any(o in dirty for _, o in previous):
+            best[i] = row(i)
+            recomputed += 1
+            continue
+        # Every earlier candidate still scores the same; one that was not listed ranked below this list, so only
+        # the changed bills can enter it.
+        merged = previous + [(s, c) for c in changed if c != i for s in (score(i, c),) if s is not None]
+        best[i] = heapq.nlargest(top, merged)
+    return best, recomputed
 
 
 def publish(snapshot_bills: list[dict], summaries: dict[str, str], cache_dir: Path, out: Path,
@@ -144,7 +195,18 @@ def publish(snapshot_bills: list[dict], summaries: dict[str, str], cache_dir: Pa
     texts = {b["id"]: bill_text(b, summaries.get(b["id"])) for b in bills}
     texts = {i: t for i, t in texts.items() if t}
     vectors, tokens = embed_missing(list(texts.values()), cache_dir, embedder)
-    related = top_related({i: text_key(t) for i, t in texts.items()}, vectors, companion_pairs(bills))
+    keys, exclude = {i: text_key(t) for i, t in texts.items()}, companion_pairs(bills)
+    state_path = cache_dir / "embeddings" / "related-state.json"
+    try:
+        state = json.loads(state_path.read_text("utf-8"))
+    except (OSError, ValueError):
+        state = None
+    raw, _ = update_related(state, keys, vectors, exclude)
+    new_state = {"params": [MODEL, DIMENSIONS, TOP, MIN_SCORE], "keys": keys,
+                 "exclude": sorted(sorted(p) for p in exclude), "best": {i: [[s, o] for s, o in v] for i, v in raw.items()}}
+    if new_state != state:
+        _atomic_write(state_path, json.dumps(new_state, separators=(",", ":")))
+    related = _format(raw)
     payload = {"format": FORMAT, "model": MODEL,
                "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
                "bills": related}

@@ -1054,6 +1054,9 @@ def publish_tags(cache_dir: Path, out: Path, registry: list[dict], live: set[str
     payload = {"format": "texas-bill-luna-tags-v1", "model": classification.MODEL,
                "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
                "agencies": {a["id"]: a["name"] for a in registry}, "bills": bills}
+    if same_but_stamp(previous, payload):
+        # Unchanged: keep the file, its time and its ETag, so every visitor's cached copy stays valid.
+        return len(bills)
     atomic_json(out, payload, mode=0o644)  # Served publicly; the worker's UMask=0077 would otherwise hide it.
     try:
         import luna_updates
@@ -1738,6 +1741,12 @@ def _read_json(path: Path):
         return json.loads(path.read_text("utf-8"))
     except (OSError, ValueError):
         return None
+
+
+def same_but_stamp(previous, payload: dict, stamp: str = "generated_at") -> bool:
+    """True when a published file already says exactly this, apart from its time stamp."""
+    return (isinstance(previous, dict)
+            and {k: v for k, v in previous.items() if k != stamp} == {k: v for k, v in payload.items() if k != stamp})
 
 
 def _key_fn(budget):

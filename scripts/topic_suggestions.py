@@ -331,6 +331,13 @@ def publish_extras(reviews, cache_dir: Path, out: Path) -> int:
     payload = {"format": EXTRAS_FORMAT, "model": classify_bill.MODEL,
                "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
                "bills": bills}
+    try:
+        previous = json.loads(out.read_text("utf-8"))
+    except (OSError, ValueError):
+        previous = None
+    if isinstance(previous, dict) and {k: v for k, v in previous.items() if k != "generated_at"} == \
+            {k: v for k, v in payload.items() if k != "generated_at"}:
+        return len(bills)  # Unchanged: keep the file and its ETag.
     out.parent.mkdir(parents=True, exist_ok=True)
     temporary = out.with_name(out.name + ".tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n", "utf-8")
