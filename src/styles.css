@@ -194,6 +194,11 @@ a.bill-number:hover{text-decoration:underline}
 .today-row-head{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
 .today-row-head .bill-title-link{font-weight:700;flex:1 1 220px}
 .today-action{margin:6px 0;font-size:var(--fs-sm);color:color-mix(in srgb,var(--ink) 73%,var(--surface));overflow-wrap:anywhere}
+/* The row's action, who filed it and its tags share one line, wrapping on narrow screens. */
+.today-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:6px}
+.today-meta .today-action{margin:0}.today-meta .bill-tags{margin:0}
+.today-by{font-size:var(--fs-sm);color:color-mix(in srgb,var(--ink) 73%,var(--surface))}
+.nav-count[hidden]{display:none!important}
 .near-setup h3{font:var(--head-weight) 16px var(--font-head);margin:0 0 6px}
 .near-notice{font-size:var(--fs-xs);color:var(--muted);line-height:1.55;margin:0 0 14px}
 .near-busy{font-size:var(--fs-sm);color:var(--teal);font-weight:700;margin:0 0 12px}
@@ -530,6 +535,8 @@ summary:focus-visible,.disclaimer-ok:focus-visible,.footer-link:focus-visible{ou
   .search-row{flex-wrap:nowrap}.search-wrap{flex:1 1 auto;flex-basis:auto;min-width:0}.share-menu>summary{white-space:nowrap}.share-panel{left:auto;right:0}
   .filter-bar>.filter-row{flex:1 1 0;min-width:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding:3px 3px 6px;margin:-3px}
   .filter-bar>.filter-row select{flex:0 0 auto;min-width:0;max-width:40vw;text-overflow:ellipsis}
+  .today-topics{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding:3px 3px 6px;margin:-3px -3px 8px}
+  .today-topics>*{flex:0 0 auto;white-space:nowrap}
   .bill-bar .drawer-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%}
   .bill-bar .drawer-actions>*{text-align:center;padding:8px 10px;font-size:var(--fs-xs)}}
 /* Phones: the bundled-copy notice keeps its lead and the Coverage link; the details are on the Data page. */

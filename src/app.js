@@ -571,6 +571,8 @@ function renderOverview(){
     part(today,'filed today','filed today','According to the filing dates in the data'),
     part(scheduled,'hearing scheduled','hearings scheduled','Confirmed by recorded actions')].join('<span aria-hidden="true">·</span>');
   $('#nav-all').textContent=state.bills.length;
+  const doneToday=activityOn(state.bills,todayDay()).length,todayCount=$('#nav-today');
+  if(todayCount){todayCount.textContent=doneToday;todayCount.hidden=!doneToday}
   $('#nav-watch').textContent=state.watch.size;
   $('#nav-follow').textContent=state.follow.length+state.searches.length;
   const progress=reviewProgress(state.bills.map(b=>b.id),state.reviewStatus,Object.keys(state.luna?.bills||{}));
@@ -599,7 +601,7 @@ function registerViews(){
   registerView('all',{heading:['See what’s moving.','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:explorerMarkup,after:renderResults});
   registerView('watchlist',{heading:['Your watchlist.','Bills you starred on this device, with a clear view of their movement.'],render:explorerMarkup,after:renderResults});
   registerView('following',{heading:['Following.','Legislators you follow on this device, and every bill they file or sign onto.'],render:followingMarkup});
-  registerView('today',{heading:['Today at the Lege.','Bills with a recorded action today, grouped by type of action. Dates follow Texas time.'],render:todayMarkup});
+  registerView('today',{heading:['Today at the Lege.','Bills with a recorded action that day, by type of action. Dates follow Texas time.'],render:todayMarkup});
   registerView('local',{heading:['Near you.','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],render:nearMarkup});
   registerView('member',{heading:['One legislator.','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],render:memberMarkup});
   registerView('statute',{heading:['One section of law.','The bills that would amend, add or repeal this section of Texas law, with their wording side by side.'],render:statuteMarkup});
@@ -997,7 +999,7 @@ function todayMarkup(){
   let budget=state.todayLimit;
   const sections=groupByActionType(shown).map(g=>{
     const part=g.rows.slice(0,Math.max(0,budget));budget-=part.length;
-    return part.length?`<section class="today-group"><h3>${esc(g.label)} <span>${g.rows.length}</span></h3>${part.map(todayRow).join('')}</section>`:'';
+    return part.length?`<section class="today-group"><h3>${esc(g.label)} <span>${g.rows.length}</span></h3>${part.map(r=>todayRow(r,{by:true})).join('')}</section>`:'';
   }).join('');
   return `<div class="section-head"><div><div class="section-overline">${day===today?'TODAY':'MOST RECENT ACTIVITY'}</div><h2>${esc(dateText(day))}</h2></div><span class="subtitle">${shown.length} ${shown.length===1?'bill':'bills'} with recorded action</span></div>
     <div class="info-callout today-note">${note?`<p>${note}</p>`:''}<p>${esc(TODAY_INTERIM_NOTE)}</p></div>
@@ -1005,9 +1007,10 @@ function todayMarkup(){
     ${shown.length>state.todayLimit?`<button class="outline-button" id="today-more">Show 100 more · showing ${state.todayLimit} of ${shown.length}</button>`:''}`;
 }
 
-function todayRow({bill:b,actions}){
+// `by`: also name who filed the bill (the Today page; member pages and Near you already say whose bills they are).
+function todayRow({bill:b,actions},{by=false}={}){
   const real=realAgencies(b);
-  return `<article class="today-row" data-bill-id="${esc(b.id)}"><div class="today-row-head">${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span>${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</div>${headlineLine(b,'card')}<p class="today-action">${actions.map(esc).join(' · ')}</p><div class="bill-tags">${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${real.slice(0,2).map(a=>`<span class="tag agency">${esc(agencyName(a.id).replace(/^Texas /,'').replace(/ Department of /,' · '))}</span>`).join('')}</div></article>`;
+  return `<article class="today-row" data-bill-id="${esc(b.id)}"><div class="today-row-head">${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span>${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</div>${headlineLine(b,'card')}<div class="today-meta"><p class="today-action">${actions.map(esc).join(' · ')}</p>${by&&b.author?`<span class="today-by">by ${filerHtml(b)}</span>`:''}<div class="bill-tags">${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${real.slice(0,2).map(a=>`<span class="tag agency">${esc(agencyName(a.id).replace(/^Texas /,'').replace(/ Department of /,' · '))}</span>`).join('')}</div></div></article>`;
 }
 
 // ---- Near you: the visitor's own legislators and the bills tied to them. Location stays in this browser. ----
@@ -1139,7 +1142,10 @@ const influencePill=i=>i.level>=4?`<span class="influence-pill" title="${esc(i.f
 const tenurePill=m=>{const t=tenureTag(m);return t?`<span class="tenure-pill tenure-${t.key}" title="${esc(t.detail)}">${esc(t.label)}</span>`:''};
 const memberNameHtml=(member,label)=>member?.code?`<a class="text-link member-name" href="${esc(memberHref(member.code))}">${esc(label)}</a>`:esc(label);
 // Authors serve in the bill's own chamber.
-const authorHtml=(b,name)=>memberNameHtml(b.people?.authors?.find(p=>p.name===name)?.member||rosterMember(String(b.chamber||'').toLowerCase(),name),name);
+const authorMember=(b,name)=>b.people?.authors?.find(p=>p.name===name)?.member||rosterMember(String(b.chamber||'').toLowerCase(),name);
+const authorHtml=(b,name)=>memberNameHtml(authorMember(b,name),name);
+// The primary author by title and full name ("Rep. Ann Johnson") when the roster knows them; else the bill's own name.
+const filerHtml=b=>{const m=authorMember(b,b.author);return memberNameHtml(m,m?.full_name||m?.display_name?memberTitle(m):b.author)};
 // Only the district tables (about 240 KB), not the maps; reused when Near you already loaded everything.
 let tablesLoading=null;
 function districtTables(){

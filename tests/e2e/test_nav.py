@@ -1,18 +1,18 @@
-"""The nav: Browse, Yours and About groups; Today lives on the dashboard; on a phone, a bottom bar with More."""
+"""The nav: Browse, Yours and About groups; Today in Browse and on the dashboard; on a phone, a bottom bar with More."""
 
 from playwright.sync_api import expect
 
 BAR = ["Home", "Bill explorer", "Watchlist", "More"]
 
 
-def test_groups_and_today_leaving_the_nav(device, viewport):
+def test_groups_and_today_in_the_nav(device, viewport):
     page = device.open("#home")
-    expect(page.locator('.sidebar [data-view="today"]')).to_have_count(0)
-    expect(page.locator('.home-card a[data-view="today"]')).to_have_count(1)  # Today is reached from the dashboard
+    expect(page.locator('.sidebar [data-view="today"]')).to_have_count(1)
+    expect(page.locator('.home-card a[data-view="today"]')).to_have_count(1)  # the dashboard links the whole day too
     expect(page.locator(".nav-label")).to_have_text(["BROWSE", "YOURS", "ABOUT"])
     if viewport == "desktop":
         expect(page.locator("#nav-more")).to_be_hidden()
-        expect(page.locator(".sidebar [data-view]")).to_have_count(10)
+        expect(page.locator(".sidebar [data-view]")).to_have_count(11)
 
 
 def test_phone_bottom_bar_and_more_sheet(device, viewport):
@@ -26,7 +26,7 @@ def test_phone_bottom_bar_and_more_sheet(device, viewport):
     more = page.locator("#nav-more")
     more.click()
     expect(more).to_have_attribute("aria-expanded", "true")
-    expect(page.locator(".sidebar [data-view]:visible")).to_have_count(10)
+    expect(page.locator(".sidebar [data-view]:visible")).to_have_count(11)
     page.keyboard.press("Escape")
     expect(more).to_have_attribute("aria-expanded", "false")
     more.click()

@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-15
+- Today is back in the nav (Browse, after Home; under More on phones), with a count when today itself has
+  activity. Its rows put the action, who filed the bill ("by Rep. ...") and the tags on one line, and on phones the
+  topic chips are one scrolling row so the first bill shows without scrolling.
 - Search keeps each bill's search text between keystrokes instead of rebuilding it for all 1,521 bills every time
   (it starts over when bills or Luna's agency names change). Desktop: a keystroke went from about 22 to 15 ms, and a
   search that matches nothing from 9.5 to 2.3 ms; results unchanged. No debounce.
