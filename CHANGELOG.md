@@ -1,6 +1,12 @@
 # Changelog
 
 ## 2026-11-15
+- Bill texts are read again only when their own file changed. Before, any new action on a bill re-read every text
+  version (the bill's update time stood in for the text's), and the 24 texts TLC has not posted yet were read every
+  hour, all counting against the 400-per-run limit. Now a bill whose update time is unchanged costs no FTP call; a
+  changed bill costs one MDTM per version; placeholders are remembered (`live/ftp-text-pending.json`) until their
+  file changes; and unchanged `index.json` files are no longer rewritten. On a copy of live data: the first run kept
+  all 1,497 texts without reading them, the next took 0.9 s with no downloads.
 - The hourly bill-history import only reads files that changed. Re-reading all 1,521 history files took 11
   minutes (0.4 s per file), which would be about 85 minutes at session volume, past the hour and the unit's
   45-minute limit. It now LISTs each FTP folder and reads new or changed files, plus 1/24 of the rest each hour

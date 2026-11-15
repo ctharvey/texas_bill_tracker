@@ -589,12 +589,15 @@ def _decode_html(raw: bytes) -> str:
 
 
 def _source_modified(conn, bill: dict, path: str) -> str | None:
-    if bill.get("source_updated"):
-        return str(bill["source_updated"])
+    """The text file's own MDTM; the bill's lastUpdate only when the server cannot say (the original stamp)."""
     try:
         return str(conn.sendcmd(f"MDTM {path}")).split()[-1]
     except Exception:
-        return None
+        return str(bill["source_updated"]) if bill.get("source_updated") else None
+
+
+TEXT_PENDING_FORMAT = "texas-bill-text-pending-v1"
+_MDTM_STAMP = re.compile(r"^\d{14}(?:\.\d+)?$")
 
 
 def _load_index(path: Path) -> dict[str, dict]:
@@ -605,10 +608,19 @@ def _load_index(path: Path) -> dict[str, dict]:
         return {}
 
 
-def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int) -> dict:
-    """Write text_dir/<BILL>/<CODE>.md and index.json for each bill's TLC text versions."""
-    counts = {"bills": 0, "versions": 0, "downloaded": 0, "unchanged": 0, "deferred": 0, "failed": 0, "not_posted": 0}
+def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int, pending_path: Path | None = None) -> dict:
+    """Write text_dir/<BILL>/<CODE>.md and index.json for each bill's TLC text versions.
+
+    A bill whose lastUpdate matches the one its index was last fully checked against costs no FTP call. Otherwise each
+    version costs one MDTM and is downloaded only when that file's own stamp moved, so a new action no longer re-reads
+    every version. With pending_path, TLC placeholder pages are remembered by MDTM and read again only once they change.
+    """
+    counts = {"bills": 0, "versions": 0, "downloaded": 0, "unchanged": 0, "deferred": 0, "failed": 0, "not_posted": 0,
+              "skipped_bills": 0, "placeholder_unchanged": 0}
     now = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+    stored = _load_json(pending_path) if pending_path else {}
+    old_pending = stored.get("bills") if stored.get("format") == TEXT_PENDING_FORMAT and isinstance(stored.get("bills"), dict) else {}
+    pending: dict[str, dict] = {}
     for bill in bills:
         versions = bill.get("text_versions") or []
         bill_id = str(bill.get("id", ""))
@@ -618,21 +630,49 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int) -> dict:
         bill_dir = text_dir / bill_id
         index_path = bill_dir / "index.json"
         previous = _load_index(index_path)
+        updated = str(bill.get("source_updated") or "")
+        waiting = old_pending.get(bill_id) if isinstance(old_pending.get(bill_id), dict) else {}
+        codes = [str(v.get("code", "")) for v in versions]
+        checked = _load_json(index_path).get("bill_updated") if previous else None
+        # Same lastUpdate as the last complete check, every version on disk, nothing waiting: the bill is as it was.
+        if (updated and checked == updated and not waiting and all(c in previous for c in codes)
+                and all((bill_dir / f"{c}.md").is_file() for c in codes)):
+            counts["skipped_bills"] += 1
+            counts["versions"] += len(codes)
+            counts["unchanged"] += len(codes)
+            continue
         entries = []
+        complete = True
         for version in versions:
             counts["versions"] += 1
             code, url = str(version.get("code", "")), str(version.get("html", ""))
             path = text_url_path(url)
             if not CODE_RE.match(code) or not path:
                 counts["failed"] += 1
+                complete = False
                 continue
             md_path = bill_dir / f"{code}.md"
             old = previous.get(code)
             exists = md_path.is_file()
             current = _source_modified(conn, bill, path)
-            if exists and old is not None and (not current or old.get("source_modified") == current):
-                counts["unchanged"] += 1
-                entries.append(old)
+            mdtm = current if current and _MDTM_STAMP.match(current) else None
+            if exists and old is not None:
+                stamp = old.get("source_modified")
+                # Entries written before MDTM stamps held the bill's lastUpdate; equal to today's, the file was read
+                # after the bill last changed, so take the MDTM without reading it again.
+                if mdtm and stamp == updated and updated and not _MDTM_STAMP.match(str(stamp)):
+                    old = {**old, "source_modified": mdtm}
+                    stamp = mdtm
+                if not current or stamp == current:
+                    counts["unchanged"] += 1
+                    entries.append(old)
+                    continue
+            if mdtm and isinstance(waiting.get(code), dict) and waiting[code].get("mdtm") == mdtm:
+                counts["placeholder_unchanged"] += 1  # Still the placeholder TLC last served: no download.
+                pending.setdefault(bill_id, {})[code] = waiting[code]
+                complete = False
+                if exists and old is not None:
+                    entries.append(old)
                 continue
             if exists and old is None and not current:
                 counts["unchanged"] += 1
@@ -642,6 +682,7 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int) -> dict:
                 continue
             if counts["downloaded"] >= max_texts:
                 counts["deferred"] += 1
+                complete = False
                 if exists and old is not None:
                     entries.append(old)
                 continue
@@ -652,9 +693,14 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int) -> dict:
                 bill_dir.mkdir(parents=True, exist_ok=True)
                 _atomic_write(md_path, data)
             except (*ftplib.all_errors, ValueError) as exc:
-                # A placeholder is not a failure: nothing is written, and the next run checks again.
-                counts["not_posted" if isinstance(exc, TextNotPosted) else "failed"] += 1
+                # A placeholder is not a failure: nothing is written, and the next run checks again (or, with an
+                # MDTM to recognise it by, once TLC replaces it).
+                placeholder = isinstance(exc, TextNotPosted)
+                counts["not_posted" if placeholder else "failed"] += 1
+                complete = False
                 print(f"text {bill_id}/{code}: {exc}", file=sys.stderr)
+                if placeholder and mdtm:
+                    pending.setdefault(bill_id, {})[code] = {"mdtm": mdtm, "checked": now}
                 if exists and old is not None:
                     entries.append(old)
                 continue
@@ -662,12 +708,23 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int) -> dict:
                             "source_modified": current or "", "sha256": hashlib.sha256(data).hexdigest(), "generated_at": now})
         if entries:
             index = {"format": TEXT_INDEX_FORMAT, "bill_id": bill_id, "versions": entries}
+            if complete and updated:
+                index["bill_updated"] = updated  # Lets the next run skip this bill until its lastUpdate moves.
+            data = (json.dumps(index, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
             try:
-                bill_dir.mkdir(parents=True, exist_ok=True)
-                _atomic_write(index_path, (json.dumps(index, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+                # Rewriting an identical index would still change its mtime, and with it the ETag readers revalidate.
+                if not (index_path.is_file() and index_path.read_bytes() == data):
+                    bill_dir.mkdir(parents=True, exist_ok=True)
+                    _atomic_write(index_path, data)
             except OSError as exc:
                 counts["failed"] += 1
                 print(f"text {bill_id}/index.json: {exc}", file=sys.stderr)
+    if pending_path is not None:
+        try:
+            _write_if_changed(pending_path, {"format": TEXT_PENDING_FORMAT, "bills": pending})
+        except OSError as exc:  # Without it placeholders are simply read again next run.
+            counts["failed"] += 1
+            print(f"text pending file: {exc}", file=sys.stderr)
     return counts
 
 
@@ -1401,7 +1458,8 @@ def main() -> int:
     try:
         with ftplib.FTP(HOST,timeout=55) as conn:
             conn.login('anonymous','legislative-research@example.invalid')
-            text_counts=sync_texts(conn,snapshot['bills'],args.text_dir or args.out.parent/'text',args.max_texts)
+            text_counts=sync_texts(conn,snapshot['bills'],args.text_dir or args.out.parent/'text',args.max_texts,
+                                   args.out.with_name('ftp-text-pending.json'))
         print(json.dumps({'texts':text_counts},indent=2))
     except Exception as exc:  # Text files are secondary; never fail a written snapshot.
         print(f"TEXT SYNC FAILED, snapshot unaffected: {exc}",file=sys.stderr)

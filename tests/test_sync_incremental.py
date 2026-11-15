@@ -322,5 +322,96 @@ class StoredHistories(unittest.TestCase):
             self.assertEqual((counts['written'], counts['unchanged']), (0, 1))
 
 
+class TextChecks(unittest.TestCase):
+    """Text versions are read again only when their own file changed, and placeholders only once TLC replaces them."""
+    TLC = 'ftp://ftp.legis.state.tx.us/bills/90R/billtext/HTML/house_bills/HB01000_HB01099/'
+    HTML = '<html><body><table><tr><td>&#xA0;</td><td>&#xA0;&#xA0;SECTION&#xA0;1.&#xA0;&#xA0;Text.</td></tr></table></body></html>'
+    PLACEHOLDER = ('<html><body><p>This version is not currently available, but is coming soon. In the meantime, '
+                   'please see the PDF for the content of this bill.</p></body></html>')
+
+    class Conn:
+        def __init__(self, stamps):
+            self.stamps, self.mdtm = stamps, []
+
+        def sendcmd(self, cmd):
+            self.mdtm.append(cmd)
+            return f"213 {self.stamps[cmd.split(' ', 1)[1].rsplit('/', 1)[1][7]]}"  # stamp by version code
+
+    def bills(self, updated, codes=('I',)):
+        return [{'id': 'HB1001', 'number': 'HB 1001', 'source_updated': updated,
+                 'text_versions': [{'code': c, 'name': c, 'html': f'{self.TLC}HB01001{c}.HTM'} for c in codes]}]
+
+    def sync(self, tmp, conn, bills, body=None):
+        reads = []
+
+        def fetch(c, path):
+            reads.append(path)
+            return (body or self.HTML).encode()
+
+        with mock.patch.object(sync_ftp, 'ftp_bytes', fetch), mock.patch('builtins.print'):
+            counts = sync_ftp.sync_texts(conn, bills, Path(tmp) / 'text', 400, Path(tmp) / 'pending.json')
+        return counts, reads
+
+    def test_new_action_without_a_new_text_file_reads_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = self.Conn({'I': '20261110080006', 'H': '20261111080006'})
+            self.sync(tmp, conn, self.bills('a', ('I', 'H')))
+            counts, reads = self.sync(tmp, conn, self.bills('b', ('I', 'H')))  # bill history moved, texts did not
+            self.assertEqual(reads, [])
+            self.assertEqual(counts['unchanged'], 2)
+            conn.stamps['H'] = '20261112080006'
+            _, reads = self.sync(tmp, conn, self.bills('c', ('I', 'H')))
+            self.assertEqual([p[-5:] for p in reads], ['H.HTM'])
+
+    def test_unchanged_bill_costs_no_ftp_call(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = self.Conn({'I': '20261110080006'})
+            self.sync(tmp, conn, self.bills('a'))
+            conn.mdtm.clear()
+            index = Path(tmp) / 'text' / 'HB1001' / 'index.json'
+            before = index.stat().st_mtime_ns
+            counts, reads = self.sync(tmp, conn, self.bills('a'))
+            self.assertEqual((conn.mdtm, reads, counts['skipped_bills']), ([], [], 1))
+            self.assertEqual(index.stat().st_mtime_ns, before)
+
+    def test_placeholder_is_read_again_only_when_it_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = self.Conn({'I': '20261110080006'})
+            counts, reads = self.sync(tmp, conn, self.bills('a'), self.PLACEHOLDER)
+            self.assertEqual((counts['not_posted'], len(reads)), (1, 1))
+            self.assertFalse((Path(tmp) / 'text' / 'HB1001').exists())  # still no folder: the review pipeline waits
+            counts, reads = self.sync(tmp, conn, self.bills('a'), self.PLACEHOLDER)
+            self.assertEqual((counts['placeholder_unchanged'], reads), (1, []))
+            conn.stamps['I'] = '20261111080006'  # TLC posts the real text
+            counts, reads = self.sync(tmp, conn, self.bills('a'))
+            self.assertEqual((counts['downloaded'], counts['not_posted']), (1, 0))
+            self.assertTrue((Path(tmp) / 'text' / 'HB1001' / 'I.md').is_file())
+            self.assertEqual(json.loads((Path(tmp) / 'pending.json').read_text('utf-8'))['bills'], {})
+
+    def test_index_from_before_mdtm_stamps_adopts_them_without_reading(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.sync(tmp, object(), self.bills('a'))  # no MDTM: stamped with the bill's lastUpdate, as before
+            index = json.loads((Path(tmp) / 'text' / 'HB1001' / 'index.json').read_text('utf-8'))
+            index.pop('bill_updated')
+            (Path(tmp) / 'text' / 'HB1001' / 'index.json').write_text(json.dumps(index), 'utf-8')
+            conn = self.Conn({'I': '20261110080006'})
+            _, reads = self.sync(tmp, conn, self.bills('a'))
+            self.assertEqual(reads, [])
+            stamp = json.loads((Path(tmp) / 'text' / 'HB1001' / 'index.json').read_text('utf-8'))['versions'][0]
+            self.assertEqual(stamp['source_modified'], '20261110080006')
+            _, reads = self.sync(tmp, conn, self.bills('b'))  # bill moved before the old stamp: still compared by MDTM
+            self.assertEqual(reads, [])
+
+    def test_legacy_stamp_older_than_the_bill_is_read_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.sync(tmp, object(), self.bills('a'))
+            index_path = Path(tmp) / 'text' / 'HB1001' / 'index.json'
+            index = json.loads(index_path.read_text('utf-8'))
+            index.pop('bill_updated')
+            index_path.write_text(json.dumps(index), 'utf-8')
+            _, reads = self.sync(tmp, self.Conn({'I': '20261110080006'}), self.bills('b'))
+            self.assertEqual(len(reads), 1)  # read before the bill's latest change: cannot be trusted
+
+
 if __name__ == '__main__':
     unittest.main()
