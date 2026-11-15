@@ -235,7 +235,7 @@ def test_watch_button_on_the_bill_page_toggles_and_keeps_the_bill_page_open(devi
     bill, _ = first_bill(page)
     page.goto(device.site.base + f"#bill?id={bill}")
     button = page.locator("#bill-page .drawer-actions [data-watch]")
-    expect(button).to_have_text("☆ Follow this bill")
+    expect(button).to_have_text("☆ Add to watchlist")
     button.click()
     expect(page.locator("#bill-page .drawer-actions [data-watch]")).to_have_text("★ Remove from watchlist")
     expect(page.locator("#bill-page")).to_be_visible()
@@ -281,7 +281,7 @@ def test_back_to_results_leaves_the_bill_page_and_escape_does_not(device):
 def test_clicking_inside_the_bill_page_does_not_leave_it(device):
     page = device.open("#bill?id=HB110")
     page.locator("#bill-page-title").click()
-    page.locator("#bill-page .drawer-caption").click()
+    page.locator("#bill-page .bill-intro .status-pill").click()  # the caption is hidden when it repeats the title
     expect(page.locator("#bill-page")).to_be_visible()
 
 

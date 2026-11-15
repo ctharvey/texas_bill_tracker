@@ -46,14 +46,14 @@ def test_star_from_the_bill_page(device):
     drawer = page.locator("#bill-page")
     expect(drawer).to_be_visible()
     btn = drawer.locator("[data-watch]")
-    expect(btn).to_have_text("☆ Follow this bill")
+    expect(btn).to_have_text("☆ Add to watchlist")
     btn.click()
     expect(page.locator("#toast")).to_have_text("HB110 added to your watchlist")
     expect(drawer.locator("[data-watch]")).to_have_text("★ Remove from watchlist")
     expect(page.locator("#nav-watch")).to_have_text("1")
     assert json.loads(device.storage()[WATCH_KEY]) == ["HB110"]
     drawer.locator("[data-watch]").click()
-    expect(drawer.locator("[data-watch]")).to_have_text("☆ Follow this bill")
+    expect(drawer.locator("[data-watch]")).to_have_text("☆ Add to watchlist")
     expect(page.locator("#nav-watch")).to_have_text("0")
     assert json.loads(device.storage()[WATCH_KEY]) == []
 
