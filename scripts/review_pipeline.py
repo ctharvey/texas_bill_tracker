@@ -1057,8 +1057,10 @@ def publish_tags(cache_dir: Path, out: Path, registry: list[dict], live: set[str
                "agencies": {a["id"]: a["name"] for a in registry}, "bills": bills}
     if same_but_stamp(previous, payload):
         # Unchanged: keep the file, its time and its ETag, so every visitor's cached copy stays valid.
+        publish_shards(out, "tags", previous, TAG_SHARDS)
         return len(bills)
     atomic_json(out, payload, mode=0o644)  # Served publicly; the worker's UMask=0077 would otherwise hide it.
+    publish_shards(out, "tags", payload, TAG_SHARDS)
     try:
         import luna_updates
         luna_updates.record(out, previous, payload, payload["generated_at"])
@@ -1742,6 +1744,19 @@ def _read_json(path: Path):
         return json.loads(path.read_text("utf-8"))
     except (OSError, ValueError):
         return None
+
+
+TAG_SHARDS = 32  # ~27 KB gzipped each at 1,500 bills; an hourly change of a few bills refetches a few shards
+
+
+def publish_shards(out: Path, name: str, payload, shards: int) -> None:
+    """The site's sharded copy of a published map (see luna_shards). A failure leaves the single file, which the
+    site falls back to, so it is reported and never fails the publish."""
+    try:
+        import luna_shards
+        luna_shards.publish(out.parent, name, payload, shards)
+    except Exception as error:  # noqa: BLE001
+        print("Sharded %s not updated:" % name, type(error).__name__, flush=True)
 
 
 def same_but_stamp(previous, payload: dict, stamp: str = "generated_at") -> bool:

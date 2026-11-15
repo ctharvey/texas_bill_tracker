@@ -11,7 +11,7 @@ import {setupThemePicker, setupModePicker, setTheme, savedTheme} from './feature
 import {TUMBLEWEED, noticeSearch, setupEasterEggs} from './features/easter/view.js';
 import {state} from './core/state.js';
 import {$, esc, toast} from './core/dom.js';
-import {timeoutSignal} from './core/net.js';
+import {timeoutSignal, loadShardedMap} from './core/net.js';
 import {registerView, setFallbackView, viewHeading, renderView} from './core/router.js';
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
 import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, visitKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
@@ -481,9 +481,11 @@ async function fetchLuna(){
       return body;
     }catch(error){console.warn(`Luna ${name} unavailable`,error.message);return null}
   };
+  const sharded=(name,format)=>loadShardedMap('./live/luna',name,format).catch(error=>{
+    console.warn(`Luna ${name} shards unavailable`,error.message);return load(name,format,x=>isMap(x.bills))});
   const [tags,extras,related,audit,updates]=await Promise.all([
-    load('tags','texas-bill-luna-tags-v1',x=>isMap(x.bills)),
-    load('extras','texas-bill-luna-extras-v1',x=>isMap(x.bills)),
+    sharded('tags','texas-bill-luna-tags-v1'),
+    sharded('extras','texas-bill-luna-extras-v1'),
     load('related','texas-bill-related-v1',x=>isMap(x.bills)),
     load('audit','texas-bill-luna-audit-v1',x=>true),
     load('updates','texas-bill-luna-updates-v1',x=>Array.isArray(x.updates))]);

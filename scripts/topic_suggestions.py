@@ -337,13 +337,27 @@ def publish_extras(reviews, cache_dir: Path, out: Path) -> int:
         previous = None
     if isinstance(previous, dict) and {k: v for k, v in previous.items() if k != "generated_at"} == \
             {k: v for k, v in payload.items() if k != "generated_at"}:
-        return len(bills)  # Unchanged: keep the file and its ETag.
+        _publish_shards(out, previous)  # Unchanged: keep the file and its ETag.
+        return len(bills)
     out.parent.mkdir(parents=True, exist_ok=True)
     temporary = out.with_name(out.name + ".tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n", "utf-8")
     os.chmod(temporary, 0o644)
     os.replace(temporary, out)
+    _publish_shards(out, payload)
     return len(bills)
+
+
+EXTRAS_SHARDS = 8  # ~15 KB gzipped each
+
+
+def _publish_shards(out: Path, payload: dict) -> None:
+    """The site's sharded copy (luna_shards); on failure the site reads the single file."""
+    try:
+        import luna_shards
+        luna_shards.publish(out.parent, "extras", payload, EXTRAS_SHARDS)
+    except Exception as error:  # noqa: BLE001
+        print("Sharded extras not updated:", type(error).__name__, flush=True)
 
 
 def tally(cache_dir: Path, min_bills: int = 1) -> list[dict]:
