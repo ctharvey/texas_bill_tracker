@@ -317,6 +317,7 @@ class SyncAppTests(unittest.TestCase):
     def test_foreign_origin_is_refused(self):
         self.assertEqual(self.call('POST', body={'data': {}}, Origin='https://evil.example')[0], 403)
         self.assertEqual(self.call('POST', body={'data': {}}, Origin='https://bills.ctharvey.me')[0], 201)
+        self.assertEqual(self.call('POST', body={'data': {}}, Origin='https://billatlas.org')[0], 201)
 
     def test_unused_lists_expire_after_a_year(self):
         old = self.create()

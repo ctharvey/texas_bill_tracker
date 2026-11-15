@@ -33,6 +33,8 @@ FEED_RE = re.compile(r"/api/sync/feed/([A-Za-z0-9_-]{22})\.xml")
 # Matches the gateway's request_body limit (cth.hosting 07-bills.ctharvey.me.caddy). 500 bills, 200 follows and 20
 # searches with SEARCH_FILTER_BYTES each come to about 21 KB.
 MAX_BODY = 32 * 1024
+# Pages that may write lists: the site is served under both names (cth.hosting 07-bills and 09-billatlas.org).
+ALLOWED_ORIGINS = ("https://billatlas.org", "https://bills.ctharvey.me")
 SEARCH_FILTER_BYTES = 600
 DISCARD_LIMIT, DISCARD_SECONDS = 1024 * 1024, 2  # Bounds on draining a refused body (make_handler).
 MAX_BILLS = 500
@@ -302,7 +304,7 @@ def watchlist_feed(bill_ids: list[str], bills: dict, site: str, reviews: dict | 
 
 class App:
     def __init__(self, store: Store, snapshot: Snapshot, *, trust_proxy=False,
-                 allowed_origins=("https://bills.ctharvey.me",), site=build_feeds.SITE, clock=time.time,
+                 allowed_origins=ALLOWED_ORIGINS, site=build_feeds.SITE, clock=time.time,
                  search: search_bills.Index | None = None, reviews: Reviews | None = None):
         self.store, self.snapshot, self.trust_proxy = store, snapshot, trust_proxy
         self.allowed_origins, self.site, self.clock = set(allowed_origins), site, clock
@@ -499,7 +501,7 @@ def main() -> int:
     parser.add_argument("--tags", type=Path, default=None, help="live/luna/tags.json, for review items in feeds")
     args = parser.parse_args()
     app = App(Store(args.db), Snapshot(args.snapshot), trust_proxy=args.trust_proxy,
-              allowed_origins=args.allowed_origin or ("https://bills.ctharvey.me",),
+              allowed_origins=args.allowed_origin or ALLOWED_ORIGINS,
               search=search_bills.Index(args.search_data) if args.search_data else None, reviews=Reviews(args.tags))
     server = Server((args.host, args.port), make_handler(app))
     print(f"Sync service listening on {args.host}:{args.port}", flush=True)
