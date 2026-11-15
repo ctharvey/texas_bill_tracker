@@ -77,7 +77,7 @@ def test_header_pills_title_and_caption(device):
     expect(pills.locator(".status-pill")).to_have_text("Filed")
     expect(pills.locator(".party-pill")).to_have_text("Democratic author")
     expect(bill.locator("#bill-page-title")).to_have_text("Relating to the minimum wage.")
-    expect(bill.locator(".drawer-caption")).to_have_text("Relating to the minimum wage.")
+    expect(bill.locator(".drawer-caption")).to_have_count(0)  # a caption that repeats the title is not shown twice
     meta = bill.locator(".drawer-meta-grid")
     expect(meta).to_contain_text("Nov 9, 2026")  # filed on
     expect(meta).to_contain_text("No hearing yet")  # hearing status
@@ -149,14 +149,14 @@ def test_rss_link_points_at_the_bills_feed(device):
 def test_watch_button_toggles_and_saves(device):
     page = device.open("#bill?id=HB110")
     watch = page.locator(f"{PAGE} [data-watch]")
-    expect(watch).to_have_text("☆ Follow this bill")
+    expect(watch).to_have_text("☆ Add to watchlist")
     watch.click()
     expect(watch).to_have_text("★ Remove from watchlist")
     expect(page.locator("#toast")).to_have_text("HB110 added to your watchlist")
     assert json.loads(device.storage()["tx-bill-atlas-watch-90r"]) == ["HB110"]
     expect(page.locator("#nav-watch")).to_have_text("1")
     watch.click()
-    expect(watch).to_have_text("☆ Follow this bill")
+    expect(watch).to_have_text("☆ Add to watchlist")
     expect(page.locator("#toast")).to_have_text("HB110 removed from your watchlist")
     expect(page.locator("#nav-watch")).to_have_text("0")
     assert json.loads(device.storage()["tx-bill-atlas-watch-90r"]) == []

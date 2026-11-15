@@ -6,6 +6,12 @@
   (`src/features/areas/model.js`). The explorer has an Area filter (`#all?area=<id>`) with a header for the chosen
   area, the dashboard a "Browse by area" card, and bill pages link their areas. Kept apart from `POLICY_AREAS`, so
   Luna's requests and cached reviews are unchanged. The sync server accepts the new `area` filter.
+- Visual review fixes: the Data, Saving and Near-you panels no longer show a white slab in dark mode; changing view
+  starts at the top of the page; the explorer's stat line says "bills in this snapshot" (it never followed the
+  filters); the bill page says "Add to watchlist" like the rest of the site, and drops a caption that repeats the
+  title; the preview pager counts every match and Next loads more; the agency index shows a code only when it is a
+  real short form; method and saving cards lose their 01-06 numbers; reader-area badges look like links; the bill
+  section tabs fade at the edge when they scroll; the previewed card's marker is no longer a star.
 
 ## 2026-11-13
 - Remembered filters are no longer rewritten on page load when they mean the same thing (the party filter had
