@@ -12,6 +12,8 @@
   title; the preview pager counts every match and Next loads more; the agency index shows a code only when it is a
   real short form; method and saving cards lose their 01-06 numbers; reader-area badges look like links; the bill
   section tabs fade at the edge when they scroll; the previewed card's marker is no longer a star.
+- Dark mode drop-downs: the theme picker and the other native selects drew white lists with near-white text; their
+  options now carry the theme's surface and ink. The agency picker panel loses its hard-coded white too.
 
 ## 2026-11-13
 - Remembered filters are no longer rewritten on page load when they mean the same thing (the party filter had

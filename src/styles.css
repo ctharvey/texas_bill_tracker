@@ -96,13 +96,13 @@ button[disabled]{opacity:.5;cursor:not-allowed}
 .agency-combobox input:focus{border-color:color-mix(in srgb,var(--accent) 43%,var(--surface));background:var(--surface);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 8%,var(--surface))}
 .agency-combobox input::placeholder{color:color-mix(in srgb,var(--ink) 68%,var(--surface));opacity:1}
 .agency-chevron{pointer-events:none;position:absolute;right:11px;top:7px;color:color-mix(in srgb,var(--ink) 52%,var(--surface));font-size:16px}
-.agency-panel{position:absolute;z-index:25;top:calc(100% + 5px);left:0;right:0;background:white;border:1px solid color-mix(in srgb,var(--accent) 22%,var(--surface));border-radius:calc(8px*var(--rs));box-shadow:0 12px 25px #182d462b;padding:4px}
+.agency-panel{position:absolute;z-index:25;top:calc(100% + 5px);left:0;right:0;background:var(--surface);border:1px solid color-mix(in srgb,var(--accent) 22%,var(--surface));border-radius:calc(8px*var(--rs));box-shadow:0 12px 25px #182d462b;padding:4px}
 .agency-options{max-height:290px;overflow-y:auto;overscroll-behavior:contain}
 .agency-sort{display:flex;gap:4px;padding:2px 2px 6px;margin-bottom:4px;border-bottom:1px solid color-mix(in srgb,var(--ink) 7%,var(--surface))}
 .filter-row .agency-sort button{flex:1;min-width:0;border:1px solid color-mix(in srgb,var(--ink) 11%,var(--surface));background:color-mix(in srgb,var(--accent) 2%,var(--surface));border-radius:calc(5px*var(--rs));padding:5px 8px;font-size:var(--fs-xs);color:color-mix(in srgb,var(--ink) 68%,var(--surface));cursor:pointer}
 .filter-row .agency-sort button[aria-pressed=true]{background:color-mix(in srgb,var(--accent) 8%,var(--surface));border-color:color-mix(in srgb,var(--accent) 43%,var(--surface));color:color-mix(in srgb,var(--accent) 87%,var(--ink));font-weight:700}
 .filter-row .agency-sort button:focus-visible{outline:2px solid var(--teal);outline-offset:1px}
-.filter-row .agency-option{display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;width:100%;min-width:0;border:0;border-radius:calc(5px*var(--rs));padding:9px 10px;background:white;color:color-mix(in srgb,var(--ink) 80%,var(--surface));font-size:var(--fs-xs);white-space:normal}
+.filter-row .agency-option{display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;width:100%;min-width:0;border:0;border-radius:calc(5px*var(--rs));padding:9px 10px;background:var(--surface);color:color-mix(in srgb,var(--ink) 80%,var(--surface));font-size:var(--fs-xs);white-space:normal}
 .filter-row .agency-option:hover,.filter-row .agency-option.active{background:color-mix(in srgb,var(--accent) 8%,var(--surface));color:color-mix(in srgb,var(--accent) 87%,var(--ink))}
 .filter-row .agency-option[aria-selected=true]{font-weight:800;color:var(--teal)}
 .agency-option-count{flex-shrink:0;color:color-mix(in srgb,var(--ink) 50%,var(--surface));font-size:var(--fs-xs)}
@@ -494,3 +494,5 @@ small{font-size:var(--fs-xs)}
 .home-areas{grid-column:1/-1}.area-groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 22px}.area-groups h3{font:var(--head-weight) var(--fs-sm) var(--font-head);margin:6px 0 6px}.area-list{list-style:none;padding:0;margin:0}.area-list li{padding:4px 0;font-size:var(--fs-sm);line-height:1.4}.area-count{color:var(--muted);font-size:var(--fs-xs);white-space:nowrap}
 @media(max-width:900px){.area-groups{grid-template-columns:1fr}}
 .area-badges a.area-tag{color:var(--teal);text-decoration:underline;text-underline-offset:2px}
+/* Native drop-down lists: some browsers draw them white whatever the page scheme, so the options carry the theme. */
+select option,select optgroup{background:var(--surface);color:var(--ink)}
