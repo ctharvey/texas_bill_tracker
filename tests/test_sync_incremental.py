@@ -341,7 +341,11 @@ class TextChecks(unittest.TestCase):
         return [{'id': 'HB1001', 'number': 'HB 1001', 'source_updated': updated,
                  'text_versions': [{'code': c, 'name': c, 'html': f'{self.TLC}HB01001{c}.HTM'} for c in codes]}]
 
-    def sync(self, tmp, conn, bills, body=None):
+    # A turn that is not HB1001's daily re-check, unless a test asks for it.
+    OFF_TURN = next(t for t in range(24) if not sync_ftp.text_recheck_due('HB1001', t))
+    ON_TURN = next(t for t in range(24) if sync_ftp.text_recheck_due('HB1001', t))
+
+    def sync(self, tmp, conn, bills, body=None, turn=None):
         reads = []
 
         def fetch(c, path):
@@ -349,7 +353,8 @@ class TextChecks(unittest.TestCase):
             return (body or self.HTML).encode()
 
         with mock.patch.object(sync_ftp, 'ftp_bytes', fetch), mock.patch('builtins.print'):
-            counts = sync_ftp.sync_texts(conn, bills, Path(tmp) / 'text', 400, Path(tmp) / 'pending.json')
+            counts = sync_ftp.sync_texts(conn, bills, Path(tmp) / 'text', 400, Path(tmp) / 'pending.json',
+                                         turn=self.OFF_TURN if turn is None else turn)
         return counts, reads
 
     def test_new_action_without_a_new_text_file_reads_nothing(self):
@@ -411,6 +416,60 @@ class TextChecks(unittest.TestCase):
             index_path.write_text(json.dumps(index), 'utf-8')
             _, reads = self.sync(tmp, self.Conn({'I': '20261110080006'}), self.bills('b'))
             self.assertEqual(len(reads), 1)  # read before the bill's latest change: cannot be trusted
+
+    def test_daily_recheck_finds_a_repost_without_a_new_lastupdate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = self.Conn({'I': '20261110080006'})
+            self.sync(tmp, conn, self.bills('a'))
+            conn.mdtm.clear()
+            counts, reads = self.sync(tmp, conn, self.bills('a'), turn=self.ON_TURN)  # unchanged: MDTM only
+            self.assertEqual((len(conn.mdtm), reads, counts['rechecked_bills']), (1, [], 1))
+            conn.stamps['I'] = '20261111080006'  # re-posted; the bill's lastUpdate did not move
+            _, reads = self.sync(tmp, conn, self.bills('a'))
+            self.assertEqual(reads, [])  # not this bill's turn
+            _, reads = self.sync(tmp, conn, self.bills('a'), turn=self.ON_TURN)
+            self.assertEqual([p[-5:] for p in reads], ['I.HTM'])
+
+    def test_every_bill_is_rechecked_once_a_day(self):
+        for bill in ('HB1', 'SB22', 'HJR45', 'HCR7'):
+            self.assertEqual(sum(sync_ftp.text_recheck_due(bill, t) for t in range(24)), 1, bill)
+
+    def test_placeholder_is_downloaded_again_after_the_recheck_interval(self):
+        # The real text could land without a new file time: a remembered placeholder still expires.
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = self.Conn({'I': '20261110080006'})
+            self.sync(tmp, conn, self.bills('a'), self.PLACEHOLDER)
+            pending = Path(tmp) / 'pending.json'
+            data = json.loads(pending.read_text('utf-8'))
+            data['bills']['HB1001']['I']['checked'] = '2000-01-01T00:00:00Z'
+            pending.write_text(json.dumps(data), 'utf-8')
+            counts, reads = self.sync(tmp, conn, self.bills('a'))
+            self.assertEqual((counts['downloaded'], counts['placeholder_unchanged']), (1, 0))
+            self.assertTrue((Path(tmp) / 'text' / 'HB1001' / 'I.md').is_file())
+
+    def test_placeholder_with_unreadable_check_time_is_downloaded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = self.Conn({'I': '20261110080006'})
+            self.sync(tmp, conn, self.bills('a'), self.PLACEHOLDER)
+            pending = Path(tmp) / 'pending.json'
+            data = json.loads(pending.read_text('utf-8'))
+            data['bills']['HB1001']['I']['checked'] = 'garbage'
+            pending.write_text(json.dumps(data), 'utf-8')
+            _, reads = self.sync(tmp, conn, self.bills('a'), self.PLACEHOLDER)
+            self.assertEqual(len(reads), 1)
+
+    def test_mdtm_reply_must_be_a_213_stamp(self):
+        bill = {'source_updated': '11/10/2026 08:00:06'}
+
+        class Reply:
+            def __init__(self, text):
+                self.text = text
+
+            def sendcmd(self, cmd):
+                return self.text
+        self.assertEqual(sync_ftp._source_modified(Reply('213 20261110080006'), bill, 'x'), '20261110080006')
+        for bad in ('550 No such file', '213', '213 soon', '200 20261110080006'):
+            self.assertEqual(sync_ftp._source_modified(Reply(bad), bill, 'x'), '11/10/2026 08:00:06', bad)
 
 
 if __name__ == '__main__':

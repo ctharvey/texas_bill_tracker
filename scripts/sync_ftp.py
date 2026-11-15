@@ -591,12 +591,17 @@ def _decode_html(raw: bytes) -> str:
 def _source_modified(conn, bill: dict, path: str) -> str | None:
     """The text file's own MDTM; the bill's lastUpdate only when the server cannot say (the original stamp)."""
     try:
-        return str(conn.sendcmd(f"MDTM {path}")).split()[-1]
+        reply = str(conn.sendcmd(f"MDTM {path}")).split()
+        if len(reply) == 2 and reply[0] == "213" and _MDTM_STAMP.match(reply[1]):
+            return reply[1]
     except Exception:
-        return str(bill["source_updated"]) if bill.get("source_updated") else None
+        pass
+    return str(bill["source_updated"]) if bill.get("source_updated") else None
 
 
 TEXT_PENDING_FORMAT = "texas-bill-text-pending-v1"
+TEXT_RECHECK_RUNS = 24  # an unchanged bill's texts are still MDTM-checked once a day (hourly runs)
+PLACEHOLDER_RECHECK_S = 6 * 3600  # a remembered placeholder is downloaded again at least this often
 _MDTM_STAMP = re.compile(r"^\d{14}(?:\.\d+)?$")
 
 
@@ -608,7 +613,21 @@ def _load_index(path: Path) -> dict[str, dict]:
         return {}
 
 
-def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int, pending_path: Path | None = None) -> dict:
+def text_recheck_due(bill_id: str, turn: int) -> bool:
+    """This run's daily share of unchanged bills: TLC may re-post a text without moving the bill's lastUpdate."""
+    return int(hashlib.sha256(bill_id.encode("utf-8")).hexdigest()[:8], 16) % TEXT_RECHECK_RUNS == turn % TEXT_RECHECK_RUNS
+
+
+def _age_s(stamp, now: dt.datetime) -> float | None:
+    try:
+        then = dt.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+        return (now - then).total_seconds() if then.tzinfo else None
+    except ValueError:
+        return None
+
+
+def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int, pending_path: Path | None = None,
+               turn: int | None = None) -> dict:
     """Write text_dir/<BILL>/<CODE>.md and index.json for each bill's TLC text versions.
 
     A bill whose lastUpdate matches the one its index was last fully checked against costs no FTP call. Otherwise each
@@ -616,8 +635,10 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int, pending_
     every version. With pending_path, TLC placeholder pages are remembered by MDTM and read again only once they change.
     """
     counts = {"bills": 0, "versions": 0, "downloaded": 0, "unchanged": 0, "deferred": 0, "failed": 0, "not_posted": 0,
-              "skipped_bills": 0, "placeholder_unchanged": 0}
-    now = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+              "skipped_bills": 0, "placeholder_unchanged": 0, "rechecked_bills": 0}
+    moment = dt.datetime.now(dt.timezone.utc)
+    now = moment.isoformat().replace("+00:00", "Z")
+    turn = int(moment.timestamp() // 3600) if turn is None else turn
     stored = _load_json(pending_path) if pending_path else {}
     old_pending = stored.get("bills") if stored.get("format") == TEXT_PENDING_FORMAT and isinstance(stored.get("bills"), dict) else {}
     pending: dict[str, dict] = {}
@@ -637,10 +658,13 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int, pending_
         # Same lastUpdate as the last complete check, every version on disk, nothing waiting: the bill is as it was.
         if (updated and checked == updated and not waiting and all(c in previous for c in codes)
                 and all((bill_dir / f"{c}.md").is_file() for c in codes)):
-            counts["skipped_bills"] += 1
-            counts["versions"] += len(codes)
-            counts["unchanged"] += len(codes)
-            continue
+            if text_recheck_due(bill_id, turn):
+                counts["rechecked_bills"] += 1  # falls through to one MDTM per version; downloads only on a change
+            else:
+                counts["skipped_bills"] += 1
+                counts["versions"] += len(codes)
+                counts["unchanged"] += len(codes)
+                continue
         entries = []
         complete = True
         for version in versions:
@@ -667,7 +691,12 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int, pending_
                     counts["unchanged"] += 1
                     entries.append(old)
                     continue
-            if mdtm and isinstance(waiting.get(code), dict) and waiting[code].get("mdtm") == mdtm:
+            remembered = waiting.get(code) if isinstance(waiting.get(code), dict) else None
+            age = _age_s(remembered.get("checked"), moment) if remembered else None
+            # Same MDTM as the placeholder last served, and downloaded recently: TLC may also post the real text
+            # without moving the file's time, so a placeholder is still downloaded every PLACEHOLDER_RECHECK_S.
+            if (mdtm and remembered and remembered.get("mdtm") == mdtm and age is not None
+                    and 0 <= age < PLACEHOLDER_RECHECK_S):
                 counts["placeholder_unchanged"] += 1  # Still the placeholder TLC last served: no download.
                 pending.setdefault(bill_id, {})[code] = waiting[code]
                 complete = False
