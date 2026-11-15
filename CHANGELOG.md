@@ -1,6 +1,14 @@
 # Changelog
 
 ## 2026-11-15
+- Review service: idle runs stop repeating. It started a run two minutes after the last ended (about 230 a day at
+  2.5 to 3 CPU-minutes each, $0 spent) and each rewrote the 4 MB `tags.json`, `extras.json` and `audit.json` with
+  only a new time stamp. Now unchanged maps keep their file and ETag; related bills reuse the last run's lists
+  (`embeddings/related-state.json`) and recompute only rows a changed bill touches (property-tested equal to the
+  full computation); and a timer start after a $0 run that changed nothing waits up to 30 minutes for new data or
+  code instead of re-reading every bill.
+- The site loads Luna tags and extras as content-addressed shards with a small index, cached by hash, so a review of
+  a few bills refetches a few of 32 shards instead of the 857 KB (gzipped) map on every visit.
 - Agent edition: district pages and the paged bill index point to the overview for "as of" times instead of
   carrying them. The full-text tags time moves with every review run, so 181 district pages and the bill index were
   rewritten every hour with no bill changed. The overview, 404 and recent pages still show the times.

@@ -204,7 +204,12 @@ summary, policy tags, agencies, statewide scope, locations, affected groups and 
 claims all failed verification is left out, and the tracker keeps its caption inference for that field.
 
 On the VPS the overlay is `/var/www/html/texas-bill-atlas/live/luna/tags.json`, served as `./live/luna/tags.json`
-through a `live -> ../../live` symlink the deployer adds to every release. The tracker labels Luna-tagged bills
+through a `live -> ../../live` symlink the deployer adds to every release. The page reads `tags.json` and
+`extras.json` through content-addressed shards (`live/luna/<name>-index.json` lists the hash of each
+`live/luna/shards/<name>-<n>.json`, fetched as `?v=<hash>` from the browser cache), so a review of a few bills
+refetches a few of 32 shards rather than the 4 MB map; it falls back to the single file, which every other reader
+keeps using. Unchanged maps (tags, extras, audit, related) are not rewritten, so their ETags hold between runs.
+The tracker labels Luna-tagged bills
 "Luna · full text" and shows the summary, review date and locations in the drawer.
 
 ### Member roster and party tint
@@ -422,7 +427,10 @@ and `/var/lib/texas-bill-review/{repository,venv,cache}`. The repository stays o
 `--ff-only`. Install optional dependencies into the dedicated venv; install the units under `/etc/systemd/system`.
 Set `OPENAI_API_KEY` only in root-owned mode-0600 `/etc/texas-bill-review.env`, outside the web root and git.
 Enable `texas-bill-review.timer` after the pilot; it starts a run two minutes after the last one ends (each run
-lasts up to 55 minutes, then pulls again), with an hourly start at minute 35 as a backstop. The production unit currently runs with `--no-spending-cap
+lasts up to 55 minutes, then pulls again), with an hourly start at minute 35 as a backstop. A timer start after a
+run that spent nothing, deferred nothing and changed no public Luna file waits (without the worker lock) until the
+snapshot, a text or history index, the account-stop file or the code changes, or 30 minutes pass; delete
+`<cache>/idle.json` to start at once. Shell and `--bill-id` runs never wait. The production unit currently runs with `--no-spending-cap
 --order reverse` so the backlog completes; restore `--daily-budget 1 --run-budget 0.10` to re-enable the guard. Inspect `journalctl -u texas-bill-review.service` and the private
 ledger/review queue. To pause spending, stop/disable this timer; the public tracker and metadata refresh remain
 independent. Reinstall dependencies when their requirements change.
