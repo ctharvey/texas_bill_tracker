@@ -145,6 +145,7 @@ async function init(){
   window.addEventListener('hashchange',()=>{const key=applyLocation(false);if(key)openSyncLink(key)});
   state.near=cleanNear(readJson(NEAR_KEY),null);
   const syncKey=applyLocation(true);
+  viewReady=true;
   setupDisclaimer();
   setupThemePicker(id=>{if(sync.linked?.mode==='edit')sync.record('theme',id)});
   setupModePicker();
@@ -236,7 +237,7 @@ function applyLocation(initial){
   // Arriving back at the page a bill was opened from: show as many results as before, then return to the same place.
   const back=view!=='bill'&&billReturn?.scrollY!==undefined&&location.hash===billReturn.hash?billReturn:null;
   if(back){state.visibleCount=Math.max(state.visibleCount,back.visibleCount);billReturn=null}
-  setView(view);
+  setView(view,false,{focus:!back});
   if(back)window.scrollTo({top:back.scrollY,behavior:'instant'});
   return p.sync;
 }
@@ -473,13 +474,23 @@ function setNavOpen(open){
   const more=$('#nav-more');more.setAttribute('aria-expanded',String(open));more.querySelector('.nav-more-label').textContent=open?'Close':'More';
 }
 // push=true adds a history entry (opening a bill page), so the browser's Back returns to the page before it.
-function setView(view,push=false){
+const PAGE_NAMES={home:'Home',all:'Bill explorer',watchlist:'Watchlist',following:'Following',today:'Today',local:'Near you',member:'Legislator',statute:'Section of law',agencies:'Agency index',review:'Review progress',method:'Scoring method',saving:'Saving your info',data:'Data & imports'};
+// The tab title names the page (and the bill or member), so history, tabs and screen readers can tell views apart.
+function pageTitle(view){
+  const bill=view==='bill'?state.bills.find(b=>b.id===state.openBill):null;
+  const member=view==='member'?memberByCode(state.roster,state.memberCode):null;
+  const name=bill?bill.number:member?memberTitle(member):PAGE_NAMES[view]||'Bill explorer';
+  return `${name} · Texas Bill Atlas`;
+}
+let viewReady=false;  // Set after the first view is drawn; the first load keeps focus where the browser put it.
+function setView(view,push=false,{focus=true}={}){
   switchFilters(view);
   state.view=view;
   if(view!=='bill')state.openBill=null;
   setNavOpen(false);
   preview.id=null;
-  document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===view));
+  document.querySelectorAll('[data-view]').forEach(el=>{el.classList.toggle('active',el.dataset.view===view);if(el.classList.contains('nav-item')){if(el.dataset.view===view)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current')}});
+  document.title=pageTitle(view);
   const [title,subtitle]=viewHeading(view);
   $('#page-title').innerHTML=title;$('#page-subtitle').textContent=subtitle;
   // A bill page has its own header in place of the page heading.
@@ -488,6 +499,8 @@ function setView(view,push=false){
   renderNotice();renderOverview();renderContent();persistState(push);
   // A new view starts at its top; arriving back from a bill, applyLocation restores the old place after this.
   window.scrollTo({top:0,behavior:'instant'});
+  // A new view is announced by moving focus to its heading; the bill page focuses its own title.
+  if(viewReady&&focus&&view!=='bill'){const h=$('#page-title');if(h){h.tabIndex=-1;h.focus({preventScroll:true})}}
 }
 
 function renderNotice(){
@@ -524,7 +537,21 @@ function renderOverview(){
   $('#nav-review').textContent=progress.reviewed.length+progress.inProgress.length;
 }
 
-function renderContent(){renderView(state.view,$('#dynamic-content'))}
+// A redraw replaces the control that had focus; this finds its replacement so keyboard users keep their place.
+const FOCUS_KEYS=['data-watch','data-topic','data-today-topic','data-open','data-clear-filter','data-watch-group','data-bill-jump'];
+function focusKey(){
+  const el=document.activeElement;
+  if(!el||el===document.body||el.id==='page-title')return null;
+  if(el.id)return `#${CSS.escape(el.id)}`;
+  const a=FOCUS_KEYS.find(k=>el.hasAttribute(k));
+  return a?`${el.tagName.toLowerCase()}[${a}="${CSS.escape(el.getAttribute(a))}"]`:null;
+}
+function keepFocus(draw){
+  const key=focusKey();draw();
+  const now=document.activeElement;
+  if(key&&(!now||now===document.body))document.querySelector(key)?.focus({preventScroll:true});
+}
+function renderContent(){keepFocus(()=>renderView(state.view,$('#dynamic-content')))}
 
 // Each view's heading and content. Features take theirs over as they move into src/features/.
 function registerViews(){
@@ -661,7 +688,7 @@ function companionBlock(b){
 
 function headlineLine(b,where){
   if(typeof b.headline!=='string'||!b.headline)return '';
-  return `<p class="bill-headline ${where}"><span class="headline-label">In brief</span> <span class="ai-badge" title="Plain-language line written by Luna from its review; not official">AI</span> <span class="headline-text">${esc(b.headline)}</span></p>`;
+  return `<p class="bill-headline ${where}"><span class="headline-label">In brief</span> <span class="ai-badge" title="Plain-language line written by Luna from its review; not official">AI</span> <span class="headline-text"${where==='card'?` title="${esc(b.headline)}"`:''}>${esc(b.headline)}</span></p>`;
 }
 function relatedBlock(b){
   const known=new Set(state.bills.map(x=>x.id));
@@ -718,7 +745,8 @@ function filteredBills(f=state){
   return list.sort(sorters[f.sort]||sorters.newest);
 }
 
-function renderResults(){
+function renderResults(){keepFocus(drawResults)}
+function drawResults(){
   renderAreaHeader();
   const list=filteredBills();
   $('#result-count').textContent=`${list.length} ${list.length===1?'bill':'bills'}`;
@@ -816,7 +844,7 @@ function billCard(b,unwatchedCompanion=false,reasons=null){
   const via=agencyVia().get(b.id);
   const viaTag=via?`<span class="tag agency via-companion" title="${esc(`Not tagged with ${agencyName(state.agency)} itself; listed because its companion ${via.map(id=>companionLabel({id})).join(', ')} is.`)}">via companion ${esc(via.map(id=>companionLabel({id})).join(', '))}</span>`:'';
   const actionTag=`<span class="tag action-tag action-${esc(last.key)}" title="${esc(`Last action${last.chamber?` (${last.chamber})`:''}: ${last.text}`)}">${esc(last.label)}${last.chamber&&last.key!=='filed'?` · ${esc(last.chamber)}`:''}${last.date?` · ${esc(shortDate(last.date))}`:''}</span>`;
-  return `<article class="bill-card party-${party.tint}${unwatchedCompanion?' unwatched-companion':''}" data-bill-id="${esc(b.id)}"><div class="bill-left"><div class="bill-head">${unwatchedCompanion?'<span class="unwatched-pill">Companion · not watched</span>':''}${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><span class="party-pill party-${party.tint}" title="${esc(party.detail)}">${esc(party.label)}</span>${influence.level>=4?influencePill(influence):''}</div><h3 class="bill-title">${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</h3>${headlineLine(b,'card')}${reasonLine(reasons)}${sameText(b.caption,b.title)?'':`<p class="bill-description">${esc(b.caption)}</p>`}<div class="bill-tags">${actionTag}${viaTag}${companionTags}${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${agencyTags}${real.length>2?`<span class="tag agency">+${real.length-2} agencies</span>`:''}</div><div class="bill-meta"><span>By <b>${authorHtml(b,b.authors[0]||b.author)}</b></span>${countSpan(b.authors.length>1?b.authors.length:0,'author')}${countSpan(b.coauthors?.length,'coauthor')}${countSpan(b.cosponsors?.length,'cosponsor')}<span class="bill-filed">Filed ${dateText(b.filed_at)}</span>${real.length?`<span class="bill-links">${real.length} agency ${real.length===1?'link':'links'}</span>`:''}</div></div><div class="bill-right"><button class="watch-button" data-watch="${b.id}" aria-label="${watched?'Remove from':'Add to'} watchlist" aria-pressed="${watched}">${watched?'★':'☆'}</button><div>${h.level>0?`<div class="outlook-label">Hearing progress</div><div class="outlook-value">${esc(h.label)}</div>`:''}<button class="bill-open" data-open="${b.id}">Bill details →</button></div></div></article>`;
+  return `<article class="bill-card party-${party.tint}${unwatchedCompanion?' unwatched-companion':''}" data-bill-id="${esc(b.id)}"><div class="bill-left"><div class="bill-head">${unwatchedCompanion?'<span class="unwatched-pill">Companion · not watched</span>':''}${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span><span class="status-pill">${esc(b.status)}</span><span class="party-pill party-${party.tint}" title="${esc(party.detail)}">${esc(party.label)}</span>${influence.level>=4?influencePill(influence):''}</div><h3 class="bill-title">${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</h3>${headlineLine(b,'card')}${reasonLine(reasons)}${sameText(b.caption,b.title)?'':`<p class="bill-description">${esc(b.caption)}</p>`}<div class="bill-tags">${actionTag}${viaTag}${companionTags}${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${agencyTags}${real.length>2?`<span class="tag agency">+${real.length-2} agencies</span>`:''}</div><div class="bill-meta"><span>By <b>${authorHtml(b,b.authors[0]||b.author)}</b></span>${countSpan(b.authors.length>1?b.authors.length:0,'author')}${countSpan(b.coauthors?.length,'coauthor')}${countSpan(b.cosponsors?.length,'cosponsor')}<span class="bill-filed">Filed ${dateText(b.filed_at)}</span>${real.length?`<span class="bill-links">${real.length} agency ${real.length===1?'link':'links'}</span>`:''}</div></div><div class="bill-right"><button class="watch-button" data-watch="${b.id}" aria-label="${watched?`Remove ${esc(b.number)} from`:`Add ${esc(b.number)} to`} watchlist" aria-pressed="${watched}">${watched?'★':'☆'}</button><div>${h.level>0?`<div class="outlook-label">Hearing progress</div><div class="outlook-value">${esc(h.label)}</div>`:''}<button class="bill-open" data-open="${b.id}" aria-label="Bill details for ${esc(b.number)}">Bill details →</button></div></div></article>`;
 }
 
 // ---- Home: the dashboard. Search first, then what changed on your bills, the latest day's actions, hearings and reviews.
@@ -1622,6 +1650,8 @@ function registerClicks(){
   clickOn('import-trigger','#import-trigger',()=>$('#import-file').click());
   clickOn('nav-more','#nav-more',()=>setNavOpen(!$('.sidebar').classList.contains('nav-open')));
   clickOn('bill-back','#bill-back',()=>leaveBillPage());
+  // The skip link moves focus without touching the address, which names the view.
+  clickOn('skip-link','#skip-link',(el,e)=>{e.preventDefault();$('#main-content').focus()});
   clickOn('preview-close','#preview-close',()=>closePreview());
   clickOn('preview-step','[data-preview-step]',step=>stepPreview(Number(step.dataset.previewStep)));
   clickOn('bill-jump','[data-bill-jump]',jump=>{const group=$(`#bill-g-${jump.dataset.billJump}`);if(group){group.scrollIntoView({block:'start'});group.querySelector('h2')?.focus?.({preventScroll:true})}});

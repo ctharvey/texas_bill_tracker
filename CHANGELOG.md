@@ -14,6 +14,13 @@
   section tabs fade at the edge when they scroll; the previewed card's marker is no longer a star.
 - Dark mode drop-downs: the theme picker and the other native selects drew white lists with near-white text; their
   options now carry the theme's surface and ink. The agency picker panel loses its hard-coded white too.
+- Accessibility pass from the design review: one visible focus ring in the accent colour (search and agency inputs
+  no longer remove it); smooth scrolling only without reduced motion; the hidden agent hint is out of the tab order.
+  Secondary text, the atlas muted colour and the status pill pass 4.5:1 in light themes, and input borders 3:1.
+  Each view sets the page title, marks its nav item `aria-current`, and moves focus to its heading; a skip link
+  leads to the content. Card buttons name their bill ("Add HB 1159 to watchlist"), truncated headlines carry the
+  full text as a tooltip, re-renders keep focus on the control that was used, and phone inputs are 16px so iOS
+  does not zoom.
 
 ## 2026-11-13
 - Remembered filters are no longer rewritten on page load when they mean the same thing (the party filter had
