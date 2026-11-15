@@ -18,7 +18,7 @@ def unit(rng, n=8):
 
 def as_state(keys, exclude, raw):
     # Through JSON, as the state file stores it.
-    return json.loads(json.dumps({"params": [rb.MODEL, rb.DIMENSIONS, 3, 0.1], "keys": keys,
+    return json.loads(json.dumps({"params": [rb.STATE_FORMAT, rb.MODEL, rb.DIMENSIONS, 3, 0.1], "keys": keys,
                                   "exclude": sorted(sorted(p) for p in exclude),
                                   "best": {i: [[s, o] for s, o in v] for i, v in raw.items()}}))
 
@@ -67,9 +67,34 @@ class IncrementalEqualsFull(unittest.TestCase):
         vectors = {f"k{i}": unit(rng) for i in range(10)}
         keys = {f"B{i}": f"k{i}" for i in range(10)}
         state = as_state(keys, set(), rb._top_raw(keys, vectors, set(), top=3, min_score=0.1))
-        state["params"][2] = 9
+        state["params"][3] = 9
         _, recomputed = rb.update_related(state, keys, vectors, set(), top=3, min_score=0.1)
         self.assertEqual(recomputed, -1)
+
+    def test_damaged_state_falls_back_to_the_full_result(self):
+        rng = random.Random(4)
+        vectors = {f"k{i}": unit(rng) for i in range(12)}
+        keys = {f"B{i}": f"k{i}" for i in range(12)}
+        full = rb._top_raw(keys, vectors, set(), top=3, min_score=0.1)
+        good = as_state(keys, set(), full)
+        damage = [
+            lambda s: s["best"].__setitem__("B1", [[0.5, "B2", "x"]]),   # 3-element row
+            lambda s: s["best"].__setitem__("B1", 5),                    # not a list
+            lambda s: s.__setitem__("exclude", [["B1", ["B2"]]]),        # unhashable pair
+            lambda s: s["best"].pop("B0"),                               # a bill with no stored list
+            lambda s: s["best"].__setitem__("B1", [[0.5, "GHOST"]]),     # unknown id
+            lambda s: s["best"].__setitem__("B1", [["nan", "B2"]]),      # not finite
+            lambda s: s.__setitem__("keys", []),                         # wrong shape
+        ]
+        for n, hurt in enumerate(damage):
+            state = json.loads(json.dumps(good))
+            hurt(state)
+            raw, recomputed = rb.update_related(state, keys, vectors, set(), top=3, min_score=0.1)
+            self.assertEqual((raw, recomputed), (full, -1), n)
+
+    def test_self_companion_is_not_a_pair(self):
+        bills = [{"id": "HB1", "companions": [{"id": "HB1"}, {"id": "SB1"}]}]
+        self.assertEqual(rb.companion_pairs(bills), {frozenset(("HB1", "SB1"))})
 
 
 class PublishKeepsState(unittest.TestCase):

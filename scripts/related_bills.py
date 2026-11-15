@@ -25,6 +25,7 @@ TOP = 5
 MIN_SCORE = 0.5
 BATCH = 256
 MAX_TEXT = 4000
+STATE_FORMAT = "texas-bill-related-state-v1"  # bump when scoring changes: old lists are then recomputed
 
 
 def bill_text(bill: dict, summary: str | None) -> str:
@@ -107,7 +108,7 @@ def companion_pairs(bills: list[dict]) -> set[frozenset]:
     pairs = set()
     for bill in bills:
         for other in bill.get("companions") or []:
-            if isinstance(other, dict) and other.get("id"):
+            if isinstance(other, dict) and other.get("id") and other["id"] != bill["id"]:
                 pairs.add(frozenset((bill["id"], other["id"])))
     return pairs
 
@@ -147,16 +148,41 @@ def top_related(keys: dict[str, str], vectors: dict[str, list[float]], exclude: 
     return _format(_top_raw(keys, vectors, exclude, top, min_score))
 
 
+def _valid_state(state, params) -> tuple[dict, dict, set]:
+    """The last run's keys, lists and companion pairs, exactly as publish() writes them, or ValueError."""
+    if not isinstance(state, dict) or state.get("params") != params:
+        raise ValueError("other parameters")
+    keys, best, pairs = state.get("keys"), state.get("best"), state.get("exclude")
+    if not (isinstance(keys, dict) and isinstance(best, dict) and isinstance(pairs, list)):
+        raise ValueError("bad shape")
+    if set(best) != set(keys) or not all(isinstance(k, str) and isinstance(v, str) for k, v in keys.items()):
+        raise ValueError("lists do not match keys")  # e.g. a bill with no stored list would silently get none
+    lists = {}
+    for i, rows in best.items():
+        if not isinstance(rows, list):
+            raise ValueError("bad list")
+        lists[i] = [(float(s), str(o)) for s, o in rows]
+        if any(not math.isfinite(s) or o not in keys or o == i for s, o in lists[i]):
+            raise ValueError("bad entry")
+    exclude = set()
+    for pair in pairs:
+        if not (isinstance(pair, list) and len(pair) == 2 and all(isinstance(x, str) for x in pair)):
+            raise ValueError("bad pair")
+        exclude.add(frozenset(pair))
+    return keys, lists, exclude
+
+
 def update_related(state: dict | None, keys: dict[str, str], vectors: dict[str, list[float]], exclude: set[frozenset],
                    top: int = TOP, min_score: float = MIN_SCORE) -> tuple[dict[str, list[tuple[float, str]]], int]:
     """_top_raw's exact result, reusing the last run's lists. Only bills whose text or companions changed are compared
     with every bill; any other bill keeps its list unless it named a changed or removed bill (then its row is
     recomputed), and otherwise only takes in the changed bills. Returns (lists, rows recomputed); -1 = everything."""
-    params = [MODEL, DIMENSIONS, top, min_score]
-    old_keys = (state or {}).get("keys") if isinstance(state, dict) and state.get("params") == params else None
-    if not isinstance(old_keys, dict) or not isinstance(state.get("best"), dict):
+    params = [STATE_FORMAT, MODEL, DIMENSIONS, top, min_score]
+    try:
+        old_keys, old_best, old_exclude = _valid_state(state, params)
+    except (TypeError, ValueError, AttributeError):
+        # Anything this code would not have written: start over rather than trust (or fail on) it every run.
         return _top_raw(keys, vectors, exclude, top, min_score), -1
-    old_exclude = {frozenset(p) for p in state.get("exclude") or [] if isinstance(p, list) and len(p) == 2}
     changed = {i for i in keys if old_keys.get(i) != keys[i]}
     for pair in old_exclude ^ exclude:
         changed |= {i for i in pair if i in keys}
@@ -176,7 +202,7 @@ def update_related(state: dict | None, keys: dict[str, str], vectors: dict[str, 
 
     best, recomputed = {}, 0
     for i in sorted(keys):
-        previous = [(float(s), str(o)) for s, o in state["best"].get(i) or []]
+        previous = old_best.get(i, [])
         if i in changed or any(o in dirty for _, o in previous):
             best[i] = row(i)
             recomputed += 1
@@ -202,7 +228,7 @@ def publish(snapshot_bills: list[dict], summaries: dict[str, str], cache_dir: Pa
     except (OSError, ValueError):
         state = None
     raw, _ = update_related(state, keys, vectors, exclude)
-    new_state = {"params": [MODEL, DIMENSIONS, TOP, MIN_SCORE], "keys": keys,
+    new_state = {"params": [STATE_FORMAT, MODEL, DIMENSIONS, TOP, MIN_SCORE], "keys": keys,
                  "exclude": sorted(sorted(p) for p in exclude), "best": {i: [[s, o] for s, o in v] for i, v in raw.items()}}
     if new_state != state:
         _atomic_write(state_path, json.dumps(new_state, separators=(",", ":")))
