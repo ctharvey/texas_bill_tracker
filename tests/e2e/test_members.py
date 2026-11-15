@@ -26,8 +26,7 @@ def section_titles(page):
 
 def test_house_member_profile(device):
     page = device.open(f"#member?code={LANDGRAF}")
-    expect(page.locator("#dynamic-content h2")).to_have_text("Rep. Brooks Landgraf")
-    expect(page.locator("#page-title")).to_contain_text("One legislator.")
+    expect(page.locator("#page-title")).to_have_text("Rep. Brooks Landgraf")
     profile = page.locator(".member-profile")
     expect(profile).to_contain_text("Texas House · District 81")
     expect(profile).to_contain_text("Republican · HD 81 · 12 years served · since 2015")
@@ -63,7 +62,7 @@ def test_senate_member_page_pages_through_a_long_list(device):
     expected = authored("Menéndez", "Senate")
     assert len(expected) == 80
     page = device.open(f"#member?code={MENENDEZ}")
-    expect(page.locator("#dynamic-content h2")).to_have_text("Sen. José Menéndez")
+    expect(page.locator("#page-title")).to_have_text("Sen. José Menéndez")
     profile = page.locator(".member-profile")
     expect(profile).to_contain_text("Texas Senate · District 26")
     expect(profile).to_contain_text("Democratic · SD 26 · 26 years served · since 2001")
@@ -86,7 +85,7 @@ def test_senate_member_page_pages_through_a_long_list(device):
 def test_new_member_shows_newcomer_tag(device):
     page = device.open(f"#member?code={GARIBAY}")
     profile = page.locator(".member-profile")
-    expect(page.locator("#dynamic-content h2")).to_have_text("Rep. Montserrat Garibay")
+    expect(page.locator("#page-title")).to_have_text("Rep. Montserrat Garibay")
     expect(profile.locator(".tenure-pill")).to_have_text("First term")
     expect(profile).to_contain_text("Democratic (2026 ballot, unofficial) · HD 49 · member-elect; no prior service on record")
     expect(profile).to_contain_text("New to the House")
@@ -101,7 +100,7 @@ def test_drawer_author_links_to_member_page(device):
     expect(link).to_have_attribute("href", f"#member?code={LANDGRAF}")
     link.click()
     expect(page.locator("#bill-page")).to_have_count(0)
-    expect(page.locator("#dynamic-content h2")).to_have_text("Rep. Brooks Landgraf")
+    expect(page.locator("#page-title")).to_have_text("Rep. Brooks Landgraf")
     assert page.evaluate("location.hash") == f"#member?code={LANDGRAF}"
     expect(page.locator("#dynamic-content .today-row").first).to_be_visible()
     # The member page lists the bill we came from.

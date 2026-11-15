@@ -43,9 +43,8 @@ def test_drawer_link_opens_the_section_page(device):
     box.locator("a", has_text="62.051").click()
     page.wait_for_selector(".law-compare-wrap")
     assert page.url.endswith(SECTION)
-    expect(page.locator("#page-title")).to_contain_text("One section of law")
+    expect(page.locator("#page-title")).to_have_text("Labor Code § 62.051")
     head = page.locator(".section-head").first
-    expect(head).to_contain_text("Labor Code § 62.051")
     expect(head).to_contain_text("Minimum Wage")
 
 

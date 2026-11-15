@@ -87,7 +87,7 @@ def test_author_link_in_a_card_goes_to_the_member_page_without_opening_the_bill_
     link = page.locator("#bill-list article.bill-card a.member-name").first
     parent = link.locator("xpath=ancestor::article")
     link.click()
-    expect(page.locator("#page-title")).to_contain_text("One legislator.")
+    expect(page.locator("#page-title")).to_have_text(re.compile(r"^(Rep|Sen)\. "))  # the member's name
     assert re.search(r"#member\?code=", page.url)
     expect(page.locator("#bill-page")).to_be_hidden()
     assert "#bill?" not in page.url

@@ -344,9 +344,10 @@ export function renderBillText(root, parsed, highlights, opts = {}) {
             const first = claims.get(seg.ids[0]);
             const m = node('mark', seg.text, `hl hl-${first.kind}${seg.ids.some(id => claims.get(id)?.key_point) ? ' hl-key' : ''}`);
             m.dataset.ids = seg.ids.join(' '); m.dataset.kind = first.kind;
-            m.tabIndex = 0;
+            // A highlight acts as a button (it opens the explanation) but stays a <mark>, so the text can still be selected.
+            m.tabIndex = 0; m.setAttribute('role', 'button');
             m.addEventListener('click', () => explain(seg.ids));
-            m.addEventListener('keydown', e => { if (e.key === 'Enter') explain(seg.ids); });
+            m.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); explain(seg.ids); } });
             marks.push(m);
             seg.ids.forEach(id => { if (!firstMark.has(id)) firstMark.set(id, m); });
             target.append(m);

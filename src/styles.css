@@ -1,7 +1,7 @@
 /* Theme tokens. :root is the Atlas theme; :root[data-palette] blocks override the base values, and every other colour is
    a mix of these, so a theme only sets this list. Party, status, review and highlight colours stay the same in every theme;
    dark mode (at the end) re-tints them. */
-:root{--fs-xs:12px;--fs-sm:13px;--fs-md:14px;--fs-lg:15px;--bg:#f6f8fb;--surface:#fff;--ink:#1a2940;--muted:#596575;--line:#e5eaf0;--accent:#087d7a;--accent-ink:#fff;--nav-bg:#14243a;--nav-ink:#fff;--mark:#ba822d;--rs:1;--font-ui:'DM Sans',sans-serif;--font-head:Manrope,sans-serif;--head-weight:800;--navy:var(--nav-bg);--paper:var(--bg);--teal:var(--accent);--teal-soft:color-mix(in srgb,var(--accent) 9%,var(--surface));--white:var(--surface);--gold:#ba822d;--gold-soft:#fbf4e7;--red:#b35a4e;--red-soft:#fcf1ef;--shadow:0 12px 28px rgba(20,36,58,.045)}
+:root{--fs-xs:12px;--fs-sm:13px;--fs-md:14px;--fs-lg:15px;--bg:#f6f8fb;--surface:#fff;--ink:#1a2940;--muted:#596575;--line:#e5eaf0;--accent:#087d7a;--accent-ink:#fff;--nav-bg:#14243a;--nav-ink:#fff;--mark:#ba822d;--rs:1;--font-ui:'DM Sans',sans-serif;--font-head:Manrope,sans-serif;--head-weight:800;--navy:var(--nav-bg);--paper:var(--bg);--teal:var(--accent);--teal-soft:color-mix(in srgb,var(--accent) 9%,var(--surface));--white:var(--surface);--gold:#ba822d;--gold-ink:#936724;--gold-soft:#fbf4e7;--red:#ac564b;--red-soft:#fcf1ef;--shadow:0 12px 28px rgba(20,36,58,.045)}
 :root[data-palette="granite"]{--bg:#eceeed;--surface:#fbfbfa;--ink:#1c2422;--muted:#56625f;--line:#cfd5d2;--accent:#2b5c4c;--nav-bg:#5e3a40;--nav-ink:#f4ecec;--mark:#5e3a40;--rs:.3;--font-ui:'Public Sans',sans-serif;--font-head:Newsreader,Georgia,serif;--head-weight:600}
 :root[data-palette="lone-star"]{--bg:#f5f6f8;--surface:#fff;--ink:#0f1c33;--muted:#4f5b6e;--line:#d6dbe3;--accent:#002868;--nav-bg:#002868;--nav-ink:#fff;--mark:#bf0a30;--rs:.6;--font-ui:'Public Sans',sans-serif;--font-head:'Libre Franklin','Public Sans',sans-serif;--head-weight:800}
 :root[data-palette="lone-star"] .sidebar{box-shadow:inset -5px 0 0 #bf0a30}
@@ -168,7 +168,7 @@ button[disabled]{opacity:.5;cursor:not-allowed}
 .stage-badge{display:inline-block;font-size:var(--fs-xs);font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-radius:calc(4px*var(--rs));padding:3px 6px;background:color-mix(in srgb,var(--ink) 6%,var(--surface));color:color-mix(in srgb,var(--ink) 73%,var(--surface))}
 .stage-added{background:var(--teal-soft);color:var(--teal)}
 .stage-removed{background:var(--red-soft);color:var(--red)}
-.stage-altered{background:var(--gold-soft);color:var(--gold)}
+.stage-altered{background:var(--gold-soft);color:var(--gold-ink)}
 .stage-quotes{margin-top:6px;font-size:var(--fs-xs);color:color-mix(in srgb,var(--ink) 70%,var(--surface))}
 .stage-quotes summary{cursor:pointer;color:var(--teal);font-weight:700}
 .stage-quotes blockquote{margin:6px 0 0;padding:4px 0 4px 10px;border-left:2px solid var(--line);overflow-wrap:anywhere}
@@ -338,7 +338,7 @@ mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;
 .review-pass{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:start;border:1px solid var(--line);border-radius:calc(10px*var(--rs));padding:10px 12px;background:var(--paper)}
 .review-pass.now{border-color:var(--gold);box-shadow:inset 3px 0 0 var(--gold)}
 .review-pass .pass-step{grid-row:span 2;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:var(--fs-xs);font-weight:700;background:var(--line);color:var(--ink)}
-.review-pass.now .pass-step{background:var(--gold);color:var(--white)}
+.review-pass.now .pass-step{background:var(--gold-ink);color:var(--white)}
 .review-pass.clear .pass-step{background:var(--teal);color:var(--white)}
 .pass-name{min-width:0}.pass-name strong{display:block;font-size:var(--fs-sm);color:var(--ink)}.pass-name small{display:block;font-size:var(--fs-xs);color:var(--muted)}
 .pass-count{display:flex;flex-wrap:wrap;gap:2px 6px;align-items:baseline;font-size:var(--fs-xs);color:var(--muted)}
@@ -410,7 +410,7 @@ small{font-size:var(--fs-xs)}
    same hue here. :where() keeps each override at its light rule's specificity, so modifiers such as .slim still win.
    A new rule with a literal wash or text colour needs its dark twin here; saturated fills, rules and white text on them
    stay the same in both modes. */
-:root[data-mode="dark"]{color-scheme:dark;--bg:#0d141d;--surface:#151f2c;--ink:#edf1f6;--muted:#aab6c4;--line:#2b394a;--accent:#3fb5ae;--accent-ink:#06201f;--nav-bg:#0b1422;--nav-ink:#e8eef5;--mark:#d6a04f;--gold:#d6a04f;--gold-soft:#33291a;--red:#e8907f;--red-soft:#3b2220;--shadow:0 12px 28px rgba(0,0,0,.3)}
+:root[data-mode="dark"]{color-scheme:dark;--bg:#0d141d;--surface:#151f2c;--ink:#edf1f6;--muted:#aab6c4;--line:#2b394a;--accent:#3fb5ae;--accent-ink:#06201f;--nav-bg:#0b1422;--nav-ink:#e8eef5;--mark:#d6a04f;--gold:#d6a04f;--gold-ink:#d6a04f;--gold-soft:#33291a;--red:#e8907f;--red-soft:#3b2220;--shadow:0 12px 28px rgba(0,0,0,.3)}
 :root[data-mode="dark"][data-palette="granite"]{--bg:#151918;--surface:#1b201e;--ink:#eef1ef;--muted:#b0bab6;--line:#34403c;--accent:#7fb8a2;--accent-ink:#0f1f19;--nav-bg:#342024;--nav-ink:#fbf5f5;--mark:#c48a93}
 :root[data-mode="dark"][data-palette="lone-star"]{--bg:#0c1220;--surface:#121a2a;--ink:#eef2f8;--muted:#adb8ca;--line:#2a3550;--accent:#8fb0ff;--accent-ink:#0a1733;--nav-bg:#0a1a44;--nav-ink:#fff;--mark:#e04a63}
 :root[data-mode="dark"][data-palette="bluebonnet"]{--bg:#191712;--surface:#201d17;--ink:#f3eee2;--muted:#b6afa1;--line:#3a352b;--accent:#8aa8ec;--accent-ink:#101c38;--nav-bg:#25211a;--nav-ink:#f3eee2;--mark:#e0605e}
@@ -534,3 +534,27 @@ summary:focus-visible,.disclaimer-ok:focus-visible,.footer-link:focus-visible{ou
   .bill-bar .drawer-actions>*{text-align:center;padding:8px 10px;font-size:var(--fs-xs)}}
 /* Phones: the bundled-copy notice keeps its lead and the Coverage link; the details are on the Data page. */
 @media(max-width:760px){.source-notice .notice-more{display:none}}
+/* #15: nav items are links, so they can open in a new tab. */
+a.nav-item{text-decoration:none;box-sizing:border-box}
+.bill-h1-number{display:block;font-size:.62em;letter-spacing:.02em;color:var(--teal);margin-bottom:4px}
+.restored-note{font-size:var(--fs-xs);color:var(--muted);font-weight:700;align-self:center}
+/* #15: targets at least 24px without moving anything (vertical padding on inline links widens only the hit area). */
+a.bill-number{padding:6px 0}
+.github-link,.footer-link{padding:5px 2px}
+.theme-pick select{min-height:24px}
+.preview-close{min-width:28px;min-height:28px}
+/* #15: Windows high-contrast drops background colours, so selection and highlights get outlines; "increase contrast"
+   darkens secondary text and lines in every palette. */
+@media(forced-colors:active){
+  .nav-item[aria-current],.topic-chip.selected,.check-filter.selected,.filter-chip{outline:2px solid Highlight;outline-offset:-2px}
+  mark.hl{outline:1px solid Highlight;forced-color-adjust:none;background:Mark;color:MarkText}
+  .tag,.status-pill,.chamber-pill,.party-pill,.action-tag{border:1px solid CanvasText}
+  .watch-button[aria-pressed=true]{outline:2px solid Highlight}
+}
+@media(prefers-contrast:more){
+  :root[data-palette],:root:not([data-palette]){--muted:var(--ink);--line:color-mix(in srgb,var(--ink) 45%,var(--surface))}
+  .bill-description,.method-card p,.tools-note,.area-audience,.home-counts{color:var(--ink)}
+}
+.info-callout.callout-warn{background:color-mix(in srgb,var(--gold) 9%,var(--surface));border-color:color-mix(in srgb,var(--gold) 35%,var(--surface))}
+.info-callout.callout-warn strong{color:var(--gold-ink)}
+.empty-steps{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:14px 0 0!important}

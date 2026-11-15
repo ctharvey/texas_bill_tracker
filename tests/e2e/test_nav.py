@@ -31,7 +31,7 @@ def test_phone_bottom_bar_and_more_sheet(device, viewport):
     expect(more).to_have_attribute("aria-expanded", "false")
     more.click()
     page.locator('.sidebar [data-view="method"]').click()
-    expect(page.locator("#page-title")).to_contain_text("The scoring method.")
+    expect(page.locator("#page-title")).to_contain_text("How the atlas works.")
     expect(more).to_have_attribute("aria-expanded", "false")  # choosing a page closes the sheet
 
 

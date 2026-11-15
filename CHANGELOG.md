@@ -29,6 +29,17 @@
   titles stop at 80 characters a line, and on phones the bill page shows Overview before the key facts and its
   four buttons in two rows. The page heading no longer shows a focus box after a view change.
 - On phones the bundled-copy notice reads just "Showing the bundled copy." and the Coverage & sources link.
+- Review follow-ups (#15): the page shows the bills as soon as they, the roster and the review status arrive; Luna's
+  files (about 1 MB) load afterwards with a 45-second limit and redraw the page, instead of holding the first render
+  and being dropped after 7.5 seconds. The live bills get 15 seconds before the bundled copy takes over. Nav items
+  are links (they open in a new tab); member and law-section pages name the member or section in their heading,
+  and the bill page heading leads with the bill number. Restored filters say "Filters from your last visit", empty
+  results offer to clear filters or search every bill, and an unknown bill offers a search for it. Problem callouts
+  are amber, not green. "Scoring method" is now "How it works" (`#method` unchanged) and explains who Luna is; the
+  AI badge and Luna's bill-page section point there. Data & imports shows reviewed and tagged counts separately.
+  Small targets (bill numbers, footer and project links, theme select, preview close) reach 24px; gold and red
+  state text passes 4.5:1; Windows high-contrast and "increase contrast" get their own rules; review highlights
+  are keyboard buttons (Enter or Space).
 
 ## 2026-11-13
 - Remembered filters are no longer rewritten on page load when they mean the same thing (the party filter had

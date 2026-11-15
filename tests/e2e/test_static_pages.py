@@ -7,13 +7,13 @@ from playwright.sync_api import expect
 
 def test_method_page(device):
     page = device.open("#method")
-    expect(page.locator("#page-title")).to_contain_text("The scoring method.")
+    expect(page.locator("#page-title")).to_contain_text("How the atlas works.")
     expect(page.locator(".section-head h2")).to_have_text("Verified facts first. Forecasts second.")
     cards = page.locator(".method-card")
-    expect(cards).to_have_count(6)
+    expect(cards).to_have_count(7)
     assert [c.locator("h3").inner_text() for c in cards.all()] == [
         "What is affected", "Who filed it", "Chance of a hearing", "Likelihood of passage",
-        "What changes over time", "Known limitations"]
+        "What changes over time", "Who Luna is", "Known limitations"]
     expect(page.locator(".info-callout")).to_contain_text("A filed bill is not a viable bill by default.")
     expect(cards.nth(3)).to_contain_text("No passage probabilities are currently claimed.")
 
@@ -69,7 +69,7 @@ def test_data_page(device):
     expect(field("Read from")).to_have_text("Live server snapshot")
     loaded = int(field("Loaded records").inner_text())
     assert loaded == int(page.locator("#nav-all").inner_text().replace(",", ""))
-    expect(field("Luna reviews")).to_contain_text("bills · updated")
+    expect(field("Luna reviews")).to_contain_text("with published tags · updated")
     expect(field("Member roster")).to_contain_text("House")
     expect(page.locator(".info-callout")).to_contain_text("Official source policy:")
     expect(page.locator("#import-trigger")).to_be_visible()

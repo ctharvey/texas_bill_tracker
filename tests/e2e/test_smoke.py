@@ -6,7 +6,7 @@ import pytest
 
 VIEWS = {"home": "This session, at a glance.", "all": "See what’s moving.", "watchlist": "Your watchlist.", "following": "Following.",
          "today": "Today at the Lege.", "local": "Near you.", "agencies": "Follow the agencies.",
-         "review": "Full-text review.", "method": "The scoring method.", "saving": "Save your work.",
+         "review": "Full-text review.", "method": "How the atlas works.", "saving": "Save your work.",
          "data": "Behind the tracker."}
 
 
