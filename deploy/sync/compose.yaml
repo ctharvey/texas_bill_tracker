@@ -1,4 +1,4 @@
-# Private sync links service. The shared gateway proxies bills.ctharvey.me/api/sync* to bills-sync:8787 over
+# Private sync links service. The shared gateway proxies billatlas.org/api/sync* to bills-sync:8787 over
 # edge-bills (cth.hosting). Values come from sync.env next to the deployed copy; none of them are secrets.
 name: texas-bill-sync
 

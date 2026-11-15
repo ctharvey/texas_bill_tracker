@@ -18,7 +18,7 @@ import tempfile
 from xml.sax.saxutils import escape
 
 BILL_ID = re.compile(r"(HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9]\d{0,4}")
-SITE = "https://bills.ctharvey.me/"
+SITE = "https://billatlas.org/"
 
 
 def rfc822(day: str | None) -> str | None:

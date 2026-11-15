@@ -8,10 +8,10 @@ const bill = (id, extra = {}) => ({id, number: id.replace(/^([A-Z]+)/, '$1 '), t
 test('aiPrompt names the bill, both URLs and one neutral instruction', () => {
   const text = aiPrompt(bill('HB5'));
   assert.match(text, /^Texas HB 5 \(90th Legislature\): Title of HB5/);
-  assert.ok(text.includes('https://agent.bills.ctharvey.me/bills/HB5.md'));
+  assert.ok(text.includes('https://agent.billatlas.org/bills/HB5.md'));
   assert.ok(text.includes('https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill=HB5'));
   assert.ok(text.endsWith('Summarize what this bill does, who it affects, and its current status, citing the bill text.'));
-  assert.equal(agentUrl(bill('SJR9')), 'https://agent.bills.ctharvey.me/bills/SJR9.md');
+  assert.equal(agentUrl(bill('SJR9')), 'https://agent.billatlas.org/bills/SJR9.md');
 });
 
 test('aiPrompt links the latest text version when there is one', () => {
@@ -92,13 +92,13 @@ test('pageAiText: an open bill copies that bill', () => {
 });
 
 test('pageAiText: a filtered list names its filters, an equivalent search link and each bill', () => {
-  const text = pageAiText({view: 'all', label: 'Bill explorer', pageUrl: 'https://bills.ctharvey.me/#all?topic=Taxes',
+  const text = pageAiText({view: 'all', label: 'Bill explorer', pageUrl: 'https://billatlas.org/#all?topic=Taxes',
     bills: [bill('HB5', {headline: 'Cuts a tax.'})], filters: {topic: 'Taxes', agency: 'tea', chamber: ''}, agencyName: id => id.toUpperCase()});
   assert.match(text, /^Texas Bill Atlas \(90th Legislature\): Bill explorer \(topic Taxes, agency TEA\)/);
-  assert.ok(text.includes('Page: https://bills.ctharvey.me/#all?topic=Taxes'));
-  assert.ok(text.includes('Same list, AI-readable: https://agent.bills.ctharvey.me/search?topic=Taxes&agency=tea'));
+  assert.ok(text.includes('Page: https://billatlas.org/#all?topic=Taxes'));
+  assert.ok(text.includes('Same list, AI-readable: https://agent.billatlas.org/search?topic=Taxes&agency=tea'));
   assert.ok(text.includes('- HB 5: Title of HB5 | In brief: Cuts a tax. | Last action:'));
-  assert.ok(text.includes('https://agent.bills.ctharvey.me/bills/HB5.md'));
+  assert.ok(text.includes('https://agent.billatlas.org/bills/HB5.md'));
 });
 
 test('pageAiText: long lists are capped and point to the rest', () => {
@@ -118,15 +118,15 @@ test('companions: label, agency-via-companion and both copy texts', () => {
   const via = agencyViaCompanion([senate, house, other], 'ers', index);
   assert.deepEqual([...via], [['HB234', ['SB108']]]);
   assert.equal(agencyViaCompanion([senate, house, other], 'tea', index).size, 0);
-  assert.ok(aiPrompt(senate, index.get('SB108')).includes('Companion bill HB 234 (identical): https://agent.bills.ctharvey.me/bills/HB234.md'));
+  assert.ok(aiPrompt(senate, index.get('SB108')).includes('Companion bill HB 234 (identical): https://agent.billatlas.org/bills/HB234.md'));
   const text = pageAiText({view: 'all', label: 'Bill explorer', pageUrl: 'u', bills: [senate, house], filters: {agency: 'ers'},
     companions: id => index.get(id) || [], via});
   assert.ok(text.split('\n').find(l => l.startsWith('- SB 108')).includes('| Companion: HB 234 (identical) |'));
   assert.ok(text.split('\n').find(l => l.startsWith('- HB 234')).includes('| Listed because its companion SB 108 is tagged with this agency |'));
-  assert.ok(text.includes('Bills tagged with this agency directly (companions not added), AI-readable: https://agent.bills.ctharvey.me/search?agency=ers'));
+  assert.ok(text.includes('Bills tagged with this agency directly (companions not added), AI-readable: https://agent.billatlas.org/search?agency=ers'));
 });
 
 test('pageAiText: reference views link their agent page', () => {
   const text = pageAiText({view: 'agencies', pageUrl: 'u'});
-  assert.ok(text.includes('AI-readable version: https://agent.bills.ctharvey.me/agencies/index.md'));
+  assert.ok(text.includes('AI-readable version: https://agent.billatlas.org/agencies/index.md'));
 });

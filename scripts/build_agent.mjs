@@ -1,4 +1,4 @@
-// Agent pages for agent.bills.ctharvey.me: what the tracker shows, as Markdown and JSON, with no JavaScript.
+// Agent pages for agent.billatlas.org: what the tracker shows, as Markdown and JSON, with no JavaScript.
 // Reuses the tracker's own bill pipeline (src/taxonomy.js) and link format (src/prefs.js), so tags, hearing
 // status, last-action categories and author party match the human site. Output is deterministic: a file is
 // rewritten only when its content changes, and pages for bills or groups that disappear are removed.
@@ -9,8 +9,8 @@ import {AGENCY_NAME, NO_HEARING, applyLunaTags, assessHearing, attachMembers, au
   companionIndex, lastActionInfo, memberSummary, normalizeBill, officialUrl, reviewProgress} from '../src/taxonomy.js';
 import {buildHash} from '../src/prefs.js';
 
-export const SITE = 'https://bills.ctharvey.me/';
-export const AGENT = 'https://agent.bills.ctharvey.me/';
+export const SITE = 'https://billatlas.org/';
+export const AGENT = 'https://agent.billatlas.org/';
 export const DISCLAIMER = 'Unofficial, independent open-source project; not a state website. Bill data comes from the '
   + 'Texas Legislative Council bulk files and can lag or contain errors. Topic, agency and impact tags are automated '
   + '(caption rules or the Luna model reading the full text) and can be wrong. Not legal advice. Confirm on Texas '

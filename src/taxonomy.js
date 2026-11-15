@@ -772,7 +772,7 @@ export function officialUrl(bill) {
 
 // ---- Opening a bill from its card, and "Copy for AI" ----
 // (Kept in this file: the static deployer ships a fixed list of src files.)
-export const AGENT_BASE = 'https://agent.bills.ctharvey.me/';
+export const AGENT_BASE = 'https://agent.billatlas.org/';
 export const agentUrl = bill => `${AGENT_BASE}bills/${encodeURIComponent(bill.id || String(bill.number || '').replace(/\s+/g, ''))}.md`;
 const httpsUrl = value => { try { const u = new URL(String(value)); return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : ''; } catch { return ''; } };
 

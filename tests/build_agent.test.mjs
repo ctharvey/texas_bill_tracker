@@ -40,7 +40,7 @@ test('bill records use the tracker pipeline: Luna overlay, roster, hearing and l
   assert.equal(hb5.people.authors[0].full_name, 'Sheryl Cole');
   assert.deepEqual(hb5.people.authors[0].links, {lrl: 'https://lrl.texas.gov/x'});
   assert.equal(hb5.full_text_review.summary, 'Changes groundwater district rules.');
-  assert.equal(hb5.links.tracker, 'https://bills.ctharvey.me/#all?bill=HB5');
+  assert.equal(hb5.links.tracker, 'https://billatlas.org/#all?bill=HB5');
   const sb12 = JSON.parse(files.get('bills/SB12.json'));
   assert.equal(sb12.people.sponsors, null);
   assert.equal(sb12.full_text_review, null);
@@ -62,7 +62,7 @@ test('companion bills appear on both bills, and a companion not in the snapshot 
   const hb5 = JSON.parse(files.get('bills/HB5.json')), sb12 = JSON.parse(files.get('bills/SB12.json'));
   assert.deepEqual(hb5.companions.map(c => [c.id, c.relation, c.in_snapshot]), [['SB12', 'Identical', true], ['SB99', null, false]]);
   assert.deepEqual(sb12.companions.map(c => [c.id, c.author, c.relation]), [['HB5', 'Cole', 'Identical']]);
-  assert.match(files.get('bills/HB5.md'), /- Companion bills: \[SB 12\]\(https:\/\/agent\.bills\.ctharvey\.me\/bills\/SB12\.md\), identical, by Hughes; SB 99 \(not in this snapshot yet\), by Doe/);
+  assert.match(files.get('bills/HB5.md'), /- Companion bills: \[SB 12\]\(https:\/\/agent.billatlas.org\/bills\/SB12\.md\), identical, by Hughes; SB 99 \(not in this snapshot yet\), by Doe/);
   assert.match(build().get('bills/HB5.md'), /- Companion bills: none listed in the source data/);
 });
 
@@ -209,7 +209,7 @@ test('pending and missing data are labelled, and review counts agree with publis
   const notFound = files.get('404.md');
   assert.match(notFound, /not in the data yet/);
   assert.match(notFound, /- HB: 1 bills between HB5 and HB5/);
-  assert.match(files.get('index.md'), /## Quick reference\n\n- Search: https:\/\/agent\.bills\.ctharvey\.me\/search\?q=<words>/);
+  assert.match(files.get('index.md'), /## Quick reference\n\n- Search: https:\/\/agent.billatlas.org\/search\?q=<words>/);
 });
 
 test('writePages rewrites only changed files, removes stale pages and keeps unrelated files', () => {
@@ -242,7 +242,7 @@ test('district pages: member, their bills, bills naming the district\'s counties
   const files = build({snapshot: snapshot(bills), roster, districts, geo});
   const hd46 = files.get('districts/house-46.md');
   assert.match(hd46, /Counties: Travis \(part\)\./);
-  assert.match(hd46, /- Rep\. Sheryl Cole: .*\[their bills\]\(https:\/\/agent\.bills\.ctharvey\.me\/authors\/house-cole\.md\)/);
+  assert.match(hd46, /- Rep\. Sheryl Cole: .*\[their bills\]\(https:\/\/agent.billatlas.org\/authors\/house-cole\.md\)/);
   assert.match(hd46, /## Filed or signed by this district's member \(1\)[\s\S]*\[HB 5\][^\n]*Rep\. Cole: Author/);
   assert.match(hd46, /## Bills that name this district's counties or cities \(1\)[\s\S]*\[HB 7\][^\n]*Names Travis County/);
   assert.match(files.get('districts/house-62.md'), /\[HB 5\][^\n]*Rep\. Smith: Coauthor/);
@@ -251,7 +251,7 @@ test('district pages: member, their bills, bills naming the district\'s counties
   const index = files.get('districts/index.md');
   assert.equal(index.split('\n').filter(l => l.startsWith('| [')).length, 181);
   assert.match(index, /\[House District 46 \(Cole\)\]/);
-  assert.match(files.get('index.md'), /\[Bills by legislative district\]\(https:\/\/agent\.bills\.ctharvey\.me\/districts\/index\.md\) \(181 groups\)/);
+  assert.match(files.get('index.md'), /\[Bills by legislative district\]\(https:\/\/agent.billatlas.org\/districts\/index\.md\) \(181 groups\)/);
   assert.ok(![...build().keys()].some(k => k.startsWith('districts/')));
 });
 

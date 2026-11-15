@@ -131,7 +131,7 @@ def test_official_links_and_ai_readable_link(device):
     expect(bill.get_by_role("link", name="Read official bill ↗")).to_have_attribute("href", history)
     expect(bill.get_by_role("link", name="Texas Legislature Online ↗")).to_have_attribute("href", history)
     expect(bill.get_by_role("link", name="AI-readable version ↗")).to_have_attribute(
-        "href", "https://agent.bills.ctharvey.me/bills/HB110.md")
+        "href", "https://agent.billatlas.org/bills/HB110.md")
     for name in ("Read official bill ↗", "Texas Legislature Online ↗", "AI-readable version ↗"):
         link = bill.get_by_role("link", name=name)
         expect(link).to_have_attribute("target", "_blank")

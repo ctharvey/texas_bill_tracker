@@ -1,6 +1,11 @@
 # Changelog
 
 ## 2026-11-15
+- New address: the site is billatlas.org and the agent edition agent.billatlas.org (cth.hosting PR #26).
+  Canonical links in the agent pages, feeds, search, the page head/footer and README use the new names; feed
+  GUIDs carry no host, so readers see no repeat items. bills.ctharvey.me and agent.bills.ctharvey.me keep
+  serving the same release, since watchlists, filters and sync keys live in browser storage for the address
+  they were saved under. Sync accepts writes from both origins.
 - Review fixes for the redundant-work changes (reports in `.agent/reviews/texas-bill-atlas-review-*-2026-11-15.md`):
   Luna shards are immutable files named by their hash, so an index the edge cache still serves resolves to its own
   map, the shards folder is world-readable under the worker's umask, and a failed shard publish removes the index

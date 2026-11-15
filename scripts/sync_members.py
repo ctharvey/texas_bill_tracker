@@ -27,7 +27,7 @@ LEGISLATURE = '90'
 SESSION_START_YEAR = 2027
 TLO = 'https://capitol.texas.gov/Members/'
 LRL = 'https://lrl.texas.gov/legeLeaders/members/'
-UA = {'User-Agent': 'Mozilla/5.0 (compatible; texas-bill-atlas roster import; +https://bills.ctharvey.me)'}
+UA = {'User-Agent': 'Mozilla/5.0 (compatible; texas-bill-atlas roster import; +https://billatlas.org)'}
 SUFFIXES = {'jr', 'sr', 'ii', 'iii', 'iv'}
 PARTY = {'D': 'Democratic', 'R': 'Republican'}
 LINK = re.compile(r"MemberInfo\.aspx\?Leg=(\d+)&(?:amp;)?Chamber=([HS])&(?:amp;)?Code=(\w+)'>\s*([^<]+?)\s*</a>")

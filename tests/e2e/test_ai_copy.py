@@ -3,7 +3,7 @@
 from playwright.sync_api import expect
 
 DRAWER = "#bill-page"  # the bill page
-AGENT = "https://agent.bills.ctharvey.me/"
+AGENT = "https://agent.billatlas.org/"
 
 
 def grant(device):

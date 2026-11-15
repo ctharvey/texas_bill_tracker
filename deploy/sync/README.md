@@ -33,7 +33,7 @@ every link that existed at backup time opens its list again; changes made after 
 
 Update: extract a new `app/<commit>`, point `SYNC_APP` at it, then
 `docker compose --env-file sync.env -f compose.yaml up -d` and confirm
-`https://bills.ctharvey.me/api/sync/health` returns 200. Roll back by pointing `SYNC_APP` at the previous commit, as long
+`https://billatlas.org/api/sync/health` returns 200. Roll back by pointing `SYNC_APP` at the previous commit, as long
 as both use the same layout. The compose command and the app folder layout are coupled: switching from flat releases to
 `scripts/` releases means replacing `compose.yaml` and `SYNC_APP` together in one `up -d` (keep the old `compose.yaml`),
 and rolling back across that change means restoring both.

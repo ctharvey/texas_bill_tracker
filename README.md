@@ -369,10 +369,10 @@ There are no logins. People keep and move their choices in these ways:
   Live since 2026-11-10: the shared gateway (cth.hosting) proxies `/api/sync*` to the `texas-bill-sync`
   container on `edge-bills`; deployment and updates are in `deploy/sync/README.md`.
 
-### Agent edition (agent.bills.ctharvey.me)
+### Agent edition (agent.billatlas.org)
 
 The tracker draws everything with JavaScript, so agents get the same information as static Markdown and JSON at
-`https://agent.bills.ctharvey.me/` (`index.md` = `llms.txt`). `scripts/build_agent.mjs` reuses the tracker's own
+`https://agent.billatlas.org/` (`index.md` = `llms.txt`). `scripts/build_agent.mjs` reuses the tracker's own
 pipeline (`normalizeBill`, Luna overlay, roster, hearing and last-action rules in `src/taxonomy.js`, links from
 `src/prefs.js`) and writes `bills/<ID>.md|.json`, index pages that stand in for each filter (topics, agencies, last
 action, hearing status, chamber, members; full-name member addresses point to the listed-name page) plus filing
@@ -390,7 +390,7 @@ With `--districts data/geo/districts.json` it also writes `districts/house-<n>.m
 `districts/index.md`. Without the flag `src/geo.js` is never loaded, so an older unit that copies only
 `taxonomy.js` and `prefs.js` keeps building, just without district pages. The agent edition takes no location.
 
-Search: `https://agent.bills.ctharvey.me/search?q=<words>` (Markdown, or `format=json`) is served by the sync
+Search: `https://agent.billatlas.org/search?q=<words>` (Markdown, or `format=json`) is served by the sync
 service (`scripts/search_bills.py`) from `live/agent/data/bills.json`, reloaded when it changes. It matches word
 forms, quoted phrases, two-way synonym groups (gun/firearm/rifle, voucher/"school choice"/"education savings
 account") and bill numbers across titles, captions, topics, agencies, full-text summaries, members, affected groups,
@@ -608,7 +608,9 @@ dependencies are absent so the standard-library-only FTP workflow remains usable
 
 ### Production deployment
 
-Production: https://bills.ctharvey.me on the existing VPS, 147.93.132.141.
+Production: https://billatlas.org (agent edition https://agent.billatlas.org) on the existing VPS, 147.93.132.141.
+The earlier names bills.ctharvey.me and agent.bills.ctharvey.me serve the same release and stay up, because browser
+storage (watchlists, filters, sync keys) belongs to the address it was saved under.
 The Cloudflare A record `bills` points there and is proxied. Cache rules for that host only: `/live/*` and `/data/*`
 5 minutes at the edge, `/api/sync/health` 30 seconds, `/assets/*` a year at the edge and in browsers; the page,
 `src/` and the rest of the sync API are not cached. Shared Caddy routing

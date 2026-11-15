@@ -23,7 +23,7 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import harness  # noqa: E402
 
-PROD = "https://bills.ctharvey.me/"
+PROD = "https://billatlas.org/"
 # Bills the suite opens by name: statute, bracket, related-place and range examples from the feature work.
 BILLS = ["HB1", "HB110", "HB147", "HB239", "HB381", "HB448", "HB717"]
 VIEWS = ["all", "watchlist", "following", "today", "local", "agencies", "review", "method", "saving", "data"]

@@ -14,13 +14,13 @@
   <!-- The saved colour theme and light or dark, set before first paint (src/features/theme/model.js lists the same ids).
        Light unless the reader chose Dark, or Match device on a dark device. -->
   <script>(function(){var d=document.documentElement,p={};try{p=JSON.parse(localStorage.getItem('tx-bill-atlas-prefs-v1')||'null')||{}}catch(e){}var t=p.theme;if(['granite','lone-star','bluebonnet','ranch','warbler'].indexOf(t)>=0)d.dataset.palette=t;var m=p.mode;if(m==='system')try{m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}catch(e){m='light'}d.dataset.mode=m==='dark'?'dark':'light'})()</script>
-  <link rel="alternate" type="text/markdown" href="https://agent.bills.ctharvey.me/index.md" title="Texas Bill Atlas for AI agents (Markdown and JSON, no JavaScript)">
+  <link rel="alternate" type="text/markdown" href="https://agent.billatlas.org/index.md" title="Texas Bill Atlas for AI agents (Markdown and JSON, no JavaScript)">
   <link rel="stylesheet" href="./src/styles.css">
   <script type="module" src="./src/app.js"></script>
 </head>
 <body>
   <a class="skip-link" id="skip-link" href="#main-content">Skip to content</a>
-  <p class="agent-hint" aria-hidden="true">Reading this as an AI agent or script? This page is drawn with JavaScript. The same bills, tags and members are at <a href="https://agent.bills.ctharvey.me/llms.txt" tabindex="-1">agent.bills.ctharvey.me</a> as Markdown and JSON, with keyword search and no JavaScript needed.</p>
+  <p class="agent-hint" aria-hidden="true">Reading this as an AI agent or script? This page is drawn with JavaScript. The same bills, tags and members are at <a href="https://agent.billatlas.org/llms.txt" tabindex="-1">agent.billatlas.org</a> as Markdown and JSON, with keyword search and no JavaScript needed.</p>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Main navigation">
       <a class="brand" href="#home" aria-label="Texas Bill Atlas home">
@@ -63,7 +63,7 @@
         <p id="overview" class="overview-line" aria-label="At a glance"></p>
         <section id="dynamic-content" class="dynamic-content"></section>
       </main>
-      <footer class="site-footer">Built for public scrutiny. <span>Official filings remain the authoritative record.</span> <button type="button" class="footer-link" id="disclaimer-open">Disclaimer</button> <button type="button" class="footer-link" id="privacy-open">Privacy</button><a class="footer-link" href="https://agent.bills.ctharvey.me/">For AI agents</a><noscript><p>This tracker needs JavaScript. The same information is available without it, as Markdown and JSON, at <a href="https://agent.bills.ctharvey.me/">agent.bills.ctharvey.me</a>.</p></noscript><span class="footer-right" id="footer-timestamp"></span></footer>
+      <footer class="site-footer">Built for public scrutiny. <span>Official filings remain the authoritative record.</span> <button type="button" class="footer-link" id="disclaimer-open">Disclaimer</button> <button type="button" class="footer-link" id="privacy-open">Privacy</button><a class="footer-link" href="https://agent.billatlas.org/">For AI agents</a><noscript><p>This tracker needs JavaScript. The same information is available without it, as Markdown and JSON, at <a href="https://agent.billatlas.org/">agent.billatlas.org</a>.</p></noscript><span class="footer-right" id="footer-timestamp"></span></footer>
     </div>
   </div>
   <div id="toast" role="status" aria-live="polite"></div>

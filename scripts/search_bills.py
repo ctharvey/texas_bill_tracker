@@ -14,8 +14,8 @@ import re
 import threading
 from urllib.parse import parse_qs, urlencode
 
-AGENT = "https://agent.bills.ctharvey.me/"
-SITE = "https://bills.ctharvey.me/"
+AGENT = "https://agent.billatlas.org/"
+SITE = "https://billatlas.org/"
 WORD = re.compile(r"[a-z0-9]+")
 BILL_REF = re.compile(r"\b(hb|sb|hjr|sjr|hcr|scr|hr|sr)\s*([1-9]\d{0,4})\b")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
