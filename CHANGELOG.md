@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-15
+- Search keeps each bill's search text between keystrokes instead of rebuilding it for all 1,521 bills every time
+  (it starts over when bills or Luna's agency names change). Desktop: a keystroke went from about 22 to 15 ms, and a
+  search that matches nothing from 9.5 to 2.3 ms; results unchanged. No debounce.
+- The bill page no longer asks for its changes, fiscal and witness files twice when Luna's files arrive after it
+  opens.
+
 ## 2026-11-14
 - Reader areas (#13): 29 areas built around who follows them (cybersecurity & IT, procurement, accessibility,
   children & youth, courts, ...), from the Legislative Council's official subjects plus title/caption keywords

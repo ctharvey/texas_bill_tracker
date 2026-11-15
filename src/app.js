@@ -760,6 +760,15 @@ const lawKeysFor=query=>state.statutes?statuteKeysFor(state.statutes,parseStatut
 const partyWords=b=>{if(!b.people)return[];const p=authorshipParty(b);return[p.label,p.detail]};
 
 const billSearchFields=b=>searchFields(b,{agencyName,partyWords,shortDate});
+// Each bill's search text, kept across keystrokes. Bills are replaced, not edited, when their data changes; agency
+// names also come from Luna's file, so a new one starts the cache over.
+const searchTextCache={luna:undefined,texts:new WeakMap()};
+function billSearchText(b){
+  if(searchTextCache.luna!==state.luna)Object.assign(searchTextCache,{luna:state.luna,texts:new WeakMap()});
+  let text=searchTextCache.texts.get(b);
+  if(text===undefined){text=searchText(billSearchFields(b));searchTextCache.texts.set(b,text)}
+  return text;
+}
 // Why a shown result matched the explorer's search words, in the same order of checks as filteredBills.
 function reasonFor(){
   const {q,compact}=searchTerms(state.query||'');
@@ -789,7 +798,7 @@ function filteredBills(f=state){
     if(f.action&&lastActionInfo(b).label!==f.action)return false;
     if(f.stage){const st=(b.status||'').toLowerCase();const outlook=assessHearing(b).label.toLowerCase();if(!st.includes(f.stage.toLowerCase())&&outlook!==f.stage.toLowerCase())return false}
     if(lawBills.has(b.id))return true;
-    return !q||b.id.toLowerCase().includes(compact)||textMatches(searchText(billSearchFields(b)),q);
+    return !q||b.id.toLowerCase().includes(compact)||textMatches(billSearchText(b),q);
   });
   const byNumber=(a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true});
   const newerNumber=(a,b)=>newestFirst(a.id,b.id);
