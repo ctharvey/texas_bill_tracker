@@ -73,7 +73,7 @@ async function init(){
     let data,loadedFrom,loadedBills;
     for(const [url,ms] of urls){
       try{
-        const response=await fetch(url,{cache:'no-cache',signal:timeoutSignal(ms),priority:'high'});
+        const response=await fetch(url,{cache:'no-cache',signal:timeoutSignal(ms)});
         if(!response.ok)throw Error(`HTTP ${response.status}`);
         const candidate=await response.json();
         if(candidate.session!=='90R'||!Array.isArray(candidate.bills)||!candidate.bills.length)throw Error('Invalid bill snapshot');
@@ -442,13 +442,13 @@ async function loadRoster(){
   }
   return null;
 }
-// Luna's tags, extras, related bills, audit and updates, fetched together. Nothing waits on them, so the limits
-// are generous: a slow phone gets Luna's data late rather than not at all.
+// Luna's tags, extras, related bills, audit and updates, fetched together. Nothing waits on them, so the limit is
+// longer than the bills' 7.5 seconds were: a slow phone gets Luna's data late rather than not at all.
 async function fetchLuna(){
   const isMap=o=>o&&typeof o==='object'&&!Array.isArray(o);
   const load=async(name,format,valid)=>{
     try{
-      const response=await fetch(`./live/luna/${name}.json`,{cache:'no-cache',signal:timeoutSignal(45000),priority:'low'});
+      const response=await fetch(`./live/luna/${name}.json`,{cache:'no-cache',signal:timeoutSignal(20000)});
       if(!response.ok)throw Error(`HTTP ${response.status}`);
       const body=await response.json();
       if(body?.format!==format||!valid(body))throw Error(`Unrecognized ${name} format`);

@@ -30,7 +30,7 @@
   four buttons in two rows. The page heading no longer shows a focus box after a view change.
 - On phones the bundled-copy notice reads just "Showing the bundled copy." and the Coverage & sources link.
 - Review follow-ups (#15): the page shows the bills as soon as they, the roster and the review status arrive; Luna's
-  files (about 1 MB) load afterwards with a 45-second limit and redraw the page, instead of holding the first render
+  files (about 1 MB) load afterwards with a 20-second limit and redraw the page, instead of holding the first render
   and being dropped after 7.5 seconds. The live bills get 15 seconds before the bundled copy takes over. Nav items
   are links (they open in a new tab); member and law-section pages name the member or section in their heading,
   and the bill page heading leads with the bill number. Restored filters say "Filters from your last visit", empty
