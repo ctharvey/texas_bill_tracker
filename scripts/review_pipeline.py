@@ -9,6 +9,7 @@ import ftplib
 import hashlib
 from html.parser import HTMLParser
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -1565,7 +1566,7 @@ def _second_pass(label: str, jobs, args, deadline: float, refused: RefusedBills 
             known = refused is not None and bill_id in refused
             if refused is not None:
                 refused.add(bill_id)
-            print(f"{label}: capacity unavailable for", bill_id, flush=True)
+            RUN_TROUBLE.set(); print(f"{label}: capacity unavailable for", bill_id, flush=True)
             if known:
                 continue  # refused before: its jobs come last, so it says nothing new about the other bills
             rejections += 1
@@ -1582,7 +1583,7 @@ def _second_pass(label: str, jobs, args, deadline: float, refused: RefusedBills 
                 continue
             if stops_run(error, budget):
                 raise stop_worker(error, args.cache_dir, bill_id, f" ({label.lower()})")
-            print(bill_id, f"{label.lower()} failed:", type(error).__name__, "-", next_step(error), flush=True)
+            RUN_TROUBLE.set(); print(bill_id, f"{label.lower()} failed:", type(error).__name__, "-", next_step(error), flush=True)
             errors += 1
             if errors >= OUTAGE_LIMIT:
                 print(f"{label}: {OUTAGE_LIMIT} failures in a row; the rest wait for a later run", flush=True)
@@ -1667,7 +1668,7 @@ def _slot_pass(label: str, units, args, deadline: float, slots: int, refused: Re
                     known = refused is not None and bill_id in refused
                     if refused is not None:
                         refused.add(bill_id)
-                    print(f"{label}: capacity unavailable for", bill_id, flush=True)
+                    RUN_TROUBLE.set(); print(f"{label}: capacity unavailable for", bill_id, flush=True)
                     if not known:
                         rejections += 1
                         if rejections >= 3:
@@ -1688,7 +1689,7 @@ def _slot_pass(label: str, units, args, deadline: float, slots: int, refused: Re
                                   next_step(error), flush=True)
                         end("worker stopped; saving the answers already in flight")
                         continue
-                    print(bill_id, f"{label.lower()} failed:", type(error).__name__, "-", next_step(error), flush=True)
+                    RUN_TROUBLE.set(); print(bill_id, f"{label.lower()} failed:", type(error).__name__, "-", next_step(error), flush=True)
                     errors += 1
                     if errors >= OUTAGE_LIMIT:
                         end(f"{OUTAGE_LIMIT} failures in a row; the rest wait for a later run")
@@ -1747,6 +1748,103 @@ def same_but_stamp(previous, payload: dict, stamp: str = "generated_at") -> bool
     """True when a published file already says exactly this, apart from its time stamp."""
     return (isinstance(previous, dict)
             and {k: v for k, v in previous.items() if k != stamp} == {k: v for k, v in payload.items() if k != stamp})
+
+
+IDLE_MARKER = "idle.json"
+IDLE_MAX_S = 30 * 60  # longest a timer start waits on an idle marker; bounds any delay the marker can cause
+IDLE_POLL_S = 60
+# Set by anything that makes a $0 run not idle: a capacity refusal (work deferred), a publish error (output kept
+# unchanged by failure, not by having nothing to say).
+RUN_TROUBLE = threading.Event()
+
+
+def _stat_entries(paths) -> list:
+    out = []
+    for path in paths:
+        try:
+            st = path.stat()
+        except OSError:
+            out.append([str(path), None])
+            continue
+        out.append([str(path), st.st_size, st.st_mtime_ns])
+    return out
+
+
+def git_head(root: Path) -> str | None:
+    """HEAD's commit read from the checkout's files (no subprocess); None if it cannot be read."""
+    try:
+        git = root / ".git"
+        head = (git / "HEAD").read_text("utf-8").strip()
+        if not head.startswith("ref: "):
+            return head or None
+        ref = head[5:]
+        loose = git / ref
+        if loose.is_file():
+            return loose.read_text("utf-8").strip() or None
+        for line in (git / "packed-refs").read_text("utf-8").splitlines():
+            if line.endswith(" " + ref):
+                return line.split(" ", 1)[0]
+    except OSError:
+        return None
+    return None
+
+
+def inputs_signature(args) -> str | None:
+    """Stat signature of everything a review run reads that can change between runs: the snapshot, every text and
+    history index, the account-stop file, and the code's commit. None (never idle) when the commit is unknown."""
+    head = git_head(ROOT)
+    if not head:
+        return None
+    text_dir = args.text_dir or args.snapshot.parent / "text"
+    history_dir = args.history_dir or args.snapshot.parent / "history"
+    paths = [args.snapshot, args.cache_dir / ACCOUNT_STOP]
+    paths += sorted(text_dir.glob("*/index.json")) + sorted(history_dir.glob("*/documents.json"))
+    data = json.dumps([head, _stat_entries(paths)], separators=(",", ":"))
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def output_signature(luna_dir: Path) -> str:
+    """Stat signature of the public Luna files, apart from the progress page's status.json."""
+    paths = sorted(p for p in luna_dir.rglob("*") if p.is_file() and p.name != "status.json")
+    return hashlib.sha256(json.dumps(_stat_entries(paths)).encode("utf-8")).hexdigest()
+
+
+def wait_while_idle(args, *, clock=None, sleep=None) -> float:
+    """A timer start after an idle run: wait (lock not held) until an input changes, the marker is removed or
+    replaced, or it is IDLE_MAX_S old. Returns seconds waited. A stop signal ends the process as usual."""
+    clock, sleep = clock or time.time, sleep or _REAL_SLEEP
+    marker_path = args.cache_dir / IDLE_MARKER
+    started = clock()
+    first = True
+    for _ in range(math.ceil(IDLE_MAX_S / IDLE_POLL_S) + 2):  # bounded even if the clock does not move
+        marker = _read_json(marker_path)
+        if not isinstance(marker, dict) or not isinstance(marker.get("at"), (int, float)):
+            return clock() - started
+        now = clock()
+        left = marker["at"] + IDLE_MAX_S - now
+        current = inputs_signature(args)
+        # Elapsed time and a marker from the future (clock step) both end the wait: it is never unbounded.
+        if left <= 0 or marker["at"] > now or now - started >= IDLE_MAX_S or current is None or current != marker.get("inputs"):
+            return clock() - started
+        if first:
+            print("Last run found nothing to do and no input has changed; waiting up to %d more minutes for new "
+                  "data or code (delete %s to start now)" % (math.ceil(left / 60), marker_path), flush=True)
+            first = False
+        sleep(min(IDLE_POLL_S, left))
+    return clock() - started
+
+
+def settle_idle_marker(args, inputs: str | None, luna_before: str | None, idle: bool) -> None:
+    """After a run: record it as idle only when it spent nothing, deferred nothing and changed no public file, and
+    its inputs were known at the start (so the next start compares against what this run actually read)."""
+    path = args.cache_dir / IDLE_MARKER
+    if idle and inputs and luna_before and output_signature(args.publish_tags.parent) == luna_before:
+        atomic_json(path, {"at": time.time(), "inputs": inputs})
+    else:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def _key_fn(budget):
@@ -2022,6 +2120,11 @@ def main():
             != served_text_dir(args.publish_tags).resolve()):
         parser.error("--text-dir must be the live text the site serves (beside --publish-tags): published reviews "
                      "must match it")
+    # Timer-shaped runs only: started by systemd (INVOCATION_ID), executing, all bills. A shell, test, --bill-id or
+    # dry run never waits and never records an idle marker.
+    timer_run = bool(args.execute and not args.bill_id and args.publish_tags and os.environ.get("INVOCATION_ID"))
+    if timer_run:
+        wait_while_idle(args)
     worker = contextlib.ExitStack()
     try:
         worker.enter_context(ResponseCache(args.cache_dir / "worker-lock")._lock("worker"))
@@ -2033,6 +2136,18 @@ def main():
         # Runs before the lock is released (LIFO), on every exit; acts only on a stop.
         worker.push(lambda exc_type, error, tb: publish_after_stop(args, error))
         STOP_REQUESTED.clear()
+        RUN_TROUBLE.clear()
+        held_any = False
+        idle_inputs = luna_before = None
+        if timer_run:
+            # Only this run's own end can write a new marker; any earlier exit leaves none behind.
+            settle_idle_marker(args, None, None, idle=False)
+            idle_inputs = inputs_signature(args)
+            if args.publish_tags.parent.is_dir():
+                luna_before = output_signature(args.publish_tags.parent)
+        elif args.execute:
+            # A manual run can change reviews without changing any input the marker compares.
+            settle_idle_marker(args, None, None, idle=False)
         if threading.current_thread() is threading.main_thread():
             worker.callback(signal.signal, signal.SIGTERM, signal.signal(signal.SIGTERM, request_stop))
         limits = (None, None) if args.no_spending_cap else (args.daily_budget, args.run_budget)
@@ -2054,6 +2169,7 @@ def main():
             if args.execute:
                 # Under the worker lock, before any send: no other run can still be making these calls.
                 held, left = budget.hold_stranded()
+                held_any = bool(held or left)
                 for key, bound in held:
                     print("Held request %s a stopped run left pending (booked $%.6f); its bill waits, other bills go "
                           "on. Check the provider usage log, then --release it if it was not billed" % (key, bound),
@@ -2231,10 +2347,10 @@ def main():
                 ready = time.monotonic() + max(0, retry_after or 0) + 1
                 if ready < deadline:
                     cooling.append((ready, bill_id)); redo.add(bill_id)
-                    print(bill_id, "capacity unavailable; revisiting in %d seconds, continuing with other bills"
+                    RUN_TROUBLE.set(); print(bill_id, "capacity unavailable; revisiting in %d seconds, continuing with other bills"
                           % (ready - time.monotonic()), flush=True)
                 else:
-                    print(bill_id, "capacity unavailable; stays queued for the next run", flush=True)
+                    RUN_TROUBLE.set(); print(bill_id, "capacity unavailable; stays queued for the next run", flush=True)
                 wait = CAPACITY_PAUSE[min(capacity_waits, len(CAPACITY_PAUSE) - 1)]
                 capacity_waits += 1
                 if wait and not stopping and time.monotonic() + wait < deadline:
@@ -2349,7 +2465,7 @@ def main():
                         if account_error(error):
                             stop_worker(error, args.cache_dir, bill_id, " (fiscal check)")  # writes the backoff marker
                         return
-                    print(bill_id, "fiscal check failed:", type(error).__name__, "-", next_step(error), flush=True)
+                    RUN_TROUBLE.set(); print(bill_id, "fiscal check failed:", type(error).__name__, "-", next_step(error), flush=True)
                     return  # an error specific to this check; retried on a later visit
                 if "result" in report:
                     bundle["fiscal_record"] = {
@@ -2579,6 +2695,10 @@ def main():
             progress["pass_name"] = None
             print("New model spending this run: $%.6f" % budget.run_spent)
             publish_luna(args, network_ok=not halt.is_set() and not STOP_REQUESTED.is_set())
+            if idle_inputs is not None:
+                settle_idle_marker(args, idle_inputs, luna_before, idle=(
+                    budget.run_spent == 0 and not stopped and not halt.is_set() and not STOP_REQUESTED.is_set()
+                    and not new_failures and not queue.get("retry") and not held_any and not RUN_TROUBLE.is_set()))
         finally:
             progress["pass_name"] = None
             progress["pass_jobs"] = []
@@ -2629,12 +2749,12 @@ def publish_luna(args, *, network_ok: bool) -> None:
                   publish_highlights(args.cache_dir, served, args.publish_tags.parent / "highlights", live),
                   "bills", flush=True)
         except Exception as error:
-            print("Highlight publish failed:", type(error).__name__, flush=True)
+            RUN_TROUBLE.set(); print("Highlight publish failed:", type(error).__name__, flush=True)
         if args.related_bills and args.execute and network_ok:
             try:
                 publish_related(args, live)
             except Exception as error:
-                print("Related bills not updated:", type(error).__name__, flush=True)
+                RUN_TROUBLE.set(); print("Related bills not updated:", type(error).__name__, flush=True)
         if args.stages:
             for name, folder, publish in (("changes", "changes", publish_changes),
                                           ("fiscal checks", "fiscal", publish_fiscal)):
@@ -2643,7 +2763,7 @@ def publish_luna(args, *, network_ok: bool) -> None:
                           publish(args.cache_dir, args.publish_tags.parent / folder, live), "bills",
                           flush=True)
                 except Exception as error:
-                    print("Publishing", name, "failed:", type(error).__name__, flush=True)
+                    RUN_TROUBLE.set(); print("Publishing", name, "failed:", type(error).__name__, flush=True)
         for flag, name, module, filename in ((args.suggest_topics, "extras", "topic_suggestions", "extras.json"),
                                              (args.audit_sample, "audit counts", "review_audit", "audit.json")):
             if not flag:
@@ -2656,7 +2776,7 @@ def publish_luna(args, *, network_ok: bool) -> None:
                                                               args.publish_tags.parent / filename),
                       "bills", flush=True)
             except Exception as error:
-                print("Publishing", name, "failed:", type(error).__name__, flush=True)
+                RUN_TROUBLE.set(); print("Publishing", name, "failed:", type(error).__name__, flush=True)
 
 
 if __name__ == "__main__":
