@@ -408,6 +408,15 @@ reading the script from the deployer's bare repository and writing `/var/www/htm
 The tracker loads `./live/bills.json` first and falls back to the bundled `data/bills.json` with a warning
 banner. The GitHub workflow `refresh-bills.yml` is now manual only and refreshes that bundled fallback.
 
+The history read is incremental. Each run LISTs the FTP folders (stamp and size per file; TLC rewrites history
+files in a nightly batch) and reads a file only when it is new or changed, when the prior snapshot no longer
+holds what its last read produced, when a different `sync_ftp.py` read it, or as this run's 1/24 share of the
+daily re-check. Reads stop at `--max-histories` (3000) or after `--history-minutes` (20); the rest wait for the
+next run. Fingerprints live in `live/ftp-history-state.json` (public, like the rest of `live/`); a read counts
+only once the snapshot and its `history.json` are written. Bills not read this run take their events and
+documents from `history.json` for the document and witness stages. `--full` reads everything. In the stats,
+`recheck_drift` above 0 means a file changed without a new LIST stamp, so the stamps cannot be trusted.
+
 Hourly operation uses `scripts/texas-bill-review.service` and `.timer`, a dedicated `texas-bill-review` account,
 and `/var/lib/texas-bill-review/{repository,venv,cache}`. The repository stays on `main` and pulls with
 `--ff-only`. Install optional dependencies into the dedicated venv; install the units under `/etc/systemd/system`.
@@ -631,7 +640,7 @@ Rollback: stop the timer, make a temporary relative symlink to a retained `relea
 then atomically rename it over `current` using `mv -Tf`. Fix or revert main before restarting
 the timer. This affects only the bills site.
 
-Deferred improvements: incremental FTP imports; an authoritative agency registry; full-text
+Deferred improvements: an authoritative agency registry; full-text
 agency classification; and out-of-band alerts for importer failures (the site itself now warns
 on stale snapshots and fallback use).
 

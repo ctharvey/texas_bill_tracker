@@ -1,6 +1,13 @@
 # Changelog
 
 ## 2026-11-15
+- The hourly bill-history import only reads files that changed. Re-reading all 1,521 history files took 11
+  minutes (0.4 s per file), which would be about 85 minutes at session volume, past the hour and the unit's
+  45-minute limit. It now LISTs each FTP folder and reads new or changed files, plus 1/24 of the rest each hour
+  as a daily re-check, capped at 3,000 files or 20 minutes per run. Checked against the real server: the first
+  run reproduced the live snapshot exactly, the next read 64 files in 20 s, and a run with 3 altered fingerprints
+  read exactly those 3 plus the re-check share. Plan:
+  `.agent/plans/texas-bill-atlas-session-readiness-roadmap-2026-11-15.md` (item 1).
 - Security audit fixes (`.agent/reviews/texas-bill-tracker-security-audit-results-2026-11-15.md`, M1 and M2):
   an edit link now asks "Join this synced list?" before it adds this device's bills, legislators and saved
   searches to someone's list or replaces this device's own link (a device with nothing saved still joins straight

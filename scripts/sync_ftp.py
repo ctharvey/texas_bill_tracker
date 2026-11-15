@@ -20,6 +20,7 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import sys
+import time
 from urllib.parse import urlsplit
 import xml.etree.ElementTree as ET
 
@@ -1117,27 +1118,195 @@ def choose_generated_at(previous: dict | None, new_payload: dict, now: dt.dateti
     return fresh
 
 
-def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000, histories: dict | None = None) -> tuple[dict, dict]:
-    paths = enumerate_xml(conn)
+STATE_FORMAT = "texas-bill-ftp-state-v1"
+# A history read by a different version of this file is re-read: parser changes reach every bill without a manual bump.
+PARSER_VERSION = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:16]
+# Unchanged files are still re-read about once a day (1/24 per hourly run): the safety net for LIST stamps, which
+# have minute precision, and the check that they can be trusted (stats 'recheck_drift').
+RECHECK_RUNS = 24
+_LIST_DOS = re.compile(r"^(\d{2}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}[AP]M)\s+(<DIR>|\d+)\s+(\S.*?)\s*$", re.I)
+_LIST_UNIX = re.compile(r"^([-d])\S{9}\S?\s+\d+\s+\S+\s+\S+\s+(\d+)\s+(\w{3}\s+\d{1,2}\s+(?:\d{4}|\d{1,2}:\d{2}))\s+(\S.*?)\s*$")
+
+
+class ListingFormatError(ValueError):
+    """A LIST line this parser does not understand; the caller falls back to NLST without fingerprints."""
+
+
+def _list_entries(conn, path: str) -> list[tuple[str, bool, int | None, str]]:
+    """(name, is_dir, size, stamp) per LIST line; [] for a missing folder (550), like ftp_names."""
+    lines: list[str] = []
+    try:
+        conn.retrlines(f"LIST {path}", lines.append)
+    except ftplib.error_perm as exc:
+        if str(exc).startswith("550"):
+            return []
+        raise
+    entries = []
+    for line in lines:
+        if not line.strip() or line.lower().startswith("total "):
+            continue
+        match = _LIST_DOS.match(line)
+        if match:
+            date, clock, size, name = match.groups()
+            directory = size.upper() == "<DIR>"
+            entries.append((name, directory, None if directory else int(size), f"{date} {clock.upper()}"))
+            continue
+        match = _LIST_UNIX.match(line)
+        if match:
+            kind, size, stamp, name = match.groups()
+            entries.append((name, kind == "d", None if kind == "d" else int(size), " ".join(stamp.split())))
+            continue
+        raise ListingFormatError(f"unrecognized LIST line under {path}: {line[:80]!r}")
+    return entries
+
+
+def list_xml(conn) -> dict[str, dict]:
+    """enumerate_xml with each file's LIST stamp and size: {path: {"stamp", "size"}}. Same paths, same filters."""
+    found: dict[str, dict] = {}
+    for category in FOLDERS:
+        top = f"{ROOT}/{category}"
+        for name, directory, size, stamp in _list_entries(conn, top):
+            if name in (".", ".."):
+                continue
+            path = str(PurePosixPath(top) / PurePosixPath(name).name)
+            if not directory:
+                if name.lower().endswith(".xml"):
+                    found[path] = {"stamp": stamp, "size": size}
+                continue
+            for leaf, leaf_directory, leaf_size, leaf_stamp in _list_entries(conn, path):
+                if not leaf_directory and leaf.lower().endswith(".xml"):
+                    found[str(PurePosixPath(path) / PurePosixPath(leaf).name)] = {"stamp": leaf_stamp, "size": leaf_size}
+    return {path: info for path, info in sorted(found.items()) if not path.lower().endswith("/history.xml")}
+
+
+def _fingerprint(listed: dict | None) -> str | None:
+    return f"{listed['stamp']}|{listed['size']}" if listed and listed.get("stamp") and listed.get("size") is not None else None
+
+
+def load_state(path: Path) -> dict:
+    """{'paths': {ftp path: entry}}; a missing or unreadable file is an empty state (every file is read)."""
+    data = _load_json(path)
+    paths = data.get("paths") if data.get("format") == STATE_FORMAT else None
+    return {"paths": {p: e for p, e in paths.items() if isinstance(e, dict)} if isinstance(paths, dict) else {}}
+
+
+def commit_state(state: dict, path: Path) -> None:
+    """Apply the entries this run fetched and write the state. Call only after the snapshot and history are written."""
+    paths = {**state.get("paths", {}), **state.pop("pending", {})}
+    state["paths"] = paths
+    payload = {"format": STATE_FORMAT, "parser": PARSER_VERSION, "paths": paths}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write(path, (json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
+
+
+def load_stored_histories(bills: list[dict], histories: dict, history_dir: Path) -> int:
+    """Fill histories for bills not read this run from their history.json, so later stages still see every bill."""
+    loaded = 0
+    for bill in bills:
+        bill_id = str(bill.get("id", ""))
+        if bill_id in histories or not BILL_DIR_RE.match(bill_id):
+            continue
+        stored = _load_json(history_dir / bill_id / "history.json")
+        if stored.get("format") == HISTORY_FORMAT and stored.get("bill") == bill_id:
+            histories[bill_id] = {"events": stored.get("events") or [], "documents": stored.get("documents") or [],
+                                  "source_updated": stored.get("source_updated")}
+            loaded += 1
+    return loaded
+
+
+def plan_fetches(listing: dict[str, dict | None], prior_bills: dict[str, dict], known: dict[str, dict]) -> tuple[list[tuple[int, str]], int]:
+    """Order the files to read: (0) new, changed or not provably in the prior snapshot, (1) read by another
+    parser version, (2) this run's share of the daily re-check, oldest read first. Returns ([(class, path)], skipped).
+
+    A file is skipped only when its LIST fingerprint is unchanged AND the prior snapshot still holds the record that
+    read produced (same bill, source_path and source_updated): state alone never proves the snapshot has the data.
+    """
+    order, current = [], []
+    for path, listed in listing.items():
+        entry = known.get(path)
+        fingerprint = _fingerprint(listed)
+        bill = prior_bills.get(entry.get("bill")) if entry else None
+        if (entry is None or fingerprint is None or entry.get("fp") != fingerprint or bill is None
+                or bill.get("source_path") != path or bill.get("source_updated") != entry.get("source_updated")):
+            order.append((0, str(entry.get("fetched", "")) if entry else "", path))
+        elif entry.get("parser") != PARSER_VERSION:
+            order.append((1, str(entry.get("fetched", "")), path))
+        else:
+            current.append((2, str(entry.get("fetched", "")), path))
+    current.sort()
+    share = -(-len(listing) // RECHECK_RUNS)
+    order.extend(current[:share])
+    order.sort()
+    return [(klass, path) for klass, _, path in order], len(current) - min(share, len(current))
+
+
+def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000, histories: dict | None = None,
+                state: dict | None = None, max_histories: int | None = None,
+                deadline: float | None = None) -> tuple[dict, dict]:
+    """Read bill-history XML into a snapshot merged over prior.
+
+    state=None reads every file (the original full read). With a state dict ({'paths': ...}, see load_state) only
+    new, changed and re-check files are read, at most max_histories of them and none after the time.monotonic()
+    deadline; the rest wait for the next run. Fetched entries go to state['pending'] for commit_state.
+    """
+    incremental = state is not None
+    if incremental:
+        try:
+            listing: dict[str, dict | None] = dict(list_xml(conn))
+        except ListingFormatError as exc:
+            print(f"LIST not understood, reading without fingerprints: {exc}", file=sys.stderr)
+            listing = {path: None for path in enumerate_xml(conn)}
+    else:
+        listing = {path: None for path in enumerate_xml(conn)}
+    paths = list(listing)
     if not paths:
         raise RuntimeError("The 90R bulk FTP bill-history listing is empty or unavailable")
     if len(paths) > max_files:
         raise RuntimeError(f"Found {len(paths)} XML paths; refusing unexpected volume above {max_files}")
+    previous = {b['id']: b for b in prior.get('bills',[]) if 'id' in b}
+    known = state.setdefault("paths", {}) if incremental else {}
+    if incremental:
+        plan, skipped = plan_fetches(listing, previous, known)
+    else:
+        plan, skipped = [(0, path) for path in paths], 0
+    now = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
     parsed = {}
     errors = []
-    for i, path in enumerate(paths, 1):
+    pending: dict[str, dict] = {}
+    attempted = deferred = drift = 0
+    for i, (klass, path) in enumerate(plan):
+        if ((max_histories is not None and attempted >= max_histories)
+                or (deadline is not None and time.monotonic() >= deadline)):
+            deferred = len(plan) - i
+            break
+        attempted += 1
         try:
-            bill = parse_bill_xml(ftp_bytes(conn, path), path)
-            if bill:
-                parsed[bill['id']] = bill
+            raw = ftp_bytes(conn, path)
         except (ftplib.error_perm, ftplib.error_temp, EOFError, OSError) as exc:
-            errors.append(f"{path}: {exc}")
-        if i % 250 == 0:
-            print(f"Inspected {i}/{len(paths)} XML files; {len(parsed)} parseable", flush=True)
-    min_parsed = max(1, len(paths) // 3)
-    if len(parsed) < min_parsed:
-        raise RuntimeError(f"Could parse only {len(parsed)}/{len(paths)} files; snapshot left untouched. First errors: {errors[:3]}")
-    previous = {b['id']: b for b in prior.get('bills',[]) if 'id' in b}
+            errors.append(f"{path}: {exc}")  # No pending entry: the file is read again next run.
+            continue
+        bill = parse_bill_xml(raw, path)
+        if bill:
+            parsed[bill['id']] = bill
+        if incremental:
+            listed = listing[path]
+            # A size that differs from the listing means the file was being rewritten: read it again next run.
+            whole = not listed or listed.get("size") is None or listed["size"] == len(raw)
+            old = known.get(path) or {}
+            if klass == 2 and bill and bill.get("source_updated") != old.get("source_updated"):
+                drift += 1
+            pending[path] = {"fp": _fingerprint(listed) if whole else None, "bill": bill['id'] if bill else None,
+                             "source_updated": bill.get("source_updated") if bill else None,
+                             "parser": PARSER_VERSION, "fetched": now}
+        if attempted % 250 == 0:
+            print(f"Inspected {attempted}/{len(plan)} XML files; {len(parsed)} parseable", flush=True)
+    min_parsed = max(1, attempted // 3)
+    # An incremental run that read only one or two files does not prove the source is broken.
+    if attempted and len(parsed) < min_parsed and (not incremental or attempted >= 3):
+        raise RuntimeError(f"Could parse only {len(parsed)}/{attempted} files; snapshot left untouched. First errors: {errors[:3]}")
+    if incremental:
+        state["paths"] = {path: entry for path, entry in known.items() if path in listing}
+        state["pending"] = pending
     merged = dict(previous)
     for key,bill in parsed.items():
         old = previous.get(key,{})
@@ -1148,7 +1317,9 @@ def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000, histories
         'session': '90R',
         'generated_at': '',
         'data_mode': 'official-ftp',
-        'coverage_note': f"{len(parsed)} bill histories read from the official bulk FTP; {len(merged)} combined records. Agency inferences are based on available captions and curated overrides.",
+        # Counts that stay put between runs: an incremental run's read count would change the snapshot (and its
+        # generated_at) every hour even when no bill changed.
+        'coverage_note': f"{len(paths)} bill histories listed on the official bulk FTP; {len(merged)} combined records. Agency inferences are based on available captions and curated overrides.",
         'sources': ['ftp://ftp.legis.state.tx.us/bills/90r/billhistory/', 'https://capitol.texas.gov/billlookup/filedownloads.aspx'],
         'author_profiles': prior.get('author_profiles',{}),
         # Newest filing first, then by bill number as a number (HB 99 before HB 100), not as text.
@@ -1161,11 +1332,16 @@ def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000, histories
         bill.pop('events', None)
         bill.pop('documents', None)
     snapshot['generated_at'] = choose_generated_at(prior, snapshot, dt.datetime.now(dt.timezone.utc))
-    incomplete = len(errors) > INCOMPLETE_SHARE * len(paths)
+    # Share of the files this run tried to read. A full read tries all of them, so that case is unchanged.
+    incomplete = len(errors) > INCOMPLETE_SHARE * attempted and (not incremental or len(errors) >= 3)
     if incomplete and prior.get('generated_at'):
         snapshot['generated_at'] = prior['generated_at']
-    return snapshot, {'listed':len(paths),'parsed':len(parsed),'combined':len(merged),'transfer_errors':len(errors),
-                      'incomplete':incomplete}
+    stats = {'listed':len(paths),'parsed':len(parsed),'combined':len(merged),'transfer_errors':len(errors),
+             'incomplete':incomplete}
+    if incremental:
+        stats.update({'mode': 'incremental', 'fetched': attempted, 'unchanged': skipped, 'deferred': deferred,
+                      'recheck_drift': drift, 'fingerprinted': any(listing.values())})
+    return snapshot, stats
 
 
 def main() -> int:
@@ -1180,25 +1356,48 @@ def main() -> int:
     parser.add_argument('--failures-file',type=Path,default=None,
                         help='Write the secondary stages that failed here, one per line (the unit fails on a non-empty file '
                              'after building feeds); the snapshot itself is still written')
+    parser.add_argument('--state',type=Path,default=None,
+                        help='Fingerprints of the history files already read (default: ftp-history-state.json next to --out)')
+    parser.add_argument('--max-histories',type=int,default=3000,help='Most history files read per run; the rest wait')
+    parser.add_argument('--history-minutes',type=float,default=20,
+                        help='Stop starting history reads after this many minutes; the rest wait for the next run')
+    parser.add_argument('--full',action='store_true',help='Read every history file, ignoring fingerprints, caps and time limit')
     args=parser.parse_args()
     failures=[]
     prior=json.loads(args.out.read_text(encoding='utf-8')) if args.out.exists() else {'bills':[]}
+    state_path=args.state or args.out.with_name('ftp-history-state.json')
+    state={'paths':{}} if args.full else load_state(state_path)
+    history_dir=args.history_dir or args.out.parent/'history'
     with ftplib.FTP(HOST,timeout=55) as conn:
         conn.login('anonymous','legislative-research@example.invalid')
         histories={}
-        snapshot,stats=synchronize(conn,prior,args.max_files,histories)
+        snapshot,stats=synchronize(conn,prior,args.max_files,histories,state,
+                                   None if args.full else args.max_histories,
+                                   None if args.full else time.monotonic()+args.history_minutes*60)
     temp=args.out.with_suffix('.json.tmp')
     temp.write_text(json.dumps(snapshot,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     os.replace(temp,args.out)
     print(json.dumps(stats,indent=2))
     if stats.get('incomplete'):
-        failures.append(f"incomplete read: {stats['transfer_errors']} of {stats['listed']} transfers failed")
+        failures.append(f"incomplete read: {stats['transfer_errors']} of {stats.get('fetched', stats['listed'])} transfers failed")
+    history_ok=False
     try:
-        history_counts=sync_history(histories,args.history_dir or args.out.parent/'history')
+        load_stored_histories(snapshot['bills'],histories,history_dir)
+        history_counts=sync_history(histories,history_dir)
         print(json.dumps({'history':history_counts},indent=2))
+        history_ok=not history_counts.get('failed')
     except Exception as exc:  # History files are secondary; never fail a written snapshot.
         print(f"HISTORY SYNC FAILED, snapshot unaffected: {exc}",file=sys.stderr)
         failures.append(f"history: {exc}")
+    # Order: snapshot, then history, then state. A file counts as read only once both hold what it produced;
+    # otherwise its old entry stays and the next run reads it again.
+    if not history_ok:
+        state.pop('pending',None)
+    try:
+        commit_state(state,state_path)
+    except OSError as exc:  # Without state the next run reads more files; nothing published is wrong.
+        print(f"STATE WRITE FAILED, next run re-reads: {exc}",file=sys.stderr)
+        failures.append(f"state: {exc}")
     try:
         with ftplib.FTP(HOST,timeout=55) as conn:
             conn.login('anonymous','legislative-research@example.invalid')
