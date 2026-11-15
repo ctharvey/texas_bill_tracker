@@ -244,3 +244,16 @@ test('district pages: member, their bills, bills naming the district\'s counties
   assert.match(files.get('index.md'), /\[Bills by legislative district\]\(https:\/\/agent\.bills\.ctharvey\.me\/districts\/index\.md\) \(181 groups\)/);
   assert.ok(![...build().keys()].some(k => k.startsWith('districts/')));
 });
+
+test('a new tags or roster stamp alone leaves district and bill-index pages unchanged', async () => {
+  const geo = await import('../src/geo.js');
+  const districts = JSON.parse(readFileSync(new URL('../data/geo/districts.json', import.meta.url), 'utf8'));
+  const before = build({districts, geo});
+  const after = build({districts, geo, tags: {...TAGS, generated_at: '2026-11-10T14:05:00Z'},
+    roster: {...ROSTER, generated_at: '2026-11-11T09:00:00Z'}});
+  const pages = [...before.keys()].filter(k => k.startsWith('districts/') || k.startsWith('bills/index'));
+  assert.ok(pages.length > 180);
+  assert.deepEqual(pages.filter(k => before.get(k) !== after.get(k)), []);
+  assert.match(before.get('districts/house-46.md'), /How current this is: see the \[overview\]/);
+  assert.match(after.get('index.md'), /full-text tags as of 2026-11-10T14:05:00Z/);  // the overview still says
+});

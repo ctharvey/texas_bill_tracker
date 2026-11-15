@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-15
+- Agent edition: district pages and the paged bill index point to the overview for "as of" times instead of
+  carrying them. The full-text tags time moves with every review run, so 181 district pages and the bill index were
+  rewritten every hour with no bill changed. The overview, 404 and recent pages still show the times.
 - Bill texts are read again only when their own file changed. Before, any new action on a bill re-read every text
   version (the bill's update time stood in for the text's), and the 24 texts TLC has not posted yet were read every
   hour, all counting against the 400-per-run limit. Now a bill whose update time is unchanged costs no FTP call; a

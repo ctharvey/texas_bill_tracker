@@ -263,6 +263,9 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   const put = (path, text) => files.set(path, text);
   const dataDate = snapshot.generated_at;
   const asOf = `Bill data as of ${dataDate}${tags?.generated_at ? `; full-text tags as of ${tags.generated_at}` : ''}${roster?.generated_at ? `; member roster as of ${roster.generated_at}` : ''}.`;
+  // Pages that list many bills point to the overview for freshness instead of carrying the stamps: the tags stamp
+  // moves with every review run, which rewrote every district and bill-index page each hour though no bill changed.
+  const freshness = `How current this is: see the [overview](${AGENT}index.md).`;
   const records = new Map(bills.map(b => [b.id, billRecord(b)]));
   const listed = role => bills.filter(b => records.get(b.id).people[role]?.length).length;
   const coverage = {bills: bills.length, full_text_reviewed: bills.filter(b => b.luna).length,
@@ -312,7 +315,7 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
       put(href(i), groupPage(title, intro + nav, chunk, humanLink, sorted.length));
     }
   };
-  pagedGroup('bills/index', 'All bills', `${asOf} Also by [filing date](${AGENT}filed/index.md), or [search](${AGENT}search).`,
+  pagedGroup('bills/index', 'All bills', `${freshness} Also by [filing date](${AGENT}filed/index.md), or [search](${AGENT}search).`,
     bills, SITE + '#all');
 
   const indexes = [];
@@ -374,7 +377,7 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   put('authors/index.md', indexPage('Bills by member', `Authors and coauthors serve in the originating chamber; sponsors and cosponsors in the other.${roleNote}`, personRows));
   indexes.push(['Bills by member', 'authors/index.md', personRows.length]);
 
-  if (districts && geo) districtPages({bills, roster, tables: districts, geo, put, files, indexes, asOf});
+  if (districts && geo) districtPages({bills, roster, tables: districts, geo, put, files, indexes, asOf: freshness});
 
   put('recent.md', groupPage('Most recent actions', `The 100 bills with the most recent recorded actions, so not every bill acted on in a period. For everything filed since a date use ${AGENT}search?filed_from=YYYY-MM-DD or [bills by filing date](${AGENT}filed/index.md); for one action type see [bills by most recent action](${AGENT}last-action/index.md). ${asOf}`,
     [...bills].sort(byRecent).slice(0, 100), tracker({sort: 'latest'})));
