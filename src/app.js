@@ -134,7 +134,7 @@ async function init(){
   document.addEventListener('focusin',event=>{
     if(event.target.id==='filter-agency')showAgencyChoices('');
   });
-  document.addEventListener('toggle',e=>{if(e.target.id==='more-filters')state.moreFiltersOpen=e.target.open;if(e.target.id==='watch-save')state.watchSaveOpen=e.target.open},true);
+  document.addEventListener('toggle',e=>{if(e.target.id==='more-filters')state.moreFiltersOpen=e.target.open;if(e.target.id==='watch-save')state.watchSaveOpen=e.target.open;if(e.target.id==='watch-filters')state.watchFiltersOpen=e.target.open},true);
   document.addEventListener('click',e=>{const m=$('#share-menu');if(m?.open&&(!m.contains(e.target)||e.target.closest('.share-panel button')))setTimeout(()=>{m.open=false})});
   document.addEventListener('keydown',event=>{
     if(event.key==='Escape'&&preview.id&&!$('#bill-preview')?.hidden){closePreview();return}
@@ -628,10 +628,10 @@ function areaHeaderMarkup(){
   const row=areaCounts(bills,todayDay()).find(r=>r.area.id===area.id);
   const hearing=new Map();for(const b of bills){const l=assessHearing(b).label;hearing.set(l,(hearing.get(l)||0)+1)}
   const status=[NO_HEARING,'Referred','Scheduled','Heard'].filter(l=>hearing.get(l)).map(l=>`<span><strong>${hearing.get(l).toLocaleString()}</strong> ${esc(l.toLowerCase())}</span>`).join('');
-  const agencies=topAgencies(bills,6,new Set([SCOPE_AGENCY_ID])).map(a=>`<a class="tag" href="${esc(buildHash('all',{area:area.id,agency:a.id}))}">${esc(agencyName(a.id))} · ${a.count.toLocaleString()}</a>`).join('');
+  const agencies=topAgencies(bills,3,new Set([SCOPE_AGENCY_ID])).map(a=>`<a class="text-link" href="${esc(buildHash('all',{area:area.id,agency:a.id}))}">${esc(agencyName(a.id))}</a> (${a.count.toLocaleString()})`).join(', ');
   return `<h2>${esc(area.name)}</h2><p class="area-audience">For ${esc(area.audience.charAt(0).toLowerCase()+area.audience.slice(1))}.</p>`
     +`<p class="home-counts"><span><strong>${bills.length.toLocaleString()}</strong> ${bills.length===1?'bill':'bills'}</span><span><strong>${(row?.moved||0).toLocaleString()}</strong> with an action in the last 7 days</span>${status}</p>`
-    +(agencies?`<p class="area-agencies"><span>Agencies these bills name most:</span> ${agencies}</p>`:'')
+    +(agencies?`<p class="area-agencies">Agencies named most: ${agencies}.</p>`:'')
     +`<details class="area-rule"><summary>What puts a bill in this area</summary><p>A bill is here when the Legislative Council files it under one of these official subjects, or its title or caption uses one of the area's key terms. Areas are a reading aid built from the subject index, not a legal classification.</p><div class="bill-tags">${subjectLabels(area).map(x=>`<span class="tag subject-tag">${esc(x)}</span>`).join('')}</div></details>`
     +`<p class="tools-note">To follow this area, use <strong>Share / save</strong> then <strong>Save search</strong>.</p>`;
 }
@@ -644,13 +644,19 @@ function renderAreaHeader(){
   areaHeaderShown=now;
   const html=areaHeaderMarkup();box.hidden=!html;box.innerHTML=html;
 }
+// The watchlist is usually short, so its filters fold under one toggle; any set filter opens it.
+function watchFiltersOpen(){
+  if(state.view!=='watchlist')return '';
+  const n=activeFilters().filter(([key])=>key!=='query').length;
+  return `<details class="watch-filters" id="watch-filters"${n||state.watchFiltersOpen?' open':''}><summary class="outline-button">Filters${n?` · ${n}`:''}</summary>`;
+}
 function explorerMarkup(){
   const topics=unique([...POLICY_AREAS.map(t=>t.name),...state.bills.flatMap(b=>b.topics)]).sort();
   const popular=['Education','Healthcare','Elections','Taxes','Immigration','Data centers','Local government','Energy & utilities'];
   return `${sharedBanner()}${state.view==='watchlist'?watchTools():''}
     <section class="area-header" id="area-header" aria-label="Reader area" hidden></section><div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" maxlength="200" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><details class="share-menu" id="share-menu"><summary class="outline-button">Share / save</summary><div class="share-panel"><button type="button" id="copy-view-link" title="Copy a link to this view, with its filters">Copy link</button>${state.view==='all'&&!state.sharedList?'<button type="button" id="save-search" title="Keep this search and its filters under Following">Save search</button>':''}<button type="button" id="export-csv">↓ Export results (CSV)</button></div></details></div><details class="search-help"><summary>What search looks at</summary><p>Every word you type has to appear somewhere in the bill, in any order. It looks in: ${SEARCH_FIELDS.map(f=>esc(f.label)).join(', ')}. Luna's search terms are words it added to help find a bill; they are not shown on the card, so each result says which field matched.</p><p>Put words in "double quotes" to keep them together. A plural also finds the singular ("wages" finds "wage"). A section number such as <em>Penal Code 46.06</em> finds the bills that change it.</p><p class="search-examples">Try: ${SEARCH_EXAMPLES.map(x=>`<button type="button" class="search-example" data-search-example="${esc(x)}">${esc(x)}</button>`).join('')}</p></details>
-    <div class="filter-row">${areaSelect()}<select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted'],state.stage,'Any stage')}</select><details class="more-filters" id="more-filters"${moreFiltersOpen()?' open':''}><summary class="outline-button">More filters<span id="more-count">${moreCountText()}</span></summary><div class="filter-row more-row"><div class="agency-combobox" id="agency-combobox"><input aria-label="Affected agency" aria-controls="agency-options" aria-expanded="false" aria-autocomplete="list" role="combobox" id="filter-agency" placeholder="All affected agencies" value="${esc(state.agency?agencyName(state.agency):'')}" autocomplete="off"><span class="agency-chevron" aria-hidden="true">⌄</span><div class="agency-panel" id="agency-panel" hidden><div class="agency-sort" role="group" aria-label="Sort agencies">${agencySortButtons()}</div><div class="agency-options" id="agency-options" role="listbox" hidden>${agencyOptionsMarkup()}</div></div></div><select aria-label="Author party" id="filter-party" title="Republican or Democratic: the primary author's party, with no author or coauthor from the other party. Bipartisan: authors or coauthors from both parties.">${options(Object.keys(PARTY_FILTERS),state.party,'Any party')}</select><select aria-label="Hearing status" id="filter-outlook">${options([NO_HEARING,'Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><select aria-label="Last action" id="filter-action">${options(unique([...LAST_ACTION_TYPES.map(t=>t.label),'Other action']).filter(l=>l===state.action||state.bills.some(b=>lastActionInfo(b).label===l)),state.action,'Any last action')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></details></div></div>
-    <div class="topic-strip" aria-label="Quick topic filters"><button class="topic-chip ${state.topic===''?'selected':''}" data-topic="">All topics</button>${popular.map(t=>`<button class="topic-chip ${state.topic===t?'selected':''}" data-topic="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+    ${watchFiltersOpen()}<div class="filter-bar"><div class="filter-row">${areaSelect()}<select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted'],state.stage,'Any stage')}</select></div><details class="more-filters" id="more-filters"${moreFiltersOpen()?' open':''}><summary class="outline-button">More filters<span id="more-count">${moreCountText()}</span></summary><div class="filter-row more-row"><div class="agency-combobox" id="agency-combobox"><input aria-label="Affected agency" aria-controls="agency-options" aria-expanded="false" aria-autocomplete="list" role="combobox" id="filter-agency" placeholder="All affected agencies" value="${esc(state.agency?agencyName(state.agency):'')}" autocomplete="off"><span class="agency-chevron" aria-hidden="true">⌄</span><div class="agency-panel" id="agency-panel" hidden><div class="agency-sort" role="group" aria-label="Sort agencies">${agencySortButtons()}</div><div class="agency-options" id="agency-options" role="listbox" hidden>${agencyOptionsMarkup()}</div></div></div><select aria-label="Author party" id="filter-party" title="Republican or Democratic: the primary author's party, with no author or coauthor from the other party. Bipartisan: authors or coauthors from both parties.">${options(Object.keys(PARTY_FILTERS),state.party,'Any party')}</select><select aria-label="Hearing status" id="filter-outlook">${options([NO_HEARING,'Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><select aria-label="Last action" id="filter-action">${options(unique([...LAST_ACTION_TYPES.map(t=>t.label),'Other action']).filter(l=>l===state.action||state.bills.some(b=>lastActionInfo(b).label===l)),state.action,'Any last action')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></details></div>${state.view==='watchlist'?'</details>':''}</div>
+    ${state.view==='watchlist'?'':`<div class="topic-strip" aria-label="Quick topic filters"><button class="topic-chip ${state.topic===''?'selected':''}" data-topic="">All topics</button>${popular.map(t=>`<button class="topic-chip ${state.topic===t?'selected':''}" data-topic="${esc(t)}">${esc(t)}</button>`).join('')}</div>`}
     <div class="active-filters" id="active-filters" aria-label="Active filters"></div><div class="results-header"><div><strong id="result-count">—</strong><span id="result-note"></span></div><select id="sort-order" aria-label="Sort bills">${options(Object.values(SORTS),SORTS[state.sort],'Sort by')}</select></div><div class="explorer-results" id="explorer-results"><div class="bill-list" id="bill-list"></div><aside class="bill-preview" id="bill-preview" aria-labelledby="preview-title" hidden></aside></div><div class="explorer-bottom" id="results-bottom"></div>`;
 }
 
@@ -850,8 +856,8 @@ function billCard(b,unwatchedCompanion=false,reasons=null){
 // ---- Home: the dashboard. Search first, then what changed on your bills, the latest day's actions, hearings and reviews.
 const HOME_ROWS=5;
 function homeMarkup(){
-  return `<form class="home-search" id="home-search-form" role="search"><label for="home-search">Search every bill</label><div class="home-search-row"><input id="home-search" name="query" maxlength="200" placeholder="Bill number, author, subject, agency or keyword…" autocomplete="off"><button class="primary-button" type="submit">Search</button></div><p class="tools-note">Or <a class="text-link" href="#all" data-view="all">browse all ${state.bills.length.toLocaleString()} bills</a>.</p></form>
-    <div class="calendar-mini home-milestone"><div class="calendar-eyebrow">UPCOMING MILESTONE</div><div class="calendar-date">JAN 12 <span>2027</span></div><div class="calendar-desc">90th regular session convenes</div><div class="calendar-progress"><span></span></div></div>
+  return `<div class="home-top"><form class="home-search" id="home-search-form" role="search"><label for="home-search">Search every bill</label><div class="home-search-row"><input id="home-search" name="query" maxlength="200" placeholder="Bill number, author, subject, agency or keyword…" autocomplete="off"><button class="primary-button" type="submit">Search</button></div><p class="tools-note">Or <a class="text-link" href="#all" data-view="all">browse all ${state.bills.length.toLocaleString()} bills</a>.</p></form>
+    <div class="calendar-mini home-milestone"><div class="calendar-eyebrow">UPCOMING MILESTONE</div><div class="calendar-date">JAN 12 <span>2027</span></div><div class="calendar-desc">90th regular session convenes</div><div class="calendar-progress"><span></span></div></div></div>
     <div class="home-grid">${homeCards()}</div>`;
 }
 // Redraws the dashboard's cards only, so a sync or watch change never clears what is typed in its search box.
@@ -859,7 +865,7 @@ function refreshHome(){const grid=$('.home-grid');if(grid)grid.innerHTML=homeCar
 function homeCards(){
   const today=todayDay(),prev=previousVisit();
   const more=(href,view,label)=>`<a class="text-link home-more" href="${esc(href)}"${view?` data-view="${view}"`:''}>${label} →</a>`;
-  const card=(title,count,body)=>`<section class="home-card"><h2>${title}${count?` <span>${count.toLocaleString()}</span>`:''}</h2>${body}</section>`;
+  const card=(title,count,body,order)=>`<section class="home-card home-o${order}"><h2>${title}${count?` <span>${count.toLocaleString()}</span>`:''}</h2>${body}</section>`;
   const datedRow=({bill,day})=>todayRow({bill,actions:(activityOn([bill],day)[0]?.actions||[lastActionInfo(bill).text]).map(t=>`${shortDate(day)} · ${t}`)});
   // Your bills: watched, and those of legislators you follow.
   const followed=state.roster&&state.follow.length?followedBills(state.bills,state.roster,state.follow).map(r=>r.bill):[];
@@ -885,7 +891,10 @@ function homeCards(){
   const reviewed=newestReviewed(state.bills);
   const reviewBody=reviewed.length?reviewed.slice(0,HOME_ROWS).map(b=>todayRow({bill:b,actions:[`Reviewed ${dateText(b.luna.reviewed_at)}`]})).join('')+more('#review','review','Review progress')
     :'<p class="tools-note">Luna has not reviewed any bills yet.</p>';
-  return `${card(yoursTitle,changed.length,yours)}${card(day===today?'Today at the Lege':`Most recent activity, ${esc(shortDate(day))}`,rows.length,dayBody)}${card('What Luna changed, last 24 hours',lunaChanged.bills.length,changedBody)}${card('Upcoming hearings',hearings.length,hearingBody)}${card('Newly reviewed by Luna',0,reviewBody)}${areasCard()}`;
+  // Two columns that do not share row heights, split so their lengths come out close on a typical day.
+  // On a phone the columns dissolve and .home-oN puts the cards back in this order.
+  return `<div class="home-col">${card(yoursTitle,changed.length,yours,1)}${card('Upcoming hearings',hearings.length,hearingBody,4)}${card('What Luna changed, last 24 hours',lunaChanged.bills.length,changedBody,3)}</div>`
+    +`<div class="home-col">${card(day===today?'Today at the Lege':`Most recent activity, ${esc(shortDate(day))}`,rows.length,dayBody,2)}${card('Newly reviewed by Luna',0,reviewBody,5)}</div>${areasCard()}`;
 }
 // Browse by area: every reader area with its bills and how many moved this week, grouped by audience.
 function areasCard(){
@@ -1256,10 +1265,15 @@ function statuteHintMarkup(keys){
 
 // An agency id is shown as a code only when it is a short form the name does not already spell out (TCEQ, not HOUSE or TX-COURTS).
 const agencyCode=a=>/^[a-z]{2,6}$/.test(a.id)&&!a.name.toLowerCase().includes(a.id)?a.id.toUpperCase():'';
+function filterAgencyCards(text){
+  const words=text.toLowerCase().split(/\s+/).filter(Boolean),cards=[...document.querySelectorAll('#agency-grid .agency-card')];
+  let shown=0;for(const c of cards){const hit=words.every(w=>c.dataset.find.includes(w));c.hidden=!hit;if(hit)shown++}
+  $('#agency-find-note').textContent=words.length?(shown?`${shown} of ${cards.length} agencies`:'No agency matches. Try part of the name.'):'';
+}
 function agenciesMarkup(){
   const counts=new Map();for(const b of state.bills)for(const a of realAgencies(b))counts.set(a.id,(counts.get(a.id)||0)+1);
   const agencies=unique([...AGENCIES.map(a=>a.id),...Object.keys(state.luna?.agencies||{})]).filter(id=>id!==SCOPE_AGENCY_ID).map(id=>({id,name:agencyName(id)})).sort((a,b)=>(counts.get(b.id)||0)-(counts.get(a.id)||0)||a.name.localeCompare(b.name));
-  return `<div class="section-head"><div><div class="section-overline">IMPACT DIRECTORY</div><h2>Texas state agencies</h2></div><span class="subtitle">${counts.size} with possible links in this snapshot</span></div><div class="info-callout"><strong>Why an agency index?</strong> One bill can change the work of several state agencies. “Direct” means the supplied material names an agency; “possible” means an inferred policy connection. An agency absent from a caption is not proof it is unaffected—full bill text review is needed for comprehensive coverage.</div><div class="agency-grid" style="margin-top:18px">${agencies.map(a=>`<button class="agency-card" data-agency-pick="${esc(a.id)}">${agencyCode(a)?`<span class="agency-code">${esc(agencyCode(a))}</span>`:''}<strong>${esc(a.name)}</strong><span class="hits">${counts.get(a.id)||0} ${counts.get(a.id)===1?'bill':'bills'} in snapshot →</span></button>`).join('')}</div>`;
+  return `<div class="section-head"><div><div class="section-overline">IMPACT DIRECTORY</div><h2>Texas state agencies</h2></div><span class="subtitle">${counts.size} with possible links in this snapshot</span></div><div class="info-callout"><strong>Why an agency index?</strong> One bill can change the work of several state agencies. “Direct” means the supplied material names an agency; “possible” means an inferred policy connection. An agency absent from a caption is not proof it is unaffected—full bill text review is needed for comprehensive coverage.</div><div class="agency-find"><label for="agency-find">Find an agency</label><input id="agency-find" type="search" maxlength="80" placeholder="Name or short form, e.g. TCEQ" autocomplete="off"><span id="agency-find-note" class="tools-note" aria-live="polite"></span></div><div class="agency-grid" id="agency-grid">${agencies.map(a=>`<button class="agency-card" data-agency-pick="${esc(a.id)}" data-find="${esc(`${a.name} ${a.id} ${agencyCode(a)}`.toLowerCase())}">${agencyCode(a)?`<span class="agency-code">${esc(agencyCode(a))}</span>`:''}<strong>${esc(a.name)}</strong><span class="hits">${counts.get(a.id)||0} ${counts.get(a.id)===1?'bill':'bills'} in snapshot →</span></button>`).join('')}</div>`;
 }
 
 const clockText=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/Chicago'})+' CT';
@@ -1705,6 +1719,7 @@ async function copyForAi(button){
 }
 
 function handleInput(e){
+  if(e.target.id==='agency-find'){filterAgencyCards(e.target.value);return}
   if(e.target.id==='review-lookup'){$('#review-lookup-result').innerHTML=reviewLookupHtml(e.target.value);return}
   if(e.target.id==='bill-search'){state.query=e.target.value.slice(0,200);state.visibleCount=30;renderResults()}
   if(e.target.id==='filter-agency'){

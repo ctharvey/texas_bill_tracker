@@ -21,6 +21,13 @@
   leads to the content. Card buttons name their bill ("Add HB 1159 to watchlist"), truncated headlines carry the
   full text as a tooltip, re-renders keep focus on the control that was used, and phone inputs are 16px so iOS
   does not zoom.
+- Layout pass (#14): the dashboard puts search beside the milestone and its cards in two columns that no longer
+  share row heights (phones keep the old order). The explorer's filter selects scroll in one row on phones, beside
+  More filters, and Share / save sits beside the search box; topic chips hide while an area is chosen, and the area
+  header names its top three agencies in a sentence. The watchlist folds its filters under one Filters toggle.
+  The agency index has a filter box and no empty band in its cards. Method and Saving read as one column, card
+  titles stop at 80 characters a line, and on phones the bill page shows Overview before the key facts and its
+  four buttons in two rows. The page heading no longer shows a focus box after a view change.
 
 ## 2026-11-13
 - Remembered filters are no longer rewritten on page load when they mean the same thing (the party filter had
