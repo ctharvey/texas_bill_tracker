@@ -126,6 +126,16 @@ test('review buckets add up when a new bill is queued for a retry, with pace and
   assert.match(progress, /Only the next five are listed under Up next/);
 });
 
+test('the review pace counts back from the worker status, not the last tags change', () => {
+  // Tags change only when a review changes; days later the worker is still running and nothing new was published.
+  const status = {format: 'texas-bill-luna-status-v1', updated_at: '2026-11-14T19:00:00Z', running: true, current: null,
+    upcoming: ['SB12'], reviewed: ['HB5'], retry: [], failed: {}};
+  const progress = buildPages({snapshot: snapshot(BILLS), tags: TAGS, roster: ROSTER, status, minBills: 1}).get('review-progress.md');
+  assert.match(progress, /No review was published in the 24 hours before the worker's latest status/);
+  const noStatus = buildPages({snapshot: snapshot(BILLS), tags: TAGS, roster: ROSTER, minBills: 1}).get('review-progress.md');
+  assert.match(noStatus, /In the 24 hours before the tags were published, 1 review was published/);
+});
+
 test('unreviewed bills get a queue position only when the worker order is clear', () => {
   const many = Array.from({length: 6}, (_, i) => ({id: `HB${i + 1}`, caption: `Relating to item ${i + 1}.`, author: 'Cole',
     authors: ['Cole'], status: 'Filed', actions: ['Filed'], filed_at: '2026-11-09'}));

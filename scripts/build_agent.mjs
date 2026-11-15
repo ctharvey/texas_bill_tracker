@@ -263,8 +263,8 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   const put = (path, text) => files.set(path, text);
   const dataDate = snapshot.generated_at;
   const asOf = `Bill data as of ${dataDate}${tags?.generated_at ? `; full-text tags as of ${tags.generated_at}` : ''}${roster?.generated_at ? `; member roster as of ${roster.generated_at}` : ''}.`;
-  // Pages that list many bills point to the overview for freshness instead of carrying the stamps: the tags stamp
-  // moves with every review run, which rewrote every district and bill-index page each hour though no bill changed.
+  // Pages that list many bills point to the overview for freshness instead of carrying the stamps: a stamp that
+  // moved without a bill changing (the tags stamp once moved every review run) rewrote all of them.
   const freshness = `How current this is: see the [overview](${AGENT}index.md).`;
   const records = new Map(bills.map(b => [b.id, billRecord(b)]));
   const listed = role => bills.filter(b => records.get(b.id).people[role]?.length).length;
@@ -293,7 +293,11 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   const falling = next.length > 1 && next.every((v, i) => !i || v < next[i - 1]);
   const queueOrder = rising ? neverReviewed : falling ? [...neverReviewed].reverse() : null;
   const ahead = Math.min(3, progress.inProgress.length) + progress.active.length;
-  const tagsAt = Date.parse(tags?.generated_at || '');
+  // Pace window: the worker's own status time when there is one (it moves every run), else the tags time. The tags
+  // stamp alone now moves only when tags change, so on quiet days it would keep counting an old busy day.
+  const statusAt = Date.parse(status?.updated_at || '');
+  const tagsAt = Number.isNaN(statusAt) ? Date.parse(tags?.generated_at || '') : statusAt;
+  const paceFrom = Number.isNaN(statusAt) ? 'the tags were published' : "the worker's latest status";
   const lastDay = Number.isNaN(tagsAt) ? 0 : bills.filter(b => Date.parse(b.luna?.reviewed_at || '') >= tagsAt - 86400000).length;
   const queueNote = new Map((queueOrder || []).map((id, i) => {
     const position = ahead + i + 1;
@@ -394,8 +398,8 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   const queued = pendingBy(s => s.startsWith('queued, not started') || s.includes('not available') || !s);
   // Throughput from published review dates; an estimate only.
   const pace = Number.isNaN(tagsAt) ? '' : lastDay
-    ? `In the 24 hours before the tags were published, ${lastDay} ${lastDay === 1 ? 'review was' : 'reviews were'} published; at that pace the ${unpublished.length} unpublished ${unpublished.length === 1 ? 'bill' : 'bills'} would take about ${Math.ceil(unpublished.length / lastDay)} ${Math.ceil(unpublished.length / lastDay) === 1 ? 'day' : 'days'}. An estimate, not a schedule.`
-    : 'No review was published in the 24 hours before the tags were published, so there is no pace to estimate from.';
+    ? `In the 24 hours before ${paceFrom}, ${lastDay} ${lastDay === 1 ? 'review was' : 'reviews were'} published; at that pace the ${unpublished.length} unpublished ${unpublished.length === 1 ? 'bill' : 'bills'} would take about ${Math.ceil(unpublished.length / lastDay)} ${Math.ceil(unpublished.length / lastDay) === 1 ? 'day' : 'days'}. An estimate, not a schedule.`
+    : `No review was published in the 24 hours before ${paceFrom}, so there is no pace to estimate from.`;
   const order = 'Order: the worker takes up to three retries first, then bills never reviewed, then failed bills, then re-reviews of the rest. Only the next five are listed under Up next; a bill not listed there is still queued.'
     + (queueOrder ? ' Each unreviewed bill\'s page gives its approximate place in the queue.' : ' The worker\'s order is not clear from its status right now, so bill pages give no queue position.');
   put('review-progress.md', `# Full-text review progress\n\nLuna reads each bill's full text and publishes citation-verified tags. ${status?.updated_at ? `Worker status as of ${status.updated_at}.` : 'Worker status is not available right now; counts below come from published tags only.'} Published tags as of ${tags?.generated_at || 'not available yet'}.\n\n`
