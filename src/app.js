@@ -168,7 +168,7 @@ function setupDisclaimer(){
 // ---- Saving choices without accounts: URL state, remembered filters, files and private sync links ----
 // Lists are saved through listStore; each change re-reads it (core/lists.js), so other tabs' saves are kept.
 const listStore=STORAGE_OK?localStorage:memoryStorage();
-const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>readWatch(listStore,storageKey),getFollows:()=>[...state.follow],getSearches:()=>state.searches,getTheme:savedTheme});
+const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>readWatch(listStore,storageKey),getFollows:()=>readFollows(listStore,followKey),getSearches:()=>readSearches(listStore,searchesKey),getTheme:savedTheme});
 let syncAvailable=null,lastPull=0;
 const siteBase=()=>location.href.split('#')[0];
 

@@ -4,6 +4,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {changeWatchList, changeFollowList, changeSearchList, readWatch, readFollows, readSearches} from '../src/core/lists.js';
 import {createSyncClient} from '../src/sync.js';
+// Debounced sync writes wait 60 s in these tests (they flush by hand); don't let those timers hold the run open.
+const realSetTimeout = globalThis.setTimeout;
+globalThis.setTimeout = (fn, ms, ...rest) => { const t = realSetTimeout(fn, ms, ...rest); if (ms >= 1000) t.unref?.(); return t; };
 
 const W = 'tx-bill-atlas-watch-90r', F = 'tx-bill-atlas-follow-90r', S = 'tx-bill-atlas-searches-90r', SYNC = 'tx-bill-atlas-sync-v1';
 const memoryStorage = () => { const m = new Map(); return {getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k)}; };
@@ -66,8 +69,9 @@ function server() {
         entry.data = request.data; entry.version++;
         return reply(200, {version: entry.version, data: entry.data});
       };
-      if (!hold) return answer();
-      return new Promise(resolve => held.push(() => resolve(answer())));
+      const result = answer();  // Answered on arrival, delivered when released: a slow reply carries old data.
+      if (!hold) return result;
+      return new Promise(resolve => held.push(() => resolve(result)));
     },
   };
   return s;
@@ -161,4 +165,22 @@ test('a 404 for a link another tab already replaced does not unlink the new one'
   srv.hold = false; srv.release();
   assert.equal(await out, null);
   assert.equal(JSON.parse(storage.getItem(SYNC)).key, second);
+});
+
+test('a slow pull adopts its own version, so the next write replays onto a bill this tab saved meanwhile', async () => {
+  const srv = server(), storage = memoryStorage();
+  storage.setItem(W, JSON.stringify(['HB1']));
+  const {editKey} = await client(srv, storage).create(['HB1']);
+  const tab = client(srv, storage);
+  srv.hold = true;
+  const pulling = tab.pull(); await tick();        // The GET's reply is version 1, ['HB1'], delivered late.
+  srv.hold = false;
+  changeWatchList(storage, W, 'add', ['HB2']); tab.record('add', 'HB2');
+  await tab.flush();                               // Version 2 holds HB2.
+  srv.release();
+  const pulled = await pulling;
+  storage.setItem(W, JSON.stringify(pulled.watch));  // The app adopts the pulled (older) list.
+  changeWatchList(storage, W, 'add', ['HB3']); tab.record('add', 'HB3');
+  await tab.flush();
+  assert.deepEqual(srv.lists.get(editKey).data.watch.sort(), ['HB1', 'HB2', 'HB3']);
 });

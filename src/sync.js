@@ -118,7 +118,8 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
       if (!same(key)) return null;
       if (r.status === 404) { state = null; values = {}; save(); throw Error('This sync link no longer exists'); }
       if (r.status !== 200) throw Error(r.data?.error || `Sync is unavailable (HTTP ${r.status})`);
-      Object.assign(state, {mode: r.data.mode, version: Math.max(r.data.version, state.version || 0), viewKey: r.data.view_key || state.viewKey});
+      // The version of the data adopted below, even when another tab stored a newer one: a later write 409s and replays.
+      Object.assign(state, {mode: r.data.mode, version: r.data.version, viewKey: r.data.view_key || state.viewKey});
       save();
       if (r.data.mode !== 'edit') return {mode: r.data.mode, watch: r.data.data.watch};
       let data = r.data.data, needsWrite = false;
