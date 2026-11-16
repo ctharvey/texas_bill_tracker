@@ -377,7 +377,9 @@ pipeline (`normalizeBill`, Luna overlay, roster, hearing and last-action rules i
 `src/prefs.js`) and writes `bills/<ID>.md|.json`, index pages that stand in for each filter (topics, agencies, last
 action, hearing status, chamber, members; full-name member addresses point to the listed-name page) plus filing
 date, authorship party and full-text review, `recent.md`, `review-progress.md` (with pace and queue order),
-`saving.md` and `data/bills.json`. Group tables carry each bill's topics, agencies and review status and are split
+`saving.md` and `data/bills.json`. For crawlers it also writes `robots.txt` (OAI-SearchBot and everyone allowed, live
+search queries excluded), `sitemap.xml` (every Markdown page) and `index.html`, a plain HTML entry point linking
+every bill: ChatGPT opens a link on its own only after an independent crawler has seen that URL. Group tables carry each bill's topics, agencies and review status and are split
 into pages of 150 (`<group>--page-N.md`) so page-reading tools see every row. Bill pages link the official text, and
 the overview states coverage (reviews, coauthors, sponsors, hearings) so a zero reads as "none yet", not missing data.
 Empty fields say whether the full-text review found nothing or is still pending (queued, queued for a retry, failed

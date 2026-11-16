@@ -433,7 +433,77 @@ export function buildPages({snapshot, tags = null, roster = null, status = null,
   const overview = overviewPage(bills.length, asOf, indexes, example, coverage);
   put('index.md', overview);
   put('llms.txt', overview);
+  // Crawler discovery: OpenAI's agents open a link on their own only once a crawler has seen that exact URL,
+  // so the pages need to be findable from robots.txt, a sitemap and a plain HTML page.
+  put('robots.txt', ROBOTS);
+  put('index.html', discoveryPage(bills, asOf, indexes));
+  put('sitemap.xml', sitemap([...files.keys()]));  // Last, so it lists every page above.
   return files;
+}
+
+const ROBOTS = `# Texas Bill Atlas, agent edition: Markdown and JSON pages for ${SITE}
+# Search crawlers and AI agents are welcome. Search results (/search?...) are live, rate-limited queries: please
+# don't crawl them; the usage page at /search is fine.
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /search?
+Disallow: /search.md?
+Disallow: /search.json?
+
+User-agent: *
+Allow: /
+Disallow: /search?
+Disallow: /search.md?
+Disallow: /search.json?
+
+Sitemap: ${AGENT}sitemap.xml
+`;
+
+const html = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+
+// Every Markdown page (the bill pages above all) plus the HTML entry point; JSON twins and the 404 page are left out.
+export function sitemap(paths) {
+  const pages = ['index.html', ...paths.filter(p => p.endsWith('.md') && p !== '404.md').sort((a, b) => a.localeCompare(b, 'en', {numeric: true}))];
+  const loc = p => html(p === 'index.md' ? AGENT : AGENT + p);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`
+    + pages.map(p => `  <url><loc>${loc(p)}</loc></url>`).join('\n') + '\n</urlset>\n';
+}
+
+// An ordinary crawlable page for crawlers and browsers that won't follow Markdown; the Markdown stays the API.
+function discoveryPage(bills, asOf, indexes) {
+  const list = [...bills].sort((a, b) => a.id.localeCompare(b.id, 'en', {numeric: true}))
+    .map(b => `<li><a href="${AGENT}bills/${html(b.id)}.md">${html(b.number)}</a> ${html(b.title)}</li>`).join('\n');
+  const groups = indexes.map(([title, href, n]) => `<li><a href="${AGENT}${html(href)}">${html(title)}</a> (${n} groups)</li>`).join('\n');
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Texas Bill Atlas agent edition: 90th Texas Legislature bills as Markdown and JSON</title>
+<meta name="description" content="Plain-text and JSON pages for all ${bills.length} bills the Texas Bill Atlas tracks in the 90th Texas Legislature: captions, authors, actions, hearings, topics, agencies and full-text reviews.">
+<link rel="canonical" href="${AGENT}index.html">
+<link rel="alternate" type="text/markdown" href="${AGENT}index.md">
+</head>
+<body>
+<h1>Texas Bill Atlas (agent edition)</h1>
+<p>Plain-text and JSON pages for everything the <a href="${SITE}">Texas Bill Atlas</a> tracker shows for the 90th Texas Legislature: ${bills.length} bills with captions, authors and sponsors, recorded actions, hearing status, topics, potentially affected agencies and full-text reviews. No JavaScript, login or API key needed. ${html(asOf)}</p>
+<p>Start with the <a href="${AGENT}index.md">Markdown overview</a> or <a href="${AGENT}llms.txt">llms.txt</a>. Search: <a href="${AGENT}search">${AGENT}search</a>. One bill: <code>${AGENT}bills/&lt;ID&gt;.md</code> or <code>.json</code>.</p>
+<h2>Browse</h2>
+<ul>
+<li><a href="${AGENT}bills/index.md">All bills</a></li>
+<li><a href="${AGENT}recent.md">Most recent actions</a></li>
+${groups}
+<li><a href="${AGENT}review-progress.md">Full-text review progress</a></li>
+<li><a href="${AGENT}data/bills.json">Everything as one JSON file</a> (large)</li>
+</ul>
+<h2>Every bill (${bills.length})</h2>
+<ul>
+${list}
+</ul>
+<p><small>${html(DISCLAIMER)}</small></p>
+</body>
+</html>
+`;
 }
 
 function overviewPage(count, asOf, indexes, example, coverage) {

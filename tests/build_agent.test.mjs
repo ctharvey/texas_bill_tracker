@@ -212,6 +212,41 @@ test('pending and missing data are labelled, and review counts agree with publis
   assert.match(files.get('index.md'), /## Quick reference\n\n- Search: https:\/\/agent.billatlas.org\/search\?q=<words>/);
 });
 
+test('crawlers can find every page: robots.txt allows OAI-SearchBot and names the sitemap', () => {
+  const robots = build().get('robots.txt');
+  const groups = robots.split(/\n\n/).filter(g => /User-agent:/.test(g));
+  const oai = groups.find(g => /^User-agent: OAI-SearchBot$/m.test(g));
+  assert.ok(oai && /^Allow: \/$/m.test(oai), 'OAI-SearchBot has its own allow group');
+  for (const g of groups) {
+    assert.doesNotMatch(g, /^Disallow: \/$/m);
+    assert.match(g, /^Disallow: \/search\?$/m);  // Live, rate-limited queries are not crawled.
+  }
+  assert.match(robots, new RegExp(`^Sitemap: ${AGENT}sitemap\\.xml$`, 'm'));
+});
+
+test('the sitemap lists exactly the Markdown pages and the HTML entry point, each once', () => {
+  const files = build();
+  const locs = [...files.get('sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]);
+  const expected = ['index.html', ...[...files.keys()].filter(p => p.endsWith('.md') && p !== '404.md')]
+    .map(p => p === 'index.md' ? AGENT : AGENT + p);
+  assert.deepEqual([...locs].sort(), [...expected].sort());
+  assert.equal(new Set(locs).size, locs.length);
+  assert.ok(locs.includes(`${AGENT}bills/HB5.md`) && locs.includes(`${AGENT}index.html`));
+  assert.ok(!locs.some(l => l.endsWith('.json') || l.endsWith('404.md')));
+  assert.match(files.get('sitemap.xml'), /^<\?xml version="1\.0" encoding="UTF-8"\?>\n<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
+});
+
+test('the HTML entry point links every bill and the Markdown overview, escaping captions', () => {
+  const evil = {...BILLS[0], id: 'HB7', caption: 'Relating to <script>alert(1)</script> & "quotes".'};
+  const page = buildPages({snapshot: snapshot([...BILLS, evil]), tags: TAGS, roster: ROSTER, minBills: 1}).get('index.html');
+  assert.match(page, /^<!doctype html>/);
+  assert.match(page, new RegExp(`<link rel="canonical" href="${AGENT}index\\.html">`));
+  for (const id of ['HB5', 'SB12', 'HB7']) assert.ok(page.includes(`<a href="${AGENT}bills/${id}.md">`), id);
+  assert.ok(page.includes(`href="${AGENT}index.md"`) && page.includes(`href="${AGENT}llms.txt"`));
+  assert.ok(!page.includes('<script>') && page.includes('&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quotes&quot;'));
+  assert.ok(!page.includes('XX1'));
+});
+
 test('writePages rewrites only changed files, removes stale pages and keeps unrelated files', () => {
   const dir = mkdtempSync(join(tmpdir(), 'agent-'));
   try {

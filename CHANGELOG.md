@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-16
+- Agent edition is now discoverable by crawlers: the hourly build writes `robots.txt` (allows OAI-SearchBot, keeps
+  live search queries out), `sitemap.xml` (every Markdown page) and an HTML `index.html` linking every bill.
+  ChatGPT wouldn't open agent.billatlas.org links because OpenAI's crawler had never seen those URLs.
+
 ## 2026-11-15
 - Export page at `#export` (not in the nav): lists the bills, followed legislators, saved searches and theme this
   browser holds, and downloads them as the same profile file Import file reads. A fallback for moving saved lists
