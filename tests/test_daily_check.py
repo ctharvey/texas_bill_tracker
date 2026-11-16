@@ -47,3 +47,69 @@ def test_ci_verdict_uses_the_newest_main_run_of_each_event():
     assert dc.ci_verdict([r for r in runs if r["event"] != "schedule"], "schedule", NOW)[0] is False
     runs[1]["conclusion"] = "failure"
     assert dc.ci_verdict(runs, "schedule", NOW)[0] is False
+
+
+XML = ('<billhistory bill="90(R) HB 1160"><lastaction>11/16/2026 H Filed</lastaction>'
+       '<caption version="Introduced">Relating to roads &amp; bridges.</caption><authors>Plesa | Bhojani</authors>'
+       '<coauthors /></billhistory>')
+BILL = {"id": "HB1160", "number": "HB 1160", "caption": "Relating to roads & bridges.", "authors": ["Plesa", "Bhojani"],
+        "last_action": "11/16/2026 H Filed", "subjects": ["Roads (I0001)"]}
+MEMBERS = {"house|Plesa": {}, "house|Bhojani": {}}
+TAG = {"summary": "Adds a rule.", "policy_tags": ["Transportation"]}
+
+
+def findings(**over):
+    args = dict(bill=BILL, official=dc.official_record(XML), members=MEMBERS, tag=TAG, luna_failed=None,
+                text_state="ok", agent_ok=True, search_ok=True)
+    args.update(over)
+    return dc.bill_findings(**args)
+
+
+def levels(found):
+    return sorted({level for level, _ in found})
+
+
+def test_official_record_reads_the_history_file():
+    assert dc.official_record(XML) == {"caption": "Relating to roads & bridges.", "authors": ["Plesa", "Bhojani"],
+                                       "last_action": "11/16/2026 H Filed"}
+
+
+def test_a_bill_with_everything_passes():
+    assert findings() == []
+    assert dc.verdict(findings())[0] is True
+
+
+def test_waiting_for_text_or_review_is_a_warning_not_a_failure():
+    assert levels(findings(text_state="none", tag=None)) == ["warn"]
+    assert levels(findings(text_state="placeholder", tag=None)) == ["warn"]
+    assert levels(findings(tag=None)) == ["warn"]  # Text posted, Luna not there yet.
+    assert levels(findings(bill={**BILL, "subjects": []})) == ["warn"]
+    assert dc.verdict(findings(tag=None))[0] is None
+
+
+def test_each_missing_part_fails():
+    assert levels(findings(official=None)) == ["fail"]
+    assert levels(findings(bill={**BILL, "caption": "Relating to roads."})) == ["fail"]
+    assert levels(findings(bill={**BILL, "authors": ["Plesa"]})) == ["fail"]
+    assert levels(findings(members={"house|Plesa": {}})) == ["fail"]  # An author the roster does not know.
+    assert levels(findings(members={"senate|Plesa": {}, "senate|Bhojani": {}})) == ["fail"]  # Wrong chamber.
+    assert levels(findings(tag={"summary": "", "policy_tags": []})) == ["fail"]
+    assert levels(findings(tag=None, luna_failed="download")) == ["fail"]  # Readable text, but Luna failed it.
+    assert levels(findings(agent_ok=False)) == ["fail"]
+    assert levels(findings(search_ok=False)) == ["fail"]
+    assert dc.verdict(findings(agent_ok=False, text_state="none"))[0] is False
+
+
+def test_a_bill_newer_than_the_agent_build_only_warns_about_the_agent_edition():
+    assert levels(findings(agent_ok=False, search_ok=False, agent_behind=True)) == ["warn"]
+    assert levels(findings(agent_ok=False, search_ok=False)) == ["fail"]
+
+
+def test_text_posted_after_the_data_run_is_a_wait_not_a_luna_failure():
+    assert levels(findings(tag=None, luna_failed="download", text_is_new=True)) == ["warn"]
+    assert levels(findings(tag=None, luna_failed="download")) == ["fail"]
+
+
+def test_ftp_listing_times_read_as_texas_time():
+    assert dc.ftp_time("11-16-26  03:32PM                13580 HB01184I.htm") == datetime(2026, 11, 16, 21, 32, tzinfo=timezone.utc)
+    assert dc.ftp_time("not a listing") is None

@@ -5,18 +5,23 @@ check and exits 1 when any check fails, so a scheduler can alert on it.
 
     python scripts/daily_check.py            # all checks
     python scripts/daily_check.py --no-ci    # skip the GitHub Actions checks (needs the gh CLI)
+    python scripts/daily_check.py --sample 0 # spot-check every bill from the newest filing day, not 8
 """
 from __future__ import annotations
 
 import argparse
+import html
 import json
+import random
 import re
 import socket
 import ssl
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 SITES = ("https://billatlas.org/", "https://bills.ctharvey.me/")
 AGENT = "https://agent.billatlas.org/"
@@ -54,9 +59,9 @@ def freshness(name, stamp, now, limit):
     return hours <= limit, f"{name}: {hours:.1f} h old (limit {limit} h)"
 
 
-def asset_digest(html):
+def asset_digest(page):
     """The build digest in the page's app.js path (assets/<digest>/app.js), or None for an unbundled page."""
-    m = re.search(r"assets/([0-9a-f]{8,})/app\.js", html or "")
+    m = re.search(r"assets/([0-9a-f]{8,})/app\.js", page or "")
     return m[1] if m else None
 
 
@@ -88,6 +93,73 @@ def ci_verdict(runs, event, now):
     return ok, f"{event} run {r.get('headSha', '')[:7]}: {r.get('conclusion')} ({when})"
 
 
+PLACEHOLDER = "is not currently available"  # TLC's stand-in page until a version's HTML is posted (the PDF may be).
+
+
+def official_record(xml):
+    """Caption, authors and last action from a TLO bill history XML file."""
+    def text(tag):
+        m = re.search(rf"<{tag}[^>]*>(.*?)</{tag}>", xml, re.S)
+        return html.unescape(m[1].strip()) if m else ""
+    return {"caption": text("caption"), "authors": [a.strip() for a in text("authors").split("|") if a.strip()],
+            "last_action": text("lastaction")}
+
+
+def bill_findings(bill, official, members, tag, luna_failed, text_state, agent_ok, search_ok, agent_behind=False,
+                  text_is_new=False):
+    """What one bill got, as [(level, message)] with level 'ok', 'warn' (expected wait) or 'fail'.
+
+    official: official_record() of its TLO history, or None; members: the roster's members map; tag: its Luna entry or
+    None; luna_failed: Luna's recorded failure reason or None; text_state: 'ok', 'placeholder' or 'none';
+    agent_behind: the agent edition was built from data older than this bill's snapshot (it rebuilds hourly);
+    text_is_new: its text file is newer than the snapshot, so the data run has not passed it on yet."""
+    out = []
+    chamber = "house" if str(bill.get("id", "")).startswith("H") else "senate"
+    if official is None:
+        out.append(("fail", "no official history record"))
+    else:
+        if official["caption"] != bill.get("caption"):
+            out.append(("fail", "caption differs from the official record"))
+        if official["authors"] != list(bill.get("authors") or []):
+            out.append(("fail", f"authors {bill.get('authors')} vs official {official['authors']}"))
+        if official["last_action"] and official["last_action"] != bill.get("last_action"):
+            out.append(("warn", "official record has a newer action than the snapshot"))
+    if not bill.get("caption") or not bill.get("authors"):
+        out.append(("fail", "missing caption or author"))
+    unknown = [a for a in bill.get("authors") or [] if f"{chamber}|{a}" not in members]
+    if unknown:
+        out.append(("fail", f"author not in the member roster: {', '.join(unknown)}"))
+    if not bill.get("subjects"):
+        out.append(("warn", "no official subjects yet"))
+    if text_state == "none":
+        out.append(("warn", "no bill text posted yet, so no Luna review yet"))
+    elif text_state == "placeholder":
+        out.append(("warn", "official HTML text is a placeholder (PDF only), so Luna waits"))
+    if tag:
+        if not tag.get("summary") or not tag.get("policy_tags"):
+            out.append(("fail", "Luna review has no summary or policy tags"))
+    elif text_state == "ok" and luna_failed and text_is_new:
+        out.append(("warn", "text was posted after the last data run; the next run passes it to Luna"))
+    elif text_state == "ok":
+        out.append(("fail", f"text is posted but Luna failed: {luna_failed}") if luna_failed
+                   else ("warn", "text is posted; Luna has not reviewed it yet"))
+    level = "warn" if agent_behind else "fail"  # A bill newer than the agent edition's last build is not in it yet.
+    if not agent_ok:
+        out.append((level, "no agent edition page" + (" yet (not rebuilt since it arrived)" if agent_behind else "")))
+    if not search_ok:
+        out.append((level, "search by bill number does not find it" + (" yet" if agent_behind else "")))
+    return out
+
+
+def verdict(findings):
+    """(ok, detail) for check(): ok is True, None (warnings only) or False."""
+    fails = [m for level, m in findings if level == "fail"]
+    warns = [m for level, m in findings if level == "warn"]
+    if fails:
+        return False, "; ".join(fails + warns)
+    return (None, "; ".join(warns)) if warns else (True, "data, official match, roster, Luna, agent page, search")
+
+
 # --- Network ----------------------------------------------------------------------------------------------------
 
 def get(url, timeout=30):
@@ -115,7 +187,83 @@ def cert_days(host, now):
 
 # --- Checks -----------------------------------------------------------------------------------------------------
 
-def run_checks(include_ci=True):
+def ftp_time(line):
+    """UTC time of an FTP listing line ('11-16-26  03:32PM  13580 HB01184I.htm'). The server lists Texas time; this
+    assumes CST, so in daylight time it reads an hour late, which only makes text look newer."""
+    m = re.match(r"(\d\d-\d\d-\d\d)\s+(\d\d:\d\d[AP]M)", line.strip())
+    if not m:
+        return None
+    local = datetime.strptime(f"{m[1]} {m[2]}", "%m-%d-%y %I:%M%p")
+    return local.replace(tzinfo=timezone.utc) + timedelta(hours=6)
+
+
+_listings = {}
+
+
+def text_state(bill):
+    """('ok' | 'placeholder' | 'none', posted time or None) for a bill's newest posted text version."""
+    versions = bill.get("text_versions") or []
+    if not versions or not versions[-1].get("html"):
+        return "none", None
+    url = versions[-1]["html"]
+    _, _, body = get(url, timeout=60)
+    folder, name = url.rsplit("/", 1)
+    if folder not in _listings:
+        _listings[folder] = get(folder + "/", timeout=60)[2].decode("latin-1").splitlines()
+    line = next((l for l in _listings[folder] if l.lower().endswith(name.lower())), "")
+    return ("placeholder" if PLACEHOLDER in body.decode("latin-1") else "ok"), ftp_time(line)
+
+
+def spot_check_bills(check, snapshot, sample, now):
+    """Spot checks of bills from the newest filing day: each one against everything the pipeline should give it."""
+    bills = snapshot.get("bills") or []
+    if not bills:
+        return check("spot checks of new bills", lambda: (False, "no snapshot to sample"))
+    day = max(str(b.get("filed_at", ""))[:10] for b in bills)
+    newest = [b for b in bills if str(b.get("filed_at", "")).startswith(day)]
+    picked = sorted(random.sample(newest, min(sample, len(newest))) if sample else newest, key=lambda b: b["id"])
+    members = get_json(SITES[0] + "live/members.json")[1].get("members") or {}
+    tags = get_json(SITES[0] + "live/luna/tags.json")[1].get("bills") or {}
+    status = get_json(SITES[0] + "live/luna/status.json")[1]
+    failed = status.get("failed") or {}
+    check(f"bills filed {day}", lambda: (True, f"{len(newest)} bills; checking {', '.join(b['id'] for b in picked)}"))
+    for bill in picked:
+        def one(bill=bill):
+            official = None
+            if bill.get("source_path"):
+                url = "ftp://ftp.legis.state.tx.us" + bill["source_path"].replace(" ", "%20")
+                official = official_record(get(url, timeout=60)[2].decode("utf-8-sig", "replace"))
+            try:
+                status_code, _, page = get(f"{AGENT}bills/{bill['id']}.md")
+                agent_ok = status_code == 200 and page.decode("utf-8", "replace").startswith(f"# {bill.get('number')}")
+            except urllib.error.HTTPError as e:
+                if e.code != 404:
+                    raise
+                agent_ok = False
+            found = get_json(f"{AGENT}search.json?q={urllib.parse.quote(bill.get('number') or bill['id'])}")[1]
+            search_ok = any(r.get("id") == bill["id"] for r in (found.get("results") or [])[:3])
+            built, ours = parse_time(found.get("data_as_of")), parse_time(snapshot.get("generated_at"))
+            behind = bool(built and ours and built < ours)
+            state, posted = text_state(bill)
+            new_text = bool(posted and ours and posted > ours)
+            return verdict(bill_findings(bill, official, members, tags.get(bill["id"]), failed.get(bill["id"]),
+                                         state, agent_ok, search_ok, agent_behind=behind, text_is_new=new_text))
+        check(f"  {bill['id']}", one)
+
+    # Bills Luna still cannot read days after filing: TLC's HTML placeholder (PDF only), or a real download failure.
+    def stuck():
+        by_id = {b["id"]: b for b in bills}
+        old = sorted((i for i, why in failed.items() if why == "download" and i in by_id
+                      and age_hours(str(by_id[i].get("filed_at")) + "T00:00:00Z", now) > 72),
+                     key=lambda i: (len(i), i))
+        other = {i: why for i, why in failed.items() if why != "download"}
+        detail = f"{len(old)} bills over 3 days without readable text" + (f": {', '.join(old)}" if old else "")
+        detail += f"; other Luna failures: {other}" if other else ""
+        return (None if old or other else True), detail
+    check("bills Luna cannot review", stuck)
+
+
+def run_checks(include_ci=True, sample=8):
     now = datetime.now(timezone.utc)
     results = []
 
@@ -190,6 +338,8 @@ def run_checks(include_ci=True):
         return status == 200 and bool(n) and fresh, f"index, sitemap, robots OK; search 'teacher': {n} results; {detail}"
     check("agent edition and search", agent)
 
+    spot_check_bills(check, snapshot, sample, now)
+
     for host in ("billatlas.org", "bills.ctharvey.me", "agent.billatlas.org"):
         check(f"TLS certificate {host}", lambda host=host: (lambda d: (d >= CERT_MIN_DAYS, f"{d} days left"))(cert_days(host, now)))
 
@@ -210,13 +360,16 @@ def run_checks(include_ci=True):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--no-ci", action="store_true", help="skip the GitHub Actions checks")
+    parser.add_argument("--sample", type=int, default=8, help="new bills to spot-check (0 = all of that day)")
     args = parser.parse_args(argv)
-    results = run_checks(include_ci=not args.no_ci)
+    results = run_checks(include_ci=not args.no_ci, sample=args.sample)
     width = max(len(name) for name, _, _ in results)
     for name, ok, detail in results:
-        print(f"{'PASS' if ok else 'FAIL'}  {name:<{width}}  {detail}")
-    failed = sum(1 for _, ok, _ in results if not ok)
-    print(f"\n{len(results) - failed} passed, {failed} failed ({datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC)")
+        print(f"{'PASS' if ok else 'WARN' if ok is None else 'FAIL'}  {name:<{width}}  {detail}")
+    failed = sum(1 for _, ok, _ in results if ok is False)
+    warned = sum(1 for _, ok, _ in results if ok is None)
+    print(f"\n{len(results) - failed - warned} passed, {warned} warnings, {failed} failed "
+          f"({datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC)")
     return 1 if failed else 0
 
 
