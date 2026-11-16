@@ -497,7 +497,7 @@ function sharedBanner(){
 
 // Items a sync limit or a move kept aside are listed on the Export page; say so where saving is managed.
 function keptNote(){const n=STORAGE_OK?heldCount(listStore):0;
-  return n?`<p class="tools-note">${n} saved ${n===1?'item is':'items are'} kept aside because ${n===1?'it':'they'} did not fit a limit. <a class="text-link" href="#export" data-view="export">See them on the Export page</a>.</p>`:''}
+  return n?`<p class="tools-note">${n} saved ${n===1?'item is':'items are'} kept aside because ${n===1?'it':'they'} did not fit a list limit or ${n===1?'was':'were'} not valid. <a class="text-link" href="#export" data-view="export">See them on the Export page</a>.</p>`:''}
 function watchTools(){
   const linked=sync.linked,n=state.watch.size,none=n?'':'disabled';
   const syncPart=syncAvailable===false?'<p class="tools-note">Private sync links aren’t switched on for this site yet. Use a share link or a file to move your list for now.</p>'

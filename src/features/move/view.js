@@ -19,7 +19,7 @@ const FAILED = {
   timeout: 'The move did not finish. Nothing was changed here; try again, or export a file instead.',
   failed: 'The new address could not save everything (its storage may be full). Nothing was changed here; export a file instead.',
   read: 'This browser’s saved data could not be read. Export a file instead.',
-  sync: 'Everything arrived, but joining your sync link failed. Nothing was changed here; try again in a minute.',
+  sync: 'Everything arrived, but joining your sync link failed. Nothing was changed here; try the move again in a minute.',
 };
 
 // status: 'offer' | 'moving' | 'moved' | 'gone' (nothing to move) | 'failed:<reason>'. goHref: same page on the new site.
