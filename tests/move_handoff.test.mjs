@@ -7,6 +7,9 @@ import {collect, KEYS} from '../src/core/move.js';
 import {readWatch, readFollows, readSearches, changeWatchList, changeFollowList, changeSearchList} from '../src/core/lists.js';
 import {createSyncClient} from '../src/sync.js';
 import {MAX_FOLLOWS} from '../src/prefs.js';
+// Debounced sync writes wait 60 s in these tests (they flush by hand); don't let those timers hold the run open.
+const realSetTimeout = globalThis.setTimeout;
+globalThis.setTimeout = (fn, ms, ...rest) => { const t = realSetTimeout(fn, ms, ...rest); if (ms >= 1000) t.unref?.(); return t; };
 
 const OLD = 'https://bills.ctharvey.me', NEW = 'https://billatlas.org';
 const tick = () => new Promise(r => setTimeout(r, 0));

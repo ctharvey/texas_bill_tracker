@@ -3,6 +3,15 @@ import {esc} from '../../core/dom.js';
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const host = origin => origin.replace(/^https?:\/\//, '');
+const and = parts => (parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0] || '');
+
+// What this browser holds, from receive(): '3 bills, 1 followed legislator and your settings'.
+export function savedSummary(c) {
+  const bad = c.refused.watch.length + c.refused.follows.length + c.refused.searches.length;
+  return and([c.watch.length && plural(c.watch.length, 'bill', 'bills'), c.follows.length && plural(c.follows.length, 'followed legislator', 'followed legislators'),
+    c.searches.length && plural(c.searches.length, 'saved search', 'saved searches'), c.editKey && 'your sync link',
+    Object.keys(c.settings).length && 'your settings', bad && plural(bad, 'other saved item', 'other saved items')].filter(Boolean));
+}
 
 const FAILED = {
   blocked: 'Your browser blocked the new window. Allow pop-ups for this site and try again, or export a file instead.',
@@ -13,14 +22,15 @@ const FAILED = {
 };
 
 // status: 'offer' | 'moving' | 'moved' | 'gone' (nothing to move) | 'failed:<reason>'. goHref: same page on the new site.
-export function oldSiteBanner({status, target, goHref}) {
+// what: savedSummary() of this browser's data.
+export function oldSiteBanner({status, target, goHref, what = ''}) {
   const name = esc(host(target));
   const go = `<a class="primary-button" href="${esc(goHref)}">Go to ${name}</a>`;
-  if (status === 'moving') return `<div class="info-callout move-banner" role="status"><div><strong>Moving your saved lists to ${name}.</strong> Keep the new window open until it says it is done.</div></div>`;
-  if (status === 'moved') return `<div class="info-callout move-banner" role="status"><div><strong>Your saved lists are on ${name} now.</strong> They are still here too; nothing was removed.</div><div class="tools-row">${go}</div></div>`;
+  if (status === 'moving') return `<div class="info-callout move-banner" role="status"><div><strong>Moving your saved data to ${name}.</strong> Keep the new window open until it says it is done.</div></div>`;
+  if (status === 'moved') return `<div class="info-callout move-banner" role="status"><div><strong>Your saved data is on ${name} now.</strong> They are still here too; nothing was removed.</div><div class="tools-row">${go}</div></div>`;
   if (status === 'gone') return `<div class="info-callout move-banner"><div><strong>Texas Bill Atlas has moved to ${name}.</strong></div><div class="tools-row">${go}</div></div>`;
   const reason = status?.startsWith('failed:') ? FAILED[status.slice(7)] || FAILED.timeout : '';
-  return `<div class="info-callout move-banner${reason ? ' callout-warn' : ''}" role="status"><div><strong>Texas Bill Atlas has moved to ${name}.</strong> Your watchlist, followed legislators, saved searches and settings are saved in this browser at this address. Move them once and they are on ${name} too.${reason ? ` <span class="move-error">${esc(reason)}</span>` : ''}</div>`
+  return `<div class="info-callout move-banner${reason ? ' callout-warn' : ''}" role="status"><div><strong>Texas Bill Atlas has moved to ${name}.</strong> This browser has ${esc(what || 'saved data')} saved at this address. Copy it all to ${name} in one step; nothing here is removed.${reason ? ` <span class="move-error">${esc(reason)}</span>` : ''}</div>`
     + `<div class="tools-row"><button class="primary-button" id="move-start">Move my saved lists</button><a class="outline-button" href="#export" data-view="export">Export a file instead</a></div></div>`;
 }
 
@@ -31,9 +41,9 @@ export function newSiteResult(result, source) {
   if (!result.ok && result.reason === 'no-opener') return `<div class="info-callout move-banner callout-warn" role="status"><div><strong>This page was opened without the move window.</strong> On ${from}, choose <strong>Move my saved lists</strong>. If your browser keeps opening it like this, use <strong>Export a file instead</strong> there, then <strong>Import file</strong> on the Watchlist page here.</div><div class="tools-row">${close}</div></div>`;
   if (!result.ok && result.reason === 'timeout') return `<div class="info-callout move-banner callout-warn" role="status"><div><strong>Your saved lists did not arrive.</strong> Close this window and choose <strong>Move my saved lists</strong> on ${from} again.</div><div class="tools-row">${close}</div></div>`;
   const c = result.counts || {};
-  const parts = [c.watch && plural(c.watch, 'bill', 'bills'), c.follows && plural(c.follows, 'followed legislator', 'followed legislators'),
+  const parts0 = [c.watch && plural(c.watch, 'bill', 'bills'), c.follows && plural(c.follows, 'followed legislator', 'followed legislators'),
     c.searches && plural(c.searches, 'saved search', 'saved searches'), c.settings && 'your settings'].filter(Boolean);
-  const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0];
+  const list = and(parts0);
   const lines = [
     result.ok ? (list ? `<strong>Moved from ${from}: ${esc(list)}.</strong>` : `<strong>Everything from ${from} was already here.</strong>`)
       : `<strong>Some saved items could not be saved here.</strong> Nothing was removed from ${from}; export a file there to keep a copy.`,

@@ -23,7 +23,7 @@ import {readWatch, readFollows, readSearches, changeWatchList, changeFollowList,
 import {moveTarget, moveSource, moveNeeded, collect, receive, digest, MOVED_KEY, HELD_KEY} from './core/move.js';
 import {sendMove, receiveMove, newNonce} from './features/move/handoff.js';
 import {applyMove} from './features/move/apply.js';
-import {oldSiteBanner, newSiteResult} from './features/move/view.js';
+import {oldSiteBanner, newSiteResult, savedSummary} from './features/move/view.js';
 import {withMode} from './features/theme/model.js';
 import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, followedBills, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
 import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, sortAgencyIds, groupAgencyIds, searchTerms, textMatches, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
@@ -436,7 +436,7 @@ function renderMoveBanner(){
   let html='';
   if(MOVE_TO){
     const status=moveStatus==='moving'||moveStatus?.startsWith?.('failed:')?moveStatus:moveNeeded(localStorage)?'offer':moveStatus==='moved'?'moved':'gone';
-    html=oldSiteBanner({status,target:MOVE_TO,goHref:MOVE_TO+location.pathname+location.hash});
+    html=oldSiteBanner({status,target:MOVE_TO,goHref:MOVE_TO+location.pathname+location.hash,what:status==='offer'||status.startsWith('failed:')?savedSummary(receive(collect(localStorage))):''});
   }else if(MOVE_FROM&&moveStatus)html=newSiteResult(moveStatus,MOVE_FROM);
   el.innerHTML=html;el.hidden=!html;
 }
