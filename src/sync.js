@@ -17,6 +17,14 @@ const has = (data, name) => Array.isArray(data?.[name]);
 // The colour theme is one value, not a list: last write wins. A device sends it only with a theme change of its own
 // (or when it creates the link), so a device that never changed it cannot overwrite another's choice with a stale copy.
 const lastTheme = ops => { for (let i = (ops || []).length - 1; i >= 0; i--) if (ops[i].op === 'theme') return ops[i].id; return null; };
+// Pending ops carry a tag so a finished write removes exactly the ops it sent, even when another tab of this site
+// queued or sent ops meanwhile. Ops saved by older versions have none and are matched by value.
+const opId = op => op.t || JSON.stringify(op);
+const newTag = () => Math.random().toString(36).slice(2, 12);
+function without(pending, sent) {
+  const left = [...sent];
+  return pending.filter(op => { const i = left.indexOf(opId(op)); if (i < 0) return true; left.splice(i, 1); return false; });
+}
 
 export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, base = './api/sync', getWatch, getFollows = () => [], getSearches = () => [], getTheme = () => null, debounceMs = 800} = {}) {
   let state = read(), available = null, timer = null, flushing = null;
@@ -32,6 +40,10 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
       return v;
     } catch { return null; }
   }
+  // Storage is the truth, shared with this site's other tabs: every call starts from it, and after each request a
+  // call writes only if the stored link is still the one it started with.
+  function fresh() { state = read(); return state; }
+  const same = key => fresh()?.key === key;
   function save() { try { state ? storage?.setItem(STORE, JSON.stringify(state)) : storage?.removeItem(STORE); } catch {} }
 
   async function call(method, path = '', body) {
@@ -66,7 +78,7 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
   }
 
   const client = {
-    get linked() { return state ? {mode: state.mode, viewKey: state.viewKey || null, editKey: state.mode === 'edit' ? state.key : null, pending: state.pending.length} : null; },
+    get linked() { fresh(); return state ? {joinPending: state.joinPending === true, mode: state.mode, viewKey: state.viewKey || null, editKey: state.mode === 'edit' ? state.key : null, pending: state.pending.length} : null; },
     get follows() { return values.follows ?? null; },
     get searches() { return values.searches ?? null; },
     get theme() { return values.theme ?? null; },
@@ -90,17 +102,23 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
       return client.linked;
     },
 
-    connect(key) { state = {key, mode: null, viewKey: null, version: 0, pending: [], merged: {}}; unsupported = {}; values = {}; save(); },
+    // Joining stays a join (this device's items are merged in) until the app reports a merging pull: joinDone().
+    connect(key) { state = {key, mode: null, viewKey: null, version: 0, pending: [], merged: {}, joinPending: true}; unsupported = {}; values = {}; save(); },
+    joinDone() { if (fresh()?.joinPending) { delete state.joinPending; save(); } },
 
     // Returns {mode, watch} (edit links also each section, null when unknown) after pushing this device's pending
     // changes, or null if unlinked.
+    // Null also when another tab forgot or replaced the link meanwhile.
     async pull() {
-      if (!state) return null;
+      if (!fresh()) return null;
+      const key = state.key;
       if (state.pending.length) await client.flush();
+      if (!same(key)) return null;
       const r = await call('GET');
+      if (!same(key)) return null;
       if (r.status === 404) { state = null; values = {}; save(); throw Error('This sync link no longer exists'); }
       if (r.status !== 200) throw Error(r.data?.error || `Sync is unavailable (HTTP ${r.status})`);
-      Object.assign(state, {mode: r.data.mode, version: r.data.version, viewKey: r.data.view_key || state.viewKey});
+      Object.assign(state, {mode: r.data.mode, version: Math.max(r.data.version, state.version || 0), viewKey: r.data.view_key || state.viewKey});
       save();
       if (r.data.mode !== 'edit') return {mode: r.data.mode, watch: r.data.data.watch};
       let data = r.data.data, needsWrite = false;
@@ -113,6 +131,7 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
       if (needsWrite) {
         // Write once with the unions; the reply says which sections this server keeps.
         const merged = await client.flush(true, data, r.data.version);
+        if (!same(key)) return null;
         if (merged && !Array.isArray(merged)) data = merged;  // An overlapping flush returns a list: retry next pull.
       }
       settle(data);
@@ -121,8 +140,8 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
 
     // `value` travels with ops that carry one (a saved search).
     record(op, id, onSynced, value) {
-      if (state?.mode !== 'edit') return;
-      state.pending.push(value === undefined ? {op, id} : {op, id, value}); save();
+      if (fresh()?.mode !== 'edit') return;
+      state.pending.push(value === undefined ? {op, id, t: newTag()} : {op, id, value, t: newTag()}); save();
       clearTimeout(timer);
       timer = setTimeout(() => client.flush().then(w => w && onSynced?.(w, null, {...values}), error => onSynced?.(null, error)), debounceMs);
     },
@@ -133,14 +152,16 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
     async flush(force = false, server = null, version = null) {
       if (flushing) return flushing;
       flushing = (async () => {
-        if (state?.mode !== 'edit' || (!state.pending.length && !force)) return null;
+        if (fresh()?.mode !== 'edit' || (!state.pending.length && !force)) return null;
+        const key = state.key;
         let watch = server ? applyOps(server.watch, state.pending) : getWatch();
         let current = version ?? state.version, base = server;
         for (let attempt = 0; attempt < 3; attempt++) {
-          const sent = state.pending.length;
+          const sent = state.pending.map(opId);
           const r = await call('PUT', '', {version: current, data: payload(watch, base)});
+          if (!same(key)) return null;
           if (r.status === 200) {
-            state.version = r.data.version; state.pending = state.pending.slice(sent);
+            state.version = r.data.version; state.pending = without(state.pending, sent);
             noteWrite(r.data.data);
             save();
             settle(r.data.data);
@@ -157,7 +178,7 @@ export function createSyncClient({fetchImpl = (...a) => fetch(...a), storage, ba
     forget() { clearTimeout(timer); state = null; values = {}; save(); },
 
     async remove() {
-      if (state?.mode !== 'edit') throw Error('Only the edit link can delete a synced list');
+      if (fresh()?.mode !== 'edit') throw Error('Only the edit link can delete a synced list');
       const r = await call('DELETE');
       if (r.status !== 204 && r.status !== 404) throw Error(r.data?.error || `Delete failed (HTTP ${r.status})`);
       client.forget();

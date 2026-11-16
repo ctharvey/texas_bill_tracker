@@ -1,6 +1,6 @@
 // Browser storage: keys and value shapes are unchanged, so saves made by earlier versions still load.
 import {state} from './state.js';
-import {cleanFollows, cleanSearches} from '../prefs.js';
+import {readWatch, readFollows, readSearches} from './lists.js';
 
 export const storageKey = 'tx-bill-atlas-watch-90r';
 // Followed legislators (member codes): this browser, exported files and sync links; never share or view-only links.
@@ -16,9 +16,7 @@ export const readJson=key=>{try{return JSON.parse(localStorage.getItem(key)||'nu
 export const writeJson=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value))}catch{}};
 export const memoryStorage=()=>{const m=new Map();return {getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)}};
 
-// The watchlist, follows and saved searches this browser kept, read once at startup.
+// The watchlist, follows and saved searches this browser kept: read at startup and again when another tab saves.
 export function loadSaved(){
-  try{state.watch=new Set(JSON.parse(localStorage.getItem(storageKey)||'[]'))}catch{}
-  try{state.follow=cleanFollows(JSON.parse(localStorage.getItem(followKey)||'[]'))}catch{}
-  try{state.searches=cleanSearches(JSON.parse(localStorage.getItem(searchesKey)||'[]'))}catch{}
+  try{state.watch=new Set(readWatch(localStorage,storageKey));state.follow=readFollows(localStorage,followKey);state.searches=readSearches(localStorage,searchesKey)}catch{}
 }

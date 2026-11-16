@@ -8,7 +8,7 @@ import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
 import {fillDrawerBrackets} from './features/brackets/view.js';
 import {exportMarkup} from './features/export/view.js';
-import {setupThemePicker, setupModePicker, setTheme, savedTheme} from './features/theme/view.js';
+import {setupThemePicker, setupModePicker, setTheme, savedTheme, applyTheme} from './features/theme/view.js';
 import {TUMBLEWEED, noticeSearch, setupEasterEggs} from './features/easter/view.js';
 import {state} from './core/state.js';
 import {$, esc, toast} from './core/dom.js';
@@ -17,8 +17,9 @@ import {registerView, setFallbackView, viewHeading, renderView} from './core/rou
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
 import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, visitKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
-  cleanSearches, applySearchOps, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
+  cleanSearches, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
 import {createSyncClient} from './sync.js';
+import {readWatch, changeWatchList, changeFollowList, changeSearchList} from './core/lists.js';
 import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, followedBills, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
 import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, sortAgencyIds, groupAgencyIds, searchTerms, textMatches, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
 
@@ -157,7 +158,9 @@ function setupDisclaimer(){
 }
 
 // ---- Saving choices without accounts: URL state, remembered filters, files and private sync links ----
-const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>[...state.watch],getFollows:()=>[...state.follow],getSearches:()=>state.searches,getTheme:savedTheme});
+// Lists are saved through listStore; each change re-reads it (core/lists.js), so other tabs' saves are kept.
+const listStore=STORAGE_OK?localStorage:memoryStorage();
+const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>readWatch(listStore,storageKey),getFollows:()=>[...state.follow],getSearches:()=>state.searches,getTheme:savedTheme});
 let syncAvailable=null,lastPull=0;
 const siteBase=()=>location.href.split('#')[0];
 
@@ -252,17 +255,16 @@ function persistState(push=false){
   return pushed;
 }
 
-function saveWatchLocal(){if(STORAGE_OK)writeJson(storageKey,[...state.watch])}
-function setFollows(list){state.follow=cleanFollows(list);if(STORAGE_OK)writeJson(followKey,state.follow)}
+function saveWatchLocal(){try{listStore.setItem(storageKey,JSON.stringify([...state.watch]))}catch{}}
+function setFollows(list){state.follow=cleanFollows(list);try{listStore.setItem(followKey,JSON.stringify(state.follow))}catch{}}
 // `follows` from sync is the link's list, or null when the server did not say (then this device's list stands).
 function adoptFollows(follows){
   if(!follows||follows.join()===state.follow.join())return false;
   setFollows(follows);return true;
 }
 function changeFollow(op,codes){
-  for(const code of codes){const has=state.follow.includes(code);if(op==='follow'?has:!has)continue;
-    if(op==='follow'&&state.follow.length>=MAX_FOLLOWS)break;
-    setFollows(op==='follow'?[...state.follow,code]:state.follow.filter(c=>c!==code));sync.record(op,code,onSynced)}
+  const {list,changed}=changeFollowList(listStore,followKey,op,codes,MAX_FOLLOWS);
+  state.follow=list;for(const code of changed)sync.record(op,code,onSynced);
 }
 function toggleFollow(code){
   const on=state.follow.includes(code);
@@ -275,7 +277,7 @@ function toggleFollow(code){
 const followButton=m=>{if(!m?.code)return '';const on=state.follow.includes(m.code);
   return `<button class="${on?'outline-button following':'primary-button'} follow-button" data-follow="${esc(m.code)}" aria-pressed="${on}">${on?'✓ Following':'+ Follow'}</button>`};
 const memberFeedHref=code=>`./live/feeds/members/${encodeURIComponent(code)}.xml`;
-function setSearches(list){state.searches=cleanSearches(list);if(STORAGE_OK)writeJson(searchesKey,state.searches)}
+function setSearches(list){state.searches=cleanSearches(list);try{listStore.setItem(searchesKey,JSON.stringify(state.searches))}catch{}}
 function adoptSearches(searches){
   if(!searches||JSON.stringify(searches)===JSON.stringify(state.searches))return false;
   setSearches(searches);return true;
@@ -283,7 +285,7 @@ function adoptSearches(searches){
 // op: 'save-search' (search object) or 'delete-search' (id).
 function changeSearch(op,item){
   const id=op==='save-search'?item.id:item;
-  setSearches(applySearchOps(state.searches,[{op,id,value:item}]));
+  state.searches=changeSearchList(listStore,searchesKey,op,item);
   sync.record(op,id,onSynced,op==='save-search'?item:undefined);
 }
 const todayDay=()=>chicagoDate(new Date());
@@ -337,8 +339,16 @@ function refreshWatch(){renderOverview();if(state.view==='home')refreshHome();el
 const onSynced=(watch,error,sections)=>{if(error){toast(`Sync: ${error.message}`);return}setWatch(watch);const moved=adoptFollows(sections?.follows)|adoptSearches(sections?.searches);renderOverview();
   if(state.view==='all'||state.view==='watchlist')renderResults();else if(state.view==='home')refreshHome();else if(moved&&FOLLOW_VIEWS.has(state.view))renderContent()};
 function changeWatch(op,ids){
-  for(const id of ids){if(op==='add'?state.watch.has(id):!state.watch.has(id))continue;op==='add'?state.watch.add(id):state.watch.delete(id);sync.record(op,id,onSynced)}
-  saveWatchLocal();
+  const {list,changed}=changeWatchList(listStore,storageKey,op,ids);
+  state.watch=new Set(list);for(const id of changed)sync.record(op,id,onSynced);
+}
+// Another tab of this site saved: show it. Read-only, so two open tabs never answer each other's saves.
+function onOtherTab(e){
+  if(e.storageArea&&e.storageArea!==localStorage)return;
+  const k=e.key;
+  if(k===null||k===storageKey||k===followKey||k===searchesKey){loadSaved();refreshWatch()}
+  if(k===null||k===prefsKey){const id=applyTheme(savedTheme()||'');const select=$('#theme-select');if(select)select.value=id}
+  if((k===null||k==='tx-bill-atlas-sync-v1')&&(state.view==='watchlist'||state.view==='saving'||state.view==='export'))renderContent();
 }
 
 async function setupSync(key){
@@ -346,6 +356,7 @@ async function setupSync(key){
   if(key)await openSyncLink(key);
   else if(sync.linked)await pullSync(false);
   window.addEventListener('focus',()=>{if(Date.now()-lastPull>30000)pullSync(false)});
+  if(STORAGE_OK)window.addEventListener('storage',onOtherTab);
   persistState();
   if(state.view==='home')refreshHome();else if(state.view==='watchlist'||state.view==='saving'||state.view==='export')renderContent();
 }
@@ -388,15 +399,19 @@ function confirmJoin(replacing){
   });
 }
 
+// A join that has not yet completed a merging pull (a failed first pull, a closed tab) merges on every later pull.
 async function pullSync(mergeLocal){
   if(!syncAvailable||!sync.linked)return;
   lastPull=Date.now();
+  const joining=mergeLocal||sync.linked.joinPending;
   try{
-    const {watch,follows,searches,theme}=await sync.pull();  // The client already merged this device's follows and searches.
+    const pulled=await sync.pull();  // The client already merged this device's follows and searches.
+    if(!pulled){loadSaved();refreshWatch();return}  // Another tab changed the link meanwhile.
+    const {watch,follows,searches,theme}=pulled;
     if(theme)setTheme(theme);
-    const local=[...state.watch];
+    const local=readWatch(listStore,storageKey);
     setWatch(watch);adoptFollows(follows);adoptSearches(searches);
-    if(mergeLocal)changeWatch('add',local.filter(id=>!watch.includes(id)));  // Joining keeps this device's bills.
+    if(joining){changeWatch('add',local.filter(id=>!watch.includes(id)));sync.joinDone()}  // Joining keeps this device's bills.
     refreshWatch();
   }catch(error){toast(`Sync: ${error.message}`);refreshWatch()}
 }
