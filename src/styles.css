@@ -544,6 +544,7 @@ summary:focus-visible,.disclaimer-ok:focus-visible,.footer-link:focus-visible{ou
 @media(max-width:760px){.source-notice .notice-more{display:none}}
 /* #15: nav items are links, so they can open in a new tab. */
 a.nav-item{text-decoration:none;box-sizing:border-box}
+.nav-ext{margin-left:auto;opacity:.7}
 .bill-h1-number{display:block;font-size:.62em;letter-spacing:.02em;color:var(--teal);margin-bottom:4px}
 .restored-note{font-size:var(--fs-xs);color:var(--muted);font-weight:700;align-self:center}
 /* #15: targets at least 24px without moving anything (vertical padding on inline links widens only the hit area). */
