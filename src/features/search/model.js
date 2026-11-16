@@ -19,13 +19,18 @@ export const SEARCH_FIELDS = [
   {key: 'dates', label: 'date'},
 ];
 
+// Bills name people by last name only ("Williams"); the roster's full names (attachMembers puts them on `people`)
+// let "Michelle Williams" find her bills. Each name once.
+const fullNames = b => [...new Set(Object.values(b.people || {}).flat()
+  .map(p => p?.member?.full_name).filter(n => typeof n === 'string' && n))];
+
 // A bill's searchable values per field, as [key, values]. `ctx`: {agencyName, partyWords, shortDate}.
 export function searchFields(b, {agencyName, partyWords, shortDate}) {
   return [
     ['number', [b.id, b.number]],
     ['title', [b.title]],
     ['caption', [b.caption]],
-    ['people', [b.author, ...b.authors, ...(b.coauthors || []), ...(b.sponsors || []), ...(b.cosponsors || [])]],
+    ['people', [b.author, ...b.authors, ...(b.coauthors || []), ...(b.sponsors || []), ...(b.cosponsors || []), ...fullNames(b)]],
     ['action', [b.last_action]],
     ['topics', [...b.topics]],
     ['subjects', [...(b.subjects || [])]],

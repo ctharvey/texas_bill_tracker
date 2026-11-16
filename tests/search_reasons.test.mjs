@@ -47,3 +47,12 @@ test('a phrase that only exists across two fields says so; bill numbers and sect
   assert.deepEqual(why('HB 110', 'number'), [{label: 'bill number', term: ''}]);
   assert.deepEqual(why('Labor Code 62.051', 'law'), [{label: 'changes this section of law', term: ''}]);
 });
+
+test('a legislator\'s full name from the roster finds the bills that name them by last name only', () => {
+  const people = {authors: [{name: 'Williams', member: {full_name: 'Michelle Williams'}}], coauthors: null,
+    sponsors: [{name: 'Cook', member: {full_name: 'Molly Cook'}}, {name: 'Gone', member: null}], cosponsors: null};
+  const fields = searchFields({...bill, author: 'Williams', authors: ['Williams'], people}, ctx);
+  for (const query of ['Michelle Williams', 'williams michelle', 'Molly Cook'])
+    assert.deepEqual(matchReasons(fields, searchTerms(query).q).map(r => r.label), ['author or sponsor'], query);
+  assert.deepEqual(fields.find(([key]) => key === 'people')[1].slice(-2), ['Michelle Williams', 'Molly Cook']);
+});
