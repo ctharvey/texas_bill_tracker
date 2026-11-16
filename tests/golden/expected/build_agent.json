@@ -3306,6 +3306,7 @@
   "hearing/no-hearing-yet--page-8.md": "09bed0187fe57b4f4c0c1f6b7055a5693ce58601372221208c357feec023a2d1",
   "hearing/no-hearing-yet--page-9.md": "f31b738df5c0f57ed214b4670754474640a23d4d29d1d3d24c00e379329e51f4",
   "hearing/no-hearing-yet.md": "e58b50eb7717c472770e0294c24d51da4e555b49d30fc82eafca3a74633bb196",
+  "index.html": "1f82cacd98ca26a3974343c04b3b1ba02eaf2f9053cc8a0515ad265c73036fcc",
   "index.md": "617018a67b67c61a0c3318e564fbbe4a95e68d2fb7825da7ebc5ac1f3bff7691",
   "last-action/filed--page-10.md": "96c14f6e2503e7687a9f65ae6f3a188559f4d38bd59e7086529a1968bb8ff180",
   "last-action/filed--page-2.md": "7b624159de882b9f334bfb5da7950574fde4e6feaf668cc1b3e016bc22fe6f9d",
@@ -3321,7 +3322,9 @@
   "llms.txt": "617018a67b67c61a0c3318e564fbbe4a95e68d2fb7825da7ebc5ac1f3bff7691",
   "recent.md": "1c3618f92895b0ec642476e935a0ce303deb2e5bda7379efdc180ddac7b5360e",
   "review-progress.md": "652fec9073963109c752b7da303b5c1367f115d6d57b035f4db680eb71e4ff81",
+  "robots.txt": "7e5cc1c28e05444572f39b37235e5498f82d591e6832ba0b33d60e9450c331d2",
   "saving.md": "df8f89729c739e68c0ba1e630433e47b1b60d98a6219d51c5cbeee1224d998e5",
+  "sitemap.xml": "f4d368510dc8cb030dfb564704ddf300daffab1c7bc5a2c63791a01bf76a32df",
   "topics/agriculture.md": "fcf32bb6ff770c20178ada24c073905dc3414290396e361ddbccee2a66731f15",
   "topics/business-regulation--page-2.md": "1b8722bf6f9cfadbbd5bdcac9367560a1526f71843932b7e4cc00f77f46edaf7",
   "topics/business-regulation.md": "ba5d3b85494a9348948afd333ce2cf55462fb50e8f40b531cd5689fe73e54fc2",
@@ -3358,6 +3361,6 @@
   "topics/transportation.md": "6da24a81414eb81fbb4cec2743fe4dcb6bbc9fe04ef074a8129088712e0c45b7"
  },
  "stdout": [
-  "Agent pages: 3356 total, 3356 written, 0 unchanged, 0 removed"
+  "Agent pages: 3359 total, 3359 written, 0 unchanged, 0 removed"
  ]
 }
