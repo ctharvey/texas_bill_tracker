@@ -164,16 +164,20 @@ test('deleting a link leaves alone a link another tab joined meanwhile', async (
 
 test('a pull that overlaps another write never makes the next star erase a bill on the link', async () => {
   const srv = server(), storage = memory();
-  storage.setItem(W, JSON.stringify(['HB1'])); storage.setItem(S, JSON.stringify([search('s0000001')]));
-  const client = appDevice(srv, storage), {editKey} = await client.create(['HB1'], [], []);  // Searches not sent yet.
+  storage.setItem(W, JSON.stringify(['HB1']));
+  const client = appDevice(srv, storage), {editKey} = await client.create(['HB1'], [], []);
+  // A section this link has not merged yet, with an item only this browser has: the pull must write once.
+  storage.setItem(S, JSON.stringify([search('s0000001')]));
   const saved = JSON.parse(storage.getItem(SYNC)); saved.merged = {}; storage.setItem(SYNC, JSON.stringify(saved));
   srv.hold = true;
-  const pulling = client.pull(); await tick();             // GET out; the link's searches lack this browser's.
+  const pulling = client.pull(); await tick();            // GET out (version 1).
   changeWatchList(storage, W, 'add', ['HB2']); client.record('add', 'HB2');
-  const writing = client.flush(); await tick();           // A write out at the same time.
+  const writing = client.flush(); await tick();          // A write out at the same time: the pull's write joins it.
   srv.hold = false;
   for (let i = 0; i < 5; i++) { srv.release(); await tick(); }
-  await Promise.all([pulling, writing]);
+  const [pulled] = await Promise.all([pulling, writing]);
+  assert.equal(pulled, null);                            // Overlapped: no adoption of the GET's older list.
+  assert.equal(JSON.parse(storage.getItem(SYNC)).version, srv.lists.get(editKey).version);
   changeWatchList(storage, W, 'add', ['HB3']); client.record('add', 'HB3');
   await client.flush(); await client.pull();
   assert.deepEqual(srv.lists.get(editKey).data.watch.sort(), ['HB1', 'HB2', 'HB3']);

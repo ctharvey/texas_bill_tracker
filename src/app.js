@@ -175,8 +175,10 @@ const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),get
   adopt:adoptSynced,onDisplaced:keepAside});
 // The sync client calls this as it stores a new version: the lists become the link's copy plus pending changes.
 // Throws if storage refuses, so that version is not stored (core/lists.js adoptLists).
+let syncMoved=false;  // Whether the last adoption changed follows or searches (onSynced re-renders only then).
 function adoptSynced(d){
   adoptLists(listStore,{watch:storageKey,follows:followKey,searches:searchesKey},d);
+  syncMoved=Boolean(d.follows&&d.follows.join()!==state.follow.join()||d.searches&&JSON.stringify(cleanSearches(d.searches))!==JSON.stringify(state.searches));
   state.watch=new Set(d.watch);if(d.follows)state.follow=cleanFollows(d.follows);if(d.searches)state.searches=cleanSearches(d.searches);
   if(d.theme)setTheme(d.theme);
 }
@@ -352,7 +354,7 @@ const FOLLOW_VIEWS=new Set(['following','member','local']);
 function refreshWatch(){renderOverview();if(state.view==='home')refreshHome();else if(state.view==='all'||state.view==='watchlist'||FOLLOW_VIEWS.has(state.view))renderContent()}
 // After a debounced write: the client has already adopted the link's copy (adoptSynced); show it.
 const onSynced=(watch,error)=>{if(error){toast(`Sync: ${error.message}`);return}renderOverview();
-  if(state.view==='all'||state.view==='watchlist')renderResults();else if(state.view==='home')refreshHome();else if(FOLLOW_VIEWS.has(state.view))renderContent()};
+  if(state.view==='all'||state.view==='watchlist')renderResults();else if(state.view==='home')refreshHome();else if(syncMoved&&FOLLOW_VIEWS.has(state.view))renderContent()};
 function changeWatch(op,ids){
   const {list,changed}=changeWatchList(listStore,storageKey,op,ids);
   state.watch=new Set(list);for(const id of changed)sync.record(op,id,onSynced);
@@ -493,6 +495,9 @@ function sharedBanner(){
   return `<div class="info-callout shared-banner"><div><strong>${view?'Shared watchlist (view-only)':'Shared list'} · ${state.sharedList.length} ${state.sharedList.length===1?'bill':'bills'}.</strong> ${view?'It stays current as its owner edits it.':'Opened from a link; your own watchlist is unchanged.'}</div><div class="tools-row"><button class="outline-button" id="shared-add">Add all to my watchlist</button><button class="outline-button" id="shared-close">Show all bills</button></div></div>`;
 }
 
+// Items a sync limit or a move kept aside are listed on the Export page; say so where saving is managed.
+function keptNote(){const n=STORAGE_OK?heldCount(listStore):0;
+  return n?`<p class="tools-note">${n} saved ${n===1?'item is':'items are'} kept aside because ${n===1?'it':'they'} did not fit a limit. <a class="text-link" href="#export" data-view="export">See them on the Export page</a>.</p>`:''}
 function watchTools(){
   const linked=sync.linked,n=state.watch.size,none=n?'':'disabled';
   const syncPart=syncAvailable===false?'<p class="tools-note">Private sync links aren’t switched on for this site yet. Use a share link or a file to move your list for now.</p>'
@@ -500,7 +505,7 @@ function watchTools(){
     :`<p class="tools-note">Get a private link that keeps this watchlist the same on your phone, laptop and work computer. No account, email or name.</p><div class="tools-row"><button class="primary-button" id="sync-create" ${syncAvailable?'':'disabled'}>Create sync link</button></div><p class="tools-note">Already have one? Open it on this device.</p>`;
   const synced=Boolean(linked?.editKey);
   const syncState=synced?'Synced across your devices':'This device only';
-  return `<details class="watch-save" id="watch-save"${state.watchSaveOpen?' open':''}><summary><span>Save, share and sync</span><span class="watch-sync-state${synced?' synced':''}">${syncState}</span></summary><div class="watch-tools"><section><h3>Save and share</h3><p class="tools-note">Your watchlist is kept in this browser. To move it to another device or person:</p><div class="tools-row"><button class="outline-button" id="share-watch" ${none}>Copy share link</button><button class="outline-button" id="export-watch" ${n||state.follow.length||state.searches.length?'':'disabled'} title="Your watchlist, followed legislators and saved searches, in one file">Export file</button><button class="outline-button" id="import-watch">Import file</button><input type="file" id="import-watch-file" accept=".json,.txt,.csv,application/json,text/plain,text/csv" hidden></div><p class="tools-note">Each bill also has an RSS feed in its details, for following it in Outlook or a feed reader. <a href="#saving" data-view="saving">How saving works →</a></p></section><section><h3>Sync across devices</h3>${syncPart}</section></div></details>`;
+  return `<details class="watch-save" id="watch-save"${state.watchSaveOpen?' open':''}><summary><span>Save, share and sync</span><span class="watch-sync-state${synced?' synced':''}">${syncState}</span></summary><div class="watch-tools">${keptNote()}<section><h3>Save and share</h3><p class="tools-note">Your watchlist is kept in this browser. To move it to another device or person:</p><div class="tools-row"><button class="outline-button" id="share-watch" ${none}>Copy share link</button><button class="outline-button" id="export-watch" ${n||state.follow.length||state.searches.length?'':'disabled'} title="Your watchlist, followed legislators and saved searches, in one file">Export file</button><button class="outline-button" id="import-watch">Import file</button><input type="file" id="import-watch-file" accept=".json,.txt,.csv,application/json,text/plain,text/csv" hidden></div><p class="tools-note">Each bill also has an RSS feed in its details, for following it in Outlook or a feed reader. <a href="#saving" data-view="saving">How saving works →</a></p></section><section><h3>Sync across devices</h3>${syncPart}</section></div></details>`;
 }
 
 async function handleSaveClick(target){
