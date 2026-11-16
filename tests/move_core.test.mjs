@@ -1,7 +1,7 @@
 // Move core: what is collected, cleaned, added, held and verified when saved data moves to the new address.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {collect, receive, plan, verify, digest, hasMovable, moveNeeded, keepHeld, moveTarget, moveSource,
+import {collect, receive, plan, verify, digest, hasMovable, moveNeeded, keepHeld, keepPreviousLink, previousLinks, moveTarget, moveSource,
   KEYS, HELD_KEY, MOVED_KEY, PREVIOUS_SYNC_KEY} from '../src/core/move.js';
 import {MAX_LIST, MAX_FOLLOWS, MAX_SEARCHES} from '../src/prefs.js';
 
@@ -24,15 +24,15 @@ function apply(store, planned, cur) {
   store.setItem(KEYS.searches, JSON.stringify([...cur.searches, ...planned.searches]));
   keepHeld(store, planned.held);
   if (planned.sync === 'join') store.setItem(KEYS.sync, JSON.stringify({key: planned.editKey, mode: null}));
-  if (planned.sync === 'keep-previous') store.setItem(PREVIOUS_SYNC_KEY, JSON.stringify({key: planned.editKey}));
+  if (planned.sync === 'keep-previous') keepPreviousLink(store, planned.editKey);
 }
 
-test('origins are fixed: production pair and loopback test pair only', () => {
+test('origins are fixed: production pair and the *.localhost test pair only', () => {
   assert.equal(moveTarget('https://bills.ctharvey.me'), 'https://billatlas.org');
   assert.equal(moveSource('https://billatlas.org'), 'https://bills.ctharvey.me');
-  assert.equal(moveTarget('http://127.0.0.1:8787'), 'http://localhost:8787');
-  assert.equal(moveSource('http://localhost:8787'), 'http://127.0.0.1:8787');
-  for (const o of ['https://billatlas.org', 'https://evil.example', 'http://127.0.0.1.evil.example', 'https://bills.ctharvey.me.evil', 'null'])
+  assert.equal(moveTarget('http://old.localhost:8787'), 'http://new.localhost:8787');
+  assert.equal(moveSource('http://new.localhost:8787'), 'http://old.localhost:8787');
+  for (const o of ['https://billatlas.org', 'https://evil.example', 'http://127.0.0.1:8787', 'http://localhost:8787', 'http://old.localhost.evil.example', 'https://bills.ctharvey.me.evil', 'null'])
     assert.equal(moveTarget(o), null, o);
   assert.equal(moveSource('https://bills.ctharvey.me'), null);
 });
@@ -148,4 +148,16 @@ test('what counts as movable, and when the old site asks again', () => {
   assert.equal(moveNeeded(s), false);
   s.setItem(KEYS.watch, JSON.stringify(['HB1', 'HB2']));
   assert.equal(moveNeeded(s), true);
+});
+
+test('a moved link this site did not join is kept beside earlier ones', () => {
+  const s = storage();
+  const c = receive(collect(storage({[KEYS.sync]: {key: KEY, mode: 'edit'}})));
+  const p = plan(here({syncKey: OTHER}), c);
+  keepPreviousLink(s, 'aaaaaaaaaaaaaaaaaaaaaa');
+  apply(s, p, here());
+  apply(s, p, here());
+  assert.deepEqual(previousLinks(s), ['aaaaaaaaaaaaaaaaaaaaaa', KEY]);
+  assert.equal(verify(s, c, p).ok, true);
+  assert.equal(s.getItem(PREVIOUS_SYNC_KEY).includes(OTHER), false);
 });

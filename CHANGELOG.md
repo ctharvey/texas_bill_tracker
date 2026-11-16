@@ -1,6 +1,14 @@
 # Changelog
 
 ## 2026-11-16
+- Moving saved lists to billatlas.org (not released): bills.ctharvey.me shows a banner offering "Move my saved
+  lists", which opens billatlas.org and hands this browser's lists, sync link and settings across by
+  `postMessage` (origin, window and nonce checked). The new site adds them through its normal save paths (queued
+  to its sync link), keeps anything over a limit or invalid aside for download, and reads everything back before
+  saying it is done. The old site keeps everything. Rules in `src/core/move.js`; hand-off in `src/features/move/`.
+- Saved lists survive several open tabs: each change re-reads storage and applies only that tab's change, and the
+  sync client re-reads its state per call and never writes over a link another tab changed. A joined sync link
+  merges this browser's bills until a pull succeeds (`joinPending`), so a failed first pull no longer loses them.
 - Agent edition is now discoverable by crawlers: the hourly build writes `robots.txt` (allows OAI-SearchBot, keeps
   live search queries out), `sitemap.xml` (every Markdown page) and an HTML `index.html` linking every bill.
   ChatGPT wouldn't open agent.billatlas.org links because OpenAI's crawler had never seen those URLs.

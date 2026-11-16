@@ -8,7 +8,7 @@ import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
 import {fillDrawerBrackets} from './features/brackets/view.js';
 import {exportMarkup} from './features/export/view.js';
-import {setupThemePicker, setupModePicker, setTheme, savedTheme, applyTheme} from './features/theme/view.js';
+import {setupThemePicker, setupModePicker, setTheme, savedTheme, applyTheme, applyMode} from './features/theme/view.js';
 import {TUMBLEWEED, noticeSearch, setupEasterEggs} from './features/easter/view.js';
 import {state} from './core/state.js';
 import {$, esc, toast} from './core/dom.js';
@@ -19,7 +19,12 @@ import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, visitKey, S
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
   cleanSearches, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
 import {createSyncClient} from './sync.js';
-import {readWatch, changeWatchList, changeFollowList, changeSearchList} from './core/lists.js';
+import {readWatch, readFollows, readSearches, changeWatchList, changeFollowList, changeSearchList} from './core/lists.js';
+import {moveTarget, moveSource, moveNeeded, collect, receive, digest, MOVED_KEY, HELD_KEY} from './core/move.js';
+import {sendMove, receiveMove, newNonce} from './features/move/handoff.js';
+import {applyMove} from './features/move/apply.js';
+import {oldSiteBanner, newSiteResult} from './features/move/view.js';
+import {withMode} from './features/theme/model.js';
 import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, followedBills, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
 import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, sortAgencyIds, groupAgencyIds, searchTerms, textMatches, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
 
@@ -120,6 +125,8 @@ async function init(){
   // A sync link pasted into an open tab arrives as a hash change, not a page load.
   window.addEventListener('hashchange',()=>{const key=applyLocation(false);if(key)openSyncLink(key)});
   state.near=cleanNear(readJson(NEAR_KEY),null);
+  const arrivingMove=Boolean(MOVE_FROM)&&location.hash==='#move';
+  if(arrivingMove)try{history.replaceState(null,'',location.pathname+location.search)}catch{}
   const syncKey=applyLocation(true);
   viewReady=true;
   setupDisclaimer();
@@ -127,6 +134,7 @@ async function init(){
   setupModePicker();
   setupEasterEggs();
   setupSync(syncKey);
+  if(arrivingMove)receiveArrivingMove();else renderMoveBanner();
   if(state.bills.length)loadStatutes();
   if(lunaReady){const snapshot=state.bills;lunaReady.then(({luna,base})=>applyLuna(luna,base,snapshot))}
   // Keep the progress view current while it is open; other views never refetch.
@@ -265,6 +273,7 @@ function adoptFollows(follows){
 function changeFollow(op,codes){
   const {list,changed}=changeFollowList(listStore,followKey,op,codes,MAX_FOLLOWS);
   state.follow=list;for(const code of changed)sync.record(op,code,onSynced);
+  if(changed.length)renderMoveBanner();
 }
 function toggleFollow(code){
   const on=state.follow.includes(code);
@@ -287,6 +296,7 @@ function changeSearch(op,item){
   const id=op==='save-search'?item.id:item;
   state.searches=changeSearchList(listStore,searchesKey,op,item);
   sync.record(op,id,onSynced,op==='save-search'?item:undefined);
+  renderMoveBanner();
 }
 const todayDay=()=>chicagoDate(new Date());
 // Bills matching a saved search now, and those with a dated action after the day it was last opened.
@@ -341,6 +351,7 @@ const onSynced=(watch,error,sections)=>{if(error){toast(`Sync: ${error.message}`
 function changeWatch(op,ids){
   const {list,changed}=changeWatchList(listStore,storageKey,op,ids);
   state.watch=new Set(list);for(const id of changed)sync.record(op,id,onSynced);
+  if(changed.length)renderMoveBanner();
 }
 // Another tab of this site saved: show it. Read-only, so two open tabs never answer each other's saves.
 function onOtherTab(e){
@@ -348,6 +359,7 @@ function onOtherTab(e){
   const k=e.key;
   if(k===null||k===storageKey||k===followKey||k===searchesKey){loadSaved();refreshWatch()}
   if(k===null||k===prefsKey){const id=applyTheme(savedTheme()||'');const select=$('#theme-select');if(select)select.value=id}
+  if(k!==MOVED_KEY)renderMoveBanner();
   if((k===null||k==='tx-bill-atlas-sync-v1')&&(state.view==='watchlist'||state.view==='saving'||state.view==='export'))renderContent();
 }
 
@@ -415,6 +427,57 @@ async function pullSync(mergeLocal){
     refreshWatch();
   }catch(error){toast(`Sync: ${error.message}`);refreshWatch()}
 }
+
+// ---- Moving saved data from the old address (MOVE_FROM) to the new one (MOVE_TO); see core/move.js ----
+const MOVE_TO=STORAGE_OK?moveTarget(location.origin):null,MOVE_FROM=STORAGE_OK?moveSource(location.origin):null;
+let moveStatus=null;  // Old site: null, 'moving', 'moved' or 'failed:<reason>'. New site: the arrival result.
+function renderMoveBanner(){
+  const el=$('#move-banner');if(!el)return;
+  let html='';
+  if(MOVE_TO){
+    const status=moveStatus==='moving'||moveStatus?.startsWith?.('failed:')?moveStatus:moveNeeded(localStorage)?'offer':moveStatus==='moved'?'moved':'gone';
+    html=oldSiteBanner({status,target:MOVE_TO,goHref:MOVE_TO+location.pathname+location.hash});
+  }else if(MOVE_FROM&&moveStatus)html=newSiteResult(moveStatus,MOVE_FROM);
+  el.innerHTML=html;el.hidden=!html;
+}
+async function startMove(){
+  if(!MOVE_TO||moveStatus==='moving')return;
+  // Opened inside the click, so the browser allows it; never noopener: the new page answers its opener.
+  const win=window.open(`${MOVE_TO}${location.pathname}#move`,'_blank');
+  if(!win){moveStatus='failed:blocked';renderMoveBanner();return}
+  moveStatus='moving';renderMoveBanner();
+  let payload=null;
+  const result=await sendMove({self:window,win,target:MOVE_TO,getPayload:async()=>{try{await sync.flush()}catch{}payload=collect(localStorage);return payload}});
+  if(result.ok&&payload){
+    try{localStorage.setItem(MOVED_KEY,JSON.stringify({digest:digest(receive(payload)),at:new Date().toISOString()}))}catch{}
+    moveStatus='moved';
+  }else moveStatus=`failed:${result.reason||'failed'}`;
+  renderMoveBanner();
+}
+function moveSettings(settings){
+  if(settings.theme){const id=setTheme(settings.theme);if(sync.linked?.mode==='edit')sync.record('theme',id)}
+  if(settings.mode){writeJson(prefsKey,withMode(readJson(prefsKey),settings.mode));applyMode(settings.mode)}
+  if(settings.filters)writeJson(prefsKey,{...keptPrefs(),filters:settings.filters});
+  if(settings.near){writeJson(NEAR_KEY,settings.near);state.near=cleanNear(settings.near,state.nearGeo?.tables)}
+  if(settings.agencySort){state.agencySort=settings.agencySort;try{localStorage.setItem(AGENCY_SORT_KEY,settings.agencySort)}catch{}}
+}
+async function receiveArrivingMove(){
+  if(!window.opener){moveStatus={ok:false,reason:'no-opener'};renderMoveBanner();return}
+  const result=await receiveMove({self:window,opener:window.opener,source:MOVE_FROM,nonce:newNonce(),apply:payload=>applyMove(payload,{
+    storage:localStorage,
+    current:()=>{const prefs=keptPrefs();return {watch:readWatch(localStorage,storageKey),follows:readFollows(localStorage,followKey),searches:readSearches(localStorage,searchesKey),
+      settings:{theme:savedTheme(),mode:prefs.mode??null,filters:prefs.filters??null,near:readJson(NEAR_KEY),agencySort:(()=>{try{return localStorage.getItem(AGENCY_SORT_KEY)}catch{return null}})()},
+      syncKey:readJson('tx-bill-atlas-sync-v1')?.key||null}},
+    addWatch:ids=>changeWatch('add',ids),
+    addFollows:codes=>changeFollow('follow',codes),
+    addSearch:s=>changeSearch('save-search',s),
+    setSettings:moveSettings,
+    joinLink:async key=>{sync.connect(key);if(syncAvailable===null)syncAvailable=await sync.isAvailable();await pullSync(true)},
+  })});
+  moveStatus=result;
+  loadSaved();refreshWatch();renderMoveBanner();
+}
+const movePreviousKey=()=>moveStatus?.previousKey||null;
 
 async function copyText(text,label){
   try{await navigator.clipboard.writeText(text);toast(`${label} copied`)}catch{toast(`Copy failed. ${label}: ${text}`)}
@@ -1728,6 +1791,12 @@ function registerClicks(){
   });
   // Every other click closes the agency list, then goes on to the handlers below.
   onClick('agency-dismiss',()=>{hideAgencyChoices();return false});
+  clickOn('move','#move-start,#move-close,#move-held,#move-previous',el=>{
+    if(el.id==='move-start')startMove();
+    if(el.id==='move-close'){moveStatus=null;renderMoveBanner()}
+    if(el.id==='move-held'){let text=null;try{text=localStorage.getItem(HELD_KEY)}catch{}if(text)download('texas-bill-atlas-kept-aside.json',text,'application/json')}
+    if(el.id==='move-previous'&&movePreviousKey())copyText(siteBase()+'#watchlist?sync='+movePreviousKey(),'Edit link');
+  });
   clickOn('nav','[data-view]',(nav,e)=>{if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button)return;e.preventDefault();location.hash=nav.dataset.view;setView(nav.dataset.view)});  // modified clicks open a new tab
   clickOn('open-bill','[data-open]',(open,e)=>{
     // A modified or non-primary click on a link keeps the browser's own behavior (new tab, new window).

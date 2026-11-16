@@ -566,4 +566,5 @@ a.bill-number{padding:6px 0}
 }
 .info-callout.callout-warn{background:color-mix(in srgb,var(--gold) 9%,var(--surface));border-color:color-mix(in srgb,var(--gold) 35%,var(--surface))}
 .info-callout.callout-warn strong{color:var(--gold-ink)}
+#move-banner .move-banner{margin:0 0 14px;flex-wrap:wrap}#move-banner .tools-row{margin-top:8px}.move-error{display:block;margin-top:6px}
 .empty-steps{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:14px 0 0!important}

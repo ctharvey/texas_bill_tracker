@@ -7,18 +7,19 @@ import {cleanNear, NEAR_KEY} from '../geo.js';
 
 // Fixed in code, never read from the address, storage or a message.
 export const MOVE_ORIGINS = {'https://bills.ctharvey.me': 'https://billatlas.org'};
-// Tests: 127.0.0.1:<port> moves to localhost:<port>, two origins served by one local server. Loopback only.
-const LOOPBACK = /^http:\/\/127\.0\.0\.1(:\d{1,5})?$/;
+// Tests: old.localhost:<port> moves to new.localhost:<port>, two origins served by one local server (browsers
+// resolve *.localhost to loopback). The default test host, 127.0.0.1, is neither, so other tests never see a move.
+const TEST_OLD = /^http:\/\/old\.localhost(:\d{1,5})?$/, TEST_NEW = /^http:\/\/new\.localhost(:\d{1,5})?$/;
 export function moveTarget(origin) {
   if (Object.hasOwn(MOVE_ORIGINS, origin)) return MOVE_ORIGINS[origin];
-  const m = LOOPBACK.exec(origin);
-  return m ? `http://localhost${m[1] || ''}` : null;
+  const m = TEST_OLD.exec(origin);
+  return m ? `http://new.localhost${m[1] || ''}` : null;
 }
 export function moveSource(origin) {
   const found = Object.entries(MOVE_ORIGINS).find(([, to]) => to === origin);
   if (found) return found[0];
-  const m = /^http:\/\/localhost(:\d{1,5})?$/.exec(origin);
-  return m ? `http://127.0.0.1${m[1] || ''}` : null;
+  const m = TEST_NEW.exec(origin);
+  return m ? `http://old.localhost${m[1] || ''}` : null;
 }
 
 export const KEYS = {
@@ -27,7 +28,7 @@ export const KEYS = {
 };
 export const MOVED_KEY = 'tx-bill-atlas-moved-v1';            // Old site: digest of the last verified move.
 export const HELD_KEY = 'tx-bill-atlas-move-held-v1';         // New site: items over a limit or refused, raw.
-export const PREVIOUS_SYNC_KEY = 'tx-bill-atlas-sync-previous-v1';  // New site: the old browser's other sync link.
+export const PREVIOUS_SYNC_KEY = 'tx-bill-atlas-sync-previous-v1';  // New site: other sync links moved here, a list.
 const BOOKKEEPING = new Set([MOVED_KEY, HELD_KEY, PREVIOUS_SYNC_KEY]);
 const OWN = /^(tx|texas)-bill-atlas-/;
 const EDIT_KEY = /^[A-Za-z0-9_-]{22}$/;
@@ -122,6 +123,14 @@ export function keepHeld(storage, held) {
   try { storage.setItem(HELD_KEY, JSON.stringify(out)); return true; } catch { return false; }
 }
 
+// A moved edit key this site did not join. Kept in a list, so a later move never replaces an earlier one.
+export function keepPreviousLink(storage, key) {
+  const keys = list(parse(storage.getItem(PREVIOUS_SYNC_KEY) || '[]')).filter(k => typeof k === 'string');
+  if (keys.includes(key)) return true;
+  try { storage.setItem(PREVIOUS_SYNC_KEY, JSON.stringify([...keys, key])); return true; } catch { return false; }
+}
+export const previousLinks = storage => list(parse(storage.getItem(PREVIOUS_SYNC_KEY) || '[]')).filter(k => typeof k === 'string' && EDIT_KEY.test(k));
+
 // Reads back: every incoming item is in its list or held, and the sync outcome stuck. Counts only.
 export function verify(storage, cleaned, planned) {
   const read = key => list(parse(storage.getItem(key) || '[]'));
@@ -135,7 +144,7 @@ export function verify(storage, cleaned, planned) {
   };
   let sync = true;
   if (planned?.sync === 'join' || planned?.sync === 'same') sync = parse(storage.getItem(KEYS.sync) || 'null')?.key === cleaned.editKey;
-  if (planned?.sync === 'keep-previous') sync = parse(storage.getItem(PREVIOUS_SYNC_KEY) || 'null')?.key === cleaned.editKey;
+  if (planned?.sync === 'keep-previous') sync = previousLinks(storage).includes(cleaned.editKey);
   const ok = sync && Object.values(missing).every(n => n === 0);
   return {ok, missing, sync};
 }
