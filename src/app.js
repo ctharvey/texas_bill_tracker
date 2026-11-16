@@ -7,6 +7,7 @@ import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex
   STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
 import {fillDrawerBrackets} from './features/brackets/view.js';
+import {exportMarkup} from './features/export/view.js';
 import {setupThemePicker, setupModePicker, setTheme, savedTheme} from './features/theme/view.js';
 import {TUMBLEWEED, noticeSearch, setupEasterEggs} from './features/easter/view.js';
 import {state} from './core/state.js';
@@ -346,7 +347,7 @@ async function setupSync(key){
   else if(sync.linked)await pullSync(false);
   window.addEventListener('focus',()=>{if(Date.now()-lastPull>30000)pullSync(false)});
   persistState();
-  if(state.view==='home')refreshHome();else if(state.view==='watchlist'||state.view==='saving')renderContent();
+  if(state.view==='home')refreshHome();else if(state.view==='watchlist'||state.view==='saving'||state.view==='export')renderContent();
 }
 
 async function openSyncLink(key){
@@ -531,7 +532,7 @@ function setNavOpen(open){
   const more=$('#nav-more');more.setAttribute('aria-expanded',String(open));more.querySelector('.nav-more-label').textContent=open?'Close':'More';
 }
 // push=true adds a history entry (opening a bill page), so the browser's Back returns to the page before it.
-const PAGE_NAMES={home:'Home',all:'Bill explorer',watchlist:'Watchlist',following:'Following',today:'Today',local:'Near you',member:'Legislator',statute:'Section of law',agencies:'Agency index',review:'Review progress',method:'How it works',saving:'Saving your info',data:'Data & imports'};
+const PAGE_NAMES={home:'Home',all:'Bill explorer',watchlist:'Watchlist',following:'Following',today:'Today',local:'Near you',member:'Legislator',statute:'Section of law',agencies:'Agency index',review:'Review progress',method:'How it works',saving:'Saving your info',export:'Export your saved info',data:'Data & imports'};
 // The tab title names the page (and the bill or member), so history, tabs and screen readers can tell views apart.
 function namedHeading(view){
   if(view==='member'){const m=memberByCode(state.roster,state.memberCode);return m?esc(memberTitle(m)):null}
@@ -638,6 +639,7 @@ function registerViews(){
   registerView('review',{heading:['Full-text review.','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:reviewMarkup});
   registerView('method',{heading:['How the atlas works.','Signals and uncertainty are displayed separately from verified legislative actions.'],render:methodMarkup});
   registerView('saving',{heading:['Save your work.','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],render:savingMarkup});
+  registerView('export',{heading:['Export your saved info.','Everything this browser has saved, in one file you can keep or import on another device.'],render:()=>exportMarkup({watch:state.watch,follows:state.follow,searches:state.searches,theme:savedTheme(),memberName:code=>{const m=memberByCode(state.roster,code);return m?memberTitle(m):null},synced:Boolean(sync.linked?.editKey)})});
   registerView('data',{heading:['Behind the tracker.','Understand coverage, refreshes, and how to load or export bill data.'],render:dataMarkup});
   setFallbackView('data');
 }

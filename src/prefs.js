@@ -8,7 +8,7 @@ const RENAMED = {outlook: {'Not rated': 'No hearing yet'}};
 const SORT_NAME = /^[a-z]{1,20}$/;
 const usable = (name, value) => name !== 'sort' || SORT_NAME.test(value);
 const current = (name, value) => Object.hasOwn(RENAMED, name) && Object.hasOwn(RENAMED[name], value) ? RENAMED[name][value] : value;
-export const VIEWS = ['home', 'all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'bill', 'agencies', 'review', 'method', 'saving', 'data'];
+export const VIEWS = ['home', 'all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'bill', 'agencies', 'review', 'method', 'saving', 'export', 'data'];
 const LAW_CODE = /^[A-Z]{2}$/;
 const LAW_SECTION = /^\d+[A-Z]?(?:\.\d+[A-Z]?)+$/;  // The statute index's section numbers (build_feeds.SECTION_NUM).
 export const MAX_LIST = 500;

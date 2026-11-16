@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-15
+- Export page at `#export` (not in the nav): lists the bills, followed legislators, saved searches and theme this
+  browser holds, and downloads them as the same profile file Import file reads. A fallback for moving saved lists
+  to billatlas.org, which keeps its own browser storage.
 - New address: the site is billatlas.org and the agent edition agent.billatlas.org (cth.hosting PR #26).
   Canonical links in the agent pages, feeds, search, the page head/footer and README use the new names; feed
   GUIDs carry no host, so readers see no repeat items. bills.ctharvey.me and agent.bills.ctharvey.me keep
