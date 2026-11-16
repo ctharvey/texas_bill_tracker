@@ -1,6 +1,13 @@
 # Changelog
 
 ## 2026-11-16
+- Sync and the move keep every saved item (review fixes, not released): a sync write never cuts an item to fit a
+  limit (500 bills, 200 legislators, 20 searches); what does not fit is kept aside and listed on the Export page.
+  The sync client stores a version only together with the lists it adopted, adds a joined browser's bills itself
+  (also for joins left half-done by the previous version), queues changes made while a link is created, and never
+  forgets or replaces a link another tab joined meanwhile. The move checks the new site's own items and settings,
+  carries the old site's kept-aside items, ignores default filters, answers its opener before the app loads, and
+  says why it failed.
 - Moving saved lists to billatlas.org (not released): bills.ctharvey.me shows a banner offering "Move my saved
   lists", which opens billatlas.org and hands this browser's lists, sync link and settings across by
   `postMessage` (origin, window and nonce checked). The new site adds them through its normal save paths (queued

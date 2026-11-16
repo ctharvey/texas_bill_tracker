@@ -19,8 +19,8 @@ import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, visitKey, S
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
   cleanSearches, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
 import {createSyncClient} from './sync.js';
-import {readWatch, readFollows, readSearches, changeWatchList, changeFollowList, changeSearchList} from './core/lists.js';
-import {moveTarget, moveSource, moveNeeded, collect, receive, digest, MOVED_KEY, HELD_KEY} from './core/move.js';
+import {readWatch, readFollows, readSearches, changeWatchList, changeFollowList, changeSearchList, adoptLists} from './core/lists.js';
+import {moveTarget, moveSource, moveNeeded, collect, receive, digest, keepHeld, heldFile, heldCount, previousLinks, MOVED_KEY} from './core/move.js';
 import {sendMove, receiveMove, newNonce} from './features/move/handoff.js';
 import {applyMove} from './features/move/apply.js';
 import {oldSiteBanner, newSiteResult, savedSummary} from './features/move/view.js';
@@ -70,6 +70,11 @@ const normalized=normalizeBill;
 async function init(){
   registerViews();
   registerClicks();
+  // A move window answers its opener at once (the opener times out otherwise) and applies once the app is ready.
+  const arrivingMove=Boolean(MOVE_FROM)&&location.hash==='#move';
+  if(arrivingMove)try{history.replaceState(null,'',location.pathname+location.search)}catch{}
+  let booted;const bootReady=new Promise(r=>{booted=r});
+  if(arrivingMove)receiveArrivingMove(bootReady);
   const now=new Date();
   $('.day-box').textContent=new Intl.DateTimeFormat('en-US',{day:'2-digit',timeZone:'America/Chicago'}).format(now);
   $('.heading-date strong').textContent=new Intl.DateTimeFormat('en-US',{month:'short',year:'numeric',timeZone:'America/Chicago'}).format(now).toUpperCase();
@@ -125,8 +130,6 @@ async function init(){
   // A sync link pasted into an open tab arrives as a hash change, not a page load.
   window.addEventListener('hashchange',()=>{const key=applyLocation(false);if(key)openSyncLink(key)});
   state.near=cleanNear(readJson(NEAR_KEY),null);
-  const arrivingMove=Boolean(MOVE_FROM)&&location.hash==='#move';
-  if(arrivingMove)try{history.replaceState(null,'',location.pathname+location.search)}catch{}
   const syncKey=applyLocation(true);
   viewReady=true;
   setupDisclaimer();
@@ -134,7 +137,7 @@ async function init(){
   setupModePicker();
   setupEasterEggs();
   setupSync(syncKey);
-  if(arrivingMove)receiveArrivingMove();else renderMoveBanner();
+  booted();if(!arrivingMove)renderMoveBanner();
   if(state.bills.length)loadStatutes();
   if(lunaReady){const snapshot=state.bills;lunaReady.then(({luna,base})=>applyLuna(luna,base,snapshot))}
   // Keep the progress view current while it is open; other views never refetch.
@@ -168,7 +171,22 @@ function setupDisclaimer(){
 // ---- Saving choices without accounts: URL state, remembered filters, files and private sync links ----
 // Lists are saved through listStore; each change re-reads it (core/lists.js), so other tabs' saves are kept.
 const listStore=STORAGE_OK?localStorage:memoryStorage();
-const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>readWatch(listStore,storageKey),getFollows:()=>readFollows(listStore,followKey),getSearches:()=>readSearches(listStore,searchesKey),getTheme:savedTheme});
+const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>readWatch(listStore,storageKey),getFollows:()=>readFollows(listStore,followKey),getSearches:()=>readSearches(listStore,searchesKey),getTheme:savedTheme,
+  adopt:adoptSynced,onDisplaced:keepAside});
+// The sync client calls this as it stores a new version: the lists become the link's copy plus pending changes.
+// Throws if storage refuses, so that version is not stored (core/lists.js adoptLists).
+function adoptSynced(d){
+  adoptLists(listStore,{watch:storageKey,follows:followKey,searches:searchesKey},d);
+  state.watch=new Set(d.watch);if(d.follows)state.follow=cleanFollows(d.follows);if(d.searches)state.searches=cleanSearches(d.searches);
+  if(d.theme)setTheme(d.theme);
+}
+// Items this browser added that the sync link has no room for (500 bills, 200 follows, 20 searches): kept aside
+// and listed on the Export page, never dropped. Throws when even that fails, so the write is not acknowledged.
+function keepAside(held){
+  if(!keepHeld(listStore,held))throw Error('This browser is out of storage space; sync paused so nothing is lost');
+  const n=held.watch.length+held.follows.length+held.searches.length;
+  toast(`${n} saved ${n===1?'item':'items'} did not fit the sync link and ${n===1?'was':'were'} kept aside: see Export`);
+}
 let syncAvailable=null,lastPull=0;
 const siteBase=()=>location.href.split('#')[0];
 
@@ -263,13 +281,6 @@ function persistState(push=false){
   return pushed;
 }
 
-function saveWatchLocal(){try{listStore.setItem(storageKey,JSON.stringify([...state.watch]))}catch{}}
-function setFollows(list){state.follow=cleanFollows(list);try{listStore.setItem(followKey,JSON.stringify(state.follow))}catch{}}
-// `follows` from sync is the link's list, or null when the server did not say (then this device's list stands).
-function adoptFollows(follows){
-  if(!follows||follows.join()===state.follow.join())return false;
-  setFollows(follows);return true;
-}
 function changeFollow(op,codes){
   const {list,changed}=changeFollowList(listStore,followKey,op,codes,MAX_FOLLOWS);
   state.follow=list;for(const code of changed)sync.record(op,code,onSynced);
@@ -286,11 +297,6 @@ function toggleFollow(code){
 const followButton=m=>{if(!m?.code)return '';const on=state.follow.includes(m.code);
   return `<button class="${on?'outline-button following':'primary-button'} follow-button" data-follow="${esc(m.code)}" aria-pressed="${on}">${on?'✓ Following':'+ Follow'}</button>`};
 const memberFeedHref=code=>`./live/feeds/members/${encodeURIComponent(code)}.xml`;
-function setSearches(list){state.searches=cleanSearches(list);try{listStore.setItem(searchesKey,JSON.stringify(state.searches))}catch{}}
-function adoptSearches(searches){
-  if(!searches||JSON.stringify(searches)===JSON.stringify(state.searches))return false;
-  setSearches(searches);return true;
-}
 // op: 'save-search' (search object) or 'delete-search' (id).
 function changeSearch(op,item){
   const id=op==='save-search'?item.id:item;
@@ -342,12 +348,11 @@ function followedMarkup(){
   const chips=members.map(m=>`<span class="followed-member">${memberNameHtml(m,memberTitle(m))} <a class="text-link" href="${esc(memberFeedHref(m.code))}" target="_blank" rel="noopener noreferrer" title="RSS feed of this legislator's bills">RSS</a> <button class="text-button" data-follow="${esc(m.code)}" aria-label="Unfollow ${esc(memberTitle(m))}">Unfollow</button></span>`).join('');
   return `<section class="followed-section"><h3>Followed legislators <span>${members.length}</span></h3><div class="followed-members">${chips}</div><p class="tools-note">Saved in this browser, in exported files and with your sync link; never in share or view-only links. Newest bills first.</p>${rows.length?`${rows.slice(0,limit).map(nearRow).join('')}${rows.length>limit?`<button class="outline-button" id="follow-more">Show 30 more · showing ${limit} of ${rows.length}</button>`:''}`:'<p class="review-empty">No bills by the legislators you follow in this snapshot yet.</p>'}</section>`;
 }
-function setWatch(ids){state.watch=new Set(ids);saveWatchLocal()}
 const FOLLOW_VIEWS=new Set(['following','member','local']);
 function refreshWatch(){renderOverview();if(state.view==='home')refreshHome();else if(state.view==='all'||state.view==='watchlist'||FOLLOW_VIEWS.has(state.view))renderContent()}
-// `sections` from sync: {follows, searches}, each the link's copy or null when the server did not say.
-const onSynced=(watch,error,sections)=>{if(error){toast(`Sync: ${error.message}`);return}setWatch(watch);const moved=adoptFollows(sections?.follows)|adoptSearches(sections?.searches);renderOverview();
-  if(state.view==='all'||state.view==='watchlist')renderResults();else if(state.view==='home')refreshHome();else if(moved&&FOLLOW_VIEWS.has(state.view))renderContent()};
+// After a debounced write: the client has already adopted the link's copy (adoptSynced); show it.
+const onSynced=(watch,error)=>{if(error){toast(`Sync: ${error.message}`);return}renderOverview();
+  if(state.view==='all'||state.view==='watchlist')renderResults();else if(state.view==='home')refreshHome();else if(FOLLOW_VIEWS.has(state.view))renderContent()};
 function changeWatch(op,ids){
   const {list,changed}=changeWatchList(listStore,storageKey,op,ids);
   state.watch=new Set(list);for(const id of changed)sync.record(op,id,onSynced);
@@ -359,15 +364,15 @@ function onOtherTab(e){
   const k=e.key;
   if(k===null||k===storageKey||k===followKey||k===searchesKey){loadSaved();refreshWatch()}
   if(k===null||k===prefsKey){const id=applyTheme(savedTheme()||'');const select=$('#theme-select');if(select)select.value=id}
-  if(k!==MOVED_KEY)renderMoveBanner();
+  renderMoveBanner();  // Includes another tab finishing the move (MOVED_KEY).
   if((k===null||k==='tx-bill-atlas-sync-v1')&&(state.view==='watchlist'||state.view==='saving'||state.view==='export'))renderContent();
 }
 
 async function setupSync(key){
   syncAvailable=await sync.isAvailable();
   if(key)await openSyncLink(key);
-  else if(sync.linked)await pullSync(false);
-  window.addEventListener('focus',()=>{if(Date.now()-lastPull>30000)pullSync(false)});
+  else if(sync.linked)await pullSync();
+  window.addEventListener('focus',()=>{if(Date.now()-lastPull>30000)pullSync()});
   if(STORAGE_OK)window.addEventListener('storage',onOtherTab);
   persistState();
   if(state.view==='home')refreshHome();else if(state.view==='watchlist'||state.view==='saving'||state.view==='export')renderContent();
@@ -383,9 +388,8 @@ async function openSyncLink(key){
     if(found.mode==='view'){Object.assign(state,{sharedList:found.watch,sharedMode:'sync-view',sharedSyncKey:key,visibleCount:30});setView('all');toast('Showing a shared watchlist (view-only)');return}
     const joining=sync.linked?.editKey!==key;
     if(joining&&!await confirmJoin(Boolean(sync.linked))){toast('Sync link not opened');return}
-    if(joining)sync.connect(key);
-    await pullSync(joining);
-    if(joining)toast('This device is now synced');
+    if(joining)sync.connect(key);  // Its bills are added to the link on the first pull that reaches it.
+    if(await pullSync()&&joining)toast('This device is now synced');
   }catch(error){toast(error.message)}
 }
 
@@ -411,21 +415,15 @@ function confirmJoin(replacing){
   });
 }
 
-// A join that has not yet completed a merging pull (a failed first pull, a closed tab) merges on every later pull.
-async function pullSync(mergeLocal){
-  if(!syncAvailable||!sync.linked)return;
+// The client merges a join, adopts the link's copy and stores its version together (sync.js). True when it did.
+async function pullSync(){
+  if(!syncAvailable||!sync.linked)return false;
   lastPull=Date.now();
-  const joining=mergeLocal||sync.linked.joinPending;
   try{
-    const pulled=await sync.pull();  // The client already merged this device's follows and searches.
-    if(!pulled){loadSaved();refreshWatch();return}  // Another tab changed the link meanwhile.
-    const {watch,follows,searches,theme}=pulled;
-    if(theme)setTheme(theme);
-    const local=readWatch(listStore,storageKey);
-    setWatch(watch);adoptFollows(follows);adoptSearches(searches);
-    if(joining){changeWatch('add',local.filter(id=>!watch.includes(id)));sync.joinDone()}  // Joining keeps this device's bills.
-    refreshWatch();
-  }catch(error){toast(`Sync: ${error.message}`);refreshWatch()}
+    const pulled=await sync.pull();
+    loadSaved();refreshWatch();
+    return Boolean(pulled);  // Null: another tab or write changed the link meanwhile; the next pull catches up.
+  }catch(error){toast(`Sync: ${error.message}`);loadSaved();refreshWatch();return false}
 }
 
 // ---- Moving saved data from the old address (MOVE_FROM) to the new one (MOVE_TO); see core/move.js ----
@@ -451,7 +449,7 @@ async function startMove(){
   if(result.ok&&payload){
     try{localStorage.setItem(MOVED_KEY,JSON.stringify({digest:digest(receive(payload)),at:new Date().toISOString()}))}catch{}
     moveStatus='moved';
-  }else moveStatus=`failed:${result.reason||'failed'}`;
+  }else moveStatus=`failed:${result.counts?.why==='sync'?'sync':result.reason||'failed'}`;
   renderMoveBanner();
 }
 function moveSettings(settings){
@@ -461,9 +459,9 @@ function moveSettings(settings){
   if(settings.near){writeJson(NEAR_KEY,settings.near);state.near=cleanNear(settings.near,state.nearGeo?.tables)}
   if(settings.agencySort){state.agencySort=settings.agencySort;try{localStorage.setItem(AGENCY_SORT_KEY,settings.agencySort)}catch{}}
 }
-async function receiveArrivingMove(){
-  if(!window.opener){moveStatus={ok:false,reason:'no-opener'};renderMoveBanner();return}
-  const result=await receiveMove({self:window,opener:window.opener,source:MOVE_FROM,nonce:newNonce(),apply:payload=>applyMove(payload,{
+async function receiveArrivingMove(bootReady){
+  if(!window.opener){await bootReady;moveStatus={ok:false,reason:'no-opener'};renderMoveBanner();return}
+  const result=await receiveMove({self:window,opener:window.opener,source:MOVE_FROM,nonce:newNonce(),apply:async payload=>{await bootReady;return applyMove(payload,{
     storage:localStorage,
     current:()=>{const prefs=keptPrefs();return {watch:readWatch(localStorage,storageKey),follows:readFollows(localStorage,followKey),searches:readSearches(localStorage,searchesKey),
       settings:{theme:savedTheme(),mode:prefs.mode??null,filters:prefs.filters??null,near:readJson(NEAR_KEY),agencySort:(()=>{try{return localStorage.getItem(AGENCY_SORT_KEY)}catch{return null}})()},
@@ -472,8 +470,10 @@ async function receiveArrivingMove(){
     addFollows:codes=>changeFollow('follow',codes),
     addSearch:s=>changeSearch('save-search',s),
     setSettings:moveSettings,
-    joinLink:async key=>{sync.connect(key);if(syncAvailable===null)syncAvailable=await sync.isAvailable();await pullSync(true)},
-  })});
+    joinLink:async key=>{sync.connect(key);if(syncAvailable===null)syncAvailable=await sync.isAvailable();await pullSync()},
+    flush:async()=>{if(syncAvailable&&sync.linked?.mode==='edit')await sync.flush()},
+  })}});
+  await bootReady;
   moveStatus=result;
   loadSaved();refreshWatch();renderMoveBanner();
 }
@@ -511,7 +511,7 @@ async function handleSaveClick(target){
   if(hit('#import-watch')){$('#import-watch-file').click();return}
   if(hit('#shared-add')){const before=state.watch.size;changeWatch('add',state.sharedList);refreshWatch();return toast(`Added ${state.watch.size-before} bills to your watchlist`)}
   if(hit('#shared-close')){Object.assign(state,{sharedList:null,sharedMode:null,sharedSyncKey:null,visibleCount:30});return renderContent()}
-  if(hit('#sync-create')){try{await sync.create([...state.watch],[...state.follow],state.searches);adoptFollows(sync.follows);adoptSearches(sync.searches);renderContent();toast('Sync link created. Copy the edit link to your other devices.')}catch(error){toast(error.message)}return}
+  if(hit('#sync-create')){try{await sync.create(readWatch(listStore,storageKey),readFollows(listStore,followKey),readSearches(listStore,searchesKey));loadSaved();renderContent();toast('Sync link created. Copy the edit link to your other devices.')}catch(error){toast(error.message)}return}
   if(hit('#sync-copy-edit'))return copyText(siteBase()+'#watchlist?sync='+sync.linked.editKey,'Edit link');
   if(hit('#sync-copy-view'))return copyText(siteBase()+'#watchlist?sync='+sync.linked.viewKey,'View-only link');
   if(hit('#sync-forget')){sync.forget();renderContent();return toast('This device stopped syncing; your list stays here')}
@@ -717,7 +717,7 @@ function registerViews(){
   registerView('review',{heading:['Full-text review.','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:reviewMarkup});
   registerView('method',{heading:['How the atlas works.','Signals and uncertainty are displayed separately from verified legislative actions.'],render:methodMarkup});
   registerView('saving',{heading:['Save your work.','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],render:savingMarkup});
-  registerView('export',{heading:['Export your saved info.','Everything this browser has saved, in one file you can keep or import on another device.'],render:()=>exportMarkup({watch:state.watch,follows:state.follow,searches:state.searches,theme:savedTheme(),memberName:code=>{const m=memberByCode(state.roster,code);return m?memberTitle(m):null},synced:Boolean(sync.linked?.editKey)})});
+  registerView('export',{heading:['Export your saved info.','Everything this browser has saved, in one file you can keep or import on another device.'],render:()=>exportMarkup({watch:state.watch,follows:state.follow,searches:state.searches,theme:savedTheme(),memberName:code=>{const m=memberByCode(state.roster,code);return m?memberTitle(m):null},synced:Boolean(sync.linked?.editKey),kept:STORAGE_OK?heldCount(listStore):0,previous:STORAGE_OK?previousLinks(listStore):[]})});
   registerView('data',{heading:['Behind the tracker.','Understand coverage, refreshes, and how to load or export bill data.'],render:dataMarkup});
   setFallbackView('data');
 }
@@ -1791,10 +1791,11 @@ function registerClicks(){
   });
   // Every other click closes the agency list, then goes on to the handlers below.
   onClick('agency-dismiss',()=>{hideAgencyChoices();return false});
-  clickOn('move','#move-start,#move-close,#move-held,#move-previous',el=>{
+  clickOn('move','#move-start,#move-close,#move-held,#move-previous,[data-kept-download],[data-previous-link]',el=>{
     if(el.id==='move-start')startMove();
     if(el.id==='move-close'){moveStatus=null;renderMoveBanner()}
-    if(el.id==='move-held'){let text=null;try{text=localStorage.getItem(HELD_KEY)}catch{}if(text)download('texas-bill-atlas-kept-aside.json',text,'application/json')}
+    if(el.id==='move-held'||el.hasAttribute('data-kept-download')){const text=heldFile(listStore);if(text)download('texas-bill-atlas-kept-aside.json',text,'application/json')}
+    if(el.hasAttribute('data-previous-link'))copyText(siteBase()+'#watchlist?sync='+el.dataset.previousLink,'Edit link');
     if(el.id==='move-previous'&&movePreviousKey())copyText(siteBase()+'#watchlist?sync='+movePreviousKey(),'Edit link');
   });
   clickOn('nav','[data-view]',(nav,e)=>{if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button)return;e.preventDefault();location.hash=nav.dataset.view;setView(nav.dataset.view)});  // modified clicks open a new tab

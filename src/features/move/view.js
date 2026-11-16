@@ -19,6 +19,7 @@ const FAILED = {
   timeout: 'The move did not finish. Nothing was changed here; try again, or export a file instead.',
   failed: 'The new address could not save everything (its storage may be full). Nothing was changed here; export a file instead.',
   read: 'This browser’s saved data could not be read. Export a file instead.',
+  sync: 'Everything arrived, but joining your sync link failed. Nothing was changed here; try again in a minute.',
 };
 
 // status: 'offer' | 'moving' | 'moved' | 'gone' (nothing to move) | 'failed:<reason>'. goHref: same page on the new site.
@@ -27,7 +28,7 @@ export function oldSiteBanner({status, target, goHref, what = ''}) {
   const name = esc(host(target));
   const go = `<a class="primary-button" href="${esc(goHref)}">Go to ${name}</a>`;
   if (status === 'moving') return `<div class="info-callout move-banner" role="status"><div><strong>Moving your saved data to ${name}.</strong> Keep the new window open until it says it is done.</div></div>`;
-  if (status === 'moved') return `<div class="info-callout move-banner" role="status"><div><strong>Your saved data is on ${name} now.</strong> They are still here too; nothing was removed.</div><div class="tools-row">${go}</div></div>`;
+  if (status === 'moved') return `<div class="info-callout move-banner" role="status"><div><strong>Your saved data is on ${name} now.</strong> It is still here too; nothing was removed.</div><div class="tools-row">${go}</div></div>`;
   if (status === 'gone') return `<div class="info-callout move-banner"><div><strong>Texas Bill Atlas has moved to ${name}.</strong></div><div class="tools-row">${go}</div></div>`;
   const reason = status?.startsWith('failed:') ? FAILED[status.slice(7)] || FAILED.timeout : '';
   return `<div class="info-callout move-banner${reason ? ' callout-warn' : ''}" role="status"><div><strong>Texas Bill Atlas has moved to ${name}.</strong> This browser has ${esc(what || 'saved data')} saved at this address. Copy it all to ${name} in one step; nothing here is removed.${reason ? ` <span class="move-error">${esc(reason)}</span>` : ''}</div>`
@@ -49,7 +50,7 @@ export function newSiteResult(result, source) {
       : `<strong>Some saved items could not be saved here.</strong> Nothing was removed from ${from}; export a file there to keep a copy.`,
     c.sync === 'join' ? 'This browser joined your sync link, so your other synced devices see these too.' : '',
     c.sync === 'same' ? 'They were added to the sync link this browser already uses.' : '',
-    c.held ? `${plural(c.held, 'item was', 'items were')} over a limit or not valid, so they were kept aside in this browser. <button class="text-button" id="move-held">Download them</button>` : '',
+    c.held ? `${plural(c.held, 'item was', 'items were')} over a limit or not valid, so they were kept aside in this browser (listed on the Export page). <button class="text-button" id="move-held">Download them</button>` : '',
     result.previousKey ? 'Your old browser used a different sync link. This browser kept its own; <button class="text-button" id="move-previous">copy the other edit link</button> if you still need it.' : '',
   ].filter(Boolean);
   return `<div class="info-callout move-banner${result.ok ? '' : ' callout-warn'}" role="status"><div>${lines.join(' ')}</div><div class="tools-row">${close}</div></div>`;

@@ -19,8 +19,9 @@ const MEMBER_CODE = /^A\d{3,5}$/;  // Texas Legislature Online member code
 export const isBillId = id => typeof id === 'string' && BILL_ID.test(id);
 export const MAX_FOLLOWS = 200;
 // Followed legislators, as stored in this browser: valid member codes only, in order, no repeats.
-export const cleanFollows = raw => Array.isArray(raw)
-  ? [...new Set(raw.filter(c => typeof c === 'string' && MEMBER_CODE.test(c)))].slice(0, MAX_FOLLOWS) : [];
+// `max` Infinity keeps every item: sync uses that to see what a limit would cut, then keeps the cut items aside.
+export const cleanFollows = (raw, max = MAX_FOLLOWS) => Array.isArray(raw)
+  ? [...new Set(raw.filter(c => typeof c === 'string' && MEMBER_CODE.test(c)))].slice(0, max) : [];
 const normalizeId = s => String(s).trim().toUpperCase().replace(/\s+/g, '');
 const uniqueIds = ids => [...new Set(ids.map(normalizeId).filter(isBillId))].slice(0, MAX_LIST);
 
@@ -111,10 +112,10 @@ export function applyOps(watch, ops) {
 }
 
 // The same for followed legislators: follow/unfollow ops on top of the server's follows.
-export function applyFollowOps(follows, ops) {
+export function applyFollowOps(follows, ops, max = MAX_FOLLOWS) {
   const set = new Set(follows);
   for (const {op, id} of ops || []) if (op === 'follow') set.add(id); else if (op === 'unfollow') set.delete(id);
-  return cleanFollows([...set]);
+  return cleanFollows([...set], max);
 }
 
 // Saved searches: explorer filters under a name. `seen` is the Texas day the search was last opened.
@@ -130,22 +131,22 @@ export function cleanSearch(raw) {
   if (!name || !searchFitsSync(filters)) return null;
   return {id: raw.id, name, filters, seen: typeof raw.seen === 'string' && DAY.test(raw.seen) && !Number.isNaN(Date.parse(`${raw.seen}T00:00:00Z`)) ? raw.seen : null};
 }
-export function cleanSearches(raw) {
+export function cleanSearches(raw, max = MAX_SEARCHES) {
   const seen = new Set(), out = [];
   for (const item of Array.isArray(raw) ? raw : []) {
     const s = cleanSearch(item);
     if (s && !seen.has(s.id)) { seen.add(s.id); out.push(s); }
   }
-  return out.slice(0, MAX_SEARCHES);
+  return out.slice(0, max);
 }
 // save-search replaces (or adds) one search by id; delete-search removes it.
-export function applySearchOps(searches, ops) {
-  const byId = new Map(cleanSearches(searches).map(s => [s.id, s]));
+export function applySearchOps(searches, ops, max = MAX_SEARCHES) {
+  const byId = new Map(cleanSearches(searches, Infinity).map(s => [s.id, s]));
   for (const {op, id, value} of ops || []) {
     if (op === 'save-search') { const s = cleanSearch(value); if (s && s.id === id) byId.set(id, s); }
     else if (op === 'delete-search') byId.delete(id);
   }
-  return cleanSearches([...byId.values()]);
+  return cleanSearches([...byId.values()], max);
 }
 export function newSearchId(random = n => crypto.getRandomValues(new Uint8Array(n))) {
   return [...random(10)].map(b => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');

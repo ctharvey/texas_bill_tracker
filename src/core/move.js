@@ -1,7 +1,7 @@
 // Moving a browser's saved data from the old address to the new one (pure rules; features/move does the hand-off).
 // Safety property: no saved item disappears. Each incoming item ends up in its list here, in the held key (over a
 // limit, or refused by the cleaners), or stays on the old site, which the move never changes.
-import {isBillId, cleanFollows, cleanSearches, cleanFilters, MAX_LIST, MAX_FOLLOWS, MAX_SEARCHES} from '../prefs.js';
+import {isBillId, cleanFollows, cleanSearches, cleanFilters, FILTER_DEFAULTS, PROFILE_FORMAT, MAX_LIST, MAX_FOLLOWS, MAX_SEARCHES} from '../prefs.js';
 import {cleanTheme, cleanMode} from '../features/theme/model.js';
 import {cleanNear, NEAR_KEY} from '../geo.js';
 
@@ -27,15 +27,22 @@ export const KEYS = {
   prefs: 'tx-bill-atlas-prefs-v1', sync: 'tx-bill-atlas-sync-v1', near: NEAR_KEY, agencySort: 'tx-bill-atlas-agency-sort',
 };
 export const MOVED_KEY = 'tx-bill-atlas-moved-v1';            // Old site: digest of the last verified move.
-export const HELD_KEY = 'tx-bill-atlas-move-held-v1';         // New site: items over a limit or refused, raw.
+export const HELD_KEY = 'tx-bill-atlas-move-held-v1';         // Items kept aside (over a limit or refused), raw; moves along.
 export const PREVIOUS_SYNC_KEY = 'tx-bill-atlas-sync-previous-v1';  // New site: other sync links moved here, a list.
-const BOOKKEEPING = new Set([MOVED_KEY, HELD_KEY, PREVIOUS_SYNC_KEY]);
+const BOOKKEEPING = new Set([MOVED_KEY, PREVIOUS_SYNC_KEY]);
 const OWN = /^(tx|texas)-bill-atlas-/;
 const EDIT_KEY = /^[A-Za-z0-9_-]{22}$/;
 
 const parse = text => { try { return JSON.parse(text); } catch { return undefined; } };
 const list = v => (Array.isArray(v) ? v : []);
 const normalizeId = s => String(s).trim().toUpperCase().replace(/\s+/g, '');
+const NAMES = ['watch', 'follows', 'searches'];
+// Remembered filters that differ from the defaults, or null: filters left at the defaults count as no setting.
+export function customFilters(raw) {
+  const f = Object.fromEntries(Object.entries(cleanFilters(raw)).filter(([k, v]) => v !== FILTER_DEFAULTS[k]));
+  return Object.keys(f).length ? f : null;
+}
+const heldOf = storage => { const h = parse(storage.getItem(HELD_KEY) || 'null'); return Object.fromEntries(NAMES.map(n => [n, list(h?.[n])])); };
 
 // Every own key as stored text. Bookkeeping keys stay behind.
 export function collect(storage) {
@@ -75,8 +82,8 @@ export function receive(payload) {
   if (prefs && typeof prefs === 'object' && !Array.isArray(prefs)) {
     if (typeof prefs.theme === 'string' && cleanTheme(prefs.theme) === prefs.theme) settings.theme = prefs.theme;
     if (typeof prefs.mode === 'string' && cleanMode(prefs.mode) === prefs.mode) settings.mode = prefs.mode;
-    const filters = cleanFilters(prefs.filters);
-    if (Object.keys(filters).length) settings.filters = filters;
+    const filters = customFilters(prefs.filters);
+    if (filters) settings.filters = filters;
   }
   const near = cleanNear(raw(KEYS.near));
   if (near) settings.near = near;
@@ -85,7 +92,9 @@ export function receive(payload) {
 
   const link = raw(KEYS.sync);
   const editKey = link && typeof link.key === 'string' && EDIT_KEY.test(link.key) && link.mode !== 'view' ? link.key : null;
-  return {watch, follows, searches, settings, editKey, refused};
+  // Items the old site itself kept aside (sync limits, an earlier move) move into this site's kept-aside items.
+  const keptRaw = raw(HELD_KEY), kept = Object.fromEntries(NAMES.map(n => [n, list(keptRaw?.[n])]));
+  return {watch, follows, searches, settings, editKey, refused, kept};
 }
 
 // What this site adds, keeps aside and joins. `current` is this site's own state:
@@ -99,11 +108,13 @@ export function plan(current, cleaned) {
   const [watch, watchOver] = split(current.watch, cleaned.watch, (a, b) => a === b, MAX_LIST);
   const [follows, followsOver] = split(current.follows, cleaned.follows, (a, b) => a === b, MAX_FOLLOWS);
   const [searches, searchesOver] = split(current.searches, cleaned.searches, (a, b) => a.id === b.id, MAX_SEARCHES);
-  const settings = Object.fromEntries(Object.entries(cleaned.settings).filter(([k]) => current.settings?.[k] == null));
+  const mine = {...current.settings, filters: customFilters(current.settings?.filters)};
+  const settings = Object.fromEntries(Object.entries(cleaned.settings).filter(([k]) => mine[k] == null));
+  const kept = cleaned.kept || {watch: [], follows: [], searches: []};
   const held = {
-    watch: [...watchOver, ...cleaned.refused.watch],
-    follows: [...followsOver, ...cleaned.refused.follows],
-    searches: [...searchesOver, ...cleaned.refused.searches],
+    watch: [...watchOver, ...cleaned.refused.watch, ...kept.watch],
+    follows: [...followsOver, ...cleaned.refused.follows, ...kept.follows],
+    searches: [...searchesOver, ...cleaned.refused.searches, ...kept.searches],
   };
   let sync = 'none';
   if (cleaned.editKey) sync = !current.syncKey ? 'join' : current.syncKey === cleaned.editKey ? 'same' : 'keep-previous';
@@ -115,7 +126,7 @@ const heldIn = (stored, item) => stored.some(x => JSON.stringify(x) === JSON.str
 export function keepHeld(storage, held) {
   const before = parse(storage.getItem(HELD_KEY) || 'null') || {};
   const out = {};
-  for (const name of ['watch', 'follows', 'searches']) {
+  for (const name of NAMES) {
     out[name] = list(before[name]);
     for (const item of held[name]) if (!heldIn(out[name], item)) out[name].push(item);
   }
@@ -131,31 +142,58 @@ export function keepPreviousLink(storage, key) {
 }
 export const previousLinks = storage => list(parse(storage.getItem(PREVIOUS_SYNC_KEY) || '[]')).filter(k => typeof k === 'string' && EDIT_KEY.test(k));
 
-// Reads back: every incoming item is in its list or held, and the sync outcome stuck. Counts only.
-export function verify(storage, cleaned, planned) {
+// Reads back, counts only: every incoming item, and every item this site held before the move (`before`, the
+// current() given to plan), is in its list or kept aside; each moved setting is stored; the sync outcome stuck.
+// `why` is 'sync' or 'storage' when not ok.
+export function verify(storage, cleaned, planned, before = {watch: [], follows: [], searches: []}) {
   const read = key => list(parse(storage.getItem(key) || '[]'));
-  const held = parse(storage.getItem(HELD_KEY) || 'null') || {};
-  const watch = read(KEYS.watch), follows = read(KEYS.follows), searches = read(KEYS.searches).map(s => s?.id);
+  const held = heldOf(storage);
+  const lists = {watch: read(KEYS.watch), follows: read(KEYS.follows), searches: read(KEYS.searches).map(s => s?.id)};
+  const has = {
+    watch: id => lists.watch.includes(id) || held.watch.includes(id),
+    follows: c => lists.follows.includes(c) || held.follows.includes(c),
+    searches: s => lists.searches.includes(s.id) || held.searches.some(h => h?.id === s.id),
+  };
+  const lost = (name, items) => items.filter(x => !has[name](x)).length;
   const missing = {
-    watch: cleaned.watch.filter(id => !watch.includes(id) && !list(held.watch).includes(id)).length,
-    follows: cleaned.follows.filter(c => !follows.includes(c) && !list(held.follows).includes(c)).length,
-    searches: cleaned.searches.filter(s => !searches.includes(s.id) && !list(held.searches).some(h => h?.id === s.id)).length,
-    refused: ['watch', 'follows', 'searches'].reduce((n, k) => n + cleaned.refused[k].filter(x => !heldIn(list(held[k]), x)).length, 0),
+    watch: lost('watch', cleaned.watch), follows: lost('follows', cleaned.follows), searches: lost('searches', cleaned.searches),
+    refused: NAMES.reduce((n, k) => n + [...cleaned.refused[k], ...(cleaned.kept?.[k] || [])].filter(x => !heldIn(held[k], x)).length, 0),
+    before: NAMES.reduce((n, k) => n + lost(k, list(before[k])), 0),
+    settings: Object.entries(planned?.settings || {}).filter(([k, v]) => JSON.stringify(storedSetting(storage, k)) !== JSON.stringify(v)).length,
   };
   let sync = true;
   if (planned?.sync === 'join' || planned?.sync === 'same') sync = parse(storage.getItem(KEYS.sync) || 'null')?.key === cleaned.editKey;
   if (planned?.sync === 'keep-previous') sync = previousLinks(storage).includes(cleaned.editKey);
   const ok = sync && Object.values(missing).every(n => n === 0);
-  return {ok, missing, sync};
+  return {ok, missing, sync, why: ok ? null : sync ? 'storage' : 'sync'};
+}
+function storedSetting(storage, name) {
+  const prefs = parse(storage.getItem(KEYS.prefs) || 'null') || {};
+  if (name === 'filters') return customFilters(prefs.filters);
+  if (name === 'theme' || name === 'mode') return prefs[name] ?? null;
+  if (name === 'near') return parse(storage.getItem(KEYS.near) || 'null');
+  if (name === 'agencySort') return storage.getItem(KEYS.agencySort);
+  return undefined;
 }
 
-// Fingerprint of what a move carries (lists, edit key, settings), not of visit stamps, sync versions, pending ops
-// or when a search was last opened. The old site offers the move again when this changes.
+// The kept-aside items as a profile file (Import file reads its valid items back); null when there are none.
+export function heldFile(storage, now = new Date()) {
+  const held = heldOf(storage);
+  if (!held.watch.length && !held.follows.length && !held.searches.length) return null;
+  return JSON.stringify({format: PROFILE_FORMAT, session: '90R', exported_at: now.toISOString(), kept_aside: true,
+    lists: [{id: 'main', name: 'Kept aside', bills: held.watch}], follows: held.follows, searches: held.searches}, null, 2);
+}
+export const heldCount = storage => { const h = heldOf(storage); return h.watch.length + h.follows.length + h.searches.length; };
+
+// Fingerprint of what a move carries (lists, edit key, kept-aside items, settings other than remembered filters),
+// not of visit stamps, sync versions, pending ops, when a search was last opened, or filters (they change with
+// every explorer visit). The old site offers the move again when this changes.
 export function digest(cleaned) {
   const value = JSON.stringify([
     [...cleaned.watch].sort(), [...cleaned.follows].sort(),
     cleaned.searches.map(({id, name, filters}) => [id, name, filters]).sort((a, b) => (a[0] < b[0] ? -1 : 1)),
-    cleaned.editKey, Object.keys(cleaned.settings).sort().map(k => [k, cleaned.settings[k]]),
+    cleaned.editKey, Object.keys(cleaned.settings).filter(k => k !== 'filters').sort().map(k => [k, cleaned.settings[k]]),
+    cleaned.kept || null,
   ]);
   let h = 0x811c9dc5;
   for (let i = 0; i < value.length; i++) { h ^= value.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
@@ -166,7 +204,7 @@ export function digest(cleaned) {
 export function hasMovable(storage) {
   const c = receive(collect(storage));
   return Boolean(c.watch.length || c.follows.length || c.searches.length || c.editKey || Object.keys(c.settings).length
-    || c.refused.watch.length || c.refused.follows.length || c.refused.searches.length);
+    || NAMES.some(n => c.refused[n].length || c.kept[n].length));
 }
 
 // The old site shows the move banner until a verified move carried exactly what it holds now.

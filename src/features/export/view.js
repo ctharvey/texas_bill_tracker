@@ -7,7 +7,9 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 // watch: bill ids; follows: member codes; searches: cleaned saved searches; theme: saved theme id or null.
 // memberName(code) returns a display name or null; synced is true when this browser holds a sync edit link.
-export function exportMarkup({watch = [], follows = [], searches = [], theme = null, memberName = () => null, synced = false} = {}) {
+// kept: how many items were kept aside (over a sync limit, or not valid, during a move); previous: edit keys of
+// sync links a move brought here that this browser did not join.
+export function exportMarkup({watch = [], follows = [], searches = [], theme = null, memberName = () => null, synced = false, kept = 0, previous = []} = {}) {
   const bills = [...watch], people = [...follows], total = bills.length + people.length + searches.length;
   const section = (title, items, empty) => `<section class="export-part"><h3>${esc(title)}</h3>${items.length
     ? `<ul class="export-list">${items.map(x => `<li>${x}</li>`).join('')}</ul>` : `<p class="tools-note">${esc(empty)}</p>`}</section>`;
@@ -20,5 +22,7 @@ export function exportMarkup({watch = [], follows = [], searches = [], theme = n
     + section('Followed legislators', people.map(code => esc(memberName(code) || code)), 'No followed legislators.')
     + section('Saved searches', searches.map(s => esc(s.name || 'Saved search')), 'No saved searches.')
     + (theme ? `<p class="tools-note">Colour theme: ${esc(THEMES.find(t => t.id === theme)?.name || theme)}.</p>` : '')
-    + `<p class="tools-note">Not in the file: your Near you location, remembered filters${synced ? ' and this device’s sync link (open the edit link on another device to sync it there)' : ''}. Nothing on this page is sent anywhere.</p>`;
+    + `<p class="tools-note">Not in the file: your Near you location, remembered filters${synced ? ' and this device’s sync link (open the edit link on another device to sync it there)' : ''}. Nothing on this page is sent anywhere.</p>` + (kept ? `<section class="export-part"><h3>Kept aside</h3><p class="tools-note">${esc(plural(kept, 'saved item', 'saved items'))} did not fit a limit (500 bills, 200 legislators, 20 searches) or ${kept === 1 ? 'was' : 'were'} not valid, so ${kept === 1 ? 'it is' : 'they are'} kept here instead of in your lists.</p><div class="tools-row"><button class="outline-button" data-kept-download>Download kept-aside items</button></div></section>` : '')
+    + (previous.length ? `<section class="export-part"><h3>Other sync links</h3><p class="tools-note">A move brought ${previous.length === 1 ? 'a sync link' : 'sync links'} this browser did not join. Copy an edit link to open it on a device.</p><div class="tools-row">${previous.map((k, i) => `<button class="outline-button" data-previous-link="${esc(k)}">Copy edit link ${previous.length > 1 ? i + 1 : ''}</button>`).join('')}</div></section>` : '');
+
 }

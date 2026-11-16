@@ -4,7 +4,9 @@
 
 // Sender. `win` was opened inside the click (window.open). Resolves {ok, counts} on a verified result, or
 // {ok:false, reason} when the window closed, timed out, or reported a failure. `getPayload` runs after `ready`.
-export function sendMove({self, win, target, getPayload, timeoutMs = 30000, pollMs = 500, timers = globalThis}) {
+// Two timers: `timeoutMs` for the new page to say ready, then `applyMs` from the data being sent (the receiver may
+// still be loading, joining a sync link and sending). A closed window gets `graceMs` for a last message to arrive.
+export function sendMove({self, win, target, getPayload, timeoutMs = 60000, applyMs = 90000, pollMs = 500, graceMs = 300, timers = globalThis}) {
   return new Promise(resolve => {
     let nonce = null, sent = false, finished = false;
     const finish = result => {
@@ -21,14 +23,16 @@ export function sendMove({self, win, target, getPayload, timeoutMs = 30000, poll
         sent = true; nonce = e.data.nonce;
         let payload;
         try { payload = await getPayload(); } catch { finish({ok: false, reason: 'read'}); return; }
-        if (!finished) win.postMessage({type: 'move-data', nonce, payload}, target);
+        if (finished) return;
+        timers.clearTimeout(timer); timer = timers.setTimeout(() => finish({ok: false, reason: 'timeout'}), applyMs);
+        win.postMessage({type: 'move-data', nonce, payload}, target);
       } else if (type === 'move-done' && sent && e.data.nonce === nonce) {
         finish(e.data.ok === true ? {ok: true, counts: e.data.counts || {}} : {ok: false, reason: 'failed', counts: e.data.counts || {}});
       }
     }
     self.addEventListener('message', onMessage);
-    const poll = timers.setInterval(() => { if (win.closed) finish({ok: false, reason: 'closed'}); }, pollMs);
-    const timer = timers.setTimeout(() => finish({ok: false, reason: 'timeout'}), timeoutMs);
+    const poll = timers.setInterval(() => { if (win.closed) { timers.clearInterval(poll); timers.setTimeout(() => finish({ok: false, reason: 'closed'}), graceMs); } }, pollMs);
+    let timer = timers.setTimeout(() => finish({ok: false, reason: 'timeout'}), timeoutMs);
   });
 }
 

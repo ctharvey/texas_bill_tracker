@@ -81,6 +81,7 @@ const client = (srv, storage, watch = () => readWatch(storage, W)) => createSync
 
 test('a join whose first pull failed still merges this browser\'s bills after a restart', async () => {
   const srv = server(), phone = memoryStorage(), laptop = memoryStorage();
+  phone.setItem(W, JSON.stringify(['HB1']));
   const {editKey} = await client(srv, phone).create(['HB1']);
   laptop.setItem(W, JSON.stringify(['HB7']));
   const first = client(srv, laptop);
@@ -91,13 +92,9 @@ test('a join whose first pull failed still merges this browser\'s bills after a 
   srv.down = false;
   const restarted = client(srv, laptop);
   assert.equal(restarted.linked.joinPending, true);  // Survives the restart: the next pull is still a join.
-  // What the app's pullSync does while joinPending: adopt the link's list, then add this browser's own bills.
-  const local = readWatch(laptop, W), pulled = await restarted.pull();
-  laptop.setItem(W, JSON.stringify(pulled.watch));
-  for (const id of changeWatchList(laptop, W, 'add', local.filter(id => !pulled.watch.includes(id))).changed) restarted.record('add', id);
-  restarted.joinDone();
+  // The client adds this browser's bills to the link on the first pull that reaches it (sync.js).
+  await restarted.pull();
   assert.equal(restarted.linked.joinPending, false);
-  await restarted.flush();
   assert.deepEqual(srv.lists.get(editKey).data.watch.sort(), ['HB1', 'HB7', 'HB8']);
 });
 

@@ -3,8 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {sendMove, receiveMove, newNonce} from '../src/features/move/handoff.js';
 import {applyMove} from '../src/features/move/apply.js';
-import {collect, KEYS} from '../src/core/move.js';
-import {readWatch, readFollows, readSearches, changeWatchList, changeFollowList, changeSearchList} from '../src/core/lists.js';
+import {collect, keepHeld, KEYS} from '../src/core/move.js';
+import {readWatch, readFollows, readSearches, changeWatchList, changeFollowList, changeSearchList, adoptLists} from '../src/core/lists.js';
 import {createSyncClient} from '../src/sync.js';
 import {MAX_FOLLOWS} from '../src/prefs.js';
 // Debounced sync writes wait 60 s in these tests (they flush by hand); don't let those timers hold the run open.
@@ -134,16 +134,11 @@ function server() {
 }
 // The app's list and sync paths, without the DOM: what src/app.js wires into applyMove.
 function fakeApp(srv, storage) {
+  // The same adopt and keep-aside callbacks app.js gives the client; the join merge lives in the client.
   const sync = createSyncClient({fetchImpl: srv.fetch, storage, getWatch: () => readWatch(storage, KEYS.watch),
-    getFollows: () => readFollows(storage, KEYS.follows), getSearches: () => readSearches(storage, KEYS.searches), debounceMs: 60000});
-  async function pullSync(mergeLocal) {
-    const joining = mergeLocal || sync.linked?.joinPending;
-    const local = readWatch(storage, KEYS.watch), pulled = await sync.pull();
-    storage.setItem(KEYS.watch, JSON.stringify(pulled.watch));
-    if (pulled.follows) storage.setItem(KEYS.follows, JSON.stringify(pulled.follows));
-    if (pulled.searches) storage.setItem(KEYS.searches, JSON.stringify(pulled.searches));
-    if (joining) { for (const id of changeWatchList(storage, KEYS.watch, 'add', local.filter(id => !pulled.watch.includes(id))).changed) sync.record('add', id); sync.joinDone(); }
-  }
+    getFollows: () => readFollows(storage, KEYS.follows), getSearches: () => readSearches(storage, KEYS.searches), debounceMs: 60000,
+    adopt: d => adoptLists(storage, KEYS, d), onDisplaced: held => { if (!keepHeld(storage, held)) throw Error('full'); }});
+  const pullSync = () => sync.pull();
   const deps = {
     storage,
     current: () => ({watch: readWatch(storage, KEYS.watch), follows: readFollows(storage, KEYS.follows), searches: readSearches(storage, KEYS.searches),
@@ -152,7 +147,7 @@ function fakeApp(srv, storage) {
     addFollows: codes => { for (const c of changeFollowList(storage, KEYS.follows, 'follow', codes, MAX_FOLLOWS).changed) sync.record('follow', c); },
     addSearch: s => { changeSearchList(storage, KEYS.searches, 'save-search', s); sync.record('save-search', s.id, undefined, s); },
     setSettings: () => {},
-    joinLink: async key => { sync.connect(key); await pullSync(true); },
+    joinLink: async key => { sync.connect(key); await pullSync(); },
   };
   return {sync, pullSync, deps};
 }
@@ -166,7 +161,7 @@ test('a receiver already on its own link keeps every moved item through the next
   const result = await applyMove(collect(oldSite), app.deps);
   assert.equal(result.ok, true);
   assert.deepEqual([result.counts.watch, result.counts.follows, result.counts.searches, result.counts.sync], [2, 1, 1, 'none']);
-  await app.pullSync(false);  // The next start or focus.
+  await app.pullSync();  // The next start or focus.
   assert.deepEqual(readWatch(newSite, KEYS.watch).sort(), ['HB5', 'HB6', 'SB1']);
   assert.deepEqual(readFollows(newSite, KEYS.follows), ['A1001']);
   assert.deepEqual(readSearches(newSite, KEYS.searches).map(s => s.id), ['aaaa1111']);
@@ -178,11 +173,11 @@ test('moving the same link this receiver already joined adds the old browser\'s 
   const srv = server(), phone = memory(), newSite = memory();
   const {editKey} = await createSyncClient({fetchImpl: srv.fetch, storage: phone, getWatch: () => ['HB1']}).create(['HB1'], [], []);
   const app = fakeApp(srv, newSite);
-  app.sync.connect(editKey); await app.pullSync(true);
+  app.sync.connect(editKey); await app.pullSync();
   const oldSite = memory({[KEYS.watch]: ['HB1', 'HB2'], [KEYS.sync]: {key: editKey, mode: 'edit', version: 1, pending: []}});
   const result = await applyMove(collect(oldSite), app.deps);
   assert.deepEqual([result.ok, result.counts.sync, result.counts.watch], [true, 'same', 1]);
-  await app.pullSync(false);
+  await app.pullSync();
   assert.deepEqual(srv.lists.get(editKey).data.watch.sort(), ['HB1', 'HB2']);
 });
 
@@ -193,7 +188,7 @@ test('a fresh receiver joins the moved link and keeps its own bills', async () =
   const oldSite = memory({[KEYS.watch]: ['HB2'], [KEYS.sync]: {key: editKey, mode: 'edit'}});
   const result = await applyMove(collect(oldSite), app.deps);
   assert.deepEqual([result.ok, result.counts.sync], [true, 'join']);
-  await app.pullSync(false);
+  await app.pullSync();
   assert.deepEqual(srv.lists.get(editKey).data.watch.sort(), ['HB1', 'HB2', 'SB9']);
   assert.equal(app.sync.linked.joinPending, false);
 });
@@ -206,4 +201,28 @@ test('a receiver on a different link keeps it and shows the moved one as a previ
   const result = await applyMove(collect(memory({[KEYS.watch]: ['HB3'], [KEYS.sync]: {key: theirs, mode: 'edit'}})), app.deps);
   assert.deepEqual([result.ok, result.counts.sync, result.previousKey], [true, 'keep-previous', theirs]);
   assert.equal(app.sync.linked.editKey, mine);
+});
+
+test('a window closed just after its last message still delivers that message', async () => {
+  const {oldWin, newWin} = pair();
+  const sending = sendMove({self: oldWin, win: newWin, target: NEW, pollMs: 5, graceMs: 50, getPayload: async () => ({})});
+  await receiveMove({self: newWin, opener: oldWin, source: OLD, nonce: newNonce(), apply: async () => { newWin.closed = true; return {ok: true, counts: {watch: 1}}; }});
+  assert.deepEqual(await sending, {ok: true, counts: {watch: 1}});
+});
+
+test('the sender waits for the receiver\'s apply from the moment it sends, not from opening the window', async () => {
+  const {oldWin, newWin} = pair();
+  const sending = sendMove({self: oldWin, win: newWin, target: NEW, timeoutMs: 40, applyMs: 400, pollMs: 5, getPayload: async () => ({})});
+  const slow = () => new Promise(r => setTimeout(r, 120));  // Applying takes longer than the ready timeout.
+  await receiveMove({self: newWin, opener: oldWin, source: OLD, nonce: newNonce(), apply: async () => { await slow(); return {ok: true, counts: {}}; }});
+  assert.equal((await sending).ok, true);
+});
+
+test('a move whose join failed says so', async () => {
+  const srv = server(), newSite = memory(), app = fakeApp(srv, newSite);
+  // The old browser's link was deleted meanwhile: the join's pull gets a 404 and the link is forgotten.
+  const result = await applyMove(collect(memory({[KEYS.watch]: ['HB1'], [KEYS.sync]: {key: 'gone00000000000000000a', mode: 'edit'}})), {...app.deps,
+    joinLink: async key => { app.sync.connect(key); try { await app.pullSync(); } catch {} }});
+  assert.deepEqual([result.ok, result.counts.why], [false, 'sync']);
+  assert.deepEqual(readWatch(newSite, KEYS.watch), ['HB1']);  // The bills still arrived.
 });

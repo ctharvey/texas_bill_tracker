@@ -2,7 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {collect, receive, plan, verify, digest, hasMovable, moveNeeded, keepHeld, keepPreviousLink, previousLinks, moveTarget, moveSource,
-  KEYS, HELD_KEY, MOVED_KEY, PREVIOUS_SYNC_KEY} from '../src/core/move.js';
+  heldFile, heldCount, KEYS, HELD_KEY, MOVED_KEY, PREVIOUS_SYNC_KEY} from '../src/core/move.js';
+import {parseProfileFile} from '../src/prefs.js';
 import {MAX_LIST, MAX_FOLLOWS, MAX_SEARCHES} from '../src/prefs.js';
 
 function storage(initial = {}, {failOn = null} = {}) {
@@ -39,7 +40,7 @@ test('origins are fixed: production pair and the *.localhost test pair only', ()
 
 test('collect takes own keys only and leaves move bookkeeping behind', () => {
   const s = storage({[KEYS.watch]: ['HB1'], 'texas-bill-atlas-near-you-v1': {house: 5}, 'other-site': 'x', [MOVED_KEY]: {digest: 'x'}, [HELD_KEY]: {}});
-  assert.deepEqual(Object.keys(collect(s).items).sort(), [KEYS.watch, 'texas-bill-atlas-near-you-v1'].sort());
+  assert.deepEqual(Object.keys(collect(s).items).sort(), [KEYS.watch, 'texas-bill-atlas-near-you-v1', HELD_KEY].sort());  // Kept-aside items move too.
 });
 
 test('receive cleans like the app does and keeps refused items for the held key', () => {
@@ -160,4 +161,50 @@ test('a moved link this site did not join is kept beside earlier ones', () => {
   assert.deepEqual(previousLinks(s), ['aaaaaaaaaaaaaaaaaaaaaa', KEY]);
   assert.equal(verify(s, c, p).ok, true);
   assert.equal(s.getItem(PREVIOUS_SYNC_KEY).includes(OTHER), false);
+});
+
+test('verify counts this site\'s own items too: one lost by a join is a failure, not ok', () => {
+  const c = receive(collect(storage({[KEYS.watch]: ['HB1']})));
+  const before = here({watch: ['SB1', 'SB2']});
+  const p = plan(before, c);
+  const s = storage({[KEYS.watch]: ['HB1', 'SB1']});  // SB2 vanished (say, a sync union cut it).
+  const v = verify(s, c, p, before);
+  assert.deepEqual([v.ok, v.missing.before, v.why], [false, 1, 'storage']);
+  keepHeld(s, {watch: ['SB2'], follows: [], searches: []});
+  assert.equal(verify(s, c, p, before).ok, true);  // Kept aside counts as kept.
+});
+
+test('verify reads back each moved setting', () => {
+  const c = receive(collect(storage({[KEYS.prefs]: {theme: 'warbler', mode: 'dark'}, [KEYS.agencySort]: 'count'})));
+  const p = plan(here(), c);
+  const s = storage({[KEYS.prefs]: {theme: 'warbler'}, [KEYS.agencySort]: 'count'});
+  assert.deepEqual([verify(s, c, p).ok, verify(s, c, p).missing.settings], [false, 1]);
+  s.setItem(KEYS.prefs, JSON.stringify({theme: 'warbler', mode: 'dark'}));
+  assert.equal(verify(s, c, p).ok, true);
+});
+
+test('filters left at the defaults are no setting: they neither move, block a move, nor change the digest', () => {
+  const defaults = {query: '', topic: '', sort: 'newest', onlyWatch: false};
+  assert.equal(hasMovable(storage({[KEYS.prefs]: {filters: defaults}})), false);
+  const c = receive(collect(storage({[KEYS.watch]: ['HB1'], [KEYS.prefs]: {filters: {topic: 'Taxes'}}})));
+  assert.deepEqual(plan(here({settings: {filters: defaults}}), c).settings, {filters: {topic: 'Taxes'}});
+  const a = digest(receive(collect(storage({[KEYS.watch]: ['HB1'], [KEYS.prefs]: {filters: {topic: 'Water'}}}))));
+  assert.equal(digest(c), a);
+});
+
+test('items the old site kept aside move into this site\'s kept-aside items', () => {
+  const old = storage({[KEYS.watch]: ['HB1'], [HELD_KEY]: {watch: ['HB9'], follows: [], searches: [search('zzzz0001', 'Old')]}});
+  assert.equal(hasMovable(storage({[HELD_KEY]: {watch: ['HB9'], follows: [], searches: []}})), true);
+  const c = receive(collect(old)), s = storage(), p = plan(here(), c);
+  apply(s, p, here());
+  assert.equal(verify(s, c, p).ok, true);
+  assert.deepEqual(JSON.parse(s.getItem(HELD_KEY)).watch, ['HB9']);
+  assert.equal(heldCount(s), 2);
+});
+
+test('the kept-aside download is a profile file that Import file reads', () => {
+  const s = storage({[HELD_KEY]: {watch: ['HB9', 'junk'], follows: ['A1001'], searches: [search('zzzz0001', 'Old')]}});
+  const back = parseProfileFile(heldFile(s));
+  assert.deepEqual([back.bills, back.follows, back.searches.map(x => x.id)], [['HB9'], ['A1001'], ['zzzz0001']]);
+  assert.equal(heldFile(storage()), null);
 });

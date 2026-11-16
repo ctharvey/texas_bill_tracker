@@ -44,3 +44,12 @@ export function changeSearchList(storage, key, op, item) {
   write(storage, key, list);
   return list;
 }
+
+// The sync link's copy (plus this browser's pending ops) replaces the stored lists. A section the link did not
+// report (null) is left as it is. Throws when storage refuses a write, so the sync client does not store the new
+// version for lists it could not save.
+export function adoptLists(storage, keys, {watch, follows, searches}) {
+  storage.setItem(keys.watch, JSON.stringify([...watch]));
+  if (follows) storage.setItem(keys.follows, JSON.stringify(follows));
+  if (searches) storage.setItem(keys.searches, JSON.stringify(searches));
+}
