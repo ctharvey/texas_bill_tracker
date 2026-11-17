@@ -211,7 +211,9 @@ def test_back_restores_how_many_results_were_showing_and_the_scroll_position(dev
     page.locator("#bill-back").click()
     expect(page.locator("#dynamic-content .bill-card")).to_have_count(60)
     assert abs(page.evaluate("Math.round(scrollY)") - y) <= 1
-    # The browser's Back does the same.
+    # The browser's Back does the same. Measured again from here: the first restore may be a pixel off on phones
+    # (fractional scrolling), and comparing to the first `y` would count that pixel twice.
+    y = page.evaluate("Math.round(scrollY)")
     target.locator(".bill-open").click()
     expect(page.locator(PAGE)).to_be_visible()
     page.go_back()
