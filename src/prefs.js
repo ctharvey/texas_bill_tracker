@@ -96,6 +96,14 @@ export function parseLocation(pathname, hash) {
   return p.bill ? p : parseHash('#all');
 }
 
+// The bill link the Share button copies. `version` is the bill's drawn share card (live/og/rendered.json); preview
+// caches (Facebook, X, Discord) key on the address, so a redrawn card needs a new one. The app ignores `?c`.
+export function shareUrl(origin, id, version) {
+  if (!isBillId(id)) return null;
+  const v = typeof version === 'string' && /^[0-9a-f]{6,64}$/.test(version) ? version : null;
+  return `${origin}/bill/${id}${v ? `?c=${v}` : ''}`;
+}
+
 export function buildUrl(view, filters, options = {}) {
   if (view !== 'bill' || !isBillId(options.bill)) return `/${buildHash(view, filters, options)}`;
   const extra = buildHash('bill', {}, {...options, bill: null}).replace(/^#bill\??/, '');

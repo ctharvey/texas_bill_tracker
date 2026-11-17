@@ -155,3 +155,11 @@ def test_repo_art_files_are_named_for_bills_and_small():
     for path in bf.OG_ART_DIR.glob('*'):
         assert path.suffix == '.jpg' and bf.BILL_ID.fullmatch(path.stem), path.name
         assert path.stat().st_size <= 2_000_000, path.name  # build_og.mjs refuses larger files
+
+
+def test_share_page_og_url_carries_the_card_version_and_canonical_stays_plain():
+    page = bf.share_page({'id': 'HB486', 'caption': 'c'}, image_v='52c122380bfa')
+    assert meta(page, 'og:url') == 'https://billatlas.org/bill/HB486?c=52c122380bfa'
+    assert '<link rel="canonical" href="https://billatlas.org/bill/HB486">' in page
+    plain = bf.share_page({'id': 'HB486', 'caption': 'c'})
+    assert meta(plain, 'og:url') == 'https://billatlas.org/bill/HB486'

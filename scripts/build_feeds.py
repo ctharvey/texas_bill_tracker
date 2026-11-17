@@ -264,9 +264,12 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_
     # The bill's own card once the drawer has made it (the version in the URL is the one on disk), else the site card.
     image = f"{site}live/og/{bill_id}.png?v={image_v}" if image_v else f"{site}{SITE_CARD}"
     image_alt = clip(f"{bill_number(bill_id)}: {caption}", SHARE_DESCRIPTION_MAX) if image_v else "Texas Bill Atlas"
+    # Previews are cached under og:url, so a redrawn card gets a new one; the app's Share button copies the same
+    # /bill/<ID>?c=<version> address. The canonical link stays plain for search engines.
+    og_url = f"{url}?c={image_v}" if image_v else url
     a = lambda value: escape(value, {'"': "&quot;"})
     meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
-            ("property", "og:title", title), ("property", "og:description", description), ("property", "og:url", url),
+            ("property", "og:title", title), ("property", "og:description", description), ("property", "og:url", og_url),
             ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
             ("property", "og:image:alt", image_alt), ("name", "twitter:card", "summary_large_image"),
             ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
