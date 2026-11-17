@@ -1,0 +1,8 @@
+# Texas Bill Atlas: public records of the Texas Legislature. Search crawlers and AI agents are welcome.
+# AI agents get Markdown at https://agent.billatlas.org/ (also served when you ask for text/markdown).
+User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
+Allow: /
+Disallow: /api/
+
+Sitemap: https://billatlas.org/live/sitemap.xml

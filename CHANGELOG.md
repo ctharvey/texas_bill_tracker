@@ -6,6 +6,10 @@
   fold into one line. Who filed a bill shows only when both legislators have bills here; a place tag shows the
   city and is dropped when it only repeats the single county. The matching explanation sits behind "How matching
   works", the empty member card is one line, and the repeated section heading is gone.
+- Agent readiness basics for billatlas.org (Cloudflare's scan rated it "Not Ready"): `public/robots.txt` with
+  rules, a Content-Signal line (search, ai-input and ai-train all yes) and a Sitemap; the hourly data run writes
+  `live/sitemap.xml` (home plus every `/bill/<ID>`, dated by last action). A Cloudflare response-header rule adds
+  a `Link` header to the home page (sitemap, Markdown edition, llms.txt).
 
 ## 2026-11-16
 - Sync and the move keep every saved item (review fixes, not released): a sync write never cuts an item to fit a

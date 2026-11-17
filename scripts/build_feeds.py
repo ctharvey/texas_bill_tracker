@@ -218,6 +218,19 @@ def write_feeds(snapshot: dict, out_dir: Path, site: str = SITE, reviews: dict |
     return written, unchanged
 
 
+def sitemap(snapshot: dict, site: str = SITE) -> str:
+    """The home page and every bill's address (/bill/<ID>), each dated by its last action. robots.txt points here."""
+    rows = [f"  <url><loc>{escape(site)}</loc></url>"]
+    for bill in snapshot.get("bills") or []:
+        if not isinstance(bill, dict) or not BILL_ID.fullmatch(str(bill.get("id", ""))):
+            continue
+        day = str(bill.get("last_action_date") or "")[:10]
+        lastmod = f"<lastmod>{day}</lastmod>" if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) else ""
+        rows.append(f"  <url><loc>{escape(site)}bill/{bill['id']}</loc>{lastmod}</url>")
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            + "\n".join(rows) + "\n</urlset>\n")
+
+
 # ---------------------------------------------------------------------------------------------------------------
 # Share pages: live/share/<ID>.html, served at /bill/<ID>. Link-preview crawlers (Discord, Facebook, X, Slack) drop
 # the #fragment of a bill's app address, so each bill needs a real page carrying its own tags. People are sent on to
@@ -757,6 +770,8 @@ def main() -> int:
                         help="Luna extras (In brief lines); defaults to extras.json beside the tags")
     parser.add_argument("--share", type=Path, default=None,
                         help="Share page output (served at /bill/<ID>); defaults to share/ beside the snapshot")
+    parser.add_argument("--sitemap", type=Path, default=None,
+                        help="Sitemap output (served at /live/sitemap.xml); defaults to sitemap.xml beside the snapshot")
     parser.add_argument("--og", type=Path, default=None,
                         help="Share card folder (cards.json out, rendered.json in); defaults to og/ beside the snapshot")
     parser.add_argument("--text", type=Path, default=None, help="Bill text directory; defaults to text/ beside the snapshot")
@@ -779,6 +794,7 @@ def main() -> int:
     written, unchanged, removed = write_share_pages(snapshot, args.share or args.snapshot.parent / "share", args.site,
                                                     headlines, load_rendered(og_dir / "rendered.json"))
     print(f"Share pages: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
+    write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml", sitemap(snapshot, args.site))  # Quiet: golden stdout.
     roster = load_roster(args.members or args.snapshot.parent / "members.json")
     written, unchanged = write_member_feeds(snapshot, roster, args.out / "members", args.site, reviews)
     print(f"Member feeds: {written} written, {unchanged} unchanged", flush=True)

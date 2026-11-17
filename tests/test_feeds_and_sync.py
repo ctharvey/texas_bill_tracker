@@ -21,6 +21,16 @@ BILL = {'id': 'HB5', 'caption': 'Relating to <water> & "rights".', 'last_action_
         'actions': ['Filed', 'Referred to Natural Resources'], 'action_dates': ['2026-11-09', '2027-02-10']}
 
 
+class SitemapTests(unittest.TestCase):
+    def test_lists_home_and_each_bill_with_its_last_action_date(self):
+        text = build_feeds.sitemap({'bills': [BILL, {'id': 'SB7'}, {'id': '../etc'}, 'junk']})
+        ns = {'s': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
+        urls = ET.fromstring(text).findall('s:url', ns)
+        self.assertEqual([u.findtext('s:loc', namespaces=ns) for u in urls],
+                         ['https://billatlas.org/', 'https://billatlas.org/bill/HB5', 'https://billatlas.org/bill/SB7'])
+        self.assertEqual([u.findtext('s:lastmod', namespaces=ns) for u in urls], [None, '2027-02-10', None])
+
+
 class DatedActionTests(unittest.TestCase):
     def test_parser_keeps_a_date_per_action(self):
         xml = b'''<billhistory><caption>Relating to tax incentives for data centers.</caption>
