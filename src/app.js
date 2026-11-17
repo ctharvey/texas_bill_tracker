@@ -25,7 +25,7 @@ import {sendMove, receiveMove, newNonce} from './features/move/handoff.js';
 import {applyMove} from './features/move/apply.js';
 import {oldSiteBanner, newSiteResult, savedSummary} from './features/move/view.js';
 import {withMode} from './features/theme/model.js';
-import {artEntries, artBanner} from './features/art/view.js';
+import {artEntries, artBanner, HERO_MEDIA, heroFits} from './features/art/view.js';
 import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, followedBills, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
 import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, sortAgencyIds, groupAgencyIds, searchTerms, textMatches, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
 
@@ -531,16 +531,42 @@ let billArt=null,siteFlags=null,billArtLoad=null;
 function loadBillArt(){
   if(billArtLoad)return;
   const get=url=>fetch(url,{cache:'no-cache'}).then(r=>r.ok?r.json():r.text().then(()=>null)).catch(()=>null);
-  billArtLoad=Promise.all([get('./live/site-flags.json'),get('./live/og/art.json')])
+  billArtLoad=Promise.all([get('./live/site-flags.json'),get('./live/og/art.json'),document.fonts?.ready.catch(()=>null)])
     .then(([flags,art])=>{siteFlags=flags;billArt=artEntries(art);placeBillArt()});
 }
 function placeBillArt(){
   const intro=$('#bill-page .bill-intro');if(!intro)return;
-  intro.querySelector('.bill-art')?.remove();
+  const old=intro.querySelector(':scope > .bill-art');
+  if(old){unheroBillArt(old);old.remove()}
   const b=state.bills.find(b=>b.id===state.openBill);
   const html=b?artBanner(b.id,b.number,siteFlags,billArt):'';
-  if(html)intro.insertAdjacentHTML('afterbegin',html);
+  if(html){intro.insertAdjacentHTML('afterbegin',html);layoutBillArt()}
 }
+// Moves the pills and title back under the banner; the overlay holds the only copies.
+function unheroBillArt(fig){
+  const media=fig.querySelector('.bill-art-media');if(!media)return;
+  const over=media.querySelector('.bill-art-over');
+  if(over)fig.after(...over.children);
+  fig.prepend(...media.querySelectorAll(':scope > img'));media.remove();fig.classList.remove('hero');
+}
+// Re-run on width changes: wrapping, and so whether the title fits, depends on it. Moving a focused title drops focus.
+function layoutBillArt(){
+  const intro=$('#bill-page .bill-intro'),fig=intro?.querySelector(':scope > .bill-art');if(!fig)return;
+  const h1=intro.querySelector('#bill-page-title'),focused=h1&&document.activeElement===h1;
+  unheroBillArt(fig);
+  const pills=intro.querySelector(':scope > .drawer-pills'),img=fig.querySelector(':scope > img');
+  if(HERO_WIDE.matches&&pills&&h1&&h1.parentElement===intro&&img){
+    const media=document.createElement('div'),over=document.createElement('div');
+    media.className='bill-art-media';over.className='bill-art-over';
+    fig.classList.add('hero');fig.prepend(media);media.append(img,over);over.append(pills,h1);
+    const num=h1.querySelector('.bill-h1-number');
+    if(!heroFits(h1.getBoundingClientRect().height,num?num.getBoundingClientRect().height:0,parseFloat(getComputedStyle(h1).lineHeight)))unheroBillArt(fig);
+  }
+  if(focused&&document.activeElement!==h1)h1.focus({preventScroll:true});
+}
+const HERO_WIDE=typeof matchMedia==='function'?matchMedia(HERO_MEDIA):{matches:false,addEventListener(){}};
+let billArtFrame=0;
+if(typeof addEventListener==='function')addEventListener('resize',()=>{cancelAnimationFrame(billArtFrame);billArtFrame=requestAnimationFrame(layoutBillArt)});
 
 async function copyText(text,label){
   try{await navigator.clipboard.writeText(text);toast(`${label} copied`)}catch{toast(`Copy failed. ${label}: ${text}`)}

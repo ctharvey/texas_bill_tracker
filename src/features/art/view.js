@@ -26,3 +26,8 @@ export function artBanner(id, number, flags, art) {
   return `<figure class="bill-art"><img src="./live/og/art/${id}.jpg?v=${esc(entry.v)}" alt="${esc(alt)}" width="1216" height="640" decoding="async">`
     + '<figcaption>Illustration for this bill, made with a local image model.</figcaption></figure>';
 }
+
+// Wide screens put the pills, number and title on the banner's dark ground, but only when the title (less its number
+// line) fits in two lines; a title not laid out yet (height 0) or a longer one stays under the banner.
+export const HERO_MEDIA = '(min-width: 900px)';
+export const heroFits = (titleH, numberH, lineH) => titleH > 0 && lineH > 0 && titleH - numberH <= lineH * 2.2;

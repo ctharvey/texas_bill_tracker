@@ -431,7 +431,9 @@ node container as `texas-bill-atlas`, writing only `live/og`; about 40 ms and 60
 The same illustrations can head the bill page. The data run copies each `scripts/og_art/<ID>.jpg` to
 `live/og/art/<ID>.jpg` and lists them in `live/og/art.json` (version, plus alt text from `scripts/og_art_alt.json`).
 The page shows the banner only while the operator flag file `live/site-flags.json` has `"bill_art_banner": true`;
-a missing or unreadable file means off. The page reads it on each load, so flipping it needs no deploy:
+a missing or unreadable file means off. On screens 900px and wider, the pills, number and title sit on the
+banner's dark lower edge when the title fits in two lines; otherwise they stay below it. The page reads the flag on
+each load, so flipping it needs no deploy:
 
 ```sh
 echo '{"bill_art_banner": true}' | sudo -u texas-bill-atlas tee /var/www/html/texas-bill-atlas/live/site-flags.json
