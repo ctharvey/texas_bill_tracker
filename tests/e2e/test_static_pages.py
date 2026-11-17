@@ -22,12 +22,14 @@ def test_saving_page_headings(device):
     page = device.open("#saving")
     expect(page.locator("#page-title")).to_contain_text("Save your work.")
     heads = page.locator(".section-head h2").all_inner_texts()
-    assert heads == ["Share your watchlist", "What is stored, and where"]
+    assert heads == ["Saving and sharing your info", "What is stored, and where"]
+    expect(page.locator(".info-callout").first).to_contain_text("There are no logins on this site.")
+    assert page.locator(".saving-reference-title").all_inner_texts() == ["Share your watchlist", "Saving on your devices"]
     choices = page.locator(".sharing-options article")
     assert choices.locator("h3").all_text_contents() == ["Share a snapshot", "Share a live list"]
     expect(choices.first).to_contain_text("Copy share link")
     expect(choices.last).to_contain_text("Copy view-only link")
-    topic = page.locator(".saving-reference details").filter(has_text="Sync your own devices")
+    topic = page.locator(".saving-reference details").filter(has_text="Private sync links")
     topic.locator("summary").click()
     expect(topic.locator("p")).to_be_visible()
     expect(topic).to_contain_text("anyone with it can change the list")
@@ -44,6 +46,7 @@ def test_saving_page_privacy_promises(device):
     expect(card.locator(".data-field", has_text="Never collected")).to_contain_text(
         "Names, email addresses, accounts, tracking cookies or analytics")
     expect(card.locator(".data-field", has_text="On this device")).to_contain_text("your sync link if you made one")
+    expect(card.locator(".data-field", has_text="On the server")).to_contain_text("the database cannot be used to open a list")
     expect(card.locator(".data-field", has_text="Abuse limits")).to_contain_text("never writes addresses down")
 
 
