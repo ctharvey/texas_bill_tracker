@@ -568,3 +568,11 @@ a.bill-number{padding:6px 0}
 .info-callout.callout-warn strong{color:var(--gold-ink)}
 #move-banner .move-banner{margin:0 0 14px;flex-wrap:wrap}#move-banner .tools-row{margin-top:8px}.move-error{display:block;margin-top:6px}
 .empty-steps{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:14px 0 0!important}
+/* Bill page spacing: list headings (Authors, Coauthors, Locations) match the section labels instead of browser h4
+   defaults, and an intro line keeps a gap above the chips, card or button it introduces. */
+.drawer-section>h4{font:var(--head-weight) var(--fs-xs) var(--font-head);color:var(--ink);margin:16px 0 4px}
+.drawer-section>p+:is(.evidence-card,.bill-tags,.drawer-pills,.outline-button,.review-chips){margin-top:10px}
+.related-section .review-chips+p{margin-top:8px}
+.bill-group>.drawer-pills,.bill-group>.area-badges{margin-top:12px}
+.luna-block>p+p{margin-top:6px}.luna-block>ul{margin:4px 0 0;padding-left:18px;font-size:var(--fs-xs);line-height:1.6}
+.review-file-area{margin-top:10px}

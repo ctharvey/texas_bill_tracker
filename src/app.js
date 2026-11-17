@@ -1694,11 +1694,11 @@ function fillBillPage(){
 
   const reviewSection=document.createElement('section');reviewSection.className='drawer-section';
   const heading=document.createElement('h3');heading.textContent='Full text & highlighted evidence';
-  const area=document.createElement('div');
+  const area=document.createElement('div');area.className='review-file-area';
   const local=document.createElement('input');local.type='file';local.accept='.json,application/json';local.hidden=true;
   const load=document.createElement('button');load.className='outline-button';load.textContent='Open a review file';
   load.addEventListener('click',()=>local.click());
-  const draw=()=>{if(reviews.has(b.id))renderReview(area,reviews.get(b.id),true);else area.textContent='A reviewed full-text analysis is not yet available. Review files open only in this browser session.';};
+  const draw=()=>{if(reviews.has(b.id))renderReview(area,reviews.get(b.id),true);else{const note=document.createElement('p');note.textContent='A reviewed full-text analysis is not yet available. Review files open only in this browser session.';area.replaceChildren(note);}};
   local.addEventListener('change',async()=>{try{const file=local.files[0];if(!file)return;if(file.size>15*1024*1024)throw Error('Select a file smaller than 15 MB');const bundle=JSON.parse(await file.text());reviewModel(bundle);if(bundle.bill_id!==b.id)throw Error('This review belongs to '+bundle.bill_id);reviews.set(b.id,bundle);draw();toast('Private review opened');}catch(error){toast('Review could not be opened: '+error.message)}});
   reviewSection.append(heading,load,local,area);
   $('#bill-g-text').append(billTextSection(b),reviewSection);draw();
