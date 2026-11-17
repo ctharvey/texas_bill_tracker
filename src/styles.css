@@ -533,7 +533,7 @@ summary:focus-visible,.disclaimer-ok:focus-visible,.footer-link:focus-visible{ou
 .area-agencies{display:block;font-size:var(--fs-sm);line-height:1.6}
 .bill-card .bill-title{max-width:80ch}
 .method-grid{grid-template-columns:minmax(0,760px)}
-.agency-grid{align-items:start;margin-top:18px}.agency-card{min-height:0}.agency-card .hits{margin-top:2px}.agency-card[hidden]{display:none}
+.agency-grid{margin-top:18px}.agency-card{min-height:0}.agency-code:empty::before{content:"\00a0"}.agency-card .hits{margin-top:2px}.agency-card[hidden]{display:none}
 .agency-find{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:18px}
 .agency-find label{font-weight:700;font-size:var(--fs-sm)}
 .agency-find input{flex:0 1 320px;min-width:0;font:inherit;padding:9px 12px;border:1px solid color-mix(in srgb,var(--ink) 55%,var(--surface));border-radius:calc(8px*var(--rs));background:var(--surface);color:var(--ink)}
