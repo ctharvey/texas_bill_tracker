@@ -1,0 +1,193 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Texas Bill Atlas public data",
+    "version": "1.0.0",
+    "summary": "Read-only bill search, per-bill records, the full snapshot and RSS feeds for the 90th Texas Legislature.",
+    "description": "No key, login or JavaScript needed. Bill data is rebuilt hourly from the Texas Legislative Council bulk files and can lag the official record. Topic, agency and impact tags are automated and can be wrong. Unofficial; confirm on Texas Legislature Online. Search is rate limited per visitor (HTTP 429).",
+    "contact": {"url": "https://github.com/ctharvey/texas_bill_tracker"},
+    "license": {"name": "Public records; see the project repository", "url": "https://github.com/ctharvey/texas_bill_tracker"}
+  },
+  "externalDocs": {"description": "Agent edition guide", "url": "https://agent.billatlas.org/llms.txt"},
+  "servers": [{"url": "https://agent.billatlas.org", "description": "Agent edition: search and per-bill records"}],
+  "paths": {
+    "/search": {
+      "get": {
+        "operationId": "searchBills",
+        "summary": "Search bills (Markdown by default, JSON with format=json)",
+        "description": "Every word must match; words match their forms and common synonyms. OR separates alternatives. Bill numbers (HB 5, sb12) and member names work. With no q and no filter, returns the usage guide.",
+        "parameters": [
+          {"$ref": "#/components/parameters/q"}, {"$ref": "#/components/parameters/chamber"},
+          {"$ref": "#/components/parameters/topic"}, {"$ref": "#/components/parameters/agency"},
+          {"$ref": "#/components/parameters/location"}, {"$ref": "#/components/parameters/party"},
+          {"$ref": "#/components/parameters/reviewed"}, {"$ref": "#/components/parameters/filed_from"},
+          {"$ref": "#/components/parameters/filed_to"}, {"$ref": "#/components/parameters/limit"},
+          {"$ref": "#/components/parameters/offset"},
+          {"name": "format", "in": "query", "schema": {"type": "string", "enum": ["md", "json"], "default": "md"}}
+        ],
+        "responses": {
+          "200": {"description": "Matching bills", "content": {
+            "text/markdown": {"schema": {"type": "string"}},
+            "application/json": {"schema": {"$ref": "#/components/schemas/SearchResult"}}}},
+          "400": {"$ref": "#/components/responses/BadQuery"},
+          "429": {"$ref": "#/components/responses/RateLimited"},
+          "503": {"$ref": "#/components/responses/NotReady"}
+        }
+      }
+    },
+    "/search.json": {
+      "get": {
+        "operationId": "searchBillsJson",
+        "summary": "Search bills, always JSON",
+        "parameters": [
+          {"$ref": "#/components/parameters/q"}, {"$ref": "#/components/parameters/chamber"},
+          {"$ref": "#/components/parameters/topic"}, {"$ref": "#/components/parameters/agency"},
+          {"$ref": "#/components/parameters/location"}, {"$ref": "#/components/parameters/party"},
+          {"$ref": "#/components/parameters/reviewed"}, {"$ref": "#/components/parameters/filed_from"},
+          {"$ref": "#/components/parameters/filed_to"}, {"$ref": "#/components/parameters/limit"},
+          {"$ref": "#/components/parameters/offset"}
+        ],
+        "responses": {
+          "200": {"description": "Matching bills", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SearchResult"}}}},
+          "400": {"$ref": "#/components/responses/BadQuery"},
+          "429": {"$ref": "#/components/responses/RateLimited"},
+          "503": {"$ref": "#/components/responses/NotReady"}
+        }
+      }
+    },
+    "/bills/{id}.json": {
+      "get": {
+        "operationId": "getBill",
+        "summary": "One bill as JSON",
+        "parameters": [{"$ref": "#/components/parameters/billId"}],
+        "responses": {
+          "200": {"description": "The bill's record", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Bill"}}}},
+          "404": {"description": "No bill with this ID in the data (Markdown page explaining which IDs exist)"}
+        }
+      }
+    },
+    "/bills/{id}.md": {
+      "get": {
+        "operationId": "getBillMarkdown",
+        "summary": "One bill as Markdown",
+        "parameters": [{"$ref": "#/components/parameters/billId"}],
+        "responses": {
+          "200": {"description": "The bill's page", "content": {"text/markdown": {"schema": {"type": "string"}}}},
+          "404": {"description": "No bill with this ID in the data"}
+        }
+      }
+    },
+    "/data/bills.json": {
+      "get": {
+        "operationId": "getAllBills",
+        "summary": "Every bill record in one JSON file (large)",
+        "responses": {"200": {"description": "All bill records", "content": {"application/json": {"schema": {"type": "object"}}}}}
+      }
+    },
+    "/live/bills.json": {
+      "servers": [{"url": "https://billatlas.org"}],
+      "get": {
+        "operationId": "getSnapshot",
+        "summary": "The tracker's hourly snapshot of every bill",
+        "responses": {"200": {"description": "Snapshot", "content": {"application/json": {"schema": {"type": "object"}}}}}
+      }
+    },
+    "/live/feeds/{id}.xml": {
+      "servers": [{"url": "https://billatlas.org"}],
+      "get": {
+        "operationId": "getBillFeed",
+        "summary": "RSS feed of one bill's recorded actions",
+        "parameters": [{"$ref": "#/components/parameters/billId"}],
+        "responses": {
+          "200": {"description": "RSS 2.0", "content": {"application/rss+xml": {"schema": {"type": "string"}}}},
+          "404": {"description": "No bill with this ID in the data", "content": {"text/plain": {"schema": {"type": "string"}}}}
+        }
+      }
+    },
+    "/live/feeds/members/{member}.xml": {
+      "servers": [{"url": "https://billatlas.org"}],
+      "get": {
+        "operationId": "getMemberFeed",
+        "summary": "RSS feed of the bills a legislator filed or joined",
+        "parameters": [{"name": "member", "in": "path", "required": true, "description": "Legislative Council member code, as in /data/members.json",
+                        "schema": {"type": "string", "pattern": "^A[0-9]{3,5}$"}}],
+        "responses": {"200": {"description": "RSS 2.0", "content": {"application/rss+xml": {"schema": {"type": "string"}}}},
+                      "404": {"description": "No member with this code"}}
+      }
+    },
+    "/api/sync/health": {
+      "servers": [{"url": "https://billatlas.org"}],
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Health of the service that answers search",
+        "responses": {"200": {"description": "Up", "content": {"application/json": {"schema": {"type": "object", "properties": {"ok": {"type": "boolean"}}}}}}}
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "q": {"name": "q", "in": "query", "description": "Words, a quoted phrase, a bill number or a member name; OR separates up to 8 alternatives", "schema": {"type": "string", "maxLength": 200}},
+      "chamber": {"name": "chamber", "in": "query", "schema": {"type": "string", "enum": ["House", "Senate"]}},
+      "topic": {"name": "topic", "in": "query", "description": "Topic name, or part of one", "schema": {"type": "string", "maxLength": 100}},
+      "agency": {"name": "agency", "in": "query", "description": "Agency id, or words of its name", "schema": {"type": "string", "maxLength": 100}},
+      "location": {"name": "location", "in": "query", "description": "Part of a place name, e.g. Harris", "schema": {"type": "string", "maxLength": 100}},
+      "party": {"name": "party", "in": "query", "schema": {"type": "string", "enum": ["democratic", "republican", "bipartisan"]}},
+      "reviewed": {"name": "reviewed", "in": "query", "description": "Only bills with (yes) or without (no) a full-text review", "schema": {"type": "string", "enum": ["yes", "no"]}},
+      "filed_from": {"name": "filed_from", "in": "query", "schema": {"type": "string", "format": "date"}},
+      "filed_to": {"name": "filed_to", "in": "query", "schema": {"type": "string", "format": "date"}},
+      "limit": {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+      "offset": {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}},
+      "billId": {"name": "id", "in": "path", "required": true, "description": "Bill ID without spaces, e.g. HB5, SB12, HJR5",
+                 "schema": {"type": "string", "pattern": "^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9][0-9]{0,4}$"}}
+    },
+    "responses": {
+      "BadQuery": {"description": "Invalid parameter (message says which)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+      "RateLimited": {"description": "Too many requests from this visitor; retry later", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+      "NotReady": {"description": "Search data is being rebuilt; retry shortly", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
+    },
+    "schemas": {
+      "Error": {"type": "object", "properties": {"error": {"type": "string"}}},
+      "Bill": {
+        "type": "object",
+        "required": ["id", "number", "title"],
+        "properties": {
+          "id": {"type": "string"}, "number": {"type": "string"}, "session": {"type": "string"},
+          "chamber": {"type": "string"}, "title": {"type": "string"}, "caption": {"type": "string"},
+          "status": {"type": "string"}, "filed_at": {"type": "string", "format": "date"},
+          "last_action": {"type": "object"}, "actions": {"type": "array", "items": {"type": "string"}},
+          "action_dates": {"type": "array", "items": {"type": ["string", "null"]}}
+        },
+        "additionalProperties": true
+      },
+      "SearchResult": {
+        "type": "object",
+        "properties": {
+          "format": {"const": "texas-bill-atlas-search-v1"},
+          "query": {"type": "string"}, "mode": {"type": "string"}, "filters": {"type": "object"},
+          "total": {"type": "integer"}, "offset": {"type": "integer"}, "limit": {"type": "integer"},
+          "data_as_of": {"type": ["string", "null"]}, "tags_as_of": {"type": ["string", "null"]},
+          "next": {"type": ["string", "null"], "description": "URL of the next page, if any"},
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {"type": "string"}, "number": {"type": "string"}, "title": {"type": "string"},
+                "status": {"type": ["string", "null"]}, "filed_at": {"type": ["string", "null"]},
+                "chamber": {"type": ["string", "null"]}, "authors": {"type": "array", "items": {"type": "string"}},
+                "topics": {"type": "array", "items": {"type": "string"}},
+                "agencies": {"type": "array", "items": {"type": "string"}},
+                "locations": {"type": "array", "items": {"type": "string"}},
+                "full_text_reviewed": {"type": "boolean"},
+                "matched_in": {"type": "array", "items": {"type": "string"}},
+                "markdown": {"type": "string", "format": "uri"}, "json": {"type": "string", "format": "uri"}
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

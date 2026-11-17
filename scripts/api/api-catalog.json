@@ -1,0 +1,23 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://agent.billatlas.org/search",
+      "service-desc": [{"href": "https://billatlas.org/openapi.json", "type": "application/openapi+json"}],
+      "service-doc": [
+        {"href": "https://agent.billatlas.org/search", "type": "text/markdown", "title": "Search usage"},
+        {"href": "https://agent.billatlas.org/llms.txt", "type": "text/plain", "title": "Agent edition guide"}
+      ],
+      "status": [{"href": "https://billatlas.org/api/sync/health", "type": "application/json"}]
+    },
+    {
+      "anchor": "https://agent.billatlas.org/bills/",
+      "service-desc": [{"href": "https://billatlas.org/openapi.json", "type": "application/openapi+json"}],
+      "service-doc": [{"href": "https://agent.billatlas.org/llms.txt", "type": "text/plain", "title": "Agent edition guide"}]
+    },
+    {
+      "anchor": "https://billatlas.org/live/",
+      "service-desc": [{"href": "https://billatlas.org/openapi.json", "type": "application/openapi+json"}],
+      "service-doc": [{"href": "https://agent.billatlas.org/llms.txt", "type": "text/plain", "title": "Agent edition guide"}]
+    }
+  ]
+}

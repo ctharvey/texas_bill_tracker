@@ -231,6 +231,18 @@ def sitemap(snapshot: dict, site: str = SITE) -> str:
             + "\n".join(rows) + "\n</urlset>\n")
 
 
+API_DOCS = ("api-catalog.json", "openapi.json")
+
+
+def write_api_docs(live_dir: Path, source: Path = Path(__file__).resolve().parent / "api") -> None:
+    """Copy the RFC 9727 API catalog and the OpenAPI description to live/. A Cloudflare rule serves them at
+    /.well-known/api-catalog (as application/linkset+json) and /openapi.json. Each must parse as JSON."""
+    for name in API_DOCS:
+        text = (source / name).read_text("utf-8")
+        json.loads(text)
+        write_if_changed(live_dir / name, text)
+
+
 # ---------------------------------------------------------------------------------------------------------------
 # Share pages: live/share/<ID>.html, served at /bill/<ID>. Link-preview crawlers (Discord, Facebook, X, Slack) drop
 # the #fragment of a bill's app address, so each bill needs a real page carrying its own tags. People are sent on to
@@ -795,6 +807,7 @@ def main() -> int:
                                                     headlines, load_rendered(og_dir / "rendered.json"))
     print(f"Share pages: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
     write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml", sitemap(snapshot, args.site))  # Quiet: golden stdout.
+    write_api_docs(args.snapshot.parent)
     roster = load_roster(args.members or args.snapshot.parent / "members.json")
     written, unchanged = write_member_feeds(snapshot, roster, args.out / "members", args.site, reviews)
     print(f"Member feeds: {written} written, {unchanged} unchanged", flush=True)

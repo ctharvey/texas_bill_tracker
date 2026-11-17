@@ -31,6 +31,25 @@ class SitemapTests(unittest.TestCase):
         self.assertEqual([u.findtext('s:lastmod', namespaces=ns) for u in urls], [None, '2027-02-10', None])
 
 
+class ApiCatalogTests(unittest.TestCase):
+    def test_catalog_entries_link_a_description_and_docs(self):
+        catalog = json.loads((ROOT / 'scripts' / 'api' / 'api-catalog.json').read_text('utf-8'))
+        self.assertTrue(catalog['linkset'])
+        for entry in catalog['linkset']:
+            self.assertTrue(entry['anchor'].startswith('https://'))
+            self.assertEqual(entry['service-desc'][0]['href'], 'https://billatlas.org/openapi.json')
+            self.assertTrue(entry['service-doc'])
+
+    def test_openapi_covers_the_search_filters_and_copies_to_live(self):
+        spec = json.loads((ROOT / 'scripts' / 'api' / 'openapi.json').read_text('utf-8'))
+        self.assertEqual(spec['openapi'], '3.1.0')
+        params = {p['$ref'].rsplit('/', 1)[-1] for p in spec['paths']['/search.json']['get']['parameters']}
+        self.assertEqual(params, {'q', 'limit', 'offset', *svc.search_bills.FILTERS})
+        with tempfile.TemporaryDirectory() as tmp:
+            build_feeds.write_api_docs(Path(tmp))
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ['api-catalog.json', 'openapi.json'])
+
+
 class DatedActionTests(unittest.TestCase):
     def test_parser_keeps_a_date_per_action(self):
         xml = b'''<billhistory><caption>Relating to tax incentives for data centers.</caption>

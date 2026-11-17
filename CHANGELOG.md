@@ -10,6 +10,9 @@
   rules, a Content-Signal line (search, ai-input and ai-train all yes) and a Sitemap; the hourly data run writes
   `live/sitemap.xml` (home plus every `/bill/<ID>`, dated by last action). A Cloudflare response-header rule adds
   a `Link` header to the home page (sitemap, Markdown edition, llms.txt).
+- API catalog (RFC 9727) at `/.well-known/api-catalog` and an OpenAPI 3.1 description at `/openapi.json`, covering
+  search, per-bill JSON and Markdown, the full data files, RSS feeds and the search service's health. Sources are
+  `scripts/api/`; the data run copies them to `live/` and Cloudflare rules serve them at those addresses.
 
 ## 2026-11-16
 - Sync and the move keep every saved item (review fixes, not released): a sync write never cuts an item to fit a
