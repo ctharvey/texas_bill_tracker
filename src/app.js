@@ -518,7 +518,8 @@ const movePreviousKey=()=>moveStatus?.previousKey||null;
 let cardVersions=null,cardVersionsLoad=null;
 function loadCardVersions(){
   if(cardVersionsLoad)return;
-  cardVersionsLoad=fetch('./live/og/rendered.json',{cache:'no-cache'}).then(r=>r.ok?r.json():null)
+  // A 404 body is read too: Chrome counts an unread body as a request still open, so the page never goes idle.
+  cardVersionsLoad=fetch('./live/og/rendered.json',{cache:'no-cache'}).then(r=>r.ok?r.json():r.text().then(()=>null))
     .then(d=>{cardVersions=d?.format==='texas-bill-og-rendered-v1'&&d.bills&&typeof d.bills==='object'?d.bills:{}})
     .catch(()=>{cardVersionsLoad=null});
 }
