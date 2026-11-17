@@ -52,7 +52,7 @@ DAILY_CREATES = 1000
 RETENTION_SECONDS = 365 * 86400
 FEED_ITEMS = 300
 TEXT_FILTERS = {"view", "query", "topic", "area", "agency", "chamber", "party", "stage", "action", "outlook", "sort"}
-BOOL_FILTERS = {"onlyWatch"}
+BOOL_FILTERS = {"onlyWatch", "companion"}
 SORT_NAME = re.compile(r"[a-z]{1,20}")
 LIMITS = {"create": (10, 3600), "write": (300, 3600), "read": (1200, 3600), "search": (1200, 3600)}
 
