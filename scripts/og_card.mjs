@@ -5,7 +5,7 @@
 export const WIDTH = 1200, HEIGHT = 630;
 export const BILL_ID = /^(?:HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9][0-9]{0,4}$/;
 const NAVY = '#14243a', GOLD = '#ba822d', TEAL = '#5fc7c2', WHITE = '#ffffff', MUTED = '#9fb0c4', LINE = '#2a3d57';
-// index.html's brand-mark star (viewBox 0 0 24 24), as in design/social/make_images.py.
+// The old brand-mark star (viewBox 0 0 24 24), as in design/social/make_images.py; the site's mark is now the warbler.
 const STAR = '12,1.6 14.9,8.7 22.5,9.2 16.7,14.1 18.6,21.5 12,17.4 5.4,21.5 7.3,14.1 1.5,9.2 9.1,8.7';
 
 const h = (type, style, ...children) => ({type, props: {style, children: children.flat().filter(c => c !== null && c !== '')}});

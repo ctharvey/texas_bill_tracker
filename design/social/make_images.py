@@ -1,7 +1,8 @@
-"""Draw public/social-card.png (1200x630), public/icon.png, public/apple-touch-icon.png and public/favicon.ico.
+"""Draw public/social-card.png (1200x630).
 
-Run by hand when the brand changes: python design/social/make_images.py --fonts C:/Windows/Fonts
-Colours are the default palette in src/styles.css (--nav-bg, --mark, --accent); the star is the brand-mark path.
+Run by hand when the card changes: python design/social/make_images.py --fonts C:/Windows/Fonts
+Colours are the default palette in src/styles.css (--nav-bg, --mark, --accent). The card still shows the old star mark;
+the icons (icon.png, apple-touch-icon.png, favicon.ico) come from the warbler logo: node design/social/make_icons.mjs.
 """
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
 NAVY, GOLD, TEAL, WHITE, MUTED = "#14243a", "#ba822d", "#5fc7c2", "#ffffff", "#9fb0c4"
-# index.html's brand-mark path (viewBox 0 0 24 24).
+# The old brand-mark star (viewBox 0 0 24 24).
 STAR = [(12, 1.6), (14.9, 8.7), (22.5, 9.2), (16.7, 14.1), (18.6, 21.5), (12, 17.4), (5.4, 21.5), (7.3, 14.1), (1.5, 9.2), (9.1, 8.7)]
 SCALE = 4  # Draw large and shrink, for smooth edges.
 
@@ -57,11 +58,6 @@ def main() -> None:
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     card(args.fonts).save(args.out / "social-card.png", optimize=True)
-    tile(192, .18).save(args.out / "icon.png", optimize=True)
-    # iOS rounds the corners itself and shows transparency as black, so the touch icon is full-bleed.
-    full = tile(180, 0).convert("RGB")
-    full.save(args.out / "apple-touch-icon.png", optimize=True)
-    tile(256, .18).save(args.out / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48)])
 
 
 if __name__ == "__main__":
