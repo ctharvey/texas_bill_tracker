@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {clip, captionStyle, chipLabels, planRun, cardTree, WIDTH, HEIGHT} from '../scripts/og_card.mjs';
+import {clip, captionStyle, chipLabels, planRun, cardTree, posterCaption, WIDTH, HEIGHT} from '../scripts/og_card.mjs';
 
 const words = n => Array.from({length: n}, (_, i) => `word${i}`).join(' ');
 
@@ -121,4 +121,35 @@ test('cardTree carries the card fields at 1200x630', () => {
   for (const value of [model.number, model.status, model.chamber, model.byline, model.caption, 'Highways']) {
     assert.ok(json.includes(JSON.stringify(value).slice(1, -1)), `tree should contain ${value}`);
   }
+});
+
+const POSTER = {number: 'HB 486', chamber: 'House', status: 'Filed', byline: 'Filed Nov 9, 2026 · By Wilson',
+  caption: 'Relating to wildlife.', subjects: ['Animals'], session: '90th Legislature'};
+const ART = 'data:image/jpeg;base64,AAAA';
+const nodes = tree => [tree, ...[tree?.props?.children ?? []].flat().flatMap(c => typeof c === 'object' ? nodes(c) : [])];
+
+test('posterCaption shrinks longer captions and clips past 150 characters', () => {
+  assert.equal(posterCaption('Short.').size, 40);
+  assert.equal(posterCaption('x '.repeat(50)).size, 35);
+  const long = posterCaption('word '.repeat(80));
+  assert.ok(long.text.length <= 150 && long.text.endsWith('…'));
+  assert.equal(long.size, 31);
+});
+
+test('cardTree with art draws the poster over the image', () => {
+  const tree = cardTree(POSTER, ART);
+  const imgs = nodes(tree).filter(n => n.type === 'img');
+  assert.equal(imgs.length, 1);
+  assert.equal(imgs[0].props.src, ART);
+  const json = JSON.stringify(tree);
+  for (const value of ['HB 486', 'Filed', 'Relating to wildlife.', 'billatlas.org', 'Filed Nov 9, 2026']) {
+    assert.ok(json.includes(value), `poster should contain ${value}`);
+  }
+  assert.equal(tree.props.style.width, WIDTH);
+  assert.equal(tree.props.style.height, HEIGHT);
+});
+
+test('cardTree without art is the plain card, with no image', () => {
+  assert.deepEqual(cardTree(POSTER, null), cardTree(POSTER));
+  assert.equal(nodes(cardTree(POSTER)).filter(n => n.type === 'img').length, 0);
 });

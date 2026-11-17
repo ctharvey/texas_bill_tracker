@@ -130,3 +130,28 @@ def test_write_share_pages_uses_rendered_versions(tmp_path):
     sb9 = (tmp_path / 'SB9.html').read_text('utf-8')
     assert meta(hb5, 'og:image') == 'https://billatlas.org/live/og/HB5.png?v=abc123'
     assert meta(sb9, 'og:image') == 'https://billatlas.org/social-card.png'
+
+def test_art_version_hashes_the_file_and_ignores_missing_or_bad_ids(tmp_path):
+    (tmp_path / 'HB486.jpg').write_bytes(b'one')
+    v = bf.art_version('HB486', tmp_path)
+    assert re.fullmatch(r'[0-9a-f]{12}', v)
+    (tmp_path / 'HB486.jpg').write_bytes(b'two')
+    assert bf.art_version('HB486', tmp_path) != v
+    assert bf.art_version('HB487', tmp_path) is None
+    assert bf.art_version('../HB486', tmp_path) is None
+
+
+def test_card_model_adds_art_only_when_the_bill_has_a_file(tmp_path):
+    plain = bf.card_model(BILL, tmp_path)
+    assert 'art' not in plain
+    assert bf.card_version(plain) == bf.card_version(bf.card_model(BILL, tmp_path / 'missing'))
+    (tmp_path / 'HB5.jpg').write_bytes(b'art')
+    with_art = bf.card_model(BILL, tmp_path)
+    assert with_art['art'] == bf.art_version('HB5', tmp_path)
+    assert bf.card_version(with_art) != bf.card_version(plain)
+
+
+def test_repo_art_files_are_named_for_bills_and_small():
+    for path in bf.OG_ART_DIR.glob('*'):
+        assert path.suffix == '.jpg' and bf.BILL_ID.fullmatch(path.stem), path.name
+        assert path.stat().st_size <= 2_000_000, path.name  # build_og.mjs refuses larger files

@@ -412,8 +412,11 @@ as `texas-bill-atlas`, writing only `live/agent`. The gateway serves that folder
 ### Share card images
 
 Each bill's share page (`live/share/<ID>.html`, served to link-preview crawlers at `/bill/<ID>`) shows a 1200x630
-card: number, chamber, status, official caption, up to three official subjects, filing date and lead author. Nothing
-AI-written is drawn. `build_feeds.py` (data run, :17) writes the drawn strings and a version hash per bill to
+card: number, chamber, status, official caption, up to three official subjects, filing date and lead author. No
+AI-written text is drawn. A bill can also have an illustration, `scripts/og_art/<ID>.jpg` (16:9, light sky over a dark
+road along the bottom, under 2 MB; hand-picked output of a local image model), which turns its card into a poster:
+the art fills the card and the caption sits on the road. The file's hash is part of that bill's card version, so
+adding or replacing art redraws only that card. `build_feeds.py` (data run, :17) writes the drawn strings and a version hash per bill to
 `live/og/cards.json`; `scripts/build_og.mjs` (layout in `scripts/og_card.mjs`) draws `live/og/<ID>.png` with satori and
 resvg only where the version changed, removes images of bills that left the data, and lists what it drew in
 `live/og/rendered.json`. A share page links `live/og/<ID>.png?v=<version>` only once that file lists the bill, and the

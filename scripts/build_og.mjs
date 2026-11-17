@@ -5,9 +5,27 @@
 import {readFileSync, writeFileSync, renameSync, unlinkSync, mkdirSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
 import {BILL_ID, WIDTH, cardTree, planRun} from './og_card.mjs';
 
 const RENDERED_FORMAT = 'texas-bill-og-rendered-v1', CARDS_FORMAT = 'texas-bill-og-cards-v1';
+// Illustrations ship with the code (both units archive scripts/); build_feeds.py puts their hash in a card's `art`.
+const ART_DIR = join(dirname(fileURLToPath(import.meta.url)), 'og_art'), ART_MAX_BYTES = 2_000_000;
+
+// The bill's illustration as a data: URL, or null (navy card) when the card has none or the file is not in this
+// commit; a missing file heals on the next data run, whose `art` then disappears and changes `v`.
+function artFor(id, card) {
+  if (!card.art || !BILL_ID.test(id)) return null;
+  try {
+    const data = readFileSync(join(ART_DIR, `${id}.jpg`));
+    if (data.length > ART_MAX_BYTES) throw Error(`${id}.jpg is over ${ART_MAX_BYTES} bytes`);
+    return 'data:image/jpeg;base64,' + data.toString('base64');
+  } catch (e) {
+    if (e.code !== 'ENOENT') throw e;
+    console.error(`${id}: card names art but ${id}.jpg is missing; drawing the plain card`);
+    return null;
+  }
+}
 
 function args(argv) {
   const out = {max: 2000, only: null};
@@ -68,7 +86,7 @@ async function main() {
     const fontList = fonts(), started = Date.now();
     for (const id of plan.draw) {
       const card = cards[id];
-      const svg = await satori(cardTree(card), {width: WIDTH, height: 630, fonts: fontList});
+      const svg = await satori(cardTree(card, artFor(id, card)), {width: WIDTH, height: 630, fonts: fontList});
       // Satori draws glyphs as paths, so resvg needs no fonts.
       const resvg = new Resvg(svg, {fitTo: {mode: 'width', value: WIDTH}});
       const image = resvg.render();

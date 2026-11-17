@@ -298,6 +298,8 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_
 OG_CARDS_FORMAT, OG_RENDERED_FORMAT = "texas-bill-og-cards-v1", "texas-bill-og-rendered-v1"
 OG_REVISION = "c1"  # Bump when the drawn wording changes for every bill (scripts/og_card.mjs layout changes too).
 OG_SESSION = "90th Legislature \u00b7 Regular Session"
+# Optional per-bill illustrations, scripts/og_art/<ID>.jpg; a card with one is drawn as a poster (og_card.mjs).
+OG_ART_DIR = Path(__file__).resolve().parent / "og_art"
 
 
 def _long_date(value: object) -> str:
@@ -329,7 +331,18 @@ def subject_labels(subjects: list) -> list[str]:
     return labels
 
 
-def card_model(bill: dict) -> dict:
+def art_version(bill_id: str, art_dir: Path | None = None) -> str | None:
+    """Hash of the bill's illustration file, so replacing the art redraws the card; None without one."""
+    if not BILL_ID.fullmatch(str(bill_id)):
+        return None
+    try:
+        data = ((art_dir or OG_ART_DIR) / f"{bill_id}.jpg").read_bytes()
+    except OSError:
+        return None
+    return hashlib.sha256(data).hexdigest()[:12]
+
+
+def card_model(bill: dict, art_dir: Path | None = None) -> dict:
     bill_id = bill["id"]
     authors = [a for a in bill.get("authors") or [] if isinstance(a, str) and a.strip()]
     # `author` joins every author with " | "; the first is the lead author.
@@ -340,11 +353,15 @@ def card_model(bill: dict) -> dict:
         f"By {author}" + (f" and {others} other{'s' if others > 1 else ''}" if others else "") if author else "",
     ) if part)
     subjects = subject_labels(bill.get("subjects") or [])[:3]
-    return {
+    model = {
         "number": bill_number(bill_id), "chamber": str(bill.get("chamber") or ""),
         "caption": " ".join(str(bill.get("caption") or bill.get("title") or "No caption available").split()),
         "status": str(bill.get("status") or ""), "byline": byline, "subjects": subjects, "session": OG_SESSION,
     }
+    art = art_version(bill_id, art_dir)
+    if art:  # Only cards with art get the key, so adding art to one bill leaves every other card's `v` alone.
+        model["art"] = art
+    return model
 
 
 def card_version(model: dict) -> str:

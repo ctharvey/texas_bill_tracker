@@ -45,7 +45,43 @@ export function chipLabels(subjects) {
   return labels;
 }
 
-export function cardTree(card) {
+// Poster caption: one wide box on the dark road at the bottom of the art, so a smaller budget than the navy card.
+const POSTER_TIERS = [[60, 40], [110, 35], [150, 31]];
+const POSTER_MAX = 150;
+export function posterCaption(caption) {
+  const text = clip(caption, POSTER_MAX);
+  const size = (POSTER_TIERS.find(([max]) => text.length <= max) || POSTER_TIERS.at(-1))[1];
+  return {text, size};
+}
+
+// A bill with an illustration (scripts/og_art/<ID>.jpg, 16:9 print with a light sky and a dark road along the
+// bottom): the art fills the card, brand and number sit on the sky, the caption on the road under a dark fade.
+function posterTree(card, art) {
+  const {text, size} = posterCaption(card.caption);
+  const PAPER = '#f6f0dc', INK = '#0e0e0e';
+  return h('div', {display: 'flex', width: WIDTH, height: HEIGHT, background: PAPER, fontFamily: 'DM Sans', position: 'relative'},
+    {type: 'img', props: {src: art, style: {position: 'absolute', left: -8, top: -5, width: 1216, height: 640}}},
+    h('div', {display: 'flex', position: 'absolute', left: 0, top: 0, width: WIDTH, height: HEIGHT,
+      backgroundImage: `linear-gradient(180deg, rgba(14,14,14,0) 0%, rgba(14,14,14,0) 52%, rgba(14,14,14,0.75) 70%, ${INK} 84%)`}),
+    h('div', {display: 'flex', position: 'absolute', left: 50, top: 40, right: 50, justifyContent: 'space-between', alignItems: 'center'},
+      h('div', {display: 'flex', alignItems: 'center'},
+        h('div', {display: 'flex', width: 38, height: 38, borderRadius: 8, background: GOLD, alignItems: 'center', justifyContent: 'center'},
+          {type: 'svg', props: {width: 26, height: 26, viewBox: '0 0 24 24', children: {type: 'polygon', props: {points: STAR, fill: NAVY}}}}),
+        h('div', {display: 'flex', marginLeft: 14, fontFamily: 'Manrope', fontWeight: 800, fontSize: 20, letterSpacing: 4, color: NAVY}, 'TEXAS BILL ATLAS')),
+      h('div', {display: 'flex', alignItems: 'center'},
+        h('div', {display: 'flex', fontFamily: 'Manrope', fontWeight: 800, fontSize: 64, lineHeight: 1, color: NAVY, letterSpacing: -2}, card.number),
+        card.status ? h('div', {display: 'flex', marginLeft: 16, padding: '5px 14px', borderRadius: 999, background: NAVY, color: PAPER,
+          fontFamily: 'DM Sans', fontWeight: 600, fontSize: 20, letterSpacing: 0.5}, card.status) : null)),
+    h('div', {display: 'flex', flexDirection: 'column', position: 'absolute', left: 50, right: 50, bottom: 34},
+      h('div', {display: 'flex', color: PAPER, fontWeight: 500, fontSize: size, lineHeight: 1.22}, text),
+      h('div', {display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14},
+        h('div', {display: 'flex', color: '#cfc6ad', fontSize: 20}, clip(card.byline, 70)),
+        h('div', {display: 'flex', color: '#e2b35a', fontFamily: 'Manrope', fontWeight: 800, fontSize: 28}, 'billatlas.org'))));
+}
+
+// `art`: the bill's illustration as a data: URL when it has one (build_og.mjs reads it), else the navy card.
+export function cardTree(card, art = null) {
+  if (art) return posterTree(card, art);
   const {text, size} = captionStyle(card.caption);
   const pill = (label, bg, fg) => h('div', {display: 'flex', padding: '6px 16px', borderRadius: 999, background: bg, color: fg,
     fontFamily: 'DM Sans', fontWeight: 600, fontSize: 22, letterSpacing: 0.5}, label);
