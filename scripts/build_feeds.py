@@ -299,7 +299,7 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_
 # redraws a card when `v` changes and lists what it drew in live/og/rendered.json. Official text only.
 
 OG_CARDS_FORMAT, OG_RENDERED_FORMAT = "texas-bill-og-cards-v1", "texas-bill-og-rendered-v1"
-OG_REVISION = "c1"  # Bump when the drawn wording changes for every bill (scripts/og_card.mjs layout changes too).
+OG_REVISION = "c2"  # Bump when the drawn wording changes for every bill (scripts/og_card.mjs layout changes too).
 OG_SESSION = "90th Legislature \u00b7 Regular Session"
 # Optional per-bill illustrations, scripts/og_art/<ID>.jpg; a card with one is drawn as a poster (og_card.mjs).
 OG_ART_DIR = Path(__file__).resolve().parent / "og_art"

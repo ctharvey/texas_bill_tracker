@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {clip, captionStyle, chipLabels, planRun, cardTree, posterCaption, WIDTH, HEIGHT} from '../scripts/og_card.mjs';
+import {WARBLER_SVG} from '../scripts/og_warbler.mjs';
 
 const words = n => Array.from({length: n}, (_, i) => `word${i}`).join(' ');
 
@@ -127,6 +129,10 @@ const POSTER = {number: 'HB 486', chamber: 'House', status: 'Filed', byline: 'Fi
   caption: 'Relating to wildlife.', subjects: ['Animals'], session: '90th Legislature'};
 const ART = 'data:image/jpeg;base64,AAAA';
 const nodes = tree => [tree, ...[tree?.props?.children ?? []].flat().flatMap(c => typeof c === 'object' ? nodes(c) : [])];
+// Images on a card: the bill's illustration (a JPEG) and the warbler mark (an SVG).
+const MARK = 'data:image/svg+xml;base64,';
+const artImages = tree => nodes(tree).filter(n => n.type === 'img' && !n.props.src.startsWith(MARK));
+const markImages = tree => nodes(tree).filter(n => n.type === 'img' && n.props.src.startsWith(MARK));
 
 test('posterCaption shrinks longer captions and clips past 150 characters', () => {
   assert.equal(posterCaption('Short.').size, 40);
@@ -138,7 +144,7 @@ test('posterCaption shrinks longer captions and clips past 150 characters', () =
 
 test('cardTree with art draws the poster over the image', () => {
   const tree = cardTree(POSTER, ART);
-  const imgs = nodes(tree).filter(n => n.type === 'img');
+  const imgs = artImages(tree);
   assert.equal(imgs.length, 1);
   assert.equal(imgs[0].props.src, ART);
   const json = JSON.stringify(tree);
@@ -149,7 +155,17 @@ test('cardTree with art draws the poster over the image', () => {
   assert.equal(tree.props.style.height, HEIGHT);
 });
 
-test('cardTree without art is the plain card, with no image', () => {
+test('cardTree without art is the plain card, with no illustration', () => {
   assert.deepEqual(cardTree(POSTER, null), cardTree(POSTER));
-  assert.equal(nodes(cardTree(POSTER)).filter(n => n.type === 'img').length, 0);
+  assert.equal(artImages(cardTree(POSTER)).length, 0);
+});
+
+test('both cards show the warbler mark, the same SVG as design/brand/warbler.svg', () => {
+  const brand = readFileSync(new URL('../design/brand/warbler.svg', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  assert.equal(WARBLER_SVG.replace(/\r\n/g, '\n'), brand);
+  for (const tree of [cardTree(POSTER), cardTree(POSTER, ART)]) {
+    const marks = markImages(tree);
+    assert.equal(marks.length, 1);
+    assert.equal(Buffer.from(marks[0].props.src.slice(MARK.length), 'base64').toString('utf8'), WARBLER_SVG);
+  }
 });
