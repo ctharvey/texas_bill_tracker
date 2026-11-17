@@ -539,7 +539,7 @@ summary:focus-visible,.disclaimer-ok:focus-visible,.footer-link:focus-visible{ou
 .agency-find input{flex:0 1 320px;min-width:0;font:inherit;padding:9px 12px;border:1px solid color-mix(in srgb,var(--ink) 55%,var(--surface));border-radius:calc(8px*var(--rs));background:var(--surface);color:var(--ink)}
 .agency-find .tools-note{margin:0}
 @media(max-width:900px){.home-top{grid-template-columns:1fr}.home-col{display:contents}
-  .home-o1{order:1}.home-o2{order:2}.home-o3{order:3}.home-o4{order:4}.home-o5{order:5}.home-areas{order:6}}
+  .home-stats{order:0}.home-o1{order:1}.home-o2{order:2}.home-o3{order:3}.home-o4{order:4}.home-o5{order:5}.home-areas{order:6}}
 @media(max-width:1000px){.bill-main{display:contents}.bill-main>*{order:2}.bill-main>#bill-g-overview{order:0}.bill-rail{order:1}
   .bill-rail .drawer-meta-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){
@@ -586,3 +586,25 @@ a.bill-number{padding:6px 0}
 .bill-group>.drawer-pills,.bill-group>.area-badges{margin-top:12px}
 .luna-block>p+p{margin-top:6px}.luna-block>ul{margin:4px 0 0;padding-left:18px;font-size:var(--fs-xs);line-height:1.6}
 .review-file-area{margin-top:10px}
+/* Home: count tiles, then one-line bill rows. A row's left stripe is its main topic's colour (features/home/rows.js). */
+.home-stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.stat-tile{display:block;background:var(--surface);border:1px solid var(--line);border-radius:calc(12px*var(--rs));padding:14px 16px 13px;color:inherit;text-decoration:none}
+a.stat-tile:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--surface))}
+.stat-tile strong{display:block;font:var(--head-weight) 32px/1.05 var(--font-head);letter-spacing:-.03em;color:var(--ink);margin-bottom:4px}
+.stat-tile span{font-size:var(--fs-xs);color:var(--muted)}
+.compact-row{display:grid;grid-template-columns:62px minmax(0,1fr) auto;gap:2px 12px;align-items:baseline;padding:9px 2px 9px 11px;border-left:3px solid var(--line);border-bottom:1px solid var(--line);cursor:pointer}
+.compact-row[style*="--topic-h"],.today-row[style*="--topic-h"]{border-left-color:oklch(.7 .13 var(--topic-h))}
+.today-row[style*="--topic-h"]{border-left-width:4px}
+.compact-row:has(+ :not(.compact-row)),.compact-row:last-child{border-bottom:0}
+.compact-row .bill-number{white-space:nowrap}
+.compact-text a{color:var(--ink);text-decoration:none;font-size:var(--fs-sm);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.compact-text a:hover{text-decoration:underline}
+.compact-note{font-size:var(--fs-xs);color:var(--muted);white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+.home-card h2+.compact-row,.home-counts+.compact-row{border-top:1px solid var(--line)}
+@media(max-width:600px){.home-stats{gap:8px}.stat-tile{padding:11px 12px}.stat-tile strong{font-size:26px}
+  .compact-row{grid-template-columns:56px minmax(0,1fr)}.compact-note{grid-column:2;max-width:none}}
+/* Today: the day's topic mix as one bar, and a matching dot on each topic chip. */
+.topic-bar{display:flex;gap:2px;height:36px;border-radius:calc(9px*var(--rs));overflow:hidden;margin:0 0 12px}
+.topic-seg{border:0;padding:0 10px;min-width:8px;background:color-mix(in oklch,oklch(.7 .13 var(--topic-h)) 30%,var(--surface));color:var(--ink);font-size:var(--fs-xs);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;text-align:left}
+.topic-seg.selected,.topic-seg:hover{background:oklch(.6 .14 var(--topic-h));color:#fff}
+.topic-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:oklch(.7 .13 var(--topic-h));margin-right:7px;vertical-align:1px}

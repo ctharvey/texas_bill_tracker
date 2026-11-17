@@ -1,5 +1,6 @@
 import {SEARCH_FIELDS, searchFields, searchText, matchReasons} from './features/search/model.js';
 import {nextVisit, changedSince, newestReviewed} from './features/home/model.js';
+import {topicHue, topicStyle, plainTitle, daysUntil} from './features/home/rows.js';
 import {runState, passRows, passJobs, lookup, RUN_LIMIT_MINUTES} from './features/review/model.js';
 import {recentChanges, updateEntries, changeText} from './features/review/updates.js';
 import {AREAS, AREA_GROUPS, AREA_BY_ID, billAreas, inArea, areaCounts, topAgencies, subjectLabels} from './features/areas/model.js';
@@ -1116,10 +1117,14 @@ function billCard(b,unwatchedCompanion=false,reasons=null){
 }
 
 // ---- Home: the dashboard. Search first, then what changed on your bills, the latest day's actions, hearings and reviews.
-const HOME_ROWS=5;
+const HOME_ROWS=5,SESSION_START='2027-01-12';
+// One line per bill: number, plain-language summary, and a short note (topic, action or review) on the right.
+function compactRow(b,note=''){
+  return `<article class="compact-row" data-bill-id="${esc(b.id)}"${topicStyle(b.topics)}>${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="compact-text">${openLinkHtml(b.id,billHref(b.id),'bill-title-link',plainTitle(b))}</span>${note?`<span class="compact-note" title="${esc(note)}">${esc(note)}</span>`:''}</article>`;
+}
 function homeMarkup(){
   return `<div class="home-top"><form class="home-search" id="home-search-form" role="search"><label for="home-search">Search every bill</label><div class="home-search-row"><input id="home-search" name="query" maxlength="200" placeholder="Bill number, author, subject, agency or keyword…" autocomplete="off"><button class="primary-button" type="submit">Search</button></div><p class="tools-note">Or <a class="text-link" href="#all" data-view="all">browse all ${state.bills.length.toLocaleString()} bills</a>.</p></form>
-    <div class="calendar-mini home-milestone"><div class="calendar-eyebrow">UPCOMING MILESTONE</div><div class="calendar-date">JAN 12 <span>2027</span></div><div class="calendar-desc">90th regular session convenes</div><div class="calendar-progress"><span></span></div></div></div>
+    <div class="calendar-mini home-milestone"><div class="calendar-eyebrow">UPCOMING MILESTONE</div><div class="calendar-date">JAN 12 <span>2027</span></div><div class="calendar-desc">90th regular session convenes${daysUntil(todayDay(),SESSION_START)?` · in ${daysUntil(todayDay(),SESSION_START)} days`:''}</div><div class="calendar-progress"><span></span></div></div></div>
     <div class="home-grid">${homeCards()}</div>`;
 }
 // Redraws the dashboard's cards only, so a sync or watch change never clears what is typed in its search box.
@@ -1128,7 +1133,7 @@ function homeCards(){
   const today=todayDay(),prev=previousVisit();
   const more=(href,view,label)=>`<a class="text-link home-more" href="${esc(href)}"${view?` data-view="${view}"`:''}>${label} →</a>`;
   const card=(title,count,body,order)=>`<section class="home-card home-o${order}"><h2>${title}${count?` <span>${count.toLocaleString()}</span>`:''}</h2>${body}</section>`;
-  const datedRow=({bill,day})=>todayRow({bill,actions:(activityOn([bill],day)[0]?.actions||[lastActionInfo(bill).text]).map(t=>`${shortDate(day)} · ${t}`)});
+  const datedRow=({bill,day})=>compactRow(bill,`${lastActionInfo(bill).label} · ${shortDate(day)}`);
   // Your bills: watched, and those of legislators you follow.
   const followed=state.roster&&state.follow.length?followedBills(state.bills,state.roster,state.follow).map(r=>r.bill):[];
   const mine=[...new Map([...state.bills.filter(b=>state.watch.has(b.id)),...followed].map(b=>[b.id,b])).values()];
@@ -1141,22 +1146,30 @@ function homeCards(){
   const yoursTitle=prev?`Since your last visit, ${esc(shortDate(prev))}`:'Latest on your bills';
   // The latest day with activity, as on the Today page (unfiltered by its topic chips).
   const {day,rows}=todayData();
-  const counts=groupByActionType(rows).map(g=>`<span><strong>${g.rows.length.toLocaleString()}</strong> ${esc(g.label.toLowerCase())}</span>`).join('');
-  const dayBody=rows.length?`<p class="home-counts">${counts}</p>${rows.slice(0,HOME_ROWS).map(todayRow).join('')}${more('#today','today','The whole day, by topic')}`:'<p class="tools-note">No recorded activity yet.</p>';
+  const types=groupByActionType(rows);
+  const counts=types.length>1?`<p class="home-counts">${types.map(g=>`<span><strong>${g.rows.length.toLocaleString()}</strong> ${esc(g.label.toLowerCase())}</span>`).join('')}</p>`:'';
+  const dayShown=rows.slice(0,HOME_ROWS+1),dayIds=new Set(dayShown.map(r=>r.bill.id));
+  const dayBody=rows.length?`${counts}${dayShown.map(r=>compactRow(r.bill,r.bill.topics[0]||'')).join('')}${more('#today','today','The whole day, by topic')}`:'<p class="tools-note">No recorded activity yet.</p>';
   const hearings=state.bills.filter(b=>assessHearing(b).level===3);
-  const hearingBody=hearings.length?hearings.slice(0,HOME_ROWS).map(b=>todayRow({bill:b,actions:[lastActionInfo(b).text]})).join('')+(hearings.length>HOME_ROWS?more(buildHash('all',{outlook:'Scheduled'}),'','All scheduled hearings'):'')
+  const hearingBody=hearings.length?hearings.slice(0,HOME_ROWS).map(b=>compactRow(b,lastActionInfo(b).label)).join('')+(hearings.length>HOME_ROWS?more(buildHash('all',{outlook:'Scheduled'}),'','All scheduled hearings'):'')
     :'<p class="tools-note">No hearings are scheduled yet. Committees post them once the session is under way.</p>';
-  // What Luna changed: overall counts, then each bill and what changed for it.
+  // Luna's reviews: what changed in the last 24 hours, then the newest reviews; a bill shows once, and not at all
+  // when the Today card already lists it.
   const lunaChanged=recentChanges(state.lunaUpdates,Date.now());
-  const changedBody=lunaChanged.bills.length?`${changeCounts(lunaChanged.counts)}${changeRows(lunaChanged.bills,HOME_ROWS)}${more('#review','review','Every change')}`
-    :'<p class="tools-note">Luna changed no published review in the last 24 hours.</p>';
-  const reviewed=newestReviewed(state.bills);
-  const reviewBody=reviewed.length?reviewed.slice(0,HOME_ROWS).map(b=>todayRow({bill:b,actions:[`Reviewed ${dateText(b.luna.reviewed_at)}`]})).join('')+more('#review','review','Review progress')
+  const byId=new Map(state.bills.map(b=>[b.id,b]));
+  const luna=new Map(lunaChanged.bills.filter(r=>byId.has(r.id)).map(r=>[r.id,{bill:byId.get(r.id),note:r.changes.length?changeText(r.changes[0]):''}]));
+  for(const b of newestReviewed(state.bills).slice(0,20))if(!luna.has(b.id))luna.set(b.id,{bill:b,note:`Reviewed ${shortDate(b.luna.reviewed_at.slice(0,10))}`});
+  const lunaRows=[...luna.values()].filter(r=>!dayIds.has(r.bill.id));
+  const lunaBody=lunaRows.length?`${lunaChanged.bills.length?changeCounts(lunaChanged.counts):''}${lunaRows.slice(0,HOME_ROWS+1).map(r=>compactRow(r.bill,r.note)).join('')}${more('#review','review','Every review and change')}`
     :'<p class="tools-note">Luna has not reviewed any bills yet.</p>';
+  const tile=(n,label,href,view)=>href
+    ?`<a class="stat-tile" href="${esc(href)}"${view?` data-view="${view}"`:''}><strong>${n.toLocaleString()}</strong><span>${label}</span></a>`
+    :`<div class="stat-tile"><strong>${n.toLocaleString()}</strong><span>${label}</span></div>`;
+  const stats=`<div class="home-stats">${tile(rows.length,day===today?'bills with action today':`bills with action ${esc(shortDate(day))}`,'#today','today')}${tile(lunaChanged.bills.length,'bills Luna reviewed or updated, last 24 hours','#review','review')}${tile(hearings.length,hearings.length===1?'hearing scheduled':'hearings scheduled',hearings.length?buildHash('all',{outlook:'Scheduled'}):'','')}</div>`;
   // Two columns that do not share row heights, split so their lengths come out close on a typical day.
   // On a phone the columns dissolve and .home-oN puts the cards back in this order.
-  return `<div class="home-col">${card(yoursTitle,changed.length,yours,1)}${card('Upcoming hearings',hearings.length,hearingBody,4)}${card('What Luna changed, last 24 hours',lunaChanged.bills.length,changedBody,3)}</div>`
-    +`<div class="home-col">${card(day===today?'Today at the Lege':`Most recent activity, ${esc(shortDate(day))}`,rows.length,dayBody,2)}${card('Newly reviewed by Luna',0,reviewBody,5)}</div>${areasCard()}`;
+  return stats+`<div class="home-col">${card(yoursTitle,changed.length,yours,1)}${card(day===today?'Today at the Lege':`Most recent activity, ${esc(shortDate(day))}`,rows.length,dayBody,2)}</div>`
+    +`<div class="home-col">${card("Luna's reviews",0,lunaBody,3)}${card('Upcoming hearings',hearings.length,hearingBody,4)}</div>${areasCard()}`;
 }
 // Browse by area: every reader area with its bills and how many moved this week, grouped by audience.
 function areasCard(){
@@ -1194,7 +1207,11 @@ function todayMarkup(){
   const {today,day,rows,note,counts,shown}=todayData();
   // Every topic is reachable: the 12 largest show first, the rest behind "+N more"; a selected topic always shows.
   const TOP=12,listed=state.todayAllTopics?counts:counts.filter((c,i)=>i<TOP||c.topic===state.todayTopic);
-  const chip=(topic,label)=>`<button class="topic-chip ${state.todayTopic===topic?'selected':''}" data-today-topic="${esc(topic)}" aria-pressed="${state.todayTopic===topic}">${label}</button>`;
+  const dot=topic=>topicHue(topic)===null?'':`<i class="topic-dot" style="--topic-h:${topicHue(topic)}"></i>`;
+  const chip=(topic,label)=>`<button class="topic-chip ${state.todayTopic===topic?'selected':''}" data-today-topic="${esc(topic)}" aria-pressed="${state.todayTopic===topic}">${dot(topic)}${label}</button>`;
+  // The day's topic mix as one bar. Mouse users can click a segment; the chips below are the accessible control.
+  const barTotal=counts.reduce((n,c)=>n+c.count,0);
+  const bar=counts.length>1?`<div class="topic-bar" aria-hidden="true">${counts.map(c=>`<button type="button" tabindex="-1" class="topic-seg${state.todayTopic===c.topic?' selected':''}" data-today-topic="${esc(c.topic)}" style="--topic-h:${topicHue(c.topic)??220};flex:${c.count} 1 0" title="${esc(c.topic)} · ${c.count}"><span>${c.count/barTotal>=.09?`${esc(c.topic)} · ${c.count}`:''}</span></button>`).join('')}</div>`:'';
   const chips=`<div class="today-topics" role="group" aria-label="Filter this day's bills by topic">${chip('',`All · ${rows.length}`)}${listed.map(c=>chip(c.topic,`${esc(c.topic)} · ${c.count}`)).join('')}${counts.length>TOP?`<button class="text-button" id="today-topics-toggle">${state.todayAllTopics?'Show fewer':`+${counts.length-listed.length} more topics`}</button>`:''}</div>`;
   let budget=state.todayLimit;
   const sections=groupByActionType(shown).map(g=>{
@@ -1203,14 +1220,14 @@ function todayMarkup(){
   }).join('');
   return `<div class="section-head"><div><div class="section-overline">${day===today?'TODAY':'MOST RECENT ACTIVITY'}</div><h2>${esc(dateText(day))}</h2></div><span class="subtitle">${shown.length} ${shown.length===1?'bill':'bills'} with recorded action</span></div>
     <div class="info-callout today-note">${note?`<p>${note}</p>`:''}<p>${esc(TODAY_INTERIM_NOTE)}</p></div>
-    ${rows.length?chips:''}${sections||'<div class="empty-state"><h3>No activity to show</h3><p>Nothing is recorded for this day yet.</p></div>'}
+    ${rows.length?bar+chips:''}${sections||'<div class="empty-state"><h3>No activity to show</h3><p>Nothing is recorded for this day yet.</p></div>'}
     ${shown.length>state.todayLimit?`<button class="outline-button" id="today-more">Show 100 more · showing ${state.todayLimit} of ${shown.length}</button>`:''}`;
 }
 
 // `by`: also name who filed the bill (the Today page; member pages and Near you already say whose bills they are).
 function todayRow({bill:b,actions},{by=false}={}){
   const real=realAgencies(b);
-  return `<article class="today-row" data-bill-id="${esc(b.id)}"><div class="today-row-head">${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span>${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</div>${headlineLine(b,'card')}<div class="today-meta"><p class="today-action">${actions.map(esc).join(' · ')}</p>${by&&b.author?`<span class="today-by">by ${filerHtml(b)}</span>`:''}<div class="bill-tags">${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${real.slice(0,2).map(a=>`<span class="tag agency">${esc(agencyName(a.id).replace(/^Texas /,'').replace(/ Department of /,' · '))}</span>`).join('')}</div></div></article>`;
+  return `<article class="today-row" data-bill-id="${esc(b.id)}"${topicStyle(b.topics)}><div class="today-row-head">${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span>${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</div>${headlineLine(b,'card')}<div class="today-meta"><p class="today-action">${actions.map(esc).join(' · ')}</p>${by&&b.author?`<span class="today-by">by ${filerHtml(b)}</span>`:''}<div class="bill-tags">${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${real.slice(0,2).map(a=>`<span class="tag agency">${esc(agencyName(a.id).replace(/^Texas /,'').replace(/ Department of /,' · '))}</span>`).join('')}</div></div></article>`;
 }
 
 // ---- Near you: the visitor's own legislators and the bills tied to them. Location stays in this browser. ----
@@ -1309,7 +1326,7 @@ function nearData(){
     statewide:state.bills.filter(b=>(b.locations||[]).some(l=>l.kind==='statewide')).length};
 }
 function nearRow({bill:b,notes}){
-  return `<article class="today-row" data-bill-id="${esc(b.id)}"><div class="today-row-head">${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span>${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</div>${headlineLine(b,'card')}${notes.length?`<p class="today-action">${notes.map(n=>typeof n==='string'?esc(n):`${memberNameHtml(n.member,`${n.member.chamber==='house'?'Rep.':'Sen.'} ${n.member.display_name}`)} · ${esc(n.role)}`).join(' · ')}</p>`:''}<div class="bill-tags">${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}<span class="tag">${esc(lastActionInfo(b).label)}</span></div></article>`;
+  return `<article class="today-row" data-bill-id="${esc(b.id)}"${topicStyle(b.topics)}><div class="today-row-head">${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span>${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</div>${headlineLine(b,'card')}${notes.length?`<p class="today-action">${notes.map(n=>typeof n==='string'?esc(n):`${memberNameHtml(n.member,`${n.member.chamber==='house'?'Rep.':'Sen.'} ${n.member.display_name}`)} · ${esc(n.role)}`).join(' · ')}</p>`:''}<div class="bill-tags">${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}<span class="tag">${esc(lastActionInfo(b).label)}</span></div></article>`;
 }
 function nearList(key,rows,empty){
   const limit=state.nearShow?.[key]||30;
