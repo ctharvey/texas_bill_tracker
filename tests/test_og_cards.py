@@ -123,6 +123,13 @@ def test_share_page_with_image_version_uses_bill_card():
     assert meta(html, 'og:image:alt').startswith('HB 5: ')
 
 
+def test_share_page_gives_x_the_same_image_alt_as_open_graph():
+    with_card = bf.share_page(BILL, image_v='abc123')
+    assert meta(with_card, 'twitter:image:alt') == meta(with_card, 'og:image:alt')
+    assert meta(with_card, 'twitter:image:alt').startswith('HB 5: Relating to water rights.')
+    assert meta(bf.share_page(BILL), 'twitter:image:alt') == 'Texas Bill Atlas'
+
+
 def test_write_share_pages_uses_rendered_versions(tmp_path):
     snap = {'bills': [BILL, {'id': 'SB9', 'caption': 'Other'}]}
     bf.write_share_pages(snap, tmp_path, rendered={'HB5': 'abc123'})

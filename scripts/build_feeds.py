@@ -273,7 +273,7 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_
             ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
             ("property", "og:image:alt", image_alt), ("name", "twitter:card", "summary_large_image"),
             ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
-            ("name", "description", description)]
+            ("name", "twitter:image:alt", image_alt), ("name", "description", description)]
     tags = "\n".join(f'<meta {kind}="{name}" content="{a(value)}">' for kind, name, value in meta)
     return f"""<!doctype html>
 <html lang="en">
