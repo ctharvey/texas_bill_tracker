@@ -5,6 +5,7 @@ deployer would not publish 404s here exactly as it would in production.
 """
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -109,6 +110,9 @@ class Site:
                     self.send_error(405)
                 elif path.startswith("/live/"):
                     self.serve_live(path[len("/live/"):])
+                elif re.fullmatch(r"/bill/(?:HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9]\d{0,4}", path):
+                    self.path = "/index.html"  # As the gateway serves the app at /bill/<ID> to people.
+                    super().do_GET()
                 else:
                     super().do_GET()
 

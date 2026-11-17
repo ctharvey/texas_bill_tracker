@@ -31,7 +31,7 @@ def test_preview_shows_the_bill_beside_the_results_and_marks_its_card(device):
     expect(first).to_have_class(re.compile(r"\bpreviewed\b"))
     expect(preview.locator(".preview-step span")).to_contain_text("1 of ")
     expect(preview.locator('[data-preview-step="-1"]')).to_be_disabled()
-    assert "#bill?" not in page.url and bill not in page.url, "the preview is not an address"
+    assert "/bill/" not in page.url and "#bill?" not in page.url and bill not in page.url, "the preview is not an address"
 
 
 def test_next_and_previous_step_through_the_shown_cards(device):
@@ -70,7 +70,7 @@ def test_watch_in_the_preview_updates_the_card_and_open_goes_to_the_page(device)
     expect(first.locator(".watch-button")).to_have_attribute("aria-pressed", "true")
     page.locator("#bill-preview .preview-actions [data-open]").click()
     expect(page.locator("#bill-page")).to_be_visible()
-    assert page.url.endswith(f"#bill?id={bill}")
+    assert page.url.endswith(f"/bill/{bill}")
     page.locator("#bill-back").click()
     expect(page.locator("#bill-list article.bill-card").first).to_be_visible()
     expect(page.locator("#bill-preview")).to_be_hidden()
@@ -84,4 +84,4 @@ def test_a_phone_opens_the_bill_page_not_the_preview(device):
     bill = first.get_attribute("data-bill-id")
     first.locator(".bill-filed").click()
     expect(page.locator("#bill-page")).to_be_visible()
-    assert page.url.endswith(f"#bill?id={bill}")
+    assert page.url.endswith(f"/bill/{bill}")

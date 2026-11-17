@@ -300,7 +300,7 @@ def test_clicking_a_card_title_opens_the_bill_page_and_back_keeps_the_search(dev
     expect(page.locator("#bill-page")).to_be_visible()
     expect(page.locator("#bill-page")).to_contain_text("HB 110")
     expect(page.locator("#bill-page")).to_contain_text("minimum wage")
-    assert page.url.endswith("#bill?id=HB110")
+    assert page.url.endswith("/bill/HB110")
     page.click("#bill-back")
     expect(page.locator("#bill-page")).to_have_count(0)
     page.wait_for_function("location.hash.startsWith('#all')")
@@ -311,7 +311,7 @@ def test_bill_details_button_opens_the_bill_page(device):
     page = device.open("#all?query=HB110")
     page.locator('.bill-card[data-bill-id="HB110"] .bill-open').click()
     expect(page.locator("#bill-page")).to_be_visible()
-    assert page.url.endswith("#bill?id=HB110")
+    assert page.url.endswith("/bill/HB110")
 
 
 def test_bill_address_opens_the_bill_page_on_load(device):

@@ -84,6 +84,24 @@ export function buildHash(view, filters, {list = null, bill = null, sync = null,
   return `#${VIEWS.includes(view) ? view : 'all'}${parts.length ? `?${parts.join('&')}` : ''}`;
 }
 
+// A bill page's address is the path /bill/<ID>; a shared list or view-only sync key it was opened from rides in the
+// fragment (/bill/HB5#list=HB5,SB2&sync=...). Every other view is /#view?... as before.
+const BILL_PATH = /^\/bill\/([A-Za-z]{2,3}\d{1,5})\/?$/;
+
+export function parseLocation(pathname, hash) {
+  const match = BILL_PATH.exec(String(pathname || ''));
+  if (!match) return parseHash(hash);
+  const extra = String(hash || '').replace(/^#\??/, '');
+  const p = parseHash(`#bill?id=${encodeURIComponent(match[1])}${extra ? `&${extra}` : ''}`);
+  return p.bill ? p : parseHash('#all');
+}
+
+export function buildUrl(view, filters, options = {}) {
+  if (view !== 'bill' || !isBillId(options.bill)) return `/${buildHash(view, filters, options)}`;
+  const extra = buildHash('bill', {}, {...options, bill: null}).replace(/^#bill\??/, '');
+  return `/bill/${options.bill}${extra ? `#${extra}` : ''}`;
+}
+
 export function watchlistFile(ids, now = new Date()) {
   return JSON.stringify({format: 'texas-bill-atlas-watchlist-v1', session: '90R', exported_at: now.toISOString(), bills: [...ids]}, null, 2);
 }

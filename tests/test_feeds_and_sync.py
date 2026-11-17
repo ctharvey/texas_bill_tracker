@@ -39,7 +39,7 @@ class FeedTests(unittest.TestCase):
         self.assertEqual([i.findtext('title') for i in items], ['HB5: Referred to Natural Resources', 'HB5: Filed'])
         self.assertIn('10 Feb 2027', items[0].findtext('pubDate'))
         self.assertEqual(items[0].findtext('description'), 'Relating to <water> & "rights".')
-        self.assertTrue(items[0].findtext('link').endswith('#all?bill=HB5'))
+        self.assertTrue(items[0].findtext('link').endswith('/bill/HB5'))
 
     def test_guid_survives_the_twelve_action_window_sliding(self):
         before = build_feeds.bill_items(BILL)

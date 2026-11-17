@@ -443,7 +443,7 @@ def test_opening_and_closing_a_bill_keeps_the_search(device):
     search(page, "minimum wage")
     page.locator('.bill-card[data-bill-id="HB110"] .bill-number').click()
     expect(page.locator("#bill-page")).to_be_visible()
-    assert page.evaluate("location.hash") == "#bill?id=HB110"
+    assert page.evaluate("location.pathname") == "/bill/HB110"
     page.locator("#bill-back").click()
     expect(page.locator("#bill-page")).to_have_count(0)
     assert "query=minimum%20wage" in page.evaluate("location.hash")

@@ -95,7 +95,7 @@ def test_row_links_open_the_bill_page(device):
     bill = page.locator("#bill-page")
     expect(bill).to_be_visible()
     expect(bill.locator(".drawer-number")).to_have_text("90R / HB 1083")
-    assert page.url.endswith("#bill?id=HB1083")
+    assert page.url.endswith("/bill/HB1083")
     page.locator("#bill-back").click()
     expect(bill).to_have_count(0)
     assert page.url.endswith("#today")

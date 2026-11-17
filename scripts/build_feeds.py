@@ -89,7 +89,7 @@ def render_rss(title: str, link: str, description: str, items: list[dict], site:
         lines.append(f"<lastBuildDate>{rfc822(newest['date'])}</lastBuildDate>")
     for item in items:
         lines += ["<item>", f"<title>{escape(item['bill'] + ': ' + item['text'])}</title>",
-                  f"<link>{escape(site + '#all?bill=' + item['bill'])}</link>",
+                  f"<link>{escape(site + 'bill/' + item['bill'])}</link>",
                   f"<description>{escape(item['caption'])}</description>",
                   f'<guid isPermaLink="false">{escape(item["guid"])}</guid>']
         if rfc822(item["date"]):
@@ -100,7 +100,7 @@ def render_rss(title: str, link: str, description: str, items: list[dict], site:
 
 
 def bill_feed(bill: dict, site: str = SITE, review: dict | None = None) -> str:
-    return render_rss(f"{bill['id']} · Texas Bill Atlas", f"{site}#all?bill={bill['id']}",
+    return render_rss(f"{bill['id']} · Texas Bill Atlas", f"{site}bill/{bill['id']}",
                       (bill.get("caption") or bill.get("title") or "")[:500]
                       + " Unofficial; confirm on Texas Legislature Online.", all_items(bill, review), site)
 
@@ -255,6 +255,8 @@ def load_headlines(path: Path | None) -> dict[str, str]:
 def share_page(bill: dict, site: str = SITE, headline: str | None = None) -> str:
     bill_id = bill["id"]
     caption = " ".join(str(bill.get("caption") or bill.get("title") or "No caption available").split())
+    # Only link-preview crawlers are served this page; anyone else who gets it is sent to the app at the site root,
+    # which moves the address to /bill/<ID> itself (sending them to /bill/<ID> could serve this page again).
     url, target = f"{site}bill/{bill_id}", f"{site}#bill?id={bill_id}"
     title = clip(f"{bill_number(bill_id)}: {caption}", SHARE_TITLE_MAX)
     # The official caption is in the title; an AI-written line is labelled as one.

@@ -1,4 +1,4 @@
-"""The bill page (#bill?id=): how it opens, old bill links, Back to results, what the header and sections show, and
+"""The bill page (/bill/<ID>): how it opens, old bill links, Back to results, what the header and sections show, and
 its links and watch button."""
 
 import json
@@ -26,14 +26,14 @@ def test_opens_from_the_bill_number_on_a_card(device):
     card(page, "HB110").locator("a.bill-number").click()
     expect(page.locator(PAGE)).to_be_visible()
     expect(page.locator(".drawer-number")).to_have_text("90R / HB 110")
-    assert page.url.endswith("#bill?id=HB110")  # a bill link is a link to the bill, not to a list
+    assert page.url.endswith("/bill/HB110")  # a bill link is a link to the bill, not to a list
     expect(card(page, "HB110")).to_have_count(0)  # the page replaces the list
     expect(page.locator(".page-heading")).to_be_hidden()  # the bill's own header takes its place
 
 
 def test_bill_number_link_is_the_bill_address(device):
     page = open_from_list(device)
-    expect(card(page, "HB110").locator("a.bill-number")).to_have_attribute("href", "#bill?id=HB110")
+    expect(card(page, "HB110").locator("a.bill-number")).to_have_attribute("href", "/bill/HB110")
 
 
 def test_opens_from_empty_space_on_a_card(device):
@@ -57,7 +57,7 @@ def test_old_bill_link_redirects_to_the_bill_page(device):
     # RSS items, agent docs and saved links carry `#<view>?…&bill=`; they open the page without adding a history entry.
     page = device.open("#all?topic=Labor&bill=HB110")
     expect(page.locator(".drawer-number")).to_have_text("90R / HB 110")
-    assert page.url.endswith("#bill?id=HB110")
+    assert page.url.endswith("/bill/HB110")
     page.locator("#bill-back").click()
     expect(page.locator(PAGE)).to_have_count(0)
     assert page.url.endswith("#all?topic=Labor")  # Back to results goes to the list the link named
@@ -224,7 +224,7 @@ def test_moving_from_bill_to_bill_keeps_where_back_to_results_goes(device):
     before = page.url
     card(page, "HB110").locator("a.bill-number").click()
     expect(page.locator(PAGE)).to_be_visible()
-    page.evaluate("location.hash = '#bill?id=HB147'")
+    page.evaluate("history.pushState(null, '', '/bill/HB147'); dispatchEvent(new PopStateEvent('popstate'))")
     expect(page.locator(".drawer-number")).to_have_text("90R / HB 147")
     page.locator("#bill-back").click()
     expect(page).to_have_url(before)

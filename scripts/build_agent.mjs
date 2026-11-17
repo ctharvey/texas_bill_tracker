@@ -86,7 +86,7 @@ export function billRecord(b) {
     locations: (b.locations || []).map(l => ({name: l.name, kind: l.kind || null, explanation: l.explanation || null})),
     full_text_review: b.luna ? {reviewed_at: b.luna.reviewed_at || null, text_version: b.luna.text_version || null,
       summary: b.luna.summary || null, fields_from_full_text: b.luna.fields || []} : null,
-    links: {tracker: tracker({}, {bill: b.id}), official: officialUrl(b), text: textUrl(b.id), rss: `${SITE}live/feeds/${b.id}.xml`,
+    links: {tracker: `${SITE}bill/${b.id}`, official: officialUrl(b), text: textUrl(b.id), rss: `${SITE}live/feeds/${b.id}.xml`,
       markdown: `${AGENT}bills/${b.id}.md`, json: `${AGENT}bills/${b.id}.json`},
   };
 }
@@ -562,9 +562,9 @@ ${indexes.map(([title, href, n]) => `- [${title}](${AGENT}${href}) (${n} groups)
 
 ## Mapping tracker links
 
-The tracker keeps its state after \`#\` in the address. Equivalents here:
+A bill's tracker page is \`${SITE}bill/<ID>\`; other views keep their state after \`#\` in the address. Equivalents here:
 
-- \`${SITE}#all?bill=${example.id}\` -> \`${AGENT}bills/${example.id}.md\`
+- \`${SITE}bill/${example.id}\` (or the older \`${SITE}#all?bill=${example.id}\`) -> \`${AGENT}bills/${example.id}.md\`
 - \`#all?topic=<topic>\` -> \`${AGENT}topics/index.md\`; \`#all?agency=<id>\` -> \`${AGENT}agencies/index.md\`; \`#all?action=<category>\` -> \`${AGENT}last-action/index.md\`; \`#all?outlook=<status>\` -> \`${AGENT}hearing/index.md\`; \`#all?chamber=<chamber>\` -> \`${AGENT}chamber/index.md\`
 - Text search (\`query=<words>\`) -> \`${AGENT}search?q=<words>\`.
 - A shared list (\`#all?list=HB1,SB2\`): fetch each \`bills/<ID>.md\`.
@@ -587,7 +587,7 @@ const SAVING = `# Saving and sharing (Texas Bill Atlas)
 
 There are no accounts. A person's watchlist and filters live in their browser; they can carry them in a link or file, or sync them with a private link.
 
-- **Links to a view**: the tracker's address describes the view, e.g. \`${SITE}#all?topic=Water&bill=HB1\`.
+- **Links to a view**: the tracker's address describes the view, e.g. \`${SITE}#all?topic=Water\`; a bill's page is \`${SITE}bill/HB1\`.
 - **Share links**: \`${SITE}#all?list=HB1,SB2\` opens a read-only list. For agents: fetch \`${AGENT}bills/<ID>.md\` for each id.
 - **Export/import**: the watchlist file is JSON: \`{"format": "texas-bill-atlas-watchlist-v1", "session": "90R", "bills": ["HB1", "SB2"]}\`. Import also accepts any text listing bill numbers.
 - **RSS**: \`${SITE}live/feeds/<ID>.xml\` per bill.

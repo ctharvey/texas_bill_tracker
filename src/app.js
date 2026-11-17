@@ -17,7 +17,7 @@ import {registerView, setFallbackView, viewHeading, renderView} from './core/rou
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
 import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, visitKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
-  cleanSearches, newSearchId, searchName, searchFitsSync, MAX_SEARCHES} from './prefs.js';
+  cleanSearches, newSearchId, searchName, searchFitsSync, MAX_SEARCHES, parseLocation, buildUrl} from './prefs.js';
 import {createSyncClient} from './sync.js';
 import {readWatch, readFollows, readSearches, changeWatchList, changeFollowList, changeSearchList, adoptLists} from './core/lists.js';
 import {moveTarget, moveSource, moveNeeded, collect, receive, digest, keepHeld, heldFile, heldCount, previousLinks, MOVED_KEY} from './core/move.js';
@@ -112,7 +112,7 @@ async function init(){
   document.addEventListener('change',handleChange);
   document.addEventListener('input',handleInput);
   document.addEventListener('submit',e=>{if(e.target.id==='near-address-form'){e.preventDefault();nearAddress($('#near-address')?.value)}
-    if(e.target.id==='home-search-form'){e.preventDefault();location.hash=buildHash('all',{query:$('#home-search').value.trim()})}
+    if(e.target.id==='home-search-form'){e.preventDefault();goTo(buildHash('all',{query:$('#home-search').value.trim()}))}
     if(e.target.id==='review-lookup-form'){e.preventDefault();const id=$('#review-lookup-result [data-open]')?.dataset.open;if(id)openBillPage(id,true)}
     const form=e.target.closest?.('[data-search-rename-form]');
     if(form){e.preventDefault();const s=state.searches.find(x=>x.id===form.dataset.searchRenameForm),name=form.elements.name.value.trim().slice(0,80);
@@ -129,6 +129,18 @@ async function init(){
   });
   // A sync link pasted into an open tab arrives as a hash change, not a page load.
   window.addEventListener('hashchange',()=>{const key=applyLocation(false);if(key)openSyncLink(key)});
+  // Back and Forward between /bill/<ID> and /#view change the path, which fires popstate but not hashchange.
+  window.addEventListener('popstate',()=>{if(location.pathname===lastPath)return;const key=applyLocation(false);if(key)openSyncLink(key)});
+  // With <base href="/">, a fragment-only link on a bill page points at the site root: a view link goes through
+  // goTo, and an in-page anchor (the skip link) stays on this page.
+  document.addEventListener('click',e=>{
+    if(e.defaultPrevented||e.button||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||location.pathname==='/')return;
+    const a=e.target.closest?.('a[href^="#"]');if(!a)return;
+    const href=a.getAttribute('href'),target=href.length>1&&!href.includes('?')?document.getElementById(href.slice(1)):null;
+    e.preventDefault();
+    if(target){target.tabIndex=target.tabIndex<0?-1:target.tabIndex;target.focus();target.scrollIntoView();return}
+    goTo(href);
+  });
   state.near=cleanNear(readJson(NEAR_KEY),null);
   const syncKey=applyLocation(true);
   viewReady=true;
@@ -190,7 +202,18 @@ function keepAside(held){
   toast(`${n} saved ${n===1?'item':'items'} did not fit the sync link and ${n===1?'was':'were'} kept aside: see Export`);
 }
 let syncAvailable=null,lastPull=0;
-const siteBase=()=>location.href.split('#')[0];
+// The site root, whatever page is open: a bill page's path is /bill/<ID>.
+const siteBase=()=>`${location.origin}/`;
+// Every view but a bill page lives at /#view. A plain hash change on /bill/<ID> would stay under that path, so it
+// moves to / instead and is handled like any other hash change.
+let lastPath=location.pathname;
+function goTo(hash){
+  hash=String(hash||'').startsWith('#')?String(hash):`#${hash||''}`;
+  if(location.pathname==='/'){location.hash=hash;return}
+  try{history.pushState(null,'',`/${hash}`)}catch{location.href=`/${hash}`;return}
+  lastPath=location.pathname;
+  window.dispatchEvent(new HashChangeEvent('hashchange'));
+}
 
 function applyFilters(raw){
   const clean=cleanFilters(raw);
@@ -218,7 +241,8 @@ let billReturn=null;
 
 // Returns a sync key from the URL, if any, for setupSync to resolve.
 function applyLocation(initial){
-  const p=parseHash(location.hash);
+  const p=parseLocation(location.pathname,location.hash);
+  lastPath=location.pathname;
   // An old link with `bill=` on another view opens the bill page; setView's persistState replaces the address.
   const legacy=Boolean(p.bill)&&p.view!=='bill';
   if(legacy)billReturn={hash:withoutBill(location.hash)};
@@ -255,9 +279,14 @@ function currentHash(){
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey});
 }
 
-// A bill's page address, so a bill title is a real link (new tab, copy link) as well as a click target.
+function currentUrl(){
+  return buildUrl(state.view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
+    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey});
+}
+
+// A bill's page address (/bill/<ID>), so a bill title is a real link (new tab, copy link) as well as a click target.
 function billHref(id){
-  return buildHash('bill',{},{list:state.sharedMode==='link'?state.sharedList:null,bill:id,
+  return buildUrl('bill',{},{list:state.sharedMode==='link'?state.sharedList:null,bill:id,
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null});
 }
 
@@ -270,15 +299,18 @@ function openBillPage(id,push=false){
 }
 
 // Back to results: the page the bill was opened from, or the explorer when the bill page was the first page loaded.
-function leaveBillPage(){location.hash=billReturn?.hash||'#all'}
+function leaveBillPage(){goTo(billReturn?.hash||'#all')}
 
 // prefs-v1 fields other than the filters (the colour theme) survive a filter save.
 const keptPrefs=()=>{const p=readJson(prefsKey);return p&&typeof p==='object'&&!Array.isArray(p)?p:{}};
 // push=true adds a history entry (opening a bill), so Back closes it instead of leaving the site.
 function persistState(push=false){
-  const hash=currentHash();
+  const url=currentUrl();
   let pushed=false;
-  if(location.hash!==hash)try{if(push){history.pushState(null,'',hash);pushed=true}else history.replaceState(null,'',hash)}catch{}
+  if(location.pathname+location.hash!==url)try{if(push){history.pushState(null,'',url);pushed=true}else history.replaceState(null,'',url)}catch{}
+  lastPath=location.pathname;
+  const canonical=document.querySelector('link[rel="canonical"]');
+  if(canonical)canonical.href=state.view==='bill'&&state.openBill?`https://billatlas.org/bill/${state.openBill}`:'https://billatlas.org/';
   if(state.view==='all'&&filtersFor==='all'&&!state.sharedList&&!(readJson(prefsKey)?.filters&&sameFilters(readJson(prefsKey).filters,state)))writeJson(prefsKey,{...keptPrefs(),filters:pickFilters(state)});
   return pushed;
 }
@@ -1803,7 +1835,7 @@ function registerClicks(){
     if(el.hasAttribute('data-previous-link'))copyText(siteBase()+'#watchlist?sync='+el.dataset.previousLink,'Edit link');
     if(el.id==='move-previous'&&movePreviousKey())copyText(siteBase()+'#watchlist?sync='+movePreviousKey(),'Edit link');
   });
-  clickOn('nav','[data-view]',(nav,e)=>{if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button)return;e.preventDefault();location.hash=nav.dataset.view;setView(nav.dataset.view)});  // modified clicks open a new tab
+  clickOn('nav','[data-view]',(nav,e)=>{if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button)return;e.preventDefault();goTo(nav.dataset.view);setView(nav.dataset.view)});  // modified clicks open a new tab
   clickOn('open-bill','[data-open]',(open,e)=>{
     // A modified or non-primary click on a link keeps the browser's own behavior (new tab, new window).
     if(open.tagName!=='A'||cardClickOpens({button:e.button,metaKey:e.metaKey,ctrlKey:e.ctrlKey,shiftKey:e.shiftKey,altKey:e.altKey})){e.preventDefault();openBillPage(open.dataset.open,true)}
@@ -1851,7 +1883,7 @@ function registerClicks(){
   clickOn('watch','[data-watch]',star=>{const id=star.dataset.watch;changeWatch(state.watch.has(id)?'remove':'add',[id]);renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(state.view==='bill')renderContent();toast(state.watch.has(id)?`${id} added to your watchlist`:`${id} removed from your watchlist`)});
   clickOn('search-example','[data-search-example]',x=>{state.query=x.dataset.searchExample;state.visibleCount=30;renderContent();$('#bill-search')?.focus()});
   clickOn('topic','[data-topic]',topic=>{state.topic=topic.dataset.topic;state.visibleCount=30;renderContent()});
-  clickOn('agency-pick','[data-agency-pick]',pick=>{switchFilters('all');state.agency=pick.dataset.agencyPick;state.visibleCount=30;state.view='all';location.hash='all';setView('all')});
+  clickOn('agency-pick','[data-agency-pick]',pick=>{switchFilters('all');state.agency=pick.dataset.agencyPick;state.visibleCount=30;state.view='all';goTo('all');setView('all')});
   clickOn('clear-filter','[data-clear-filter]',chip=>clearFilter(chip.dataset.clearFilter));
   clickOn('clear-filters','#clear-filters,[data-clear-all]',()=>{Object.assign(state,{query:'',topic:'',area:'',agency:'',chamber:'',party:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,visibleCount:30});renderContent()});
   clickOn('watch-filter','#watch-filter',()=>{state.onlyWatch=!state.onlyWatch;state.visibleCount=30;renderContent()});
@@ -1968,7 +2000,7 @@ async function importFile(file){
       state.bills=valid;state.meta={session:'90R',data_mode:'local import',source_file:file.name,generated_at:new Date().toISOString(),coverage_note:`Local file: ${file.name}. Imported rows are visible only during this session.`};
       switchFilters('all');Object.assign(state,{topic:'',area:'',agency:'',chamber:'',party:'',stage:'',action:'',outlook:'',query:'',visibleCount:30});setView('all');
     }catch(renderError){Object.assign(state,previous);setView(previous.view);throw renderError}
-    location.hash='all';toast(`Imported ${valid.length} bills`);
+    goTo('all');toast(`Imported ${valid.length} bills`);
   }catch(err){toast(`Import failed: ${err.message}`)}
 }
 

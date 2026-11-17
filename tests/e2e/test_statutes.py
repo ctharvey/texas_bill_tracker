@@ -132,7 +132,7 @@ def test_back_from_a_bill_opened_on_the_section_page_returns_to_the_section(devi
     page = open_section(device)
     page.locator(".law-version a.bill-number").first.click()
     expect(page.locator("#bill-page")).to_be_visible()
-    assert "#bill?id=" in page.url
+    assert "/bill/" in page.url
     page.locator("#bill-back").click()
     expect(page.locator("#bill-page")).to_have_count(0)
     assert page.url.endswith(SECTION)

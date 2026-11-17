@@ -32,7 +32,7 @@ def expect_card_opened(page, bill, number):
     else:
         expect(page.locator("#bill-page")).to_be_visible()
         expect(page.locator("#bill-page .drawer-number")).to_have_text(f"90R / {number}")
-        assert f"#bill?id={bill}" in page.url
+        assert f"/bill/{bill}" in page.url
 
 
 def watch_keys(device):
@@ -50,7 +50,7 @@ def test_watch_button_in_a_card_toggles_the_watch_and_does_not_open_the_bill_pag
     expect(card(page, bill).locator(".watch-button")).to_have_attribute("aria-pressed", "true")
     expect(page.locator("#toast")).to_have_text(f"{bill} added to your watchlist")
     expect(page.locator("#bill-page")).to_be_hidden()
-    assert "#bill?" not in page.url
+    assert "/bill/" not in page.url and "#bill?" not in page.url
     assert bill in "".join(watch_keys(device).values())
     card(page, bill).locator(".watch-button").click()
     expect(card(page, bill).locator(".watch-button")).to_have_attribute("aria-pressed", "false")
@@ -90,7 +90,7 @@ def test_author_link_in_a_card_goes_to_the_member_page_without_opening_the_bill_
     expect(page.locator("#page-title")).to_have_text(re.compile(r"^(Rep|Sen)\. "))  # the member's name
     assert re.search(r"#member\?code=", page.url)
     expect(page.locator("#bill-page")).to_be_hidden()
-    assert "#bill?" not in page.url
+    assert "/bill/" not in page.url and "#bill?" not in page.url
 
 
 def test_companion_tag_in_a_card_opens_the_companion_not_the_card(device):
@@ -102,7 +102,7 @@ def test_companion_tag_in_a_card_opens_the_companion_not_the_card(device):
     assert owner != companion
     tag.click()
     expect(page.locator("#bill-page .drawer-number")).to_have_text(re.compile(r"^90R / "))
-    assert f"#bill?id={companion}" in page.url
+    assert f"/bill/{companion}" in page.url
 
 
 def test_selecting_text_in_a_card_does_not_open_the_bill_page(device):
@@ -239,7 +239,7 @@ def test_watch_button_on_the_bill_page_toggles_and_keeps_the_bill_page_open(devi
     button.click()
     expect(page.locator("#bill-page .drawer-actions [data-watch]")).to_have_text("★ Remove from watchlist")
     expect(page.locator("#bill-page")).to_be_visible()
-    assert f"#bill?id={bill}" in page.url
+    assert f"/bill/{bill}" in page.url
     # The list picked up the change too.
     page.locator("#bill-back").click()
     expect(card(page, bill).locator(".watch-button")).to_have_attribute("aria-pressed", "true")
@@ -264,7 +264,7 @@ def test_companion_link_on_the_bill_page_opens_that_bills_page(device):
     other = link.get_attribute("data-open")
     link.click()
     expect(page.locator("#bill-page")).to_be_visible()
-    assert f"#bill?id={other}" in page.url
+    assert f"/bill/{other}" in page.url
     expect(page.locator("#bill-page .drawer-number")).not_to_have_text(re.compile(rf"/ {owner[:2]} {owner[2:]}$"))
 
 

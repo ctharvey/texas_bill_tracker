@@ -39,7 +39,7 @@ def test_companion_link_opens_the_other_bill(device):
     page = device.open("#bill?id=HB110")
     companion_section(page).locator("button.companion-open").click()
     expect(page.locator(".drawer-number")).to_have_text("90R / HB 972")
-    assert page.url.endswith("#bill?id=HB972")
+    assert page.url.endswith("/bill/HB972")
     # ... and that bill lists HB 110 back, even though it does not carry HB 110 in its own record.
     expect(companion_section(page).locator("button.companion-open", has_text="HB 110")).to_have_count(1)
 
@@ -100,7 +100,7 @@ def test_related_bills_block_links_to_each_related_bill(device):
     expect(section).to_contain_text("computed automatically")
     chips.nth(2).click()
     expect(page.locator(".drawer-number")).to_have_text("90R / SB 295")
-    assert page.url.endswith("#bill?id=SB295")
+    assert page.url.endswith("/bill/SB295")
     expect(page.locator(f"{DRAWER} .drawer-pills .chamber-pill").first).to_have_text("Senate")
 
 

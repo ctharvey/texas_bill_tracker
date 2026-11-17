@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseHash, buildHash, VIEWS} from '../src/prefs.js';
+import {parseHash, buildHash, parseLocation, buildUrl, VIEWS} from '../src/prefs.js';
 import {CLICK_ORDER} from '../src/core/dispatch.js';
 
 test('a bill page is the bill view with an id', () => {
@@ -35,4 +35,29 @@ test('the bill page Back button has a click slot where the drawer close button w
   assert.ok(CLICK_ORDER.includes('bill-back'));
   assert.ok(!CLICK_ORDER.includes('drawer-close'));
   assert.ok(CLICK_ORDER.indexOf('bill-back') < CLICK_ORDER.indexOf('card'));
+});
+
+test('a bill page lives at /bill/<ID>; its list or view-only sync context rides in the fragment', () => {
+  assert.equal(buildUrl('bill', {}, {bill: 'HB5'}), '/bill/HB5');
+  assert.equal(buildUrl('bill', {topic: 'Water'}, {bill: 'HB5', list: ['HB5', 'SB2'], sync: 'abcdefghijklmnopqrstuv'}),
+    '/bill/HB5#list=HB5,SB2&sync=abcdefghijklmnopqrstuv');
+  const p = parseLocation('/bill/HB5', '#list=HB5,SB2&sync=abcdefghijklmnopqrstuv');
+  assert.deepEqual([p.view, p.bill, p.list, p.sync], ['bill', 'HB5', ['HB5', 'SB2'], 'abcdefghijklmnopqrstuv']);
+  assert.equal(parseLocation('/bill/hb5', '').bill, 'HB5');
+  // The path names the bill; an id in the fragment cannot replace it.
+  assert.equal(parseLocation('/bill/HB5', '#id=SB1&bill=SB2').bill, 'HB5');
+  assert.equal(parseLocation('/bill/XX5', '').view, 'all');
+});
+
+test('other views stay at /#view, and old bill addresses still parse at the root', () => {
+  assert.equal(buildUrl('all', {topic: 'Water'}), '/#all?topic=Water');
+  assert.equal(buildUrl('bill', {}, {bill: null}), '/#bill');
+  assert.equal(buildUrl('member', {}, {member: 'A4875'}), '/#member?code=A4875');
+  for (const hash of ['#bill?id=HB5', '#all?topic=Water&bill=HB5', '#today?bill=hb5']) {
+    const p = parseLocation('/', hash);
+    assert.equal(p.bill, 'HB5', hash);
+    assert.equal(buildUrl('bill', {}, {bill: p.bill}), '/bill/HB5');
+  }
+  assert.equal(parseLocation('/', '#watchlist').view, 'watchlist');
+  assert.equal(parseLocation('/index.html', '').view, 'home');
 });

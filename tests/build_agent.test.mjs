@@ -40,7 +40,7 @@ test('bill records use the tracker pipeline: Luna overlay, roster, hearing and l
   assert.equal(hb5.people.authors[0].full_name, 'Sheryl Cole');
   assert.deepEqual(hb5.people.authors[0].links, {lrl: 'https://lrl.texas.gov/x'});
   assert.equal(hb5.full_text_review.summary, 'Changes groundwater district rules.');
-  assert.equal(hb5.links.tracker, 'https://billatlas.org/#all?bill=HB5');
+  assert.equal(hb5.links.tracker, 'https://billatlas.org/bill/HB5');
   const sb12 = JSON.parse(files.get('bills/SB12.json'));
   assert.equal(sb12.people.sponsors, null);
   assert.equal(sb12.full_text_review, null);
