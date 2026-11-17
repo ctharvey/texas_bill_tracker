@@ -68,7 +68,7 @@ const WARBLER_SVG = '<svg viewBox="6 0 54 40" width="106" height="78" aria-hidde
   + '<path d="M23.5 24q9 6 20.5-2q-2 6-11 6q-7 0-9.5-4z" fill="#f4f1e6"/>'
   + '<path d="M27 24.6l2.6-1.4M31 25.5l2.6-1.5M35 25.4l2.6-1.7" stroke="#2b2d29" stroke-width=".8" stroke-linecap="round"/>'
   + '<circle cx="46" cy="18" r="6.5" fill="#1b1d1a"/>'
-  + '<path d="M41 16.5q4-5.5 10-1q.5 5-4 6.5q-5 .5-6-5.5z" fill="#f2c230"/>'
+  + '<path d="M41 16.5q4-5.5 10-1q.5 5-4 6.5q-5 .5-6-5.5z" fill="#f5b517"/>'
   + '<path d="M43 17.2h7.5" stroke="#1b1d1a" stroke-width="1"/><circle cx="47.6" cy="17.2" r="1" fill="#1b1d1a"/>'
   + '<path d="M52 17l6.5 1.6-6.5 1.4z" fill="#1b1d1a"/>'
   + '<g class="warbler-wing" fill="#2b2d29" stroke="#f4f1e6" stroke-width=".7">' + WING + '</g>'
