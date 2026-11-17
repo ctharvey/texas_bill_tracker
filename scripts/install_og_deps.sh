@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install the share card drawer's npm packages (satori, @resvg/resvg-js, fonts) for one commit's package-lock.json,
+# Install the share card drawer's npm packages (satori, @resvg/resvg-wasm, fonts) for one commit's package-lock.json,
 # on the VPS, as root. Run it once whenever package-lock.json changes, before that commit reaches main's og run:
 #   sudo sh scripts/install_og_deps.sh [commit]        (default: main of the deployer's repository)
 # `npm ci` runs in the same pinned node image texas-bill-og.service uses, as texas-bill-atlas, with install scripts

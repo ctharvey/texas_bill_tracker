@@ -60,13 +60,21 @@ async function main() {
   }
   let drawn = 0;
   if (plan.draw.length) {
-    const [{default: satori}, {Resvg}] = await Promise.all([import('satori'), import('@resvg/resvg-js')]);
+    // resvg's WASM build, freed after each card: the native @resvg/resvg-js 2.6.2 kept about 3.5 MB per render
+    // until the process ended, which a GC did not release (the VPS run was killed at 512 MB after ~290 cards).
+    const [{default: satori}, {initWasm, Resvg}] = await Promise.all([import('satori'), import('@resvg/resvg-wasm')]);
+    const require = createRequire(import.meta.url);
+    await initWasm(readFileSync(require.resolve('@resvg/resvg-wasm/index_bg.wasm')));
     const fontList = fonts(), started = Date.now();
     for (const id of plan.draw) {
       const card = cards[id];
       const svg = await satori(cardTree(card), {width: WIDTH, height: 630, fonts: fontList});
-      // Satori draws glyphs as paths, so resvg needs no system fonts.
-      const png = new Resvg(svg, {fitTo: {mode: 'width', value: WIDTH}, font: {loadSystemFonts: false}}).render().asPng();
+      // Satori draws glyphs as paths, so resvg needs no fonts.
+      const resvg = new Resvg(svg, {fitTo: {mode: 'width', value: WIDTH}});
+      const image = resvg.render();
+      const png = image.asPng();
+      image.free();
+      resvg.free();
       writeAtomic(join(opt.out, `${id}.png`), png);
       rendered[id] = card.v;
       if (++drawn % 100 === 0) save();  // A killed run keeps what it drew.
