@@ -1266,7 +1266,7 @@ function loadNearGeo(){
   return nearLoading;
 }
 function saveNear(near){
-  state.near=cleanNear(near,state.nearGeo?.tables);state.nearPick=null;state.nearShow={members:30,area:30};
+  state.near=cleanNear(near,state.nearGeo?.tables);state.nearPick=null;state.nearShow={members:5,area:5};
   if(state.near)writeJson(NEAR_KEY,state.near);else{try{localStorage.removeItem(NEAR_KEY)}catch{}}
   renderContent();
 }
@@ -1317,7 +1317,7 @@ function memberCard(chamber,district){
   const title=chamber==='house'?'Texas House':'Texas Senate';
   if(!district)return `<div class="near-member"><small>${title}</small><strong>District not set</strong></div>`;
   const people=membersFor(state.roster,chamber,district);
-  if(!people.length)return `<div class="near-member"><small>${title} · District ${esc(district)}</small><strong>No member listed yet</strong><p>The roster has no member with a known district here yet (a new member's district may not be recorded, or results are not posted). Check <a class="text-link" href="https://capitol.texas.gov/Members/Members.aspx?Chamber=${chamber==='house'?'H':'S'}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a>.</p></div>`;
+  if(!people.length)return `<div class="near-member"><small>${title} · District ${esc(district)}</small><strong>No member listed yet</strong><p><a class="text-link" href="https://capitol.texas.gov/Members/Members.aspx?Chamber=${chamber==='house'?'H':'S'}" target="_blank" rel="noopener noreferrer">Check Texas Legislature Online ↗</a></p></div>`;
   return people.map(m=>`<div class="near-member"><small>${title} · District ${esc(district)}</small><strong>${m.code?`<a class="text-link" href="${esc(memberHref(m.code))}">${esc(memberTitle(m))}</a>`:esc(memberTitle(m))}</strong><p>${tenurePill(m)} ${esc(m.party||'Party not recorded')}${tenureTag(m)?` · ${esc(tenureTag(m).detail)}`:''}</p>${m.code?`<p>${followButton(m)}</p><a class="text-link" href="${esc(memberHref(m.code))}">All their bills →</a> `:''}${safeHref(m.links?.tlo)?`<a class="text-link" href="${esc(safeHref(m.links.tlo))}" target="_blank" rel="noopener noreferrer">Texas Legislature Online ↗</a>`:''}</div>`).join('');
 }
 function nearData(){
@@ -1333,12 +1333,31 @@ function nearData(){
   return {members:[...byBill.values()].sort(order),local:local.sort(order),area,
     statewide:state.bills.filter(b=>(b.locations||[]).some(l=>l.kind==='statewide')).length};
 }
-function nearRow({bill:b,notes}){
-  return `<article class="today-row" data-bill-id="${esc(b.id)}"${topicStyle(b.topics)}><div class="today-row-head">${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="chamber-pill">${esc(b.chamber)}</span>${openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</div>${headlineLine(b,'card')}${notes.length?`<p class="today-action">${notes.map(n=>typeof n==='string'?esc(n):`${memberNameHtml(n.member,`${n.member.chamber==='house'?'Rep.':'Sen.'} ${n.member.display_name}`)} · ${esc(n.role)}`).join(' · ')}</p>`:''}<div class="bill-tags">${b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}<span class="tag">${esc(lastActionInfo(b).label)}</span></div></article>`;
+// Ceremonial resolutions (memorials, "Waco Day at the Capitol") fold into one row so the bills that change law stand out.
+const CEREMONIAL=/^(in memory of|recognizing|commemorating|congratulating|honoring|memorializing|welcoming|celebrating)\b/i;
+const isCeremonial=b=>/^(HR|SR|HCR|SCR)\d/.test(b.id)&&CEREMONIAL.test(String(b.title||''));
+// A place note says where a bill names this area; one that only repeats the single county adds nothing.
+function placeNote(note,area){
+  const city=/^Names (.+?) \((.+) County\)$/.exec(note);
+  if(city)return city[1];
+  const county=/^Names (.+) County$/.exec(note);
+  return county&&area?.counties?.length<=1?'':note.replace(/^Names /,'');
 }
-function nearList(key,rows,empty){
-  const limit=state.nearShow?.[key]||30;
-  return rows.length?`${rows.slice(0,limit).map(nearRow).join('')}${rows.length>limit?`<button class="outline-button" data-near-more="${key}">Show 30 more · showing ${limit} of ${rows.length}</button>`:''}`:`<p class="review-empty">${empty}</p>`;
+function nearRow({bill:b,notes},opts={}){
+  const last=lastActionInfo(b),brief=typeof b.headline==='string'&&b.headline?b.headline:'';
+  const who=opts.showWho?notes.filter(n=>typeof n!=='string').map(n=>`${memberNameHtml(n.member,`${n.member.chamber==='house'?'Rep.':'Sen.'} ${n.member.display_name}`)} · ${esc(n.role)}`):
+    notes.filter(n=>typeof n!=='string'&&n.role!=='Author').map(n=>esc(n.role));
+  const places=unique(notes.filter(n=>typeof n==='string').map(n=>placeNote(n,opts.area)).filter(Boolean));
+  const meta=[...who.map(w=>`<span class="near-who">${w}</span>`),...places.map(x=>`<span class="tag near-place">${esc(x)}</span>`),
+    ...b.topics.slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`),last.label!=='Filed'?`<span class="tag">${esc(last.label)}</span>`:''].join('');
+  return `<article class="near-row" data-bill-id="${esc(b.id)}"${topicStyle(b.topics)}><p class="near-row-head">${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)} ${brief?`<span class="near-brief">${esc(brief)}</span> <span class="ai-badge" title="Written by Luna, the AI model that reads each bill’s full text; not official.">AI</span>`:openLinkHtml(b.id,billHref(b.id),'bill-title-link',b.title)}</p>${brief?`<p class="near-caption" title="${esc(b.title)}">${esc(b.title)}</p>`:''}${meta?`<div class="near-meta">${meta}</div>`:''}</article>`;
+}
+function nearList(key,rows,empty,opts={}){
+  const main=rows.filter(r=>!isCeremonial(r.bill)),fold=rows.filter(r=>isCeremonial(r.bill));
+  const limit=state.nearShow?.[key]||5;
+  const list=main.length?`<div class="near-rows">${main.slice(0,limit).map(r=>nearRow(r,opts)).join('')}</div>${main.length>limit?`<button class="text-link near-more" data-near-more="${key}">Show all ${main.length}</button>`:''}`:fold.length?'':`<p class="review-empty">${empty}</p>`;
+  const folded=fold.length?`<details class="near-resolutions"><summary>${fold.length} ${fold.length===1?'resolution':'resolutions'} honoring local people and places</summary><div class="near-rows">${fold.map(r=>nearRow(r,opts)).join('')}</div></details>`:'';
+  return list+folded;
 }
 function nearMarkup(){
   const head=`<div class="section-head"><div><div class="section-overline">NEAR YOU</div><h2>Your legislators and local bills</h2></div><span class="subtitle">Texas House and Senate districts for the 90th Legislature</span></div>`;
@@ -1348,10 +1367,13 @@ function nearMarkup(){
   const how={location:'from your location',address:'from the address you looked up',county:'from your county',district:'from the districts you entered'}[n.source];
   const where=[n.house?`House District ${n.house}`:null,n.senate?`Senate District ${n.senate}`:null,n.county?`${n.county} County`:null].filter(Boolean).join(' · ');
   const areaLabel=d.area?.exact?`${n.county} County`:d.area?.counties.length?`your district's ${d.area.counties.length===1?'county':`counties (${d.area.counties.join(', ')})`}`:'your area';
-  return `${head}<div class="info-callout near-summary"><div><strong>${esc(where)}</strong> <span>${esc(how)}</span>${n.near?`<p class="near-hint">${n.source==='county'?`${esc(n.county)} County has more than one district, so these are the ones you picked. Check with your location, address or the official lookup.`:'You are close to a district line, so this may be the neighboring district. Check with your address or the official lookup.'}</p>`:''}</div><div class="tools-row"><button class="outline-button" id="near-change">Change</button><button class="outline-button" id="near-forget">Forget on this device</button></div></div>
+  // Who filed it only needs saying when both of your legislators have bills here.
+  const authors=new Set(d.members.flatMap(x=>x.notes.map(note=>note.member)));
+  const count=k=>`<span class="near-count">${k}</span>`;
+  return `<div class="info-callout near-summary"><div><strong>${esc(where)}</strong> <span>${esc(how)}</span>${n.near?`<p class="near-hint">${n.source==='county'?`${esc(n.county)} County has more than one district, so these are the ones you picked. Check with your location, address or the official lookup.`:'You are close to a district line, so this may be the neighboring district. Check with your address or the official lookup.'}</p>`:''}</div><div class="tools-row"><button class="outline-button" id="near-change">Change</button><button class="outline-button" id="near-forget">Forget on this device</button></div></div>
     <div class="near-members">${memberCard('house',n.house)}${memberCard('senate',n.senate)}</div>
-    <section class="today-group"><h3>Filed or signed by your legislators <span>${d.members.length}</span></h3>${nearList('members',d.members,'No bills by your legislators in this snapshot yet.')}</section>
-    <section class="today-group"><h3>Bills that name ${esc(areaLabel)} <span>${d.local.length}</span></h3><p class="near-hint">A bill is listed when its full-text review names a county or city here, or its caption names the county. Bills written for areas by population size are not matched yet. ${d.statewide.toLocaleString()} reviewed bills apply statewide and are not listed here.</p>${nearList('area',d.local,'No bill names this area yet.')}</section>
+    <section class="near-group"><h3>Filed by your legislators ${count(d.members.length)}</h3>${nearList('members',d.members,'No bills by your legislators in this snapshot yet.',{showWho:authors.size>1})}</section>
+    <section class="near-group"><h3>Bills that name ${esc(areaLabel)} ${count(d.local.length)}</h3><details class="near-how"><summary>How matching works</summary><p>A bill is listed when its full-text review names a county or city here, or its caption names the county. Bills written for areas by population size are not matched yet. ${d.statewide.toLocaleString()} reviewed bills apply statewide and are not listed here.</p></details>${nearList('area',d.local,'No bill names this area yet.',{area:d.area})}</section>
     <p class="near-hint">Official check: <a class="text-link" href="https://wrm.capitol.texas.gov/home" target="_blank" rel="noopener noreferrer">Who Represents Me? (Texas Legislative Council) ↗</a></p>`;
 }
 
@@ -1986,7 +2008,7 @@ function registerClicks(){
     house:$('#near-house-pick')?.value||c.house[0]?.district,senate:$('#near-senate-pick')?.value||c.senate[0]?.district,near:c.house.length>1||c.senate.length>1})});
   clickOn('near-numbers-use','#near-numbers-use',()=>{const near=cleanNear({house:$('#near-house-num')?.value,senate:$('#near-senate-num')?.value,source:'district'},state.nearGeo?.tables);
     if(!near){state.nearError='Enter a House district from 1 to 150, a Senate district from 1 to 31, or both.';renderContent();return}saveNear(near)});
-  clickOn('near-more','[data-near-more]',nearMore=>{state.nearShow[nearMore.dataset.nearMore]+=30;renderContent()});
+  clickOn('near-more','[data-near-more]',nearMore=>{state.nearShow={...state.nearShow,[nearMore.dataset.nearMore]:Infinity};renderContent()});
   clickOn('follow','[data-follow]',follow=>toggleFollow(follow.dataset.follow));
   clickOn('save-search','#save-search',()=>saveCurrentSearch());
   // Opening a saved search marks it seen today; the link itself navigates to the explorer with its filters.

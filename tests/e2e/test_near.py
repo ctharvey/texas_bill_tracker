@@ -37,7 +37,7 @@ def use_location(device, point):
 
 
 def group(page, title_start):
-    return page.locator(".today-group", has=page.locator(f"h3:has-text('{title_start}')"))
+    return page.locator(".near-group", has=page.locator(f"h3:has-text('{title_start}')"))
 
 
 def watch_requests(page):
@@ -85,17 +85,25 @@ def test_use_my_location_shows_house_member_and_county_bills(device):
     expect(cards.nth(1)).to_contain_text("Sen. Kevin Sparks")
 
     expected = authored_numbers("Landgraf", "House") + authored_numbers("Sparks", "Senate")
-    members_group = group(page, "Filed or signed by your legislators")
-    expect(members_group.locator("h3 span")).to_have_text(str(len(expected)))
-    expect(members_group.locator(".today-row")).to_have_count(min(30, len(expected)))
-    expect(members_group.locator(".today-row").first.locator(".today-action")).to_contain_text("· Author")
-    expect(members_group.locator("[data-near-more]")).to_have_text(f"Show 30 more · showing 30 of {len(expected)}")
+    members_group = group(page, "Filed by your legislators")
+    expect(members_group.locator(".near-count")).to_have_text(str(len(expected)))
+    # Five rows first; ceremonial resolutions fold into one row; both legislators have bills, so each row says whose.
+    main = members_group.locator(":scope > .near-rows .near-row")
+    expect(main).to_have_count(5)
+    expect(main.first.locator(".near-who")).to_contain_text("· Author")
+    more = members_group.locator("[data-near-more]")
+    expect(more).to_have_text(re.compile(r"^Show all \d+$"))
+    more.click()
+    folded = members_group.locator(".near-resolutions .near-row").count()
+    expect(members_group.locator(".near-row")).to_have_count(len(expected))
+    assert main.count() + folded == len(expected)
 
     area = group(page, "Bills that name Ector County")
-    expect(area.locator("h3 span")).to_have_text("1")
-    expect(area.locator(".today-row")).to_have_count(1)
-    expect(area.locator(".today-row .today-action")).to_have_text("Names Ector County")
-    expect(page.locator("#dynamic-content")).to_contain_text("reviewed bills apply statewide and are not listed here.")
+    expect(area.locator(".near-count")).to_have_text("1")
+    expect(area.locator(".near-row")).to_have_count(1)
+    # "Names Ector County" would only repeat the section title, so the row has no place tag.
+    expect(area.locator(".near-place")).to_have_count(0)
+    expect(area.locator(".near-how")).to_contain_text("reviewed bills apply statewide and are not listed here.")
 
     assert_no_sync_traffic(requests)
 
@@ -106,11 +114,13 @@ def test_location_in_austin_names_the_city_and_county_in_local_bills(device):
     expect(page.locator(".near-members .near-member").nth(0)).to_contain_text("Rep. Montserrat Garibay")
     expect(page.locator(".near-members .near-member").nth(1)).to_contain_text("No member listed yet")
     area = group(page, "Bills that name Travis County")
-    expect(area.locator("h3 span")).to_have_text("17")
-    # Bills naming a city point at it, with its county, as well as plain county mentions.
-    expect(area.locator(".today-action", has_text="Names Austin (Travis County)").first).to_be_visible()
-    expect(area.locator(".today-action", has_text="Names Travis County").first).to_be_visible()
-    expect(group(page, "Filed or signed by your legislators").locator(".review-empty")).to_have_text(
+    expect(area.locator(".near-count")).to_have_text("17")
+    # A bill naming a city shows the city; plain county mentions add no tag, since the title already names the county.
+    if area.locator("[data-near-more]").count():
+        area.locator("[data-near-more]").click()
+    expect(area.locator(".near-place", has_text="Austin").first).to_be_visible()
+    expect(area.locator(".near-place", has_text="Travis")).to_have_count(0)
+    expect(group(page, "Filed by your legislators").locator(".review-empty")).to_have_text(
         "No bills by your legislators in this snapshot yet.")
 
 

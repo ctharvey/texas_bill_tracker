@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-17
+- Near you is about a third as long: each bill is one compact row (Luna's one-line summary, the official caption
+  on one line, tags), five per section with "Show all N", and ceremonial resolutions (memorials, "Recognizing")
+  fold into one line. Who filed a bill shows only when both legislators have bills here; a place tag shows the
+  city and is dropped when it only repeats the single county. The matching explanation sits behind "How matching
+  works", the empty member card is one line, and the repeated section heading is gone.
+
 ## 2026-11-16
 - Sync and the move keep every saved item (review fixes, not released): a sync write never cuts an item to fit a
   limit (500 bills, 200 legislators, 20 searches); what does not fit is kept aside and listed on the Export page.
