@@ -426,6 +426,18 @@ node container as `texas-bill-atlas`, writing only `live/og`; about 40 ms and 60
 `sudo sh scripts/install_og_deps.sh`; the unit refuses to run when the current lockfile has none installed. Locally:
 `npm ci`, then `node scripts/build_og.mjs --cards <dir>/cards.json --out <dir>`.
 
+### Bill page art banner
+
+The same illustrations can head the bill page. The data run copies each `scripts/og_art/<ID>.jpg` to
+`live/og/art/<ID>.jpg` and lists them in `live/og/art.json` (version, plus alt text from `scripts/og_art_alt.json`).
+The page shows the banner only while the operator flag file `live/site-flags.json` has `"bill_art_banner": true`;
+a missing or unreadable file means off. The page reads it on each load, so flipping it needs no deploy:
+
+```sh
+echo '{"bill_art_banner": true}' | sudo -u texas-bill-atlas tee /var/www/html/texas-bill-atlas/live/site-flags.json
+echo '{"bill_art_banner": false}' | sudo -u texas-bill-atlas tee /var/www/html/texas-bill-atlas/live/site-flags.json
+```
+
 ### Live bill snapshot
 
 `scripts/texas-bill-data.service` and `.timer` run `sync_ftp.py` hourly at :17 on the VPS as `texas-bill-atlas`,

@@ -387,6 +387,72 @@ def write_og_cards(snapshot: dict, out_dir: Path) -> tuple[int, bool]:
     return len(cards), write_if_changed(out_dir / "cards.json", text)
 
 
+# Bill page banners: live/og/art/<ID>.jpg copies of the illustrations and live/og/art.json (bill -> version, alt
+# text). The page shows a banner only while the operator flag in live/site-flags.json has "bill_art_banner": true.
+ART_FORMAT = "texas-bill-art-v1"
+ART_MAX_BYTES = 2_000_000  # build_og.mjs refuses larger files too
+OG_ART_ALT = Path(__file__).resolve().parent / "og_art_alt.json"
+
+
+def load_art_alt(path: Path | None) -> dict[str, str]:
+    """Bill id -> alt text for its illustration (scripts/og_art_alt.json); anything unreadable means none."""
+    try:
+        data = json.loads(path.read_text("utf-8")) if path else None
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: " ".join(v.split()) for k, v in data.items()
+            if BILL_ID.fullmatch(str(k)) and isinstance(v, str) and v.strip()}
+
+
+def write_bill_art(out_dir: Path, art_dir: Path | None = None, alt_path: Path | None = None) -> tuple[int, bool]:
+    """Copy each scripts/og_art/<ID>.jpg to out_dir/art/ and list them in out_dir/art.json.
+
+    Images are written before the list and stale ones removed after it, so the page never lists a missing image."""
+    alts = load_art_alt(alt_path or OG_ART_ALT)
+    images = out_dir / "art"
+    bills, changed = {}, False
+    for source in sorted((art_dir or OG_ART_DIR).glob("*.jpg")):
+        if not BILL_ID.fullmatch(source.stem):
+            continue
+        try:
+            data = source.read_bytes()
+        except OSError:
+            continue
+        if len(data) > ART_MAX_BYTES:
+            continue
+        images.mkdir(parents=True, exist_ok=True)
+        target = images / source.name
+        try:
+            same = target.read_bytes() == data
+        except OSError:
+            same = False
+        if not same:
+            handle, temporary = tempfile.mkstemp(dir=images, prefix=".art-")
+            try:
+                with os.fdopen(handle, "wb") as stream:
+                    stream.write(data)
+                os.chmod(temporary, 0o644)
+                os.replace(temporary, target)
+            except BaseException:
+                Path(temporary).unlink(missing_ok=True)
+                raise
+            changed = True
+        entry = {"v": hashlib.sha256(data).hexdigest()[:12]}
+        if source.stem in alts:
+            entry["alt"] = alts[source.stem]
+        bills[source.stem] = entry
+    out_dir.mkdir(parents=True, exist_ok=True)
+    text = json.dumps({"format": ART_FORMAT, "bills": bills}, ensure_ascii=False, sort_keys=True) + "\n"
+    changed = write_if_changed(out_dir / "art.json", text) or changed
+    for old in images.glob("*.jpg") if images.is_dir() else ():
+        if old.stem not in bills:
+            old.unlink(missing_ok=True)
+            changed = True
+    return len(bills), changed
+
+
 def load_rendered(path: Path | None) -> dict[str, str]:
     """Bill id -> `v` of the card image on disk (live/og/rendered.json); anything unreadable means none."""
     try:
@@ -709,6 +775,7 @@ def main() -> int:
     og_dir = args.og or args.snapshot.parent / "og"
     count, changed = write_og_cards(snapshot, og_dir)
     print(f"Share cards: {count} listed{', changed' if changed else ''}", flush=True)
+    write_bill_art(og_dir)  # No output line: the golden run pins this script's stdout.
     written, unchanged, removed = write_share_pages(snapshot, args.share or args.snapshot.parent / "share", args.site,
                                                     headlines, load_rendered(og_dir / "rendered.json"))
     print(f"Share pages: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
