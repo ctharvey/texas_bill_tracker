@@ -47,7 +47,8 @@ class ApiCatalogTests(unittest.TestCase):
         self.assertEqual(params, {'q', 'limit', 'offset', *svc.search_bills.FILTERS})
         with tempfile.TemporaryDirectory() as tmp:
             build_feeds.write_api_docs(Path(tmp))
-            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ['api-catalog.json', 'openapi.json'])
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ['api-catalog.json', 'auth.md', 'openapi.json'])
+            self.assertIn('auth.md', (Path(tmp) / 'auth.md').read_text('utf-8').splitlines()[0])
 
 
 class DatedActionTests(unittest.TestCase):

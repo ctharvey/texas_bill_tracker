@@ -231,15 +231,16 @@ def sitemap(snapshot: dict, site: str = SITE) -> str:
             + "\n".join(rows) + "\n</urlset>\n")
 
 
-API_DOCS = ("api-catalog.json", "openapi.json")
+API_DOCS = ("api-catalog.json", "openapi.json", "auth.md")
 
 
 def write_api_docs(live_dir: Path, source: Path = Path(__file__).resolve().parent / "api") -> None:
-    """Copy the RFC 9727 API catalog and the OpenAPI description to live/. A Cloudflare rule serves them at
-    /.well-known/api-catalog (as application/linkset+json) and /openapi.json. Each must parse as JSON."""
+    """Copy the RFC 9727 API catalog, the OpenAPI description and auth.md to live/. Cloudflare rules serve them at
+    /.well-known/api-catalog (as application/linkset+json), /openapi.json and /auth.md. JSON files must parse."""
     for name in API_DOCS:
         text = (source / name).read_text("utf-8")
-        json.loads(text)
+        if name.endswith(".json"):
+            json.loads(text)
         write_if_changed(live_dir / name, text)
 
 

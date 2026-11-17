@@ -13,6 +13,9 @@
 - API catalog (RFC 9727) at `/.well-known/api-catalog` and an OpenAPI 3.1 description at `/openapi.json`, covering
   search, per-bill JSON and Markdown, the full data files, RSS feeds and the search service's health. Sources are
   `scripts/api/`; the data run copies them to `live/` and Cloudflare rules serve them at those addresses.
+- `/auth.md` for agents: no registration or credential is needed for public data. Agents may ask a person for
+  their view-only watchlist link and read it only through the watchlist feed, which rejects edit keys; never the
+  edit link. No OAuth metadata is published because the site has no accounts.
 
 ## 2026-11-16
 - Sync and the move keep every saved item (review fixes, not released): a sync write never cuts an item to fit a
