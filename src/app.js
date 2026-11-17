@@ -1557,21 +1557,23 @@ function statuteHintMarkup(keys){
 // An agency id is shown as a code only when it is a short form the name does not already spell out (TCEQ, not HOUSE or TX-COURTS).
 const agencyCode=a=>/^[a-z]{2,6}$/.test(a.id)&&!a.name.toLowerCase().includes(a.id)?a.id.toUpperCase():'';
 function filterAgencyCards(text){
-  const words=text.toLowerCase().split(/\s+/).filter(Boolean),cards=[...document.querySelectorAll('#agency-grid .agency-card')];
-  let shown=0;for(const c of cards){const hit=words.every(w=>c.dataset.find.includes(w));c.hidden=!hit;if(hit)shown++}
-  const chart=document.querySelector('.agency-ranking');
-  if(chart)chart.hidden=words.length>0;
-  $('#agency-find-note').textContent=words.length?(shown?`${shown} of ${cards.length} agencies`:'No agency matches. Try part of the name.'):'';
+  const words=text.toLowerCase().split(/\s+/).filter(Boolean),list=$('#agency-list');
+  if(!list)return;
+  // Agencies with no bills stay hidden until "Show all", but a search looks through every agency.
+  const rows=[...list.children],all=list.dataset.all==='1';
+  let shown=0;for(const li of rows){const hit=words.every(w=>li.firstElementChild.dataset.find.includes(w))&&(words.length>0||all||!li.classList.contains('agency-none'));li.hidden=!hit;if(hit)shown++}
+  $('#agency-find-note').textContent=words.length?(shown?`${shown} of ${rows.length} agencies`:'No agency matches. Try part of the name.'):'';
+  const more=$('#agency-more');if(more)more.hidden=words.length>0;
 }
 function agenciesMarkup(){
   const counts=new Map();for(const b of state.bills)for(const id of new Set(realAgencies(b).map(a=>a.id)))counts.set(id,(counts.get(id)||0)+1);
   const agencies=unique([...AGENCIES.map(a=>a.id),...Object.keys(state.luna?.agencies||{})]).filter(id=>id!==SCOPE_AGENCY_ID).map(id=>({id,name:agencyName(id)})).sort((a,b)=>(counts.get(b.id)||0)-(counts.get(a.id)||0)||a.name.localeCompare(b.name));
-  const leaders=agencies.filter(a=>counts.has(a.id)).slice(0,5);
-  const ranking=leaders.length?`<figure class="agency-ranking"><figcaption>Agencies tagged on the most bills</figcaption><ol>${leaders.map(a=>{
-    const n=counts.get(a.id);
-    return `<li><a href="${esc(buildHash('all',{agency:a.id}))}"><span>${esc(a.name)}</span><strong>${n.toLocaleString()} ${n===1?'bill':'bills'}</strong><i aria-hidden="true" class="area-track"><i style="width:${100*n/counts.get(leaders[0].id)}%"></i></i></a></li>`;
-  }).join('')}</ol></figure>`:'';
-  return `<div class="section-head"><div><div class="section-overline">IMPACT DIRECTORY</div><h2>Texas state agencies</h2></div><span class="subtitle">${counts.size} with possible links in this snapshot</span></div><div class="info-callout"><strong>Why an agency index?</strong> One bill can change the work of several state agencies. “Direct” means the supplied material names an agency; “possible” means an inferred policy connection. An agency absent from a caption is not proof it is unaffected—full bill text review is needed for comprehensive coverage.</div><div class="agency-find"><label for="agency-find">Find an agency</label><input id="agency-find" type="search" maxlength="80" placeholder="Name or short form, e.g. TCEQ" autocomplete="off"><span id="agency-find-note" class="tools-note" aria-live="polite"></span></div>${ranking}<div class="agency-grid" id="agency-grid">${agencies.map(a=>`<button class="agency-card" data-agency-pick="${esc(a.id)}" data-find="${esc(`${a.name} ${a.id} ${agencyCode(a)}`.toLowerCase())}">${agencyCode(a)?`<span class="agency-code">${esc(agencyCode(a))}</span>`:'<span class="agency-code" aria-hidden="true"></span>'}<strong>${esc(a.name)}</strong><span class="hits">${counts.get(a.id)||0} ${counts.get(a.id)===1?'bill':'bills'} in snapshot →</span></button>`).join('')}</div>`;
+  const max=Math.max(1,...agencies.map(a=>counts.get(a.id)||0)),none=agencies.filter(a=>!counts.has(a.id)).length;
+  const row=a=>{
+    const n=counts.get(a.id)||0,code=agencyCode(a);
+    return `<li${n?'':' class="agency-none" hidden'}><button class="agency-row" data-agency-pick="${esc(a.id)}" data-find="${esc(`${a.name} ${a.id} ${code}`.toLowerCase())}"><span class="agency-name">${code?`<span class="agency-code">${esc(code)}</span>`:''}<strong>${esc(a.name)}</strong></span><i aria-hidden="true" class="agency-bar"><i style="width:${(100*n/max).toFixed(1)}%"></i></i><span class="hits">${n.toLocaleString()} <small>${n===1?'bill':'bills'}</small></span></button></li>`;
+  };
+  return `<div class="section-head"><div><div class="section-overline">IMPACT DIRECTORY</div><h2>Texas state agencies</h2></div><span class="subtitle">${agencies.length-none} with possible links in this snapshot</span></div><div class="info-callout"><details class="agency-why"><summary><strong>Why an agency index?</strong> One bill can change the work of several state agencies. <span class="agency-why-more">More</span></summary> “Direct” means the supplied material names an agency; “possible” means an inferred policy connection. An agency absent from a caption is not proof it is unaffected—full bill text review is needed for comprehensive coverage.</details></div><div class="agency-find"><label for="agency-find">Find an agency</label><input id="agency-find" type="search" maxlength="80" placeholder="Name or short form, e.g. TCEQ" autocomplete="off"><span id="agency-find-note" class="tools-note" aria-live="polite"></span></div><ul class="agency-list" id="agency-list">${agencies.map(row).join('')}</ul>${none?`<p class="agency-more" id="agency-more">${none} more ${none===1?'agency has':'agencies have'} no bills in this snapshot. <button type="button" class="text-link" id="agency-show-all" aria-expanded="false">Show all ${agencies.length}</button></p>`:''}`;
 }
 
 const clockText=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/Chicago'})+' CT';
@@ -2017,6 +2019,7 @@ function registerClicks(){
   clickOn('watch','[data-watch]',star=>{const id=star.dataset.watch;changeWatch(state.watch.has(id)?'remove':'add',[id]);renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(state.view==='bill')renderContent();toast(state.watch.has(id)?`${id} added to your watchlist`:`${id} removed from your watchlist`)});
   clickOn('search-example','[data-search-example]',x=>{state.query=x.dataset.searchExample;state.visibleCount=30;renderContent();$('#bill-search')?.focus()});
   clickOn('topic','[data-topic]',topic=>{state.topic=topic.dataset.topic;state.visibleCount=30;renderContent()});
+  clickOn('agency-show-all','#agency-show-all',btn=>{const list=$('#agency-list'),all=list.dataset.all!=='1';list.dataset.all=all?'1':'';btn.setAttribute('aria-expanded',String(all));btn.textContent=all?'Show only agencies with bills':`Show all ${list.children.length}`;filterAgencyCards($('#agency-find').value)});
   clickOn('agency-pick','[data-agency-pick]',pick=>{switchFilters('all');state.agency=pick.dataset.agencyPick;state.visibleCount=30;state.view='all';goTo('all');setView('all')});
   clickOn('clear-filter','[data-clear-filter]',chip=>clearFilter(chip.dataset.clearFilter));
   clickOn('clear-filters','#clear-filters,[data-clear-all]',()=>{Object.assign(state,{query:'',topic:'',area:'',agency:'',chamber:'',party:'',stage:'',action:'',outlook:'',sort:'newest',onlyWatch:false,companion:false,visibleCount:30});renderContent()});

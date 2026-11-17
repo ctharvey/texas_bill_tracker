@@ -85,25 +85,31 @@ def test_agencies_index_lists_agencies_with_counts(device):
     page = device.open("#agencies")
     expect(page.locator("#page-title")).to_contain_text("Follow the agencies.")
     expect(page.locator(".section-head h2")).to_have_text("Texas state agencies")
-    cards = page.locator(".agency-card")
-    assert cards.count() > 30
-    first = cards.first
+    rows = page.locator(".agency-list > li:not([hidden]) .agency-row")
+    assert rows.count() > 30
+    first = rows.first
     expect(first.locator(".agency-code")).to_have_text("HHSC")
     expect(first.locator("strong")).to_have_text("Health and Human Services Commission")
-    expect(first.locator(".hits")).to_have_text(re.compile(r"^\d+ bills in snapshot →$"))
-    # Sorted by how many bills each agency touches.
-    hits = [int(h.split()[0]) for h in page.locator(".agency-card .hits").all_inner_texts()]
+    expect(first.locator(".hits")).to_have_text(re.compile(r"^\d+ bills$"))
+    # Sorted by how many bills each agency touches; agencies with none wait behind "Show all".
+    hits = [int(h.split()[0]) for h in rows.locator(".hits").all_inner_texts()]
     assert hits == sorted(hits, reverse=True)
-    assert hits[0] > 0
-    expect(page.locator(".agency-card", has_text="Texas Facilities Commission").locator(".hits")).to_have_text(
-        "1 bill in snapshot →")
+    assert hits[-1] > 0
+    expect(page.locator(".agency-row", has_text="Texas Facilities Commission").locator(".hits")).to_have_text("1 bill")
     linked = page.locator(".section-head .subtitle").inner_text()
     assert re.fullmatch(r"\d+ with possible links in this snapshot", linked)
+    total = page.locator(".agency-list > li").count()
+    show_all = page.locator("#agency-show-all")
+    expect(show_all).to_have_text(f"Show all {total}")
+    show_all.click()
+    expect(page.locator(".agency-list > li:not([hidden])")).to_have_count(total)
+    show_all.click()
+    expect(page.locator(".agency-list > li:not([hidden])")).to_have_count(len(hits))
 
 
 def test_agency_card_opens_the_explorer_filtered_to_that_agency(device):
     page = device.open("#agencies")
-    card = page.locator(".agency-card", has_text="Texas Education Agency")
+    card = page.locator(".agency-row", has_text="Texas Education Agency")
     claimed = int(card.locator(".hits").inner_text().split()[0])
     card.click()
     expect(page.locator("#page-title")).to_contain_text("See what’s moving.")
