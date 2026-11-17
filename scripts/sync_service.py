@@ -388,10 +388,12 @@ class App:
                                        "error": None, "results": []})
             return 200, {"Content-Type": "text/markdown; charset=utf-8"}, search_bills.usage(index.meta, index.topic_names).encode("utf-8")
         found = search_bills.search(index, params)
+        # Agents may fetch result pages (robots.txt allows them), but search engines should not index them.
+        noindex = {"X-Robots-Tag": "noindex"}
         if wants_json:
-            return 200, {"Content-Type": "application/json"}, json.dumps(search_bills.as_json(found, params)).encode("utf-8")
+            return 200, {"Content-Type": "application/json", **noindex}, json.dumps(search_bills.as_json(found, params)).encode("utf-8")
         text = search_bills.as_markdown(found, params, search_bills.DISCLAIMER)
-        return 200, {"Content-Type": "text/markdown; charset=utf-8"}, text.encode("utf-8")
+        return 200, {"Content-Type": "text/markdown; charset=utf-8", **noindex}, text.encode("utf-8")
 
     @staticmethod
     def read_json(headers, body: bytes | None) -> dict:

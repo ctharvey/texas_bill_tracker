@@ -106,6 +106,13 @@ function billMarkdown(b, coverage, reviewState = '', queueNote = '') {
     return rows.map(p => `- ${cell(p.full_name || p.name)}${p.matched ? ` (${cell(p.summary)})` : ' (not matched to the 90th Legislature roster)'}`
       + ` · [bills](${AGENT}authors/${authorKey(p, key, b)}.md)`).join('\n');
   };
+  // Roles no bill in the snapshot lists yet share one note instead of an empty section each.
+  const roles = keys => {
+    const absent = keys.filter(k => Array.isArray(r.people[k]) && !r.people[k].length && coverage?.[`with_${k}`] === 0);
+    const shown = keys.filter(k => !absent.includes(k)).map(k => `\n### ${k[0].toUpperCase()}${k.slice(1)}\n\n${people(k)}\n`).join('');
+    const names = absent.length > 1 ? `${absent.slice(0, -1).join(', ')} or ${absent.at(-1)}` : absent[0];
+    return shown + (absent.length ? `\n_No ${names} listed: no bill in this snapshot lists any yet, so this reflects the stage of the source data, not this bill._\n` : '');
+  };
   const dated = r.action_dates && r.action_dates.length === r.actions.length;
   const actions = r.actions.length ? r.actions.map((a, i) => `${i + 1}. ${dated ? `${r.action_dates[i]}: ` : ''}${cell(a)}`).join('\n') : '_No actions recorded._';
   const agencies = r.agencies.length ? r.agencies.map(a => `- **${cell(a.name)}** (${a.relationship}, ${a.source}): ${cell(a.reason) || (a.source === 'caption-rules' ? 'Inferred from the caption; no explanation until the full-text review' : 'No explanation recorded')}`).join('\n')
@@ -159,19 +166,7 @@ Authors and coauthors serve in the originating chamber; sponsors and cosponsors 
 ### Authors
 
 ${people('authors')}
-
-### Coauthors
-
-${people('coauthors')}
-
-### Sponsors
-
-${people('sponsors')}
-
-### Cosponsors
-
-${people('cosponsors')}
-
+${roles(['coauthors', 'sponsors', 'cosponsors'])}
 ## Recorded actions
 
 ${actions}
@@ -183,7 +178,7 @@ ${actions}
 - Open in the tracker: ${r.links.tracker}
 - RSS feed of actions: ${r.links.rss}
 - This page as JSON: ${r.links.json}
-- Search all bills: ${AGENT}search?q=<words>
+- Search all bills: ${AGENT}search?q= followed by your words${r.topics.length ? `, e.g. ${AGENT}search?q=${encodeURIComponent(r.topics[0])}` : ''}
 
 ---
 ${DISCLAIMER}
@@ -447,9 +442,23 @@ export function buildPages({snapshot, tags = null, extras = null, roster = null,
 }
 
 const ROBOTS = `# Texas Bill Atlas, agent edition: Markdown and JSON pages for ${SITE}
-# Search crawlers and AI agents are welcome. Search results (/search?...) are live, rate-limited queries: please
-# don't crawl them; the usage page at /search is fine.
+# Search crawlers and AI agents are welcome. Search results (/search?...) are live, rate-limited queries:
+# crawlers please don't crawl them (they are also marked noindex). Agents fetching for a person may use them.
 User-agent: OAI-SearchBot
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: PerplexityBot
+User-agent: Googlebot
+User-agent: Bingbot
+User-agent: Applebot
+User-agent: DuckDuckBot
+User-agent: YandexBot
+User-agent: Baiduspider
+User-agent: Amazonbot
+User-agent: Bytespider
+User-agent: CCBot
+User-agent: meta-externalagent
 Allow: /
 Disallow: /search?
 Disallow: /search.md?
@@ -457,9 +466,6 @@ Disallow: /search.json?
 
 User-agent: *
 Allow: /
-Disallow: /search?
-Disallow: /search.md?
-Disallow: /search.json?
 
 Sitemap: ${AGENT}sitemap.xml
 `;

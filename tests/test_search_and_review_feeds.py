@@ -253,6 +253,12 @@ class SearchRouteTests(unittest.TestCase):
         except svc.Rejected as error:
             return error.status, {}, error.message.encode()
 
+    def test_result_pages_are_noindex_but_the_usage_page_is_not(self):
+        self.data.write_text(json.dumps(AGENT_DATA), 'utf-8')
+        self.assertEqual(self.get('/search?q=gun')[1].get('X-Robots-Tag'), 'noindex')
+        self.assertEqual(self.get('/search.json?q=gun')[1].get('X-Robots-Tag'), 'noindex')
+        self.assertNotIn('X-Robots-Tag', self.get('/search')[1])
+
     def test_markdown_json_usage_and_unavailable(self):
         self.assertEqual(self.get('/search?q=gun')[0], 503)  # Data not built yet: say so.
         self.data.write_text(json.dumps(AGENT_DATA), 'utf-8')

@@ -183,7 +183,12 @@ test('bill pages link the official text and explain empty roles with coverage', 
   assert.match(sb12, /Pending: review status not available\. 1 of 2 bills have a published review so far/);
   // HB5 lists a coauthor, so SB12's empty coauthors are not a dataset-wide gap; no bill lists cosponsors.
   assert.match(sb12, /### Coauthors\n\n_None listed in the source snapshot\._/);
-  assert.match(hb5, /### Cosponsors\n\n_None listed\. No bill in this snapshot lists any cosponsors yet/);
+  // Sponsors and cosponsors are empty snapshot-wide: one shared note, no empty sections.
+  assert.match(hb5, /_No sponsors or cosponsors listed: no bill in this snapshot lists any yet/);
+  assert.doesNotMatch(hb5, /### (Sponsors|Cosponsors)/);
+  assert.match(hb5, /### Coauthors\n\n- Reggie Smith/);
+  assert.match(hb5, /Search all bills: https:\/\/agent\.billatlas\.org\/search\?q= followed by your words, e\.g\. https:\/\/agent\.billatlas\.org\/search\?q=Water$/m);
+  assert.doesNotMatch(hb5, /<words>/);
   const overview = files.get('index.md');
   assert.match(overview, /Full-text reviewed: 1 of 2 bills/);
   assert.match(overview, /coauthors: 1; sponsors: 0; cosponsors: 0/);
@@ -216,11 +221,14 @@ test('crawlers can find every page: robots.txt allows OAI-SearchBot and names th
   const robots = build().get('robots.txt');
   const groups = robots.split(/\n\n/).filter(g => /User-agent:/.test(g));
   const oai = groups.find(g => /^User-agent: OAI-SearchBot$/m.test(g));
-  assert.ok(oai && /^Allow: \/$/m.test(oai), 'OAI-SearchBot has its own allow group');
-  for (const g of groups) {
-    assert.doesNotMatch(g, /^Disallow: \/$/m);
-    assert.match(g, /^Disallow: \/search\?$/m);  // Live, rate-limited queries are not crawled.
-  }
+  assert.ok(oai && /^Allow: \/$/m.test(oai), 'OAI-SearchBot has an allow group');
+  for (const g of groups) assert.doesNotMatch(g, /^Disallow: \/$/m);
+  // Named crawlers skip live, rate-limited queries; any other agent (one fetching for a person) may search.
+  for (const bot of ['OAI-SearchBot', 'GPTBot', 'ClaudeBot', 'Googlebot', 'Bingbot'])
+    assert.match(groups.find(g => new RegExp(`^User-agent: ${bot}$`, 'm').test(g)), /^Disallow: \/search\?$/m);
+  const star = groups.find(g => /^User-agent: \*$/m.test(g));
+  assert.ok(star && /^Allow: \/$/m.test(star));
+  assert.doesNotMatch(star, /Disallow/);
   assert.match(robots, new RegExp(`^Sitemap: ${AGENT}sitemap\\.xml$`, 'm'));
 });
 
