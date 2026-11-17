@@ -96,7 +96,8 @@ def test_luna_block_for_a_reviewed_bill(device):
 def test_authors_and_sponsors_lists_with_counts(device):
     page = device.open("#bill?id=HB110")
     section = page.locator(f"{PAGE} section", has=page.locator("h3", has_text="Authors & sponsors"))
-    expect(section.locator("h4")).to_have_text(["Authors (1)", "Coauthors (0)", "Sponsors (0)", "Cosponsors (0)"])
+    expect(section.locator("h4")).to_have_text(["Texas House", "Texas Senate"])
+    expect(section.locator("h5")).to_have_text(["Authors (1)", "Coauthors (0)", "Sponsors (0)", "Cosponsors (0)"])
     author = section.locator("ul.member-list li")
     expect(author).to_have_count(1)
     expect(author).to_contain_text("Ana-María Rodríguez Ramos")

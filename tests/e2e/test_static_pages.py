@@ -22,14 +22,15 @@ def test_saving_page_headings(device):
     page = device.open("#saving")
     expect(page.locator("#page-title")).to_contain_text("Save your work.")
     heads = page.locator(".section-head h2").all_inner_texts()
-    assert heads == ["Saving and sharing your info", "What is stored, and where"]
-    expect(page.locator(".info-callout").first).to_contain_text("There are no logins on this site.")
-    cards = page.locator(".method-card")
-    expect(cards).to_have_count(9)
-    titles = [c.locator("h3").inner_text() for c in cards.all()]
-    assert titles == ["Your watchlist", "Remembered filters", "Links to any view", "Share links",
-                      "Export and import a file", "Private sync links", "RSS feeds", "Followed legislators",
-                      "Saved searches"]
+    assert heads == ["Share your watchlist", "What is stored, and where"]
+    choices = page.locator(".sharing-options article")
+    assert choices.locator("h3").all_text_contents() == ["Share a snapshot", "Share a live list"]
+    expect(choices.first).to_contain_text("Copy share link")
+    expect(choices.last).to_contain_text("Copy view-only link")
+    topic = page.locator(".saving-reference details").filter(has_text="Sync your own devices")
+    topic.locator("summary").click()
+    expect(topic.locator("p")).to_be_visible()
+    expect(topic).to_contain_text("anyone with it can change the list")
 
 
 def test_saving_page_privacy_promises(device):
