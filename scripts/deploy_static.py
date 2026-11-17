@@ -25,17 +25,30 @@ SNAPSHOT = 'data/bills.json'
 KEEP_RELEASES = 10
 ASSETS = 'assets'
 PAGE_REFERENCES = ('./src/styles.css', './src/app.js')
+# Files under public/ are served from the site root (/favicon.ico, /social-card.png): stable URLs for browsers and
+# link-preview crawlers, unlike assets/<digest>/. One level only, with names that cannot shadow the page or a folder.
+PUBLIC = 'public/'
+PUBLIC_NAME = re.compile(r'[a-z0-9][a-z0-9-]*\.(?:png|ico|svg|txt|webmanifest)')
 
 
 def release_files(tracked) -> tuple[str, ...]:
-    """The published files of a commit: index.html, every file under src/ and DATA_FILES.
+    """The published files of a commit: index.html, every file under src/ and public/, and DATA_FILES.
 
     Listing src/ from the commit (not by name) is what lets code move between src/ folders without a deployer change."""
     tracked = set(tracked)
     missing = [name for name in ('index.html', *DATA_FILES) if name not in tracked]
     if missing:
         raise ValueError('Missing from the commit: ' + ', '.join(missing))
-    return ('index.html', *sorted(name for name in tracked if name.startswith('src/')), *DATA_FILES)
+    public = sorted(name for name in tracked if name.startswith(PUBLIC))
+    bad = [name for name in public if not PUBLIC_NAME.fullmatch(name[len(PUBLIC):])]
+    if bad:
+        raise ValueError('Unexpected file under public/: ' + ', '.join(bad))
+    return ('index.html', *sorted(name for name in tracked if name.startswith('src/')), *public, *DATA_FILES)
+
+
+def root_files(bundle: dict[str, bytes]) -> dict[str, bytes]:
+    """Move public/<name> to <name> at the release root."""
+    return {(name[len(PUBLIC):] if name.startswith(PUBLIC) else name): content for name, content in bundle.items()}
 
 
 def commit_files(commit: str) -> list[str]:
@@ -107,6 +120,7 @@ def main() -> None:
         require_assets(bundle)
         digest, versioned = versioned_assets(bundle)
         bundle.update(versioned)
+        bundle = root_files(bundle)
         release.parent.mkdir(parents=True, exist_ok=True)
         staging = Path(tempfile.mkdtemp(prefix='.staging-', dir=release.parent))
         try:

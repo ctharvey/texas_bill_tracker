@@ -219,6 +219,97 @@ def write_feeds(snapshot: dict, out_dir: Path, site: str = SITE, reviews: dict |
 
 
 # ---------------------------------------------------------------------------------------------------------------
+# Share pages: live/share/<ID>.html, served at /bill/<ID>. Link-preview crawlers (Discord, Facebook, X, Slack) drop
+# the #fragment of a bill's app address, so each bill needs a real page carrying its own tags. People are sent on to
+# the bill in the app; crawlers don't run scripts, so they keep the tags.
+
+SHARE_TITLE_MAX, SHARE_DESCRIPTION_MAX = 70, 200
+SITE_CARD = "social-card.png"
+_SHARE_NAME = re.compile(r"(" + BILL_ID.pattern + r")\.html")
+
+
+def bill_number(bill_id: str) -> str:
+    return re.sub(r"^(HJR|SJR|HCR|SCR|HB|SB|HR|SR)", r"\1 ", bill_id)
+
+
+def clip(text: str, limit: int) -> str:
+    text = " ".join(str(text).split())
+    if len(text) <= limit:
+        return text
+    cut = text[:limit - 1].rsplit(" ", 1)[0] or text[:limit - 1]
+    return cut.rstrip(" ,;:") + "…"
+
+
+def load_headlines(path: Path | None) -> dict[str, str]:
+    """Luna's "In brief" lines (texas-bill-luna-extras-v1) keyed by bill id; anything unreadable means none."""
+    try:
+        data = json.loads(path.read_text("utf-8")) if path else None
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict) or data.get("format") != "texas-bill-luna-extras-v1" or not isinstance(data.get("bills"), dict):
+        return {}
+    return {k: " ".join(v["headline"].split()) for k, v in data["bills"].items()
+            if isinstance(v, dict) and isinstance(v.get("headline"), str) and v["headline"].strip()}
+
+
+def share_page(bill: dict, site: str = SITE, headline: str | None = None) -> str:
+    bill_id = bill["id"]
+    caption = " ".join(str(bill.get("caption") or bill.get("title") or "No caption available").split())
+    url, target = f"{site}bill/{bill_id}", f"{site}#bill?id={bill_id}"
+    title = clip(f"{bill_number(bill_id)}: {caption}", SHARE_TITLE_MAX)
+    # The official caption is in the title; an AI-written line is labelled as one.
+    description = clip(f"AI summary: {headline}" if headline else caption, SHARE_DESCRIPTION_MAX)
+    image = f"{site}{SITE_CARD}"
+    a = lambda value: escape(value, {'"': "&quot;"})
+    meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
+            ("property", "og:title", title), ("property", "og:description", description), ("property", "og:url", url),
+            ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
+            ("property", "og:image:alt", "Texas Bill Atlas"), ("name", "twitter:card", "summary_large_image"),
+            ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
+            ("name", "description", description)]
+    tags = "\n".join(f'<meta {kind}="{name}" content="{a(value)}">' for kind, name, value in meta)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#112136">
+<title>{escape(title)} · Texas Bill Atlas</title>
+<link rel="canonical" href="{a(url)}">
+<link rel="icon" href="/favicon.ico">
+{tags}
+<script>location.replace({json.dumps(target)})</script>
+</head>
+<body>
+<p><a href="{a(target)}">{escape(bill_number(bill_id))} on Texas Bill Atlas</a>: {escape(caption)}</p>
+</body>
+</html>
+"""
+
+
+def write_share_pages(snapshot: dict, out_dir: Path, site: str = SITE,
+                      headlines: dict[str, str] | None = None) -> tuple[int, int, int]:
+    """One share page per bill, rewritten only when it changes; pages for bills no longer in the snapshot removed."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    headlines, keep = headlines or {}, set()
+    written = unchanged = removed = 0
+    for bill in snapshot.get("bills") or []:
+        if not isinstance(bill, dict) or not BILL_ID.fullmatch(str(bill.get("id", ""))):
+            continue  # Never build a file name from an unexpected id.
+        keep.add(f"{bill['id']}.html")
+        if write_if_changed(out_dir / f"{bill['id']}.html", share_page(bill, site, headlines.get(bill["id"]))):
+            written += 1
+        else:
+            unchanged += 1
+    if keep:  # An empty or broken snapshot never empties the folder.
+        for path in out_dir.iterdir():
+            if _SHARE_NAME.fullmatch(path.name) and path.name not in keep:
+                path.unlink(missing_ok=True)
+                removed += 1
+    return written, unchanged, removed
+
+
+# ---------------------------------------------------------------------------------------------------------------
 # Statute index: which sections of Texas law each bill amends, adds or repeals, with the text it quotes.
 # It lives here because the data unit fetches only sync_ftp.py and this file from main on every run.
 
@@ -484,6 +575,10 @@ def main() -> int:
                         help="Published Luna tags; defaults to luna/tags.json beside the snapshot when present")
     parser.add_argument("--members", type=Path, default=None,
                         help="Legislator roster for per-member feeds; defaults to members.json beside the snapshot")
+    parser.add_argument("--extras", type=Path, default=None,
+                        help="Luna extras (In brief lines); defaults to extras.json beside the tags")
+    parser.add_argument("--share", type=Path, default=None,
+                        help="Share page output (served at /bill/<ID>); defaults to share/ beside the snapshot")
     parser.add_argument("--text", type=Path, default=None, help="Bill text directory; defaults to text/ beside the snapshot")
     parser.add_argument("--statutes", type=Path, default=None,
                         help="Statute index output; defaults to statutes/ beside the snapshot")
@@ -496,6 +591,9 @@ def main() -> int:
     snapshot, reviews = json.loads(args.snapshot.read_text("utf-8")), load_reviews(tags)
     written, unchanged = write_feeds(snapshot, args.out, args.site, reviews)
     print(f"Feeds: {written} written, {unchanged} unchanged", flush=True)
+    headlines = load_headlines(args.extras or tags.parent / "extras.json")
+    written, unchanged, removed = write_share_pages(snapshot, args.share or args.snapshot.parent / "share", args.site, headlines)
+    print(f"Share pages: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
     roster = load_roster(args.members or args.snapshot.parent / "members.json")
     written, unchanged = write_member_feeds(snapshot, roster, args.out / "members", args.site, reviews)
     print(f"Member feeds: {written} written, {unchanged} unchanged", flush=True)

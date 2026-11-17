@@ -145,5 +145,32 @@ class CarryPreviousAssetsTests(unittest.TestCase):
         self.assertFalse((self.staging / 'assets').exists())
 
 
+class PublicFilesTests(unittest.TestCase):
+    def test_public_files_are_published_at_the_site_root(self):
+        tracked = ['index.html', 'src/app.js', 'public/favicon.ico', 'public/social-card.png', *deploy.DATA_FILES]
+        files = deploy.release_files(tracked)
+        self.assertIn('public/social-card.png', files)
+        moved = deploy.root_files({name: b'x' for name in files})
+        self.assertIn('favicon.ico', moved)
+        self.assertIn('social-card.png', moved)
+        self.assertFalse(any(name.startswith('public/') for name in moved))
+
+    def test_unexpected_public_names_are_refused(self):
+        for name in ('public/index.html', 'public/live', 'public/sub/x.png', 'public/.hidden.png', 'public/Assets.png'):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                deploy.release_files(['index.html', name, *deploy.DATA_FILES])
+
+    def test_every_root_file_the_page_links_is_tracked_and_published(self):
+        page = (ROOT / 'index.html').read_text(encoding='utf-8')
+        published = {name[len('public/'):] for name in deploy.release_files(tracked_files()) if name.startswith('public/')}
+        linked = set(re.findall(r'(?:href|content)="(?:https://billatlas\.org)?/([a-z0-9-]+\.(?:png|ico))"', page))
+        self.assertEqual(linked, {'favicon.ico', 'icon.png', 'apple-touch-icon.png', 'social-card.png'})
+        self.assertLessEqual(linked, published)
+        for tag in ('og:title', 'og:description', 'og:url', 'og:image', 'og:site_name'):
+            self.assertIn(f'property="{tag}"', page)
+        self.assertIn('<meta name="twitter:card" content="summary_large_image">', page)
+        self.assertIn('<link rel="canonical" href="https://billatlas.org/">', page)
+
+
 if __name__ == '__main__':
     unittest.main()

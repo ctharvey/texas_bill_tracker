@@ -392,5 +392,63 @@ class ListenBacklogTests(unittest.TestCase):
         self.assertEqual(len(clients), 64)
 
 
+class SharePageTests(unittest.TestCase):
+    BILL = {'id': 'HB486', 'caption': 'Relating to the "salvage" of wildlife <killed> by a motor vehicle & its use.'}
+
+    def meta(self, page, name):
+        import re
+        found = re.search(r'<meta (?:property|name)="' + re.escape(name) + r'" content="([^"]*)">', page)
+        return found and found.group(1)
+
+    def test_tags_escape_the_caption_and_point_at_the_share_url(self):
+        page = build_feeds.share_page(self.BILL)
+        self.assertEqual(self.meta(page, 'og:url'), 'https://billatlas.org/bill/HB486')
+        self.assertIn('<link rel="canonical" href="https://billatlas.org/bill/HB486">', page)
+        self.assertTrue(self.meta(page, 'og:title').startswith('HB 486: Relating to the &quot;salvage&quot; of wildlife &lt;killed&gt;'))
+        self.assertNotIn('<killed>', page)
+        self.assertEqual(self.meta(page, 'og:image'), 'https://billatlas.org/social-card.png')
+        self.assertEqual(self.meta(page, 'twitter:card'), 'summary_large_image')
+        self.assertIn('location.replace("https://billatlas.org/#bill?id=HB486")', page)
+        self.assertIn('<a href="https://billatlas.org/#bill?id=HB486">', page)  # People without scripts.
+
+    def test_title_and_description_fit_platform_limits(self):
+        long = {'id': 'SB1', 'caption': 'Relating to ' + 'the regulation of things ' * 30}
+        page = build_feeds.share_page(long, headline='Lets people ' + 'do a great many things ' * 20)
+        import html
+        title, description = (html.unescape(self.meta(page, n)) for n in ('og:title', 'og:description'))
+        self.assertLessEqual(len(title), build_feeds.SHARE_TITLE_MAX)
+        self.assertLessEqual(len(description), build_feeds.SHARE_DESCRIPTION_MAX)
+        self.assertTrue(title.endswith('\u2026') and description.endswith('\u2026'))
+
+    def test_description_is_the_caption_or_a_labelled_ai_summary(self):
+        self.assertEqual(self.meta(build_feeds.share_page({'id': 'HB1', 'caption': 'Relating to ferries.'}), 'og:description'),
+                         'Relating to ferries.')
+        self.assertEqual(self.meta(build_feeds.share_page({'id': 'HB1', 'caption': 'Relating to ferries.'}, headline='Funds ferries.'),
+                                   'og:description'), 'AI summary: Funds ferries.')
+
+    def test_headlines_come_from_extras_and_bad_files_mean_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'extras.json'
+            path.write_text(json.dumps({'format': 'texas-bill-luna-extras-v1', 'bills': {
+                'HB1': {'headline': ' Funds  ferries. '}, 'HB2': {'headline': ''}, 'HB3': 'x'}}), 'utf-8')
+            self.assertEqual(build_feeds.load_headlines(path), {'HB1': 'Funds ferries.'})
+            path.write_text('{"format": "other", "bills": {}}', 'utf-8')
+            self.assertEqual(build_feeds.load_headlines(path), {})
+            self.assertEqual(build_feeds.load_headlines(Path(tmp) / 'missing.json'), {})
+
+    def test_pages_are_written_once_and_removed_with_their_bill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'share'
+            snap = {'bills': [{'id': 'HB1', 'caption': 'A.'}, {'id': 'SB2', 'caption': 'B.'}, {'id': '../x', 'caption': 'C.'}]}
+            self.assertEqual(build_feeds.write_share_pages(snap, out), (2, 0, 0))
+            self.assertEqual(build_feeds.write_share_pages(snap, out), (0, 2, 0))
+            (out / 'notes.txt').write_text('kept', 'utf-8')
+            self.assertEqual(build_feeds.write_share_pages({'bills': [{'id': 'HB1', 'caption': 'A.'}]}, out), (0, 1, 1))
+            self.assertEqual(sorted(p.name for p in out.iterdir()), ['HB1.html', 'notes.txt'])
+            # A snapshot with no usable bills never empties the folder.
+            self.assertEqual(build_feeds.write_share_pages({'bills': []}, out), (0, 0, 0))
+            self.assertTrue((out / 'HB1.html').exists())
+
+
 if __name__ == '__main__':
     unittest.main()

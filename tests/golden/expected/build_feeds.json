@@ -1615,6 +1615,7 @@
  },
  "stdout": [
   "Feeds: 1384 written, 0 unchanged",
+  "Share pages: 1384 written, 0 unchanged, 0 removed",
   "Member feeds: 179 written, 0 unchanged",
   "Statute sections: 43 written, 0 unchanged, 0 removed",
   "Population brackets: 5 bills, 13 clauses, written"
