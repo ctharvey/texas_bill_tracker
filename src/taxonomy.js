@@ -845,6 +845,13 @@ export function activityOn(bills, day) {
   return out;
 }
 
+// A day's rows with the highest bill number first: actions carry a day but no time, and numbers are given out in
+// filing order, so the highest is the newest. Equal numbers: House first, then by id.
+export function highestNumberFirst(rows) {
+  const num = row => Number(/\d+/.exec(row.bill.id)?.[0] || 0);
+  return [...rows].sort((a, b) => num(b) - num(a) || a.bill.id.localeCompare(b.bill.id));
+}
+
 // The most recent day on or before `today` that has any activity, or null.
 export function latestActivityDay(bills, today) {
   let best = null;

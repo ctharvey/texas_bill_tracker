@@ -28,7 +28,7 @@ import {oldSiteBanner, newSiteResult, savedSummary} from './features/move/view.j
 import {withMode} from './features/theme/model.js';
 import {artEntries, artBanner, HERO_MEDIA, heroFits} from './features/art/view.js';
 import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, followedBills, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
-import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, sortAgencyIds, groupAgencyIds, searchTerms, textMatches, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
+import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, sortAgencyIds, groupAgencyIds, searchTerms, textMatches, newestFirst, aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, highestNumberFirst, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
 
 const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last action',actionstage:'Last action stage',number:'Bill number',agencies:'Most agencies',hearing:'Hearing progress',influence:'Author influence'};
 const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
@@ -1191,10 +1191,10 @@ const TODAY_INTERIM_NOTE='The 90th Legislature convenes in January 2027; floor c
 // The Today view's day and rows, shared by its markup and "Copy page for AI".
 function todayData(){
   const today=chicagoDate(new Date());
-  let day=today,rows=activityOn(state.bills,day),note='';
+  let day=today,rows=highestNumberFirst(activityOn(state.bills,day)),note='';
   if(!rows.length){
     const last=latestActivityDay(state.bills,today);
-    if(last){day=last;rows=activityOn(state.bills,day)}
+    if(last){day=last;rows=highestNumberFirst(activityOn(state.bills,day))}
     note=`No recorded activity today${last?`; showing ${esc(dateText(last))}`:''}.`;
   }
   const counts=topicCounts(rows.map(r=>r.bill));

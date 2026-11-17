@@ -46,7 +46,7 @@ def test_today_lists_the_days_bills(device):
     rows = page.locator(".today-row")
     expect(rows).to_have_count(6)
     numbers = [r.replace("\n", " ") for r in page.locator(".today-row .bill-number").all_inner_texts()]
-    assert numbers == [f"HB {n}" for n in range(1082, 1088)]
+    assert numbers == [f"HB {n}" for n in range(1087, 1081, -1)]  # highest number (newest filed) first
     group = page.locator(".today-group h3")
     expect(group).to_have_count(1)
     expect(group).to_have_text(re.compile(r"^Filed\s+6$"))
