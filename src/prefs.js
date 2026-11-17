@@ -1,6 +1,8 @@
 // Saving choices without accounts: URL state, remembered filters, profile and watchlist files, and sync merging.
-export const FILTER_DEFAULTS = {query: '', topic: '', area: '', agency: '', chamber: '', party: '', stage: '', action: '', outlook: '', sort: 'newest', onlyWatch: false};
+export const FILTER_DEFAULTS = {query: '', topic: '', area: '', agency: '', chamber: '', party: '', stage: '', action: '', outlook: '', sort: 'newest', onlyWatch: false, companion: false};
 const FILTER_NAMES = Object.keys(FILTER_DEFAULTS);
+// On-or-off filters: true or false when remembered, 1 or 0 in an address.
+const ON_OFF = new Set(['onlyWatch', 'companion']);
 // Renamed filter values, so old links, saved searches and remembered filters keep working (taxonomy.NO_HEARING).
 const RENAMED = {outlook: {'Not rated': 'No hearing yet'}};
 // Own keys only, so a value such as "__proto__" passes through as text instead of resolving to Object.prototype.
@@ -30,7 +32,7 @@ export function cleanFilters(raw) {
   if (!raw || typeof raw !== 'object') return out;
   for (const name of FILTER_NAMES) {
     const value = raw[name];
-    if (name === 'onlyWatch' ? typeof value === 'boolean' : typeof value === 'string' && value.length <= 200 && usable(name, value)) out[name] = current(name, value);
+    if (ON_OFF.has(name) ? typeof value === 'boolean' : typeof value === 'string' && value.length <= 200 && usable(name, value)) out[name] = current(name, value);
   }
   return out;
 }
@@ -49,7 +51,7 @@ export function parseHash(hash) {
   const filters = {};
   for (const name of FILTER_NAMES) {
     if (!params.has(name) || !usable(name, params.get(name))) continue;
-    filters[name] = name === 'onlyWatch' ? params.get(name) === '1' : current(name, params.get(name).slice(0, 200));
+    filters[name] = ON_OFF.has(name) ? params.get(name) === '1' : current(name, params.get(name).slice(0, 200));
   }
   const list = params.has('list') ? uniqueIds(params.get('list').split(',')) : null;
   // A bill page is `#bill?id=HB1`; `bill=` on any view is the older address (RSS items, agent docs, saved links).
@@ -71,7 +73,7 @@ export function buildHash(view, filters, {list = null, bill = null, sync = null,
     for (const name of FILTER_NAMES) {
       const value = filters?.[name];
       if (value === undefined || value === FILTER_DEFAULTS[name]) continue;
-      parts.push(`${name}=${name === 'onlyWatch' ? (value ? '1' : '0') : encodeURIComponent(value)}`);
+      parts.push(`${name}=${ON_OFF.has(name) ? (value ? '1' : '0') : encodeURIComponent(value)}`);
     }
   }
   if (view === 'bill' && isBillId(bill)) parts.push(`id=${bill}`);
@@ -181,7 +183,7 @@ export function newSearchId(random = n => crypto.getRandomValues(new Uint8Array(
 export function searchName(filters, agencyName = id => id, areaName = id => id) {
   const f = cleanFilters(filters);
   const parts = [f.query && `“${f.query.trim()}”`, f.area && areaName(f.area), f.topic, f.agency && agencyName(f.agency), f.chamber, f.party && `${f.party} authors`, f.stage, f.outlook,
-    f.action, f.onlyWatch && 'Watched only'].filter(Boolean);
+    f.action, f.companion && 'Has companion', f.onlyWatch && 'Watched only'].filter(Boolean);
   return (parts.join(' · ') || 'All bills').slice(0, 80);
 }
 
