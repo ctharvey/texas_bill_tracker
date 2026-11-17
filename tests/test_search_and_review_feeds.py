@@ -71,6 +71,15 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(search_bills.as_json(found, params)['results'][0]['matched_in'], ['official subjects'])
         self.assertEqual([r['id'] for *_, r, _ in search_bills.search(index(data), search_bills.parse_params('q=ai'))['results']], ['HB280'])
 
+    def test_luna_search_terms_find_bills_with_other_wording(self):
+        data = {**AGENT_DATA, 'bills': AGENT_DATA['bills'] + [
+            record('HB486', 'Relating to the salvage of wildlife killed in a motor vehicle collision.',
+                   affected_groups=['Drivers of road-killed animals'], search_terms=['roadkill', 'road-killed animals'])]}
+        params = search_bills.parse_params('q=roadkill')
+        found = search_bills.search(index(data), params)
+        self.assertEqual([r['id'] for *_, r, _ in found['results']], ['HB486'])
+        self.assertEqual(search_bills.as_json(found, params)['results'][0]['matched_in'], ['Luna search terms'])
+
     def test_companions_in_results_are_listed_together_and_marked(self):
         late = lambda d: {'category': 'Filed', 'date': d}
         data = {**AGENT_DATA, 'bills': AGENT_DATA['bills'] + [

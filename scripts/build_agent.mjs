@@ -5,7 +5,7 @@
 import {mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync, chmodSync} from 'node:fs';
 import {dirname, join, relative, sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {AGENCY_NAME, NO_HEARING, applyLunaTags, assessHearing, attachMembers, authorInfluence, authorshipParty,
+import {AGENCY_NAME, NO_HEARING, applyLunaExtras, applyLunaTags, assessHearing, attachMembers, authorInfluence, authorshipParty,
   companionIndex, lastActionInfo, memberSummary, normalizeBill, officialUrl, reviewProgress} from '../src/taxonomy.js';
 import {buildHash} from '../src/prefs.js';
 
@@ -30,7 +30,7 @@ const linkText = value => cell(value).replace(/([[\]])/g, '\\$1');
 const tracker = (filters = {}, extra = {}) => SITE + buildHash('all', filters, extra);
 const byRecent = (a, b) => (b.lastAction.date || '').localeCompare(a.lastAction.date || '') || a.id.localeCompare(b.id, 'en', {numeric: true});
 
-export function loadBills({snapshot, tags = null, roster = null, minBills = 1000}) {
+export function loadBills({snapshot, tags = null, extras = null, roster = null, minBills = 1000}) {
   if (snapshot?.session !== '90R' || snapshot.data_mode !== 'official-ftp' || !Array.isArray(snapshot.bills)
       || snapshot.bills.length < minBills) throw new Error('Refusing an incomplete or unofficial snapshot');
   let bills = snapshot.bills.map(raw => normalizeBill(raw, snapshot.author_profiles)).filter(Boolean);
@@ -38,6 +38,10 @@ export function loadBills({snapshot, tags = null, roster = null, minBills = 1000
   const lunaNames = tagged && tags.agencies && typeof tags.agencies === 'object' ? tags.agencies : {};
   if (tagged) bills = bills.map(b => Object.hasOwn(tags.bills, b.id) && tags.bills[b.id] && typeof tags.bills[b.id] === 'object'
     ? applyLunaTags(b, tags.bills[b.id], lunaNames) : b);
+  // Luna's extra search terms, as the site applies them, so agent search finds "roadkill" for a bill whose text says
+  // "wildlife killed in an unintentional motor vehicle collision".
+  if (extras?.format === 'texas-bill-luna-extras-v1' && extras.bills && typeof extras.bills === 'object' && !Array.isArray(extras.bills))
+    bills = bills.map(b => Object.hasOwn(extras.bills, b.id) ? applyLunaExtras(b, extras.bills[b.id]) : b);
   if (roster?.format === 'texas-bill-members-v1' && roster.members && typeof roster.members === 'object' && !Array.isArray(roster.members))
     bills = bills.map(b => attachMembers(b, roster));
   const agencyName = a => a.name || AGENCY_NAME[a.id] || lunaNames[a.id] || a.id;
@@ -77,6 +81,7 @@ export function billRecord(b) {
     agencies: b.agencies.map(a => ({id: a.id, name: b.agencyNames[a.id], relationship: a.relationship,
       source: a.source === 'luna' ? 'luna-full-text' : 'caption-rules', reason: a.reason || ''})),
     impacts: b.impacts,
+    search_terms: b.search_terms || [],
     affected_groups: b.constituencies || [],
     locations: (b.locations || []).map(l => ({name: l.name, kind: l.kind || null, explanation: l.explanation || null})),
     full_text_review: b.luna ? {reviewed_at: b.luna.reviewed_at || null, text_version: b.luna.text_version || null,
@@ -257,8 +262,8 @@ function districtPages({bills, roster, tables, geo, put, files, indexes, asOf}) 
   indexes.push(['Bills by legislative district', 'districts/index.md', rows.length]);
 }
 
-export function buildPages({snapshot, tags = null, roster = null, status = null, minBills = 1000, districts = null, geo = null}) {
-  const bills = loadBills({snapshot, tags, roster, minBills});
+export function buildPages({snapshot, tags = null, extras = null, roster = null, status = null, minBills = 1000, districts = null, geo = null}) {
+  const bills = loadBills({snapshot, tags, extras, roster, minBills});
   const files = new Map();
   const put = (path, text) => files.set(path, text);
   const dataDate = snapshot.generated_at;
@@ -628,13 +633,16 @@ function readJson(path, optional = false) {
 
 async function main(argv) {
   const args = Object.fromEntries(argv.reduce((acc, value, i, all) => value.startsWith('--') ? [...acc, [value.slice(2), all[i + 1]]] : acc, []));
-  if (!args.snapshot || !args.out) throw new Error('Usage: build_agent.mjs --snapshot bills.json --out dir [--tags t.json] [--members m.json] [--status s.json] [--districts districts.json]');
+  if (!args.snapshot || !args.out) throw new Error('Usage: build_agent.mjs --snapshot bills.json --out dir [--tags t.json] [--extras e.json] [--members m.json] [--status s.json] [--districts districts.json]');
   // District pages only when the district tables are given; geo.js is loaded only then, so older deployments
   // that copy just taxonomy.js and prefs.js keep building.
   const districts = args.districts ? readJson(args.districts) : null;
   if (districts && districts.format !== 'texas-bill-districts-v1') throw new Error('Unknown districts format');
   const geo = districts ? await import('../src/geo.js') : null;
+  // extras.json sits beside tags.json in live/luna; finding it there needs no change to the installed unit's flags.
+  const extrasPath = args.extras || (args.tags ? join(dirname(args.tags), 'extras.json') : null);
   const files = buildPages({snapshot: readJson(args.snapshot), tags: args.tags ? readJson(args.tags, true) : null,
+    extras: extrasPath ? readJson(extrasPath, true) : null,
     roster: args.members ? readJson(args.members, true) : null, status: args.status ? readJson(args.status, true) : null,
     districts, geo});
   mkdirSync(args.out, {recursive: true, mode: 0o755});

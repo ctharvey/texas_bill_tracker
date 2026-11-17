@@ -51,10 +51,10 @@ def _synonyms() -> dict[str, list[str]]:
     for word, wider in BROADER.items():
         table.setdefault(stem(word), []).extend(wider)
     return {k: list(dict.fromkeys(v)) for k, v in table.items()}
-FIELDS = (("title", 3), ("subjects", 4), ("topics", 4), ("agencies", 4), ("people", 3), ("summary", 2), ("groups", 2),
-          ("locations", 2), ("impacts", 1), ("actions", 1))
+FIELDS = (("title", 3), ("subjects", 4), ("topics", 4), ("agencies", 4), ("people", 3), ("summary", 2), ("terms", 2),
+          ("groups", 2), ("locations", 2), ("impacts", 1), ("actions", 1))
 LABELS = {"title": "title/caption", "subjects": "official subjects", "topics": "topics", "agencies": "agencies", "people": "members",
-          "summary": "full-text summary", "groups": "affected groups", "locations": "locations",
+          "summary": "full-text summary", "terms": "Luna search terms", "groups": "affected groups", "locations": "locations",
           "impacts": "impacts", "actions": "actions"}
 
 
@@ -92,6 +92,7 @@ def record_fields(r: dict) -> dict[str, str]:
         "agencies": " ; ".join(f"{a.get('name') or ''} {a.get('id') or ''}" for a in r.get("agencies") or []),
         "people": " ; ".join(people),
         "summary": review.get("summary") or "",
+        "terms": " ; ".join(t for t in r.get("search_terms") or [] if isinstance(t, str)),
         "groups": " ; ".join(r.get("affected_groups") or []),
         "locations": " ; ".join(l.get("name") or "" for l in r.get("locations") or []),
         "impacts": " ; ".join(r.get("impacts") or []),
@@ -474,7 +475,7 @@ def usage(meta: dict, topics: list[str] = ()) -> str:
   is the same view as `{AGENT}search?topic=Education&agency=tea`; the topic, agency and chamber values carry over.
   `query=` becomes `q=`.
 {topic_line}
-Searched: titles and captions, topics, agencies, Luna full-text summaries, member names, affected groups, locations,
+Searched: titles and captions, topics, agencies, Luna full-text summaries and search terms, member names, affected groups, locations,
 impacts and recorded actions. Only {(meta.get('coverage') or {}).get('full_text_reviewed', 'some')} bills have a full-text review so far; for
 the rest only the caption and caption-based tags are searchable.
 

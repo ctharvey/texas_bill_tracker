@@ -302,3 +302,11 @@ test('a new tags or roster stamp alone leaves district and bill-index pages unch
   assert.match(before.get('districts/house-46.md'), /How current this is: see the \[overview\]/);
   assert.match(after.get('index.md'), /full-text tags as of 2026-11-10T14:05:00Z/);  // the overview still says
 });
+
+test('Luna extras search terms reach the agent record; a bill without extras gets an empty list', () => {
+  const extras = {format: 'texas-bill-luna-extras-v1', bills: {HB5: {search_terms: ['roadkill', 'aquifer'], opposing_terms: [], headline: 'x'}}};
+  const files = build({extras});
+  assert.ok(JSON.parse(files.get('bills/HB5.json')).search_terms.includes('roadkill'));
+  assert.deepEqual(JSON.parse(files.get('bills/SB12.json')).search_terms, []);
+  assert.deepEqual(JSON.parse(build({extras: {format: 'other', bills: extras.bills}}).get('bills/HB5.json')).search_terms, []);
+});
