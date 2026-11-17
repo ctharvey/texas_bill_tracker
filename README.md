@@ -409,6 +409,20 @@ caption only; it says when nothing matches, why that may be, and which named bil
 as `texas-bill-atlas`, writing only `live/agent`. The gateway serves that folder for the subdomain (cth.hosting
 `08-agent.bills.ctharvey.me.caddy`). The main page links to it in its head, footer and `<noscript>`.
 
+### Share card images
+
+Each bill's share page (`live/share/<ID>.html`, served to link-preview crawlers at `/bill/<ID>`) shows a 1200x630
+card: number, chamber, status, official caption, up to three official subjects, filing date and lead author. Nothing
+AI-written is drawn. `build_feeds.py` (data run, :17) writes the drawn strings and a version hash per bill to
+`live/og/cards.json`; `scripts/build_og.mjs` (layout in `scripts/og_card.mjs`) draws `live/og/<ID>.png` with satori and
+resvg only where the version changed, removes images of bills that left the data, and lists what it drew in
+`live/og/rendered.json`. A share page links `live/og/<ID>.png?v=<version>` only once that file lists the bill, and the
+site card until then. `scripts/texas-bill-og.service`/`.timer` (root, hourly at :40) runs it in the pinned, network-less
+node container as `texas-bill-atlas`, writing only `live/og`; about 40 ms and 60 KB per card. Its npm packages
+(`package.json`, exact versions in `package-lock.json`) are installed on the VPS once per lockfile with
+`sudo sh scripts/install_og_deps.sh`; the unit refuses to run when the current lockfile has none installed. Locally:
+`npm ci`, then `node scripts/build_og.mjs --cards <dir>/cards.json --out <dir>`.
+
 ### Live bill snapshot
 
 `scripts/texas-bill-data.service` and `.timer` run `sync_ftp.py` hourly at :17 on the VPS as `texas-bill-atlas`,

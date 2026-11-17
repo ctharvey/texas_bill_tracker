@@ -252,7 +252,7 @@ def load_headlines(path: Path | None) -> dict[str, str]:
             if isinstance(v, dict) and isinstance(v.get("headline"), str) and v["headline"].strip()}
 
 
-def share_page(bill: dict, site: str = SITE, headline: str | None = None) -> str:
+def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_v: str | None = None) -> str:
     bill_id = bill["id"]
     caption = " ".join(str(bill.get("caption") or bill.get("title") or "No caption available").split())
     # Only link-preview crawlers are served this page; anyone else who gets it is sent to the app at the site root,
@@ -261,12 +261,14 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None) -> str
     title = clip(f"{bill_number(bill_id)}: {caption}", SHARE_TITLE_MAX)
     # The official caption is in the title; an AI-written line is labelled as one.
     description = clip(f"AI summary: {headline}" if headline else caption, SHARE_DESCRIPTION_MAX)
-    image = f"{site}{SITE_CARD}"
+    # The bill's own card once the drawer has made it (the version in the URL is the one on disk), else the site card.
+    image = f"{site}live/og/{bill_id}.png?v={image_v}" if image_v else f"{site}{SITE_CARD}"
+    image_alt = clip(f"{bill_number(bill_id)}: {caption}", SHARE_DESCRIPTION_MAX) if image_v else "Texas Bill Atlas"
     a = lambda value: escape(value, {'"': "&quot;"})
     meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
             ("property", "og:title", title), ("property", "og:description", description), ("property", "og:url", url),
             ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
-            ("property", "og:image:alt", "Texas Bill Atlas"), ("name", "twitter:card", "summary_large_image"),
+            ("property", "og:image:alt", image_alt), ("name", "twitter:card", "summary_large_image"),
             ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
             ("name", "description", description)]
     tags = "\n".join(f'<meta {kind}="{name}" content="{a(value)}">' for kind, name, value in meta)
@@ -289,17 +291,105 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None) -> str
 """
 
 
-def write_share_pages(snapshot: dict, out_dir: Path, site: str = SITE,
-                      headlines: dict[str, str] | None = None) -> tuple[int, int, int]:
+# Share card images: live/og/<ID>.png, drawn hourly by scripts/build_og.mjs (texas-bill-og.service) from
+# live/og/cards.json. Each entry holds the display strings drawn on the card and `v`, a hash of them; the drawer
+# redraws a card when `v` changes and lists what it drew in live/og/rendered.json. Official text only.
+
+OG_CARDS_FORMAT, OG_RENDERED_FORMAT = "texas-bill-og-cards-v1", "texas-bill-og-rendered-v1"
+OG_REVISION = "c1"  # Bump when the drawn wording changes for every bill (scripts/og_card.mjs layout changes too).
+OG_SESSION = "90th Legislature \u00b7 Regular Session"
+
+
+def _long_date(value: object) -> str:
+    try:
+        day = dt.date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return ""
+    return f"{day:%b} {day.day}, {day.year}"
+
+
+def subject_labels(subjects: list) -> list[str]:
+    """Short chip labels from official subjects ("Family--Juvenile Delinquency" -> "Juvenile Delinquency"): the
+    specific part, or the category when the specific part is generic or repeats; all-caps subjects in title case."""
+    pairs = []
+    for subject in subjects:
+        if not isinstance(subject, str) or not subject.strip():
+            continue
+        text = " ".join(subject.split())
+        if text.isupper():
+            text = text.title()
+        parts = [part.strip() for part in text.split("--") if part.strip()]
+        pairs.append((parts[0], parts[-1]))
+    tails = Counter(tail for _head, tail in pairs)
+    labels = []
+    for head, tail in pairs:
+        label = head if tail == "General" or tail.startswith("Other") or tails[tail] > 1 else tail
+        if label not in labels:
+            labels.append(label)
+    return labels
+
+
+def card_model(bill: dict) -> dict:
+    bill_id = bill["id"]
+    authors = [a for a in bill.get("authors") or [] if isinstance(a, str) and a.strip()]
+    # `author` joins every author with " | "; the first is the lead author.
+    author = (authors[0] if authors else str(bill.get("author") or "").split("|")[0]).strip()
+    others = max(0, len(authors) - 1)
+    byline = " \u00b7 ".join(part for part in (
+        f"Filed {_long_date(bill.get('filed_at'))}" if _long_date(bill.get("filed_at")) else "",
+        f"By {author}" + (f" and {others} other{'s' if others > 1 else ''}" if others else "") if author else "",
+    ) if part)
+    subjects = subject_labels(bill.get("subjects") or [])[:3]
+    return {
+        "number": bill_number(bill_id), "chamber": str(bill.get("chamber") or ""),
+        "caption": " ".join(str(bill.get("caption") or bill.get("title") or "No caption available").split()),
+        "status": str(bill.get("status") or ""), "byline": byline, "subjects": subjects, "session": OG_SESSION,
+    }
+
+
+def card_version(model: dict) -> str:
+    text = json.dumps([OG_REVISION, model], ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
+def write_og_cards(snapshot: dict, out_dir: Path) -> tuple[int, bool]:
+    """live/og/cards.json for the card drawer; `active` (last action date) orders a capped run and is not drawn."""
+    cards = {}
+    for bill in snapshot.get("bills") or []:
+        if not isinstance(bill, dict) or not BILL_ID.fullmatch(str(bill.get("id", ""))):
+            continue
+        model = card_model(bill)
+        cards[bill["id"]] = {"v": card_version(model), "active": str(bill.get("last_action_date") or ""), **model}
+    if not cards:  # A broken snapshot leaves the last good file, so the drawer removes nothing.
+        return 0, False
+    out_dir.mkdir(parents=True, exist_ok=True)
+    text = json.dumps({"format": OG_CARDS_FORMAT, "bills": cards}, ensure_ascii=False, sort_keys=True) + "\n"
+    return len(cards), write_if_changed(out_dir / "cards.json", text)
+
+
+def load_rendered(path: Path | None) -> dict[str, str]:
+    """Bill id -> `v` of the card image on disk (live/og/rendered.json); anything unreadable means none."""
+    try:
+        data = json.loads(path.read_text("utf-8")) if path else None
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict) or data.get("format") != OG_RENDERED_FORMAT or not isinstance(data.get("bills"), dict):
+        return {}
+    return {k: v for k, v in data["bills"].items()
+            if BILL_ID.fullmatch(str(k)) and isinstance(v, str) and re.fullmatch(r"[0-9a-f]{1,64}", v)}
+
+
+def write_share_pages(snapshot: dict, out_dir: Path, site: str = SITE, headlines: dict[str, str] | None = None,
+                      rendered: dict[str, str] | None = None) -> tuple[int, int, int]:
     """One share page per bill, rewritten only when it changes; pages for bills no longer in the snapshot removed."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    headlines, keep = headlines or {}, set()
+    headlines, rendered, keep = headlines or {}, rendered or {}, set()
     written = unchanged = removed = 0
     for bill in snapshot.get("bills") or []:
         if not isinstance(bill, dict) or not BILL_ID.fullmatch(str(bill.get("id", ""))):
             continue  # Never build a file name from an unexpected id.
         keep.add(f"{bill['id']}.html")
-        if write_if_changed(out_dir / f"{bill['id']}.html", share_page(bill, site, headlines.get(bill["id"]))):
+        if write_if_changed(out_dir / f"{bill['id']}.html", share_page(bill, site, headlines.get(bill["id"]), rendered.get(bill["id"]))):
             written += 1
         else:
             unchanged += 1
@@ -581,6 +671,8 @@ def main() -> int:
                         help="Luna extras (In brief lines); defaults to extras.json beside the tags")
     parser.add_argument("--share", type=Path, default=None,
                         help="Share page output (served at /bill/<ID>); defaults to share/ beside the snapshot")
+    parser.add_argument("--og", type=Path, default=None,
+                        help="Share card folder (cards.json out, rendered.json in); defaults to og/ beside the snapshot")
     parser.add_argument("--text", type=Path, default=None, help="Bill text directory; defaults to text/ beside the snapshot")
     parser.add_argument("--statutes", type=Path, default=None,
                         help="Statute index output; defaults to statutes/ beside the snapshot")
@@ -594,7 +686,11 @@ def main() -> int:
     written, unchanged = write_feeds(snapshot, args.out, args.site, reviews)
     print(f"Feeds: {written} written, {unchanged} unchanged", flush=True)
     headlines = load_headlines(args.extras or tags.parent / "extras.json")
-    written, unchanged, removed = write_share_pages(snapshot, args.share or args.snapshot.parent / "share", args.site, headlines)
+    og_dir = args.og or args.snapshot.parent / "og"
+    count, changed = write_og_cards(snapshot, og_dir)
+    print(f"Share cards: {count} listed{', changed' if changed else ''}", flush=True)
+    written, unchanged, removed = write_share_pages(snapshot, args.share or args.snapshot.parent / "share", args.site,
+                                                    headlines, load_rendered(og_dir / "rendered.json"))
     print(f"Share pages: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
     roster = load_roster(args.members or args.snapshot.parent / "members.json")
     written, unchanged = write_member_feeds(snapshot, roster, args.out / "members", args.site, reviews)

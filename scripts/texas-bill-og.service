@@ -1,0 +1,19 @@
+[Unit]
+Description=Draw Texas Bill Atlas share card images (live/og/<ID>.png) for bills whose card changed
+Requires=docker.service
+After=docker.service
+OnFailure=texas-bill-alert@%n.service
+
+[Service]
+Type=oneshot
+# Root only to start a short-lived, network-less node container; the drawing runs as texas-bill-atlas and can write
+# only live/og. Code is scripts/ and the package files from one main commit of the deployer's repository. The npm
+# packages are installed once per package-lock.json by scripts/install_og_deps.sh into a folder named after the
+# lockfile's hash; a commit whose lockfile has no installed folder fails here (and alerts) instead of drawing with
+# other packages.
+RuntimeDirectory=texas-bill-og
+RuntimeDirectoryMode=0755
+ExecStartPre=/bin/sh -c 'set -e; cd "$RUNTIME_DIRECTORY"; g="/usr/sbin/runuser -u texas-bill-atlas -- /usr/bin/git --git-dir=/var/lib/texas-bill-atlas/repository.git"; c=$$($$g rev-parse --verify "main^{commit}"); $$g archive --format=tar "$$c" scripts package.json package-lock.json > code.tar; /usr/bin/tar -xf code.tar --no-same-owner; rm code.tar; d=/usr/local/lib/texas-bill-atlas/og-deps/$$(sha256sum package-lock.json | cut -c1-16); test -f "$$d/node_modules/satori/package.json" || { echo "no npm packages installed for this package-lock.json ($$d): run scripts/install_og_deps.sh" >&2; exit 1; }; echo "$$d/node_modules" > deps.path; mkdir node_modules; chmod -R a+rX .; echo "og code from $$c, packages from $$d"'
+ExecStartPre=/usr/bin/install -d -m 0755 -o texas-bill-atlas -g texas-bill-atlas /var/www/html/texas-bill-atlas/live/og
+ExecStart=/bin/sh -c 'exec /usr/bin/docker run --rm --name texas-bill-og-build --network none --read-only --cap-drop ALL --security-opt no-new-privileges --memory 512m --pids-limit 64 --user "$$(id -u texas-bill-atlas):$$(id -g texas-bill-atlas)" -v "$RUNTIME_DIRECTORY:/app:ro" -v "$$(cat "$RUNTIME_DIRECTORY/deps.path"):/app/node_modules:ro" -v /var/www/html/texas-bill-atlas/live/og:/out node@sha256:0e1754758c2df4cfa3e68d59e2e1b7374bb7fd9ea6328eaaacf15cc934af8202 node /app/scripts/build_og.mjs --cards /out/cards.json --out /out'
+TimeoutStartSec=1200

@@ -1,0 +1,9 @@
+[Unit]
+Description=Hourly share card drawing for Texas Bill Atlas (after the :17 data refresh writes live/og/cards.json)
+
+[Timer]
+OnCalendar=*-*-* *:40:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
