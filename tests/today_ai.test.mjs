@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {aiPrompt, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, AI_LIST_LIMIT, companionLabel, agencyViaCompanion, companionIndex} from '../src/taxonomy.js';
+import {aiPrompt, aiChatLinks, AI_CHATS, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, AI_LIST_LIMIT, companionLabel, agencyViaCompanion, companionIndex} from '../src/taxonomy.js';
 import {parseHash, buildHash, VIEWS} from '../src/prefs.js';
 
 const bill = (id, extra = {}) => ({id, number: id.replace(/^([A-Z]+)/, '$1 '), title: `Title of ${id}`, topics: [], last_action: '11/10/2026 H Filed', last_action_date: '2026-11-10', ...extra});
@@ -129,4 +129,16 @@ test('companions: label, agency-via-companion and both copy texts', () => {
 test('pageAiText: reference views link their agent page', () => {
   const text = pageAiText({view: 'agencies', pageUrl: 'u'});
   assert.ok(text.includes('AI-readable version: https://agent.billatlas.org/agencies/index.md'));
+});
+
+test('aiChatLinks prefills ChatGPT and Claude with the Copy for AI prompt', () => {
+  const b = bill('HB5', {title: 'Fees & "permits"?'});
+  const links = aiChatLinks(b);
+  assert.deepEqual(links.map(l => l.name), ['ChatGPT', 'Claude']);
+  assert.equal(links.length, AI_CHATS.length);
+  for (const [i, link] of links.entries()) {
+    assert.ok(link.href.startsWith(AI_CHATS[i][1]));
+    const q = new URL(link.href).searchParams.get('q');
+    assert.equal(q, aiPrompt(b));
+  }
 });

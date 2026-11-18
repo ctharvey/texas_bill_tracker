@@ -789,6 +789,14 @@ export function aiPrompt(bill, companions = []) {
     'Summarize what this bill does, who it affects, and its current status, citing the bill text.'].join('\n');
 }
 
+// "Ask ChatGPT / Claude": the same prompt, prefilled through each assistant's ?q= link. Neither link is a documented
+// API, so the bill page keeps "Copy for AI" as the dependable path.
+export const AI_CHATS = [['ChatGPT', 'https://chatgpt.com/?q='], ['Claude', 'https://claude.ai/new?q=']];
+export const aiChatLinks = (bill, companions = []) => {
+  const q = encodeURIComponent(aiPrompt(bill, companions));
+  return AI_CHATS.map(([name, base]) => ({name, href: base + q}));
+};
+
 // "HB 234 (identical)" for a companion entry from companionIndex.
 export const companionLabel = c => `${c.number || String(c.id).replace(/^([A-Z]+)(\d)/, '$1 $2')}${c.relation ? ` (${c.relation.toLowerCase()})` : ''}`;
 
