@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-11-18
+- Bill pages can be indexed by search engines:
+  - Search crawlers were getting the app at `/bill/<ID>`, whose canonical address is the home page, so the sitemap's
+    1,600 bill URLs all folded into the home page and no share page or Legislation data reached them. The gateway
+    (cth.hosting) now serves the share page to Googlebot, Bingbot, DuckDuckBot, Applebot, Yandex, Seznam, Naver,
+    Baidu and Qwant as well as link-preview crawlers.
+  - Share pages show the official record in plain HTML: caption, session, status, filed date, most recent
+    action, authors and sponsors, and official subjects. They also show the AI line labelled as not official, the
+    first 3,000 characters of the latest bill text with its insertions and deletions, and links to the full text,
+    the agent page and the official history. Their redirect into the app skips any user agent that says
+    bot/crawler/spider, so script-running crawlers stay on the bill.
+  - IndexNow: the server's data run submits the bill pages it rewrote to `api.indexnow.org` (Bing, Yandex, Seznam,
+    Naver, Yep) and logs `IndexNow: HTTP <status>`. A failure never fails the run. The public key file is
+    `public/7b91498ed44f1a3d41b650238bfe5f85.txt`. Other runs never submit; `--no-indexnow` turns it off.
+
 ## 2026-11-17
 - The Ask AI / Copy for AI prompt ends with a fallback for assistants that won't open links from a prefilled prompt
   (Claude on the web refused all of them): search the web for "Texas Bill Atlas <bill>" (billatlas.org) and use its

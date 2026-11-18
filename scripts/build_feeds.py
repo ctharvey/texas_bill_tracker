@@ -317,11 +317,85 @@ def legislation_jsonld(bill: dict, site: str = SITE) -> str:
     return json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
 
 
-def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_v: str | None = None) -> str:
+SHARE_TEXT_MAX = 3000  # Characters of official text shown on a share page; the rest is a link to our full copy.
+AGENT_SITE = "https://agent.billatlas.org/"
+# Crawlers that read the share page as a page: its script must not send them to the app (whose canonical is the home
+# page). Any user agent saying bot, crawler or spider, as search engines' renderers do.
+_CRAWLER_JS = r"/bot|crawl|spider|slurp|Google-InspectionTool|BingPreview/i"
+
+
+def _names(value: object) -> list[str]:
+    return [str(v).strip() for v in value if str(v).strip()] if isinstance(value, list) else []
+
+
+def share_text_html(markdown: str, limit: int = SHARE_TEXT_MAX) -> tuple[str, bool]:
+    """Our Markdown copy of the bill text as simple HTML, cut at a line once `limit` characters are shown.
+    Returns (html, cut). Everything is escaped; only the bill's own <ins>/<del> marks are kept."""
+    parts, shown = [], 0
+    lines = [line.strip() for line in markdown.splitlines() if line.strip()]
+    if lines and lines[0].startswith("# "):
+        lines = lines[1:]  # "# HB 309 - Introduced": the page has its own heading.
+    for index, line in enumerate(lines):
+        if shown >= limit:
+            return "\n".join(parts), True
+        heading = line.startswith("#")
+        text = re.sub(r"\\(.)", r"\1", line.lstrip("#").strip())
+        body = escape(text)
+        for tag in ("ins", "del"):
+            body = body.replace(f"&lt;{tag}&gt;", f"<{tag}>").replace(f"&lt;/{tag}&gt;", f"</{tag}>")
+        parts.append(f"<h3>{body}</h3>" if heading else f"<p>{body}</p>")
+        shown += len(plain_text(text))
+    return "\n".join(parts), False
+
+
+def share_body(bill: dict, site: str, headline: str | None, text: tuple[dict, str] | None) -> str:
+    """The share page's visible content: the official record, a labelled AI line, the start of the bill text, links."""
     bill_id = bill["id"]
     caption = " ".join(str(bill.get("caption") or bill.get("title") or "No caption available").split())
-    # Only link-preview crawlers are served this page; anyone else who gets it is sent to the app at the site root,
-    # which moves the address to /bill/<ID> itself (sending them to /bill/<ID> could serve this page again).
+    official = f"https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill={bill_id}"
+    a = lambda value: escape(value, {'"': "&quot;"})
+    facts = [("Session", "90th Texas Legislature, Regular Session")]
+    if bill.get("status"):
+        facts.append(("Status", str(bill["status"])))
+    if _long_date(bill.get("filed_at")):
+        facts.append(("Filed", _long_date(bill["filed_at"])))
+    if bill.get("last_action"):
+        facts.append(("Most recent action", str(bill["last_action"])))
+    for key, label in (("authors", "Authors"), ("coauthors", "Coauthors"), ("sponsors", "Sponsors"), ("cosponsors", "Cosponsors")):
+        if _names(bill.get(key)):
+            facts.append((label, ", ".join(_names(bill.get(key)))))
+    if _names(bill.get("subjects")):
+        facts.append(("Official subjects", "; ".join(_names(bill.get("subjects")))))
+    rows = "\n".join(f"<dt>{escape(k)}</dt><dd>{escape(v)}</dd>" for k, v in facts)
+    out = [f"<h1>{escape(bill_number(bill_id))}: {escape(caption)}</h1>",
+           f'<p><a href="{a(f"{site}#bill?id={bill_id}")}">Open {escape(bill_number(bill_id))} in Texas Bill Atlas</a></p>',
+           f"<dl>\n{rows}\n</dl>"]
+    if headline:
+        out.append(f"<p><strong>AI summary (not official):</strong> {escape(headline)}</p>")
+    links = []
+    if text:
+        version, markdown = text
+        name = str(version.get("name") or version["code"])
+        full = f"{site}live/text/{bill_id}/{version['code']}.md"
+        body, cut = share_text_html(markdown)
+        out += [f"<h2>Bill text ({escape(name)})</h2>", body]
+        if cut:
+            out.append(f'<p>The text continues: <a href="{a(full)}">full text of {escape(bill_number(bill_id))}</a>.</p>')
+        links.append(f'<li><a href="{a(full)}">Full bill text ({escape(name)}), Markdown copy of the official file</a></li>')
+    links += [f'<li><a href="{a(f"{AGENT_SITE}bills/{bill_id}.md")}">Record, history and review for AI agents</a></li>',
+              f'<li><a href="{a(official)}">Official bill history on Texas Legislature Online</a></li>']
+    out += ["<h2>Links</h2>", "<ul>\n" + "\n".join(links) + "\n</ul>",
+            "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
+    return "\n".join(out)
+
+
+def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_v: str | None = None,
+               text: tuple[dict, str] | None = None) -> str:
+    bill_id = bill["id"]
+    caption = " ".join(str(bill.get("caption") or bill.get("title") or "No caption available").split())
+    # Search and link-preview crawlers are served this page; a person who gets it is sent to the app at the site root,
+    # which moves the address to /bill/<ID> itself (sending them to /bill/<ID> could serve this page again). Crawlers
+    # that run scripts stay here, or they would index the app's home page instead of the bill.
     url, target = f"{site}bill/{bill_id}", f"{site}#bill?id={bill_id}"
     title = clip(f"{bill_number(bill_id)}: {caption}", SHARE_TITLE_MAX)
     # The official caption is in the title; an AI-written line is labelled as one.
@@ -351,10 +425,10 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_
 <link rel="icon" href="/favicon.ico">
 {tags}
 <script type="application/ld+json">{legislation_jsonld(bill, site)}</script>
-<script>location.replace({json.dumps(target)})</script>
+<script>if(!{_CRAWLER_JS}.test(navigator.userAgent))location.replace({json.dumps(target)})</script>
 </head>
 <body>
-<p><a href="{a(target)}">{escape(bill_number(bill_id))} on Texas Bill Atlas</a>: {escape(caption)}</p>
+{share_body(bill, site, headline, text)}
 </body>
 </html>
 """
@@ -532,8 +606,10 @@ def load_rendered(path: Path | None) -> dict[str, str]:
 
 
 def write_share_pages(snapshot: dict, out_dir: Path, site: str = SITE, headlines: dict[str, str] | None = None,
-                      rendered: dict[str, str] | None = None) -> tuple[int, int, int]:
-    """One share page per bill, rewritten only when it changes; pages for bills no longer in the snapshot removed."""
+                      rendered: dict[str, str] | None = None, text_dir: Path | None = None,
+                      changed: list[str] | None = None) -> tuple[int, int, int]:
+    """One share page per bill, rewritten only when it changes; pages for bills no longer in the snapshot removed.
+    With text_dir the page shows the start of the bill's latest text. Rewritten bill ids are added to `changed`."""
     out_dir.mkdir(parents=True, exist_ok=True)
     headlines, rendered, keep = headlines or {}, rendered or {}, set()
     written = unchanged = removed = 0
@@ -541,8 +617,12 @@ def write_share_pages(snapshot: dict, out_dir: Path, site: str = SITE, headlines
         if not isinstance(bill, dict) or not BILL_ID.fullmatch(str(bill.get("id", ""))):
             continue  # Never build a file name from an unexpected id.
         keep.add(f"{bill['id']}.html")
-        if write_if_changed(out_dir / f"{bill['id']}.html", share_page(bill, site, headlines.get(bill["id"]), rendered.get(bill["id"]))):
+        text = _latest_text(text_dir, bill["id"]) if text_dir else None
+        if write_if_changed(out_dir / f"{bill['id']}.html",
+                            share_page(bill, site, headlines.get(bill["id"]), rendered.get(bill["id"]), text)):
             written += 1
+            if changed is not None:
+                changed.append(bill["id"])
         else:
             unchanged += 1
     if keep:  # An empty or broken snapshot never empties the folder.
@@ -551,6 +631,39 @@ def write_share_pages(snapshot: dict, out_dir: Path, site: str = SITE, headlines
                 path.unlink(missing_ok=True)
                 removed += 1
     return written, unchanged, removed
+
+
+# IndexNow: tell Bing and the engines sharing its submissions (Yandex, Seznam, Naver, Yep) which bill pages changed.
+# The key is public by design; public/<key>.txt at the site root proves the site is ours.
+INDEXNOW_KEY = "7b91498ed44f1a3d41b650238bfe5f85"
+INDEXNOW_ENDPOINT = "https://api.indexnow.org/indexnow"
+INDEXNOW_MAX_URLS = 10000
+# Only the server's data run submits: tests, golden runs and local builds never write here.
+LIVE_SNAPSHOT = Path("/var/www/html/texas-bill-atlas/live/bills.json")
+
+
+def indexnow_payload(bill_ids: list[str], site: str = SITE) -> dict:
+    from urllib.parse import urlsplit
+    return {"host": urlsplit(site).hostname, "key": INDEXNOW_KEY, "keyLocation": f"{site}{INDEXNOW_KEY}.txt",
+            "urlList": [f"{site}bill/{bill_id}" for bill_id in bill_ids[:INDEXNOW_MAX_URLS]]}
+
+
+def submit_indexnow(bill_ids: list[str], site: str = SITE, opener=None) -> str:
+    """POST the changed bill pages; returns a status line. Never raises: search pings must not fail the data run."""
+    if not bill_ids:
+        return "nothing changed"
+    import urllib.error
+    import urllib.request
+    payload = indexnow_payload(bill_ids, site)
+    request = urllib.request.Request(INDEXNOW_ENDPOINT, data=json.dumps(payload).encode("utf-8"), method="POST",
+                                     headers={"Content-Type": "application/json; charset=utf-8"})
+    try:
+        with (opener or urllib.request.urlopen)(request, timeout=30) as response:
+            return f"HTTP {response.status} for {len(payload['urlList'])} pages"
+    except urllib.error.HTTPError as error:
+        return f"HTTP {error.code} for {len(payload['urlList'])} pages (not accepted)"
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        return f"failed: {type(error).__name__}"
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -834,6 +947,8 @@ def main() -> int:
                         help="2020 population table (scripts/census_places.py); defaults to one beside this script")
     parser.add_argument("--brackets", type=Path, default=None,
                         help="Population bracket output; defaults to brackets/ beside the snapshot")
+    parser.add_argument("--no-indexnow", action="store_true",
+                        help="Don't submit changed bill pages to IndexNow (only the server's live run submits anyway)")
     args = parser.parse_args()
     tags = args.tags or args.snapshot.parent / "luna" / "tags.json"
     snapshot, reviews = json.loads(args.snapshot.read_text("utf-8")), load_reviews(tags)
@@ -844,15 +959,18 @@ def main() -> int:
     count, changed = write_og_cards(snapshot, og_dir)
     print(f"Share cards: {count} listed{', changed' if changed else ''}", flush=True)
     write_bill_art(og_dir)  # No output line: the golden run pins this script's stdout.
+    text_dir = args.text or args.snapshot.parent / "text"
+    changed: list[str] = []
     written, unchanged, removed = write_share_pages(snapshot, args.share or args.snapshot.parent / "share", args.site,
-                                                    headlines, load_rendered(og_dir / "rendered.json"))
+                                                    headlines, load_rendered(og_dir / "rendered.json"), text_dir, changed)
     print(f"Share pages: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
+    if not args.no_indexnow and args.site == SITE and args.snapshot == LIVE_SNAPSHOT:
+        print(f"IndexNow: {submit_indexnow(changed, args.site)}", flush=True)
     write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml", sitemap(snapshot, args.site))  # Quiet: golden stdout.
     write_api_docs(args.snapshot.parent)
     roster = load_roster(args.members or args.snapshot.parent / "members.json")
     written, unchanged = write_member_feeds(snapshot, roster, args.out / "members", args.site, reviews)
     print(f"Member feeds: {written} written, {unchanged} unchanged", flush=True)
-    text_dir = args.text or args.snapshot.parent / "text"
     written, unchanged, removed = write_statutes(snapshot, text_dir, args.statutes or args.snapshot.parent / "statutes")
     print(f"Statute sections: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
     from atlas.feeds.brackets import default_census, write_brackets
