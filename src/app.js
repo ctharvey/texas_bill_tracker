@@ -13,6 +13,8 @@ import {methodMarkup} from './features/pages/method.js';
 import {savingMarkup} from './features/pages/saving.js';
 import {dataMarkup} from './features/pages/data.js';
 import {setupDisclaimer} from './features/pages/dialogs.js';
+import {copyForAi, copyPageForAi} from './features/ai/view.js';
+import {aiChatLinks, agentUrl} from './features/ai/model.js';
 import {setupThemePicker, setupModePicker, setTheme, savedTheme, applyTheme, applyMode} from './features/theme/view.js';
 import {TUMBLEWEED, noticeSearch, setupEasterEggs} from './features/easter/view.js';
 import {state} from './core/state.js';
@@ -32,7 +34,7 @@ import {oldSiteBanner, newSiteResult, savedSummary} from './features/move/view.j
 import {withMode} from './features/theme/model.js';
 import {artEntries, artBanner, HERO_MEDIA, heroFits} from './features/art/view.js';
 import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, membersFor, memberByCode, billsByMember, followedBills, ROLES, gazetteer, areaReasons, areaFor, censusUrl, censusPoint} from './geo.js';
-import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, sortAgencyIds, groupAgencyIds, searchTerms, textMatches, newestFirst, aiPrompt, aiChatLinks, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, highestNumberFirst, latestActivityDay, topicCounts, groupByActionType, pageAiText, companionLabel, agencyViaCompanion} from './taxonomy.js';
+import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, snapshotAgeHours, normalizeBill, companionIndex, companionGroups, sortAgencyIds, groupAgencyIds, searchTerms, textMatches, newestFirst, cardClickOpens, openLinkHtml, chicagoDate, activityOn, highestNumberFirst, latestActivityDay, topicCounts, groupByActionType, companionLabel, agencyViaCompanion} from './taxonomy.js';
 
 const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last action',actionstage:'Last action stage',number:'Bill number',agencies:'Most agencies',hearing:'Hearing progress',influence:'Author influence'};
 const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
@@ -1931,7 +1933,7 @@ function registerClicks(){
     // A modified or non-primary click on a link keeps the browser's own behavior (new tab, new window).
     if(open.tagName!=='A'||cardClickOpens({button:e.button,metaKey:e.metaKey,ctrlKey:e.ctrlKey,shiftKey:e.shiftKey,altKey:e.altKey})){e.preventDefault();openBillPage(open.dataset.open,true)}
   });
-  clickOn('copy-ai','[data-copy-ai]',copyAi=>copyForAi(copyAi));
+  clickOn('copy-ai','[data-copy-ai]',copyAi=>copyForAi(copyAi,{companionsOf}));
   // Ask AI menu: close after a pick, on a click elsewhere, or on Escape.
   document.addEventListener('click',e=>{for(const menu of document.querySelectorAll('details.ask-ai[open]'))if(!menu.contains(e.target)||e.target.closest('[data-ask-ai]'))menu.open=false});
   document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;const menu=document.querySelector('details.ask-ai[open]');if(menu){menu.open=false;menu.querySelector('summary').focus()}});
@@ -1962,7 +1964,7 @@ function registerClicks(){
     renderContent();$('.law-compare-wrap')?.scrollIntoView({behavior:'smooth',block:'start'})});
   clickOn('law-show','[data-law-show]',lawShow=>{state.statuteShow=lawShow.dataset.lawShow;renderContent()});
   clickOn('member-more','[data-member-more]',memberMore=>{const role=memberMore.dataset.memberMore;state.memberShow[role]=(state.memberShow[role]||30)+30;renderContent()});
-  clickOn('copy-page-ai','#copy-page-ai',copyPage=>copyPageForAi(copyPage));
+  clickOn('copy-page-ai','#copy-page-ai',copyPage=>copyPageForAi(copyPage,{memberTitle,todayData,agencyName,companionsOf,agencyVia,filteredBills,nearData,memberData}));
   clickOn('today-topic','[data-today-topic]',todayTopic=>{state.todayTopic=todayTopic.dataset.todayTopic;state.todayLimit=100;renderContent()});
   clickOn('today-more','#today-more',()=>{state.todayLimit+=100;renderContent()});
   clickOn('today-topics-toggle','#today-topics-toggle',()=>{state.todayAllTopics=!state.todayAllTopics;renderContent()});
@@ -2005,42 +2007,6 @@ function registerClicks(){
   });
 }
 const CARD_CONTROLS='a,button,input,select,textarea,label,summary,[data-topic],[data-today-topic],[data-open],[data-watch],[data-watch-group]';
-
-async function copyToClipboard(text){
-  try{await navigator.clipboard.writeText(text);return true}catch{}
-  try{
-    const t=document.createElement('textarea');t.value=text;t.setAttribute('readonly','');t.style.cssText='position:fixed;top:0;left:0;opacity:0';
-    document.body.appendChild(t);t.select();const ok=document.execCommand('copy');t.remove();return ok;
-  }catch{return false}
-}
-// Top-bar button: the open bill, or the list/page on screen, as text for an AI assistant.
-async function copyPageForAi(button){
-  const bill=state.openBill?state.bills.find(x=>x.id===state.openBill):null;
-  const member=state.view==='member'?memberByCode(state.roster,state.memberCode):null;
-  const labels={home:'Home',all:'Bill explorer',watchlist:'Watchlist',following:'Following',today:'Today',local:'Near you',member:member?`Bills by ${memberTitle(member)}`:'Member'};
-  const today=state.view==='today'?todayData():null;
-  const text=pageAiText({view:state.view,label:labels[state.view]||state.view,pageUrl:location.href,bill,agencyName,
-    companions:companionsOf,via:state.view==='today'||state.view==='member'?null:agencyVia(),
-    bills:today?today.shown.map(r=>r.bill):['all','watchlist'].includes(state.view)?filteredBills():state.view==='local'&&state.near?(d=>[...d.members,...d.local].map(r=>r.bill).filter((b,i,a)=>a.indexOf(b)===i))(nearData()):member?Object.values(memberData(member)).flat().map(r=>r.bill):state.view==='following'&&state.roster?followedBills(state.bills,state.roster,state.follow,newestFirst).map(r=>r.bill):[],
-    day:today?today.day:null,filters:{query:state.query,topic:state.view==='today'?state.todayTopic:state.topic,
-      agency:state.agency,chamber:state.chamber}});
-  const label=button.dataset.label||(button.dataset.label=button.textContent);
-  if(await copyToClipboard(text)){button.textContent='Copied';clearTimeout(button.timer);button.timer=setTimeout(()=>{button.textContent=label},2000)}
-  else toast('Copy failed; your browser blocked the clipboard');
-}
-
-async function copyForAi(button){
-  const b=state.bills.find(x=>x.id===state.openBill);if(!b)return;
-  const text=aiPrompt(b,companionsOf(b.id));
-  if(await copyToClipboard(text)){
-    button.textContent='Copied';clearTimeout(button.timer);button.timer=setTimeout(()=>{button.textContent='Copy for AI'},2000);
-  }else{
-    // Last resort: show the text, selected, so it can be copied by hand.
-    let box=$('#ai-fallback');
-    if(!box){box=document.createElement('textarea');box.id='ai-fallback';box.className='ai-fallback';box.readOnly=true;box.rows=6;(button.closest('.ai-copy')||button.closest('.bill-head')||button.parentElement).append(box)}
-    box.value=text;box.focus();box.select();toast('Press Ctrl+C to copy');
-  }
-}
 
 function handleInput(e){
   if(e.target.id==='agency-find'){filterAgencyCards(e.target.value);return}

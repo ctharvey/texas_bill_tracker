@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {aiPrompt, aiChatLinks, AI_CHATS, agentUrl, cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, pageAiText, AI_LIST_LIMIT, companionLabel, agencyViaCompanion, companionIndex} from '../src/taxonomy.js';
+import {cardClickOpens, openLinkHtml, chicagoDate, activityOn, latestActivityDay, topicCounts, groupByActionType, companionLabel, agencyViaCompanion, companionIndex} from '../src/taxonomy.js';
+import {aiPrompt, aiChatLinks, AI_CHATS, agentUrl, pageAiText, AI_LIST_LIMIT} from '../src/features/ai/model.js';
 import {parseHash, buildHash, VIEWS} from '../src/prefs.js';
 
 const bill = (id, extra = {}) => ({id, number: id.replace(/^([A-Z]+)/, '$1 '), title: `Title of ${id}`, topics: [], last_action: '11/10/2026 H Filed', last_action_date: '2026-11-10', ...extra});
