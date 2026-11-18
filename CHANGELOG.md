@@ -1,6 +1,12 @@
 # Changelog
 
 ## 2026-11-17
+- AI assistants can read the bill text. Agent bill pages (agent.billatlas.org/bills/<ID>.md) gain a "Bill text"
+  section: each version's official wording as our Markdown copy (live/text), its source file, and the latest
+  version copied in full when it is 12,000 characters or less. The JSON record adds `links.full_text` and
+  `text_versions`. Copy for AI and the Ask links now point to the same copy; before, the prompt never linked the
+  text at all, because the snapshot's version links are ftp:// and were filtered out. capitol.texas.gov refuses
+  most AI fetchers.
 - Bill pages: "Ask ChatGPT" and "Ask Claude" links in Sources open each assistant with the Copy for AI prompt
   already filled in. Copy for AI stays, since the prefill links are not a documented feature of either assistant.
 - The site's share card (public/social-card.png) shows the warbler instead of the gold star tile, and its stripe and

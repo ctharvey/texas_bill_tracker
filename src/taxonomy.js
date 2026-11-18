@@ -773,6 +773,7 @@ export function officialUrl(bill) {
 // ---- Opening a bill from its card, and "Copy for AI" ----
 // (Kept in this file: the static deployer ships a fixed list of src files.)
 export const AGENT_BASE = 'https://agent.billatlas.org/';
+export const TEXT_BASE = 'https://billatlas.org/live/text/';
 export const agentUrl = bill => `${AGENT_BASE}bills/${encodeURIComponent(bill.id || String(bill.number || '').replace(/\s+/g, ''))}.md`;
 const httpsUrl = value => { try { const u = new URL(String(value)); return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : ''; } catch { return ''; } };
 
@@ -783,8 +784,14 @@ export function aiPrompt(bill, companions = []) {
   const textLine = latest
     ? `Official bill text${latest.name ? ` (${latest.name})` : ''}: ${httpsUrl(latest.html)}`
     : `Official bill history and text: ${officialUrl(bill)}`;
+  // Our Markdown copy of the same file (live/text, written by sync_ftp.py): capitol.texas.gov often refuses AI fetchers.
+  // The snapshot's version links are ftp://, which httpsUrl drops, so the copy goes by version code alone.
+  const coded = (Array.isArray(bill.text_versions) ? bill.text_versions : []).filter(v => v && /^[A-Za-z0-9]{1,8}$/.test(String(v.code || '')));
+  const last = coded[coded.length - 1];
+  const copy = last && bill.id
+    ? [`Full bill text${last.name ? ` (${last.name})` : ''}, the official wording as Markdown: ${TEXT_BASE}${encodeURIComponent(bill.id)}/${last.code}.md`] : [];
   return [`Texas ${bill.number} (90th Legislature): ${bill.title}`, '',
-    `AI-readable version with history and review: ${agentUrl(bill)}`, textLine,
+    `AI-readable version with history and review: ${agentUrl(bill)}`, ...copy, textLine,
     ...companions.map(c => `Companion bill ${companionLabel(c)}: ${agentUrl(c)}`), '',
     'Summarize what this bill does, who it affects, and its current status, citing the bill text.'].join('\n');
 }

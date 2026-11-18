@@ -142,3 +142,11 @@ test('aiChatLinks prefills ChatGPT and Claude with the Copy for AI prompt', () =
     assert.equal(q, aiPrompt(b));
   }
 });
+
+test('aiPrompt links the Markdown copy of the latest text, even when the official links are ftp://', () => {
+  const versions = [{code: 'I', name: 'Introduced', html: 'ftp://ftp.legis.state.tx.us/HB00309I.HTM'}];
+  const text = aiPrompt(bill('HB309', {text_versions: versions}));
+  assert.ok(text.includes('Full bill text (Introduced), the official wording as Markdown: https://billatlas.org/live/text/HB309/I.md'));
+  assert.ok(!aiPrompt(bill('HB309')).includes('live/text'));
+  assert.ok(!aiPrompt(bill('HB309', {text_versions: [{code: '../x', name: 'Bad'}]})).includes('live/text'));
+});

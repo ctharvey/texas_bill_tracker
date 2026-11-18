@@ -22,6 +22,32 @@ const PAGE = 150;
 const FILED_NOTE = '"Filed" is the filing date in the Legislative Council data. Bills filed before the session opens in '
   + 'January 2027 are prefiled; prefiling opened on 2026-11-09, so early dates cluster there.';
 const textUrl = id => `https://capitol.texas.gov/BillLookup/Text.aspx?LegSess=90R&Bill=${id}`;
+// Our copy of each text version (sync_ftp.py writes live/text/<ID>/<code>.md from the Legislative Council's files).
+export const TEXT_INLINE_MAX = 12000; // characters; longer bills are linked, not copied into the page
+const VERSION_CODE = /^[A-Za-z0-9]{1,8}$/;
+
+// id -> {versions: [{code, name, url, source_url}], body, chars} from live/text, or null when the folder is absent.
+export function loadTexts(textDir, ids) {
+  try { if (!statSync(textDir).isDirectory()) return null; } catch { return null; }
+  const texts = new Map();
+  for (const id of ids) {
+    let index;
+    try { index = JSON.parse(readFileSync(join(textDir, id, 'index.json'), 'utf8')); } catch { continue; }
+    if (index?.format !== 'texas-bill-text-index-v1' || !Array.isArray(index.versions)) continue;
+    const versions = index.versions.filter(v => v && VERSION_CODE.test(String(v.code)) && v.path === `${v.code}.md`)
+      .map(v => ({code: v.code, name: String(v.name || v.code), url: `${SITE}live/text/${id}/${v.code}.md`,
+        source_url: typeof v.source_url === 'string' ? v.source_url : null}));
+    if (!versions.length) continue;
+    let body = null, chars = 0;
+    try {
+      body = readFileSync(join(textDir, id, `${versions.at(-1).code}.md`), 'utf8').trim();
+      chars = body.length;
+      if (chars > TEXT_INLINE_MAX) body = null;
+    } catch { body = null; }
+    texts.set(id, {versions, body, chars});
+  }
+  return texts;
+}
 
 export const slug = text => String(text).toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '').slice(0, 80) || 'unnamed';
@@ -91,8 +117,28 @@ export function billRecord(b) {
   };
 }
 
-function billMarkdown(b, coverage, reviewState = '', queueNote = '') {
+// text: undefined when no text folder was given (no section), null when this bill has no text copied yet.
+function textSection(r, text) {
+  if (text === undefined) return '';
+  if (!text) return `\n## Bill text\n\n_No text has been copied here yet: the Legislature may not have published it. Official text: ${r.links.text}_\n`;
+  const latest = text.versions.at(-1), fence = '````';
+  return `\n## Bill text
+
+The official wording of each version, copied from the Texas Legislative Council's bill text files and converted to Markdown with the wording unchanged. Language the bill adds is marked <ins>like this</ins>; language it removes is in [<del>brackets</del>].
+
+${text.versions.map(v => `- ${cell(v.name)}: ${v.url}${v.source_url ? ` (source file: ${v.source_url})` : ''}`).join('\n')}
+
+${text.body ? `### Text of the latest version (${cell(latest.name)})
+
+${fence}markdown
+${text.body}
+${fence}` : `The latest version (${cell(latest.name)}) is ${text.chars.toLocaleString('en-US')} characters, too long to copy into this page; read it at ${latest.url}`}
+`;
+}
+
+function billMarkdown(b, coverage, reviewState = '', queueNote = '', text = undefined) {
   const r = billRecord(b), last = r.last_action, pending = !r.full_text_review;
+  if (text) r.links.full_text = text.versions.at(-1).url;
   // Say whether an empty field is a finding or data we do not have yet.
   const empty = noun => pending ? `_No ${noun} tagged yet: the full-text review is pending (${reviewState || 'not started'}), and caption rules found none._`
     : `_The full-text review identified no ${noun}._`;
@@ -134,7 +180,7 @@ function billMarkdown(b, coverage, reviewState = '', queueNote = '') {
 ## Caption
 
 ${cell(r.caption) || '_No caption available._'}
-
+${textSection(r, text)}
 ## Full-text review (Luna)
 
 ${review ? `Reviewed ${review.reviewed_at || 'date unknown'}${review.text_version ? ` · ${cell(review.text_version)} text` : ''}. Fields from the full text: ${review.fields_from_full_text.join(', ') || 'none'}; other fields use caption inference.
@@ -172,7 +218,7 @@ ${roles(['coauthors', 'sponsors', 'cosponsors'])}
 ${actions}
 
 ## Links
-
+${r.links.full_text ? `\n- Full bill text (official wording, Markdown): ${r.links.full_text}` : ''}
 - Official bill history: ${r.links.official}
 - Official bill text (every version, HTML/PDF/Word): ${r.links.text}
 - Open in the tracker: ${r.links.tracker}
@@ -257,7 +303,7 @@ function districtPages({bills, roster, tables, geo, put, files, indexes, asOf}) 
   indexes.push(['Bills by legislative district', 'districts/index.md', rows.length]);
 }
 
-export function buildPages({snapshot, tags = null, extras = null, roster = null, status = null, minBills = 1000, districts = null, geo = null}) {
+export function buildPages({snapshot, tags = null, extras = null, roster = null, status = null, minBills = 1000, districts = null, geo = null, texts = null}) {
   const bills = loadBills({snapshot, tags, extras, roster, minBills});
   const files = new Map();
   const put = (path, text) => files.set(path, text);
@@ -304,8 +350,10 @@ export function buildPages({snapshot, tags = null, extras = null, roster = null,
     return [id, `about number ${position} in the review queue${lastDay ? `, roughly ${Math.max(1, Math.ceil(position / lastDay))} ${Math.ceil(position / lastDay) > 1 ? 'days' : 'day'} away at the recent pace (an estimate)` : ''}`];
   }));
   for (const b of bills) {
-    put(`bills/${b.id}.md`, billMarkdown(b, coverage, reviewState.get(b.id), queueNote.get(b.id)));
-    put(`bills/${b.id}.json`, JSON.stringify(records.get(b.id), null, 1) + '\n');
+    const text = texts ? texts.get(b.id) || null : undefined, record = records.get(b.id);
+    put(`bills/${b.id}.md`, billMarkdown(b, coverage, reviewState.get(b.id), queueNote.get(b.id), text));
+    const json = text ? {...record, links: {full_text: text.versions.at(-1).url, ...record.links}, text_versions: text.versions} : record;
+    put(`bills/${b.id}.json`, JSON.stringify(json, null, 1) + '\n');
   }
 
   // Group pages are split into pages of PAGE bills so each stays small enough for page-reading tools.
@@ -639,18 +687,21 @@ function readJson(path, optional = false) {
 
 async function main(argv) {
   const args = Object.fromEntries(argv.reduce((acc, value, i, all) => value.startsWith('--') ? [...acc, [value.slice(2), all[i + 1]]] : acc, []));
-  if (!args.snapshot || !args.out) throw new Error('Usage: build_agent.mjs --snapshot bills.json --out dir [--tags t.json] [--extras e.json] [--members m.json] [--status s.json] [--districts districts.json]');
+  if (!args.snapshot || !args.out) throw new Error('Usage: build_agent.mjs --snapshot bills.json --out dir [--tags t.json] [--extras e.json] [--members m.json] [--status s.json] [--districts districts.json] [--text live/text]');
   // District pages only when the district tables are given; geo.js is loaded only then, so older deployments
   // that copy just taxonomy.js and prefs.js keep building.
   const districts = args.districts ? readJson(args.districts) : null;
   if (districts && districts.format !== 'texas-bill-districts-v1') throw new Error('Unknown districts format');
   const geo = districts ? await import('../src/geo.js') : null;
+  // live/text sits beside bills.json, so the installed unit needs no new flag; --text overrides it.
+  const snapshot = readJson(args.snapshot);
+  const texts = loadTexts(args.text || join(dirname(args.snapshot), 'text'), (snapshot.bills || []).map(b => String(b?.id || '')).filter(Boolean));
   // extras.json sits beside tags.json in live/luna; finding it there needs no change to the installed unit's flags.
   const extrasPath = args.extras || (args.tags ? join(dirname(args.tags), 'extras.json') : null);
-  const files = buildPages({snapshot: readJson(args.snapshot), tags: args.tags ? readJson(args.tags, true) : null,
+  const files = buildPages({snapshot, tags: args.tags ? readJson(args.tags, true) : null,
     extras: extrasPath ? readJson(extrasPath, true) : null,
     roster: args.members ? readJson(args.members, true) : null, status: args.status ? readJson(args.status, true) : null,
-    districts, geo});
+    districts, geo, texts});
   mkdirSync(args.out, {recursive: true, mode: 0o755});
   const result = writePages(args.out, files);
   console.log(`Agent pages: ${files.size} total, ${result.written} written, ${result.unchanged} unchanged, ${result.removed} removed`);

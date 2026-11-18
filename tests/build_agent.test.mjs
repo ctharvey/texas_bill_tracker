@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, mkdirSync, statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {buildPages, writePages, loadBills, billRecord, slug, AGENT} from '../scripts/build_agent.mjs';
+import {buildPages, writePages, loadBills, billRecord, slug, AGENT, loadTexts, TEXT_INLINE_MAX} from '../scripts/build_agent.mjs';
 import {assessHearing, lastActionInfo, normalizeBill} from '../src/taxonomy.js';
 
 const snapshot = (bills, extra = {}) => ({session: '90R', data_mode: 'official-ftp', generated_at: '2026-11-10T12:00:00Z',
@@ -317,4 +317,44 @@ test('Luna extras search terms reach the agent record; a bill without extras get
   assert.ok(JSON.parse(files.get('bills/HB5.json')).search_terms.includes('roadkill'));
   assert.deepEqual(JSON.parse(files.get('bills/SB12.json')).search_terms, []);
   assert.deepEqual(JSON.parse(build({extras: {format: 'other', bills: extras.bills}}).get('bills/HB5.json')).search_terms, []);
+});
+
+test('bill text: copied text is linked and short texts are inlined; long, missing and unsafe entries are handled', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'agent-text-'));
+  try {
+    const put = (id, versions, files) => {
+      mkdirSync(join(dir, id), {recursive: true});
+      writeFileSync(join(dir, id, 'index.json'), JSON.stringify({format: 'texas-bill-text-index-v1', bill_id: id, versions}));
+      for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, id, name), body);
+    };
+    put('HB5', [{code: 'I', name: 'Introduced', path: 'I.md', source_url: 'ftp://ftp.legis.state.tx.us/HB00005I.HTM'},
+      {code: 'H', name: 'Committee Report', path: 'H.md', source_url: 'ftp://ftp.legis.state.tx.us/HB00005H.HTM'},
+      {code: '../x', name: 'Bad', path: '../x.md'}], {'I.md': '# HB 5 - Introduced\n\nOld.', 'H.md': '# HB 5 - Committee Report\n\nSECTION 1. The <ins>new</ins> rule.\n'});
+    put('SB12', [{code: 'I', name: 'Introduced', path: 'I.md'}], {'I.md': 'x'.repeat(TEXT_INLINE_MAX + 1)});
+    const texts = loadTexts(dir, ['HB5', 'SB12', 'XX1']);
+    assert.deepEqual(texts.get('HB5').versions.map(v => v.code), ['I', 'H']);
+    assert.equal(texts.has('XX1'), false);
+    assert.equal(loadTexts(join(dir, 'absent'), ['HB5']), null);
+
+    const files = build({texts});
+    const hb5 = files.get('bills/HB5.md');
+    assert.match(hb5, /## Bill text\n\nThe official wording of each version/);
+    assert.ok(hb5.includes('- Committee Report: https://billatlas.org/live/text/HB5/H.md (source file: ftp://ftp.legis.state.tx.us/HB00005H.HTM)'));
+    assert.ok(hb5.includes('### Text of the latest version (Committee Report)\n\n````markdown\n# HB 5 - Committee Report\n\nSECTION 1. The <ins>new</ins> rule.\n````'));
+    assert.ok(hb5.includes('- Full bill text (official wording, Markdown): https://billatlas.org/live/text/HB5/H.md'));
+    assert.ok(hb5.indexOf('## Bill text') < hb5.indexOf('## Full-text review (Luna)'));
+    const json = JSON.parse(files.get('bills/HB5.json'));
+    assert.equal(json.links.full_text, 'https://billatlas.org/live/text/HB5/H.md');
+    assert.deepEqual(json.text_versions.map(v => v.name), ['Introduced', 'Committee Report']);
+
+    const sb12 = files.get('bills/SB12.md');
+    assert.ok(sb12.includes(`is ${(TEXT_INLINE_MAX + 1).toLocaleString('en-US')} characters, too long to copy into this page; read it at https://billatlas.org/live/text/SB12/I.md`));
+    assert.ok(!sb12.includes('````'));
+
+    // A bill with no copied text says so; without a text folder the page has no Bill text section at all.
+    const none = build({texts: new Map()}).get('bills/HB5.md');
+    assert.match(none, /## Bill text\n\n_No text has been copied here yet/);
+    assert.ok(!none.includes('Full bill text (official wording'));
+    assert.ok(!build().get('bills/HB5.md').includes('## Bill text'));
+  } finally { rmSync(dir, {recursive: true, force: true}); }
 });
