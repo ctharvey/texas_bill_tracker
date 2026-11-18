@@ -533,8 +533,10 @@ export function tenureTag(member) {
 // categories along the legislative path (withdrawn/vetoed rank by where they stop, not as progress).
 export const LAST_ACTION_TYPES = [
   {key:'vetoed', label:'Vetoed', rank:9, test:/vetoed/},
-  {key:'law', label:'Signed or effective', rank:10, test:/signed by the governor|^effective|filed without the governor|became law/},
+  {key:'law', label:'Signed or effective', rank:10, test:/signed by the governor|^effective|filed without the governor|became law|remarks for effective date/},
   {key:'governor', label:'Sent to governor', rank:9, test:/sent to the governor|enrolled/},
+  // Final step for joint resolutions (which then go to the voters) and some concurrent resolutions.
+  {key:'secretary', label:'Filed with Secretary of State', rank:9, test:/filed with the secretary of state/},
   {key:'other_chamber', label:'Received in other chamber', rank:7, test:/received from the (house|senate)/},
   {key:'passed', label:'Passed chamber', rank:6, test:/^passed(?! to)|reported engrossed|^adopted/},
   {key:'withdrawn', label:'Withdrawn or failed', rank:0, test:/withdrawn|^failed|^died|^not again placed/},
@@ -543,7 +545,7 @@ export const LAST_ACTION_TYPES = [
   {key:'reported', label:'Reported from committee', rank:3, test:/reported (favorably|unfavorably|from)|committee report|recommended for/},
   {key:'heard', label:'Heard in committee', rank:2.5, test:/considered in (public hearing|formal meeting)|testimony taken|left pending|heard in committee|hearing held/},
   {key:'scheduled', label:'Hearing scheduled', rank:2, test:/scheduled for (public )?hearing|hearing scheduled|meeting cancelled/},
-  {key:'referred', label:'Referred to committee', rank:1, test:/referred to|read first time|recommitted/},
+  {key:'referred', label:'Referred to committee', rank:1, test:/referred (directly )?to|read first time|recommitted/},
   {key:'filed', label:'Filed', rank:0.5, test:/^filed$|received by the secretary|^introduced|^filed\b/},
 ];
 const ACTION_CHAMBER = {H:'House', S:'Senate', E:'Governor'};
@@ -598,12 +600,16 @@ export const NO_HEARING = 'No hearing yet';
 export function assessHearing(bill) {
   const a = toArray(bill.actions).filter(a => a != null).map(a => typeof a === 'string' ? a : a.description || '').join(' ').toLowerCase();
   const committee = bill.committee || (bill.status || '').match(/referred to (.+)/i)?.[1];
-  const hearing = !!bill.hearing_date || /scheduled for (public )?hearing|hearing scheduled/.test(a);
-  const held = /public hearing held|hearing conducted|testimony taken/.test(a);
+  // Snapshots set `hearing` from the full history; `actions` holds only the last 12. Older data and CSV imports
+  // fall back to the actions.
+  const stage = ['heard', 'scheduled', 'none'].includes(bill.hearing) ? bill.hearing : null;
+  const held = stage ? stage === 'heard'
+    : /public hearing held|hearing conducted|testimony taken|in public hearing|left pending|considered in formal meeting/.test(a);
+  const hearing = !!bill.hearing_date || (stage ? stage === 'scheduled' : /scheduled for (public )?hearing|hearing scheduled/.test(a));
   if (held) return {label:'Heard', level:4, detail:'A committee hearing is recorded in the supplied action history.', facts:['Hearing recorded']};
   if (hearing) return {label:'Scheduled', level:3, detail:'A hearing date or scheduled-hearing action is recorded.', facts:['Hearing scheduled']};
   if (committee) return {label:'Referred', level:2, detail:'Committee referral is confirmed; no hearing date is in the supplied data.', facts:['Committee referral']};
-  return {label:NO_HEARING, level:0, detail:'No committee referral or hearing has been verified. A likelihood estimate would be premature.', facts:['Prefiling stage','Committee leadership not yet established']};
+  return {label:NO_HEARING, level:0, detail:'No committee referral or hearing has been verified. A likelihood estimate would be premature.', facts:['No committee referral recorded']};
 }
 
 // The primary author's standing: a verified role first, else their tenure tag (the same roster measure as member

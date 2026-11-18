@@ -78,22 +78,83 @@ def member_names(root: ET.Element, *tags: str) -> list[str]:
     ))
 
 
-def infer_status(actions: list[str], committees: list[str]) -> str:
+# TLC wording, checked against 558 final 89R histories. "Signed by the Governor/line item veto" is a law.
+ENACTED_PHRASES = ("signed by the governor", "became law", "filed without the governor's signature",
+                   "see remarks for effective date")
+PASSED_PHRASES = ("passed both", "sent to governor", "sent to the governor",
+                  "filed with the secretary of state")
+HEARD_PHRASES = ("public hearing held", "hearing held", "hearing conducted", "testimony taken", "heard in committee",
+                 "in public hearing", "left pending", "considered in formal meeting")
+SCHEDULED_PHRASES = ("scheduled for public hearing", "scheduled for hearing", "hearing scheduled")
+
+
+def hearing_stage(actions: list[str]) -> str:
+    """'heard', 'scheduled' or 'none' from the full action list."""
     text = " ".join(actions).lower()
-    if "signed by the governor" in text or "became law" in text:
+    if any(p in text for p in HEARD_PHRASES):
+        return "heard"
+    if any(p in text for p in SCHEDULED_PHRASES):
+        return "scheduled"
+    return "none"
+
+
+def infer_status(actions: list[str], committees: list[str]) -> str:
+    lines = [a.lower().strip() for a in actions]
+    text = " ".join(lines)
+    if "vetoed by the governor" in text:
+        return "Vetoed"
+    if any(p in text for p in ENACTED_PHRASES) or any(line.startswith("effective") for line in lines):
         return "Enacted"
-    if "passed both" in text or "sent to governor" in text:
+    if any(p in text for p in PASSED_PHRASES):
         return "Passed"
-    if "passed" in text or "engrossed" in text or "reported favorably" in text:
+    # "Failed to pass to engrossment" is not progress.
+    progress = text.replace("failed to pass", "")
+    if "passed" in progress or "engrossed" in progress or "reported favorably" in progress:
         return "Advanced"
-    if any(p in text for p in ("public hearing held", "hearing held", "testimony taken",
-                               "heard in committee", "considered in public hearing")):
+    stage = hearing_stage(actions)
+    if stage == "heard":
         return "Heard"
-    if any(p in text for p in ("scheduled for public hearing", "scheduled for hearing", "hearing scheduled")):
+    if stage == "scheduled":
         return "Scheduled"
-    if committees or "referred to" in text:
+    if committees or "referred to" in text or "referred directly to" in text:
         return "Referred"
     return "Filed"
+
+
+def _vote_count(value: str) -> int | None:
+    value = (value or "").strip()
+    return int(value) if value.isdigit() else None
+
+
+def parse_committees(root: ET.Element) -> list[dict]:
+    """<committees><house|senate name status ayeVotes ...> attributes, in source order (house first)."""
+    found = []
+    for group in root.iter():
+        if local_tag(group.tag) != "committees":
+            continue
+        for element in group:
+            chamber = {"house": "House", "senate": "Senate"}.get(local_tag(element.tag))
+            attrs = {local_tag(k): " ".join(v.split()) for k, v in element.attrib.items()}
+            if not chamber or not attrs.get("name"):
+                continue
+            entry = {"chamber": chamber, "name": attrs["name"][:200], "status": attrs.get("status", "")[:60]}
+            votes = {key: _vote_count(attrs.get(attr, "")) for key, attr in
+                     (("aye", "ayevotes"), ("nay", "nayvotes"), ("present", "presentnotvotingvotes"),
+                      ("absent", "absentvotes"))}
+            if any(votes.values()):  # TLC writes all zeros until the committee votes.
+                entry["votes"] = {k: v for k, v in votes.items() if v is not None}
+            if attrs.get("subcommitteename"):
+                entry["subcommittee"] = attrs["subcommitteename"][:200]
+                if attrs.get("subcommitteestatus"):
+                    entry["subcommittee_status"] = attrs["subcommitteestatus"][:60]
+            found.append(entry)
+    return found
+
+
+def current_committee(committees: list[dict]) -> str:
+    """The committee now holding the bill, else the last one it was referred to."""
+    holding = [c for c in committees if c.get("status", "").lower() == "in committee"]
+    return (holding or committees)[-1]["name"] if committees else ""
 
 
 def parse_bill_xml(raw: bytes, path: str) -> dict | None:
@@ -128,7 +189,9 @@ def parse_bill_xml(raw: bytes, path: str) -> dict | None:
     if not actions:
         actions = all_text(root, "actiondescription", "actiontext", "action")
     dates = all_text(root, "fileddate", "introductiondate", "filedate", "datefiled")
-    committees = all_text(root, "committeename", "currentcommittee", "referredcommittee")
+    committee_list = parse_committees(root)
+    committees = [c["name"] for c in committee_list] or all_text(
+        root, "committeename", "currentcommittee", "referredcommittee")
     status = infer_status(actions, committees)
     date = normalize_date(dates[0]) if dates else ""
     if not date:
@@ -153,13 +216,18 @@ def parse_bill_xml(raw: bytes, path: str) -> dict | None:
         "last_action": last_action[:400],
         "last_action_date": last_action_date,
         "actions": actions[-12:],
+        # From the full history: `actions` keeps only the last 12, and a third of 89R bills had more.
+        "hearing": hearing_stage(actions),
         "source_record": "Texas Legislative Council bulk FTP bill history",
         "source_path": path,
     }
     dated = [day for description, day in history if description]
     if len(dated) == len(actions):  # Only when every action came from a dated <action> element.
         record["action_dates"] = dated[-12:]
-    if committees:
+    if committee_list:
+        record["committees"] = committee_list
+        record["committee"] = current_committee(committee_list)
+    elif committees:
         record["committee"] = committees[-1][:200]
     if any(local_tag(element.tag) == "companions" for element in root.iter()):
         record["companions"] = parse_companions(first_text(root, "companions"), bill_id)

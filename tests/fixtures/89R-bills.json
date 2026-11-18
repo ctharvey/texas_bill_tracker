@@ -1,0 +1,696 @@
+{
+ "HB1001": {
+  "action_dates": [
+   "2024-11-12",
+   "2025-03-07",
+   "2025-03-07"
+  ],
+  "actions": [
+   "Filed",
+   "Read first time",
+   "Referred to Elections"
+  ],
+  "author": "Toth",
+  "authors": [
+   "Toth"
+  ],
+  "caption": "Relating to the use of paper ballots and certain electronic devices in conducting an election.",
+  "chamber": "House",
+  "coauthors": [
+   "Harris",
+   "Hayes",
+   "Hickland",
+   "Hopper",
+   "Kerwin",
+   "Money",
+   "Shofner",
+   "Virdell"
+  ],
+  "committee": "Elections",
+  "committees": [
+   {
+    "chamber": "House",
+    "name": "Elections",
+    "status": "In committee"
+   }
+  ],
+  "companions": [
+   {
+    "author": "Hall",
+    "id": "SB77",
+    "relation": "Similar"
+   }
+  ],
+  "cosponsors": [],
+  "filed_at": "2024-11-12",
+  "hearing": "none",
+  "id": "HB1001",
+  "last_action": "03/07/2025 H Referred to Elections: Mar 7 2025 2:33PM",
+  "last_action_date": "2025-03-07",
+  "number": "HB 1001",
+  "source_path": "/bills/89r/billhistory/x/HB1001.xml",
+  "source_record": "Texas Legislative Council bulk FTP bill history",
+  "source_updated": "5/9/2025 2:00:04 AM",
+  "sponsors": [],
+  "status": "Referred",
+  "subjects": [
+   "Elections--Administration",
+   "Elections--Voting Systems",
+   "ELECTRONIC EQUIPMENT"
+  ],
+  "text_versions": [],
+  "title": "Relating to the use of paper ballots and certain electronic devices in conducting an election."
+ },
+ "HB1232": {
+  "action_dates": [
+   "2025-04-24",
+   "2025-04-29",
+   "2025-04-29",
+   "2025-04-29",
+   "2025-04-29",
+   "2025-04-29",
+   "2025-04-30",
+   "2025-04-30",
+   "2025-04-30",
+   "2025-04-30",
+   "2025-04-30",
+   "2025-04-30"
+  ],
+  "actions": [
+   "Considered in Calendars",
+   "Placed on General State Calendar",
+   "Read 2nd time",
+   "Passed to engrossment",
+   "Record vote",
+   "Statement(s) of vote recorded in Journal",
+   "Read 3rd time",
+   "Passed",
+   "Record vote",
+   "Statement(s) of vote recorded in Journal",
+   "Reported engrossed",
+   "Received from the House"
+  ],
+  "author": "Turner | Capriglione",
+  "authors": [
+   "Turner",
+   "Capriglione"
+  ],
+  "caption": "Relating to the reporting of violations of law under the whistleblower protection laws.",
+  "chamber": "House",
+  "coauthors": [
+   "Martinez Fischer",
+   "Morales Shaw",
+   "Plesa"
+  ],
+  "committee": "State Affairs",
+  "committees": [
+   {
+    "chamber": "House",
+    "name": "State Affairs",
+    "status": "Out of committee",
+    "votes": {
+     "absent": 0,
+     "aye": 15,
+     "nay": 0,
+     "present": 0
+    }
+   }
+  ],
+  "companions": [],
+  "cosponsors": [],
+  "filed_at": "2024-11-12",
+  "hearing": "heard",
+  "id": "HB1232",
+  "last_action": "04/30/2025 S Received from the House",
+  "last_action_date": "2025-04-30",
+  "number": "HB 1232",
+  "source_path": "/bills/89r/billhistory/x/HB1232.xml",
+  "source_record": "Texas Legislative Council bulk FTP bill history",
+  "source_updated": "5/22/2025 2:00:07 AM",
+  "sponsors": [],
+  "status": "Advanced",
+  "subjects": [
+   "State Employees",
+   "State Officers",
+   "WHISTLEBLOWERS"
+  ],
+  "text_versions": [],
+  "title": "Relating to the reporting of violations of law under the whistleblower protection laws."
+ },
+ "HB2": {
+  "action_dates": [
+   "2025-05-29",
+   "2025-05-29",
+   "2025-05-29",
+   "2025-05-29",
+   "2025-05-29",
+   "2025-05-29",
+   "2025-05-31",
+   "2025-06-01",
+   "2025-06-01",
+   "2025-06-02",
+   "2025-06-20",
+   "2025-06-20"
+  ],
+  "actions": [
+   "House concurs in Senate amendment(s)",
+   "Record vote",
+   "Statement(s) of vote recorded in Journal",
+   "Reason for vote recorded in Journal",
+   "Text of Senate Amendment(s)",
+   "House concurs in Senate amendment(s)-reported",
+   "Reported enrolled",
+   "Signed in the House",
+   "Signed in the Senate",
+   "Sent to the Governor",
+   "Signed by the Governor",
+   "See remarks for effective date"
+  ],
+  "author": "Buckley | Bernal | Guillen",
+  "authors": [
+   "Buckley",
+   "Bernal",
+   "Guillen"
+  ],
+  "caption": "Relating to public education and public school finance.",
+  "chamber": "House",
+  "coauthors": [
+   "Barry",
+   "Bell, Cecil",
+   "Bell, Keith",
+   "Bhojani",
+   "Bonnen",
+   "Bumgarner",
+   "Button",
+   "Capriglione",
+   "Cook",
+   "Craddick",
+   "Cunningham",
+   "Curry",
+   "Darby",
+   "Dean",
+   "DeAyala",
+   "Dorazio",
+   "Dyson",
+   "Fairly",
+   "Frank",
+   "Gates",
+   "Gerdes",
+   "González, Jessica",
+   "Harris",
+   "Harris Davila",
+   "Hayes",
+   "Hefner",
+   "Hickland",
+   "Holt",
+   "Hull",
+   "Hunter",
+   "Isaac",
+   "Kerwin",
+   "King",
+   "Kitzman",
+   "LaHood",
+   "Lalani",
+   "Lambert",
+   "Landgraf",
+   "Leach",
+   "Leo Wilson",
+   "Lopez, Janie",
+   "Louderback",
+   "Lozano",
+   "Lujan",
+   "Luther",
+   "McLaughlin",
+   "McQueeney",
+   "Metcalf",
+   "Meyer",
+   "Morales, Eddie",
+   "Noble",
+   "Oliverson",
+   "Orr",
+   "Patterson",
+   "Paul",
+   "Perez, Vincent",
+   "Pierson",
+   "Raymond",
+   "Reynolds",
+   "Richardson",
+   "Rodríguez Ramos",
+   "Shaheen",
+   "Shofner",
+   "Slawson",
+   "Smithee",
+   "Spiller",
+   "Swanson",
+   "Tepper",
+   "Toth",
+   "Troxclair",
+   "Vasut",
+   "Villalobos",
+   "Virdell",
+   "Wharton",
+   "Wilson"
+  ],
+  "committee": "Education K-16",
+  "committees": [
+   {
+    "chamber": "House",
+    "name": "Public Education",
+    "status": "Out of committee",
+    "votes": {
+     "absent": 0,
+     "aye": 13,
+     "nay": 2,
+     "present": 0
+    }
+   },
+   {
+    "chamber": "Senate",
+    "name": "Education K-16",
+    "status": "Out of committee",
+    "votes": {
+     "absent": 0,
+     "aye": 9,
+     "nay": 0,
+     "present": 2
+    }
+   }
+  ],
+  "companions": [],
+  "cosponsors": [
+   "Alvarado",
+   "Bettencourt",
+   "Birdwell",
+   "Blanco",
+   "Campbell",
+   "Flores",
+   "Hagenbuch",
+   "Hall",
+   "Hancock",
+   "Hinojosa, Adam",
+   "Hinojosa, Juan \"Chuy\"",
+   "Huffman",
+   "King",
+   "Menéndez",
+   "Miles",
+   "Parker",
+   "Paxton",
+   "Sparks",
+   "West",
+   "Zaffirini"
+  ],
+  "filed_at": "2025-02-20",
+  "hearing": "heard",
+  "id": "HB2",
+  "last_action": "06/20/2025 E See remarks for effective date",
+  "last_action_date": "2025-06-20",
+  "number": "HB 2",
+  "source_path": "/bills/89r/billhistory/x/HB2.xml",
+  "source_record": "Texas Legislative Council bulk FTP bill history",
+  "source_updated": "6/23/2025 2:00:05 AM",
+  "sponsors": [
+   "Creighton"
+  ],
+  "status": "Enacted",
+  "subjects": [
+   "WINDHAM SCHOOL DISTRICT",
+   "Disabilities, Persons with",
+   "Education--Bilingual",
+   "Education--Primary & Secondary--Accountability",
+   "Education--Primary & Secondary--Admission & Attendance",
+   "Education--Primary & Secondary--Charter Schools",
+   "Education--Primary & Secondary--Curriculum",
+   "Education--Primary & Secondary--Finance",
+   "Education--Primary & Secondary--Other School Personnel",
+   "Education--Primary & Secondary--Special",
+   "Education--Primary & Secondary--Teachers",
+   "Education--Primary & Secondary--Vocational",
+   "Electronic Information Systems",
+   "Governor",
+   "Legislature",
+   "Occupational Regulation--Other Trades & Professions",
+   "Salaries & Expenses",
+   "State Finances--Appropriations",
+   "State Finances--Management & Control",
+   "Taxation--School District",
+   "ACADEMIC PERFORMANCE",
+   "AUTISM & PERVASIVE DEVELOPMENTAL DISORDERS",
+   "BONDS",
+   "DYSLEXIA",
+   "FOUNDATION SCHOOL FUND",
+   "INTERNET",
+   "LITERACY",
+   "MEDIATION, DISPUTE RESOLUTION, & ARBITRATION",
+   "PRESCHOOL & PREKINDERGARTEN",
+   "REGIONAL EDUCATION SERVICE CENTERS",
+   "STAFF DEVELOPMENT & TRAINING",
+   "BLIND & VISUALLY IMPAIRED, TEXAS SCHOOL FOR THE",
+   "COMPTROLLER OF PUBLIC ACCOUNTS",
+   "DEAF, TEXAS SCHOOL FOR THE",
+   "EDUCATION AGENCY, TEXAS",
+   "EDUCATION, COMMISSIONER OF",
+   "EDUCATION, STATE BOARD OF",
+   "EDUCATOR CERTIFICATION, STATE BOARD FOR",
+   "FAMILY & PROTECTIVE SERVICES, DEPARTMENT OF",
+   "HEALTH & HUMAN SERVICES COMMISSION"
+  ],
+  "text_versions": [],
+  "title": "Relating to public education and public school finance."
+ },
+ "HB2516": {
+  "action_dates": [
+   "2025-06-01",
+   "2025-06-01",
+   "2025-06-01",
+   "2025-06-01",
+   "2025-06-01",
+   "2025-06-01",
+   "2025-06-02",
+   "2025-06-02",
+   "2025-06-02",
+   "2025-06-02",
+   "2025-06-20",
+   "2025-06-20"
+  ],
+  "actions": [
+   "Record vote",
+   "Statement(s) of vote recorded in Journal",
+   "Senate adopts conference committee report",
+   "Record vote",
+   "Senate adopts conf. comm. report-reported",
+   "House adopts conf. comm. report-reported",
+   "Reported enrolled",
+   "Signed in the House",
+   "Signed in the Senate",
+   "Sent to the Governor",
+   "Filed without the Governor's signature",
+   "Effective immediately"
+  ],
+  "author": "Guillen | Dean | Wharton | Johnson | Buckley",
+  "authors": [
+   "Guillen",
+   "Dean",
+   "Wharton",
+   "Johnson",
+   "Buckley"
+  ],
+  "caption": "Relating to the eligibility of certain individuals younger than 65 years of age to purchase Medicare supplement benefit plans.",
+  "chamber": "House",
+  "coauthors": [
+   "Campos",
+   "Garcia, Josey",
+   "González, Jessica",
+   "Jones, Venton",
+   "Lalani",
+   "Lopez, Ray",
+   "Martinez Fischer",
+   "Morales, Eddie",
+   "Raymond"
+  ],
+  "committee": "Health & Human Services",
+  "committees": [
+   {
+    "chamber": "House",
+    "name": "Insurance",
+    "status": "Out of committee",
+    "votes": {
+     "absent": 1,
+     "aye": 8,
+     "nay": 0,
+     "present": 0
+    }
+   },
+   {
+    "chamber": "Senate",
+    "name": "Health & Human Services",
+    "status": "Out of committee",
+    "votes": {
+     "absent": 3,
+     "aye": 6,
+     "nay": 0,
+     "present": 0
+    }
+   }
+  ],
+  "companions": [
+   {
+    "author": "Schwertner",
+    "id": "SB1945",
+    "relation": "Identical"
+   }
+  ],
+  "cosponsors": [
+   "Blanco",
+   "Cook",
+   "Hinojosa, Juan \"Chuy\"",
+   "Zaffirini"
+  ],
+  "filed_at": "2025-02-05",
+  "hearing": "heard",
+  "id": "HB2516",
+  "last_action": "06/20/2025 E Effective immediately",
+  "last_action_date": "2025-06-20",
+  "number": "HB 2516",
+  "source_path": "/bills/89r/billhistory/x/HB2516.xml",
+  "source_record": "Texas Legislative Council bulk FTP bill history",
+  "source_updated": "6/22/2025 2:00:08 AM",
+  "sponsors": [
+   "Schwertner"
+  ],
+  "status": "Enacted",
+  "subjects": [
+   "Health--Other Diseases & Medical Conditions",
+   "Insurance--Health & Accident",
+   "Insurance--Insurers & Agents",
+   "MEDICARE",
+   "INSURANCE, COMMISSIONER OF"
+  ],
+  "text_versions": [],
+  "title": "Relating to the eligibility of certain individuals younger than 65 years of age to purchase Medicare supplement benefit plans."
+ },
+ "HJR2": {
+  "action_dates": [
+   "2025-05-12",
+   "2025-05-12",
+   "2025-05-12",
+   "2025-05-12",
+   "2025-05-12",
+   "2025-05-12",
+   "2025-05-12",
+   "2025-05-12",
+   "2025-05-13",
+   "2025-05-13",
+   "2025-05-14",
+   "2025-05-14"
+  ],
+  "actions": [
+   "Read 2nd time & passed to 3rd reading",
+   "Record vote",
+   "Three day rule suspended",
+   "Record vote",
+   "Read 3rd time",
+   "Passed",
+   "Record vote",
+   "Senate passage reported",
+   "Reported enrolled",
+   "Signed in the House",
+   "Signed in the Senate",
+   "Filed with the Secretary of State"
+  ],
+  "author": "Geren | McQueeney | Meyer | Metcalf",
+  "authors": [
+   "Geren",
+   "McQueeney",
+   "Meyer",
+   "Metcalf"
+  ],
+  "caption": "Proposing a constitutional amendment prohibiting the legislature from imposing death taxes applicable to a decedent's property or the transfer of an estate, inheritance, legacy, succession, or gift.",
+  "chamber": "House",
+  "coauthors": [
+   "Bonnen",
+   "Bumgarner",
+   "Button",
+   "Davis, Aicha",
+   "Gerdes",
+   "Lambert",
+   "Morgan",
+   "Muñoz",
+   "Pierson",
+   "Plesa",
+   "Slawson",
+   "Spiller",
+   "Toth",
+   "Troxclair"
+  ],
+  "committee": "Finance",
+  "committees": [
+   {
+    "chamber": "House",
+    "name": "Ways & Means",
+    "status": "Out of committee",
+    "votes": {
+     "absent": 1,
+     "aye": 11,
+     "nay": 1,
+     "present": 0
+    }
+   },
+   {
+    "chamber": "Senate",
+    "name": "Finance",
+    "status": "Out of committee",
+    "votes": {
+     "absent": 0,
+     "aye": 15,
+     "nay": 0,
+     "present": 0
+    }
+   }
+  ],
+  "companions": [
+   {
+    "author": "Perry",
+    "id": "SJR19",
+    "relation": "Similar"
+   }
+  ],
+  "cosponsors": [
+   "Bettencourt",
+   "Birdwell",
+   "Creighton",
+   "Hinojosa, Adam",
+   "Kolkhorst"
+  ],
+  "filed_at": "2025-02-26",
+  "hearing": "heard",
+  "id": "HJR2",
+  "last_action": "05/14/2025 E Filed with the Secretary of State",
+  "last_action_date": "2025-05-14",
+  "number": "HJR 2",
+  "source_path": "/bills/89r/billhistory/x/HJR2.xml",
+  "source_record": "Texas Legislative Council bulk FTP bill history",
+  "source_updated": "5/15/2025 2:00:25 AM",
+  "sponsors": [
+   "Perry"
+  ],
+  "status": "Passed",
+  "subjects": [
+   "Resolutions--Constitutional Amendments",
+   "Taxation--Inheritance"
+  ],
+  "text_versions": [],
+  "title": "Proposing a constitutional amendment prohibiting the legislature from imposing death taxes applicable to a decedent's property or the transfer of an estate, inheritance, legacy, succession, or gift."
+ },
+ "SB3": {
+  "action_dates": [
+   "2025-05-22",
+   "2025-05-23",
+   "2025-05-25",
+   "2025-05-25",
+   "2025-05-25",
+   "2025-05-25",
+   "2025-05-26",
+   "2025-05-26",
+   "2025-05-26",
+   "2025-05-27",
+   "2025-05-27",
+   "2025-06-22"
+  ],
+  "actions": [
+   "Statement(s) of vote recorded in Journal",
+   "House passage as amended reported",
+   "House amendment(s) laid before the Senate",
+   "Read",
+   "Senate concurs in House amendment(s)",
+   "Record vote",
+   "Senate concurs in House amendment(s)-reported",
+   "Reported enrolled",
+   "Signed in the Senate",
+   "Signed in the House",
+   "Sent to the Governor",
+   "Vetoed by the Governor"
+  ],
+  "author": "Perry",
+  "authors": [
+   "Perry"
+  ],
+  "caption": "Relating to the regulation of products derived from hemp, including consumable hemp products and the hemp-derived cannabinoids contained in those products; requiring occupational licenses and permits; imposing fees; creating criminal offenses; authorizing an administrative penalty.",
+  "chamber": "Senate",
+  "coauthors": [
+   "Bettencourt",
+   "Campbell",
+   "Creighton",
+   "Hagenbuch",
+   "Hall",
+   "Paxton",
+   "Schwertner",
+   "Sparks"
+  ],
+  "committee": "State Affairs",
+  "committees": [
+   {
+    "chamber": "House",
+    "name": "State Affairs",
+    "status": "Out of committee",
+    "votes": {
+     "absent": 3,
+     "aye": 11,
+     "nay": 0,
+     "present": 1
+    }
+   },
+   {
+    "chamber": "Senate",
+    "name": "State Affairs",
+    "status": "Out of committee",
+    "votes": {
+     "absent": 1,
+     "aye": 10,
+     "nay": 0,
+     "present": 0
+    }
+   }
+  ],
+  "companions": [],
+  "cosponsors": [],
+  "filed_at": "2025-02-20",
+  "hearing": "heard",
+  "id": "SB3",
+  "last_action": "06/22/2025 E Vetoed by the Governor",
+  "last_action_date": "2025-06-22",
+  "number": "SB 3",
+  "source_path": "/bills/89r/billhistory/x/SB3.xml",
+  "source_record": "Texas Legislative Council bulk FTP bill history",
+  "source_updated": "6/23/2025 2:00:10 AM",
+  "sponsors": [
+   "King"
+  ],
+  "status": "Vetoed",
+  "subjects": [
+   "Alcoholic Beverage Regulation",
+   "Business & Commerce--General",
+   "Business & Commerce--Trade Practices",
+   "Crimes--Drugs",
+   "Fees & Other Nontax Revenue--State",
+   "Health--General",
+   "Minors--Crimes Against",
+   "Minors--Health & Safety",
+   "Occupational Regulation--Other Trades & Professions",
+   "Taxation--Sales",
+   "ADVERTISING",
+   "BEER, BREWERIES, & BREWPUBS",
+   "BEVERAGE CONTAINERS",
+   "HEMP",
+   "MARIHUANA",
+   "PACKAGING & LABELING REQUIREMENTS",
+   "PERMITS",
+   "SYNTHETIC CANNABINOIDS",
+   "ALCOHOLIC BEVERAGE COMMISSION, TEXAS",
+   "HEALTH & HUMAN SERVICES COMMISSION",
+   "PUBLIC SAFETY, DEPARTMENT OF",
+   "STATE HEALTH SERVICES, DEPARTMENT OF"
+  ],
+  "text_versions": [],
+  "title": "Relating to the regulation of products derived from hemp, including consumable hemp products and the hemp-derived cannabinoids contained in those products; requiring occupational licenses and permits; imposing fees; creating criminal offenses; authorizing an administrative penalty."
+ }
+}

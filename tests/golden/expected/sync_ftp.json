@@ -117,6 +117,31 @@
    "Wharton",
    "Wilson"
   ],
+  "committee": "Education K-16",
+  "committees": [
+   {
+    "chamber": "House",
+    "name": "Public Education",
+    "status": "Out of committee",
+    "votes": {
+     "absent": 0,
+     "aye": 13,
+     "nay": 2,
+     "present": 0
+    }
+   },
+   {
+    "chamber": "Senate",
+    "name": "Education K-16",
+    "status": "Out of committee",
+    "votes": {
+     "absent": 0,
+     "aye": 9,
+     "nay": 0,
+     "present": 2
+    }
+   }
+  ],
   "companions": [],
   "cosponsors": [
    "Alvarado",
@@ -898,6 +923,7 @@
    }
   ],
   "filed_at": "2025-02-20",
+  "hearing": "heard",
   "id": "HB2",
   "last_action": "06/20/2025 E See remarks for effective date",
   "last_action_date": "2025-06-20",

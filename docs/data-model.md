@@ -10,7 +10,9 @@ Each bill (`bills[]`):
 | Field | Meaning |
 |---|---|
 | `id`, `number`, `chamber`, `title`, `caption` | Identity and official caption |
-| `status`, `filed_at`, `last_action`, `last_action_date`, `actions`, `action_dates` | Official history; `last_action` is TLO's `MM/DD/YYYY H\|S\|E text` |
+| `status`, `filed_at`, `last_action`, `last_action_date`, `actions`, `action_dates` | Official history; `last_action` is TLO's `MM/DD/YYYY H\|S\|E text`. `actions` keeps only the last 12; `status` (Filed, Referred, Scheduled, Heard, Advanced, Passed, Enacted, Vetoed) comes from the full history |
+| `hearing` | `heard`, `scheduled` or `none`, from the full history. The site falls back to `actions` when it is missing |
+| `committees`, `committee` | Each referral `{chamber, name, status, votes?, subcommittee?, subcommittee_status?}` from TLC's committee attributes (`votes` once the committee has voted); `committee` is the one now holding the bill, else the last |
 | `author`, `authors`, `coauthors`, `sponsors`, `cosponsors` | Members by role; authors and coauthors are from the originating chamber, sponsors from the other. `author` is a display string kept for compatibility |
 | `subjects` | TLC subject index, index codes removed |
 | `companions` | `{id, author, relation}` from the history ("SB 132 by Menendez, Identical") |
