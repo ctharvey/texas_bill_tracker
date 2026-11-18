@@ -56,11 +56,11 @@ def test_follow_from_member_page_persists_and_lists_bills(device):
     assert followed_chips(page) == ["Rep. Brooks Landgraf RSS Unfollow"]
     expect(page.locator(".followed-member a.member-name")).to_have_attribute("href", f"#member?code={LANDGRAF}")
     expected = authored_numbers("Landgraf", "House")
-    rows = section.locator(".today-row")
+    rows = section.locator(".near-row")
     expect(rows).to_have_count(len(expected))
     assert sorted(t.strip() for t in rows.locator(".bill-number").all_inner_texts()) == sorted(expected)
     # Each row names who it is followed through and in what role.
-    expect(rows.first.locator(".today-action")).to_have_text("Rep. Landgraf · Author")
+    expect(rows.first.locator(".near-who")).to_have_text("Rep. Landgraf · Author")
 
 
 def test_member_rss_link_points_at_the_member_feed(device):
@@ -124,7 +124,7 @@ def test_follow_from_near_you_result_lists_both_legislators_bills(device):
     section = page.locator(".followed-section", has_text="Followed legislators")
     expect(section.locator("h3")).to_have_text("Followed legislators 2")
     expected = authored_numbers("Landgraf", "House") + authored_numbers("Sparks", "Senate")
-    rows = section.locator(".today-row")
+    rows = section.locator(".near-row")
     expect(rows).to_have_count(min(30, len(expected)))
     expect(page.locator("#follow-more")).to_have_text(f"Show 30 more · showing 30 of {len(expected)}")
     page.locator("#follow-more").click()

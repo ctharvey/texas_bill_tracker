@@ -192,7 +192,7 @@ def test_pick_district_numbers(device):
     assert json.loads(device.storage()[NEAR_KEY]) == {"house": "123", "senate": "26", "county": None,
                                                       "source": "district", "near": False}
     # With no county, local bills come from every county of the House district.
-    expect(page.locator(".today-group h3").nth(1)).to_contain_text("Bills that name your district's county")
+    expect(page.locator(".near-group h3").nth(1)).to_contain_text("Bills that name your district's county")
 
 
 def test_district_numbers_out_of_range_are_refused(device):

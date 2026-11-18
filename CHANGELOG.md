@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-11-18
+- Following names which legislator and role each bill comes from again (lost in the compact rows); nightly E2E selectors follow the Nov 17 row redesign.
 - Session readiness, checked against 558 real 89R histories: committees come from TLC's attributes (they were never read), hearing status from the full history (it saw only the last 12 actions), and status covers vetoes, laws without a signature and "Sent to the Governor". Referred bills no longer say "Prefiling stage".
 - Cloudflare caching: the data run purges the files only it writes after every run, so the edge keeps them an hour (2aeefd2, 2202e8e).
 - Removed the legacy Luna call stack; every call goes through the vendored cth.flex boundary (`--transport flex` is the only choice).

@@ -50,7 +50,7 @@ def test_house_member_bill_list_matches_authored_bills(device):
     expect(page.locator("#dynamic-content")).to_contain_text("29 bills in this snapshot.")
     expect(page.locator("#dynamic-content")).to_contain_text(
         "Representatives author and coauthor House bills and sponsor Senate bills that reach the House.")
-    rows = page.locator(".today-group .today-row")
+    rows = page.locator(".today-group .near-row")
     expect(rows).to_have_count(29)
     shown = [r.locator(".bill-number").first.inner_text().strip() for r in rows.all()]
     assert sorted(shown) == sorted(expected)
@@ -71,7 +71,7 @@ def test_senate_member_page_pages_through_a_long_list(device):
     expect(page.locator("#dynamic-content")).to_contain_text(
         "Senators author and coauthor Senate bills and sponsor House bills that reach the Senate.")
     assert section_titles(page) == ["Author 80"]
-    rows = page.locator(".today-group .today-row")
+    rows = page.locator(".today-group .near-row")
     expect(rows).to_have_count(30)
     more = page.locator("[data-member-more='Author']")
     expect(more).to_have_text("Show 30 more · showing 30 of 80")
@@ -102,7 +102,7 @@ def test_drawer_author_links_to_member_page(device):
     expect(page.locator("#bill-page")).to_have_count(0)
     expect(page.locator("#page-title")).to_have_text("Rep. Brooks Landgraf")
     assert page.evaluate("location.hash") == f"#member?code={LANDGRAF}"
-    expect(page.locator("#dynamic-content .today-row").first).to_be_visible()
+    expect(page.locator("#dynamic-content .near-row").first).to_be_visible()
     # The member page lists the bill we came from.
     assert "HB 717" in [t.strip() for t in page.locator("#dynamic-content .bill-number").all_inner_texts()]
 

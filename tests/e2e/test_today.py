@@ -50,8 +50,8 @@ def test_today_lists_the_days_bills(device):
     group = page.locator(".today-group h3")
     expect(group).to_have_count(1)
     expect(group).to_have_text(re.compile(r"^Filed\s+6$"))
-    expect(rows.first).to_contain_text("virtual currency kiosks")
-    expect(rows.first.locator(".today-action")).to_have_text("Filed")
+    expect(rows.last).to_contain_text("virtual currency kiosks")
+    expect(rows.last.locator(".today-action")).to_have_text("Filed")
 
 
 def test_topic_chips_count_the_days_bills_and_filter(device):
