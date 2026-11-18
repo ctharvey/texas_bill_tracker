@@ -14,6 +14,11 @@ test('aiPrompt names the bill, both URLs and one neutral instruction', () => {
   assert.equal(agentUrl(bill('SJR9')), 'https://agent.billatlas.org/bills/SJR9.md');
 });
 
+test('aiPrompt tells an assistant that cannot open the links to search for the bill on BillAtlas', () => {
+  const lines = aiPrompt(bill('HB5')).split('\n');
+  assert.equal(lines.at(-2), `If you can't open these links, search the web for "Texas Bill Atlas HB 5" (billatlas.org) and use its bill page and the official Texas Legislature pages.`);
+});
+
 test('aiPrompt links the latest text version when there is one', () => {
   const versions = [{code: 'I', name: 'Introduced', html: 'https://tlc.example/HB00005I.HTM'}, {code: 'H', name: 'Committee Report', html: 'https://tlc.example/HB00005H.HTM'}];
   const text = aiPrompt(bill('HB5', {text_versions: versions}));

@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-17
+- The Ask AI / Copy for AI prompt ends with a fallback for assistants that won't open links from a prefilled prompt
+  (Claude on the web refused all of them): search the web for "Texas Bill Atlas <bill>" (billatlas.org) and use its
+  bill page and the official Legislature pages. The links stay first.
 - Push-triggered server jobs: after publishing, `deploy_static.py` diffs the old and new `main` and leaves a marker in
   `/var/lib/texas-bill-atlas/refresh` for each server job whose code or inputs changed (`JOB_INPUTS`: members, data,
   agent, share cards; never review). `texas-bill-refresh.path` (root) sees the folder fill and
