@@ -21,7 +21,8 @@ ExecStart=/bin/sh -c 'exec /usr/bin/python3 "$RUNTIME_DIRECTORY/scripts/build_fe
 # Secondary stages (history, texts, documents) and an incomplete read never block the snapshot or the feeds; they
 # fail the unit here, after both, so OnFailure reports them.
 ExecStart=/bin/sh -c 'if [ -s "$RUNTIME_DIRECTORY/failures" ]; then echo "Secondary stages failed:"; cat "$RUNTIME_DIRECTORY/failures"; exit 1; fi'
-# Cloudflare keeps this run's files an hour at the edge; purge them after every run, finished or not (purge_cache.py).
+# Cloudflare keeps this run's files 30 days at the edge; purge the changed ones after every run, finished or not
+# (purge_cache.py).
 # CF_PURGE_TOKEN=<Cache Purge token for billatlas.org>, root-only; the unit does not start without it.
 EnvironmentFile=/etc/texas-bill-atlas/cf-purge.env
 ExecStopPost=/bin/sh -c 'if [ -f "$RUNTIME_DIRECTORY/scripts/purge_cache.py" ]; then exec /usr/bin/python3 "$RUNTIME_DIRECTORY/scripts/purge_cache.py"; fi; echo "Cache purge skipped: no code checked out"'

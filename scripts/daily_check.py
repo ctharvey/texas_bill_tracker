@@ -32,6 +32,9 @@ UA = "texas-bill-atlas-daily-check/1"
 # Hours before a feed counts as stale: bills refresh hourly (:17), Luna's status as it works, members daily (09:47).
 MAX_AGE_HOURS = {"bills": 3, "members": 30, "luna": 12}
 CI_MAX_AGE_HOURS = 30  # The nightly run is at 08:00 UTC.
+# The edge keeps data-run files 30 days and only purge_cache.py makes changes visible; a purge failing this long
+# means visitors see old data.
+PURGE_PENDING_MAX_HOURS = 2
 CERT_MIN_DAYS = 14
 
 
@@ -57,6 +60,18 @@ def freshness(name, stamp, now, limit):
     if hours is None:
         return False, f"{name}: no readable timestamp ({stamp!r})"
     return hours <= limit, f"{name}: {hours:.1f} h old (limit {limit} h)"
+
+
+def purge_verdict(state, now):
+    """(ok, detail) for live/purge-state.json: a purge left pending (failed and not yet retried successfully) warns,
+    and fails past PURGE_PENDING_MAX_HOURS. No state yet is a warning."""
+    if not isinstance(state, dict) or "files" not in state:
+        return None, "no purge state yet"
+    pending = age_hours(state.get("pending_since"), now)
+    last = f"last purge {state.get('purged_at') or 'never'}: {state.get('status')}"
+    if pending is None:
+        return True, last
+    return (None if pending <= PURGE_PENDING_MAX_HOURS else False), f"purge pending {pending:.1f} h; {last}"
 
 
 def asset_digest(page):
@@ -297,6 +312,14 @@ def run_checks(include_ci=True, sample=8):
         ok, detail = freshness("bills.json", data.get("generated_at"), now, MAX_AGE_HOURS["bills"])
         return ok and n > 0 and data.get("data_mode") == "official-ftp", f"{detail}, {n} bills, mode {data.get('data_mode')}"
     check("bill data fresh", bills)
+    def purge_state():
+        try:
+            return purge_verdict(get_json(SITES[0] + "live/purge-state.json")[1], now)
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return purge_verdict(None, now)
+            raise
+    check("edge cache purged after data runs", purge_state)
 
     def ftp_parity():
         folders = [n for n in ftp_names(FTP_HOUSE) if n.startswith("HB")]

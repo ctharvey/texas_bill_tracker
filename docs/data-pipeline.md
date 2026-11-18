@@ -46,9 +46,14 @@ between files without reinstalling units. A push that changes a job's code or in
 - Population limits: `live/brackets/` lists each population test and the places that meet it under the 2020 Census
   (`data/census/tx_population_2020.json`, from `scripts/census_places.py`; skipped if absent).
 
-After every run, finished or not, `purge_cache.py` purges Cloudflare's copy of the files only this run writes
-(`bills.json`, `feeds/`, `share/`, `sitemap.xml`, `statutes/`, `brackets/`, `text/`, `history/`, the API docs), so the
-edge can keep them an hour. A failed purge leaves them at most an hour stale.
+The edge keeps the files only this run writes (`bills.json`, `feeds/`, `share/`, `sitemap.xml`, `statutes/`,
+`brackets/`, `text/`, `history/`, the API docs) for 30 days, so after every run, finished or not, `purge_cache.py`
+purges the ones that changed. It compares each file's modification time and size with `live/purge-state.json`, the
+fingerprint from the last successful purge, and purges added, rewritten and deleted files by exact path (a folder with
+too many changes goes whole; at most 100 paths per request). A typical run purges a few dozen paths; a run that
+changed nothing sends no request. A failed purge keeps the old fingerprint, so the next run purges both runs' changes,
+and sets `pending_since`; `daily_check.py` warns while a purge is pending and fails after 2 hours. Without a usable
+state file it purges every prefix.
 
 ## Other jobs
 

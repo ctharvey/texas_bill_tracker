@@ -113,3 +113,12 @@ def test_text_posted_after_the_data_run_is_a_wait_not_a_luna_failure():
 def test_ftp_listing_times_read_as_texas_time():
     assert dc.ftp_time("11-16-26  03:32PM                13580 HB01184I.htm") == datetime(2026, 11, 16, 21, 32, tzinfo=timezone.utc)
     assert dc.ftp_time("not a listing") is None
+
+
+def test_purge_state_passes_warns_while_pending_and_fails_when_stuck():
+    ok = {"files": {}, "purged_at": "2026-11-16T21:17:30Z", "pending_since": None, "status": "3 prefixes purged"}
+    assert dc.purge_verdict(ok, NOW)[0] is True
+    assert dc.purge_verdict({**ok, "pending_since": "2026-11-16T21:17:30Z"}, NOW)[0] is None
+    stuck = dc.purge_verdict({**ok, "pending_since": "2026-11-16T18:17:30Z"}, NOW)
+    assert stuck[0] is False and "pending 3.7 h" in stuck[1]
+    assert dc.purge_verdict(None, NOW)[0] is None
