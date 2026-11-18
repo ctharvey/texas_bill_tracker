@@ -5,13 +5,13 @@ rule keeps PREFIXES at the edge for an hour; this purge is what makes a new hour
 fails, the edge serves at most an hour-old copy. luna/, og/ and members.json have other writers and keep the
 5-minute rule, so they are not purged here.
 
-The token (Cache Purge on the billatlas.org zone only) comes from the unit's LoadCredential=cf-purge-token.
+The token (Cache Purge on the billatlas.org zone only) is CF_PURGE_TOKEN from the unit's EnvironmentFile. Not
+LoadCredential: under this unit's sandbox the credential is not readable from ExecStopPost (seen on the server).
 """
 from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import sys
 
 ZONE_ID = "db785871c15127e883574d0bef17bce4"  # billatlas.org
@@ -20,17 +20,11 @@ ENDPOINT = f"https://api.cloudflare.com/client/v4/zones/{ZONE_ID}/purge_cache"
 PREFIXES = [f"billatlas.org/live/{path}" for path in (
     "bills.json", "feeds/", "share/", "sitemap.xml", "statutes/", "brackets/", "text/", "history/",
     "api-catalog.json", "openapi.json", "auth.md")]
-CREDENTIAL = "cf-purge-token"
+TOKEN_VARIABLE = "CF_PURGE_TOKEN"
 
 
 def read_token(environ=os.environ) -> str | None:
-    folder = environ.get("CREDENTIALS_DIRECTORY")
-    if not folder:
-        return None
-    try:
-        return (Path(folder) / CREDENTIAL).read_text("utf-8").strip() or None
-    except OSError:
-        return None
+    return (environ.get(TOKEN_VARIABLE) or "").strip() or None
 
 
 def purge(token: str, opener=None) -> tuple[bool, str]:
@@ -56,7 +50,7 @@ def purge(token: str, opener=None) -> tuple[bool, str]:
 def main(environ=os.environ, opener=None) -> int:
     token = read_token(environ)
     if not token:
-        print("Cache purge skipped: no cf-purge-token credential", flush=True)
+        print(f"Cache purge skipped: no {TOKEN_VARIABLE}", flush=True)
         return 0
     ok, status = purge(token, opener)
     print(f"Cache purge: {status}", flush=True)

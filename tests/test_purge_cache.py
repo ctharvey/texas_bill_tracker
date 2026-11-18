@@ -1,11 +1,10 @@
-"""The data run's Cloudflare purge: one prefix purge with the credential, a skip without one, and a failing exit
+"""The data run's Cloudflare purge: one prefix purge with the token, a skip without one, and a failing exit
 (never a retry) when Cloudflare refuses or can't be reached."""
 import contextlib
 import io
 import json
 from pathlib import Path
 import sys
-import tempfile
 import unittest
 import urllib.error
 
@@ -37,12 +36,9 @@ def run(environ, opener):
 
 class PurgeCacheTest(unittest.TestCase):
     def setUp(self):
-        self.folder = tempfile.TemporaryDirectory()
-        self.addCleanup(self.folder.cleanup)
-        (Path(self.folder.name) / 'cf-purge-token').write_text('secret-token\n', 'utf-8')
-        self.environ = {'CREDENTIALS_DIRECTORY': self.folder.name}
+        self.environ = {'CF_PURGE_TOKEN': 'secret-token\n'}
 
-    def test_purges_the_data_run_prefixes_with_the_credential(self):
+    def test_purges_the_data_run_prefixes_with_the_token(self):
         sent = []
 
         def opener(request, timeout):
@@ -65,7 +61,7 @@ class PurgeCacheTest(unittest.TestCase):
         self.assertNotIn('secret-token', out)
 
     def test_no_credential_skips_without_sending(self):
-        for environ in ({}, {'CREDENTIALS_DIRECTORY': str(Path(self.folder.name) / 'missing')}):
+        for environ in ({}, {'CF_PURGE_TOKEN': '  '}):
             code, out = run(environ, lambda *a, **k: self.fail('sent'))
             self.assertEqual(code, 0)
             self.assertIn('skipped', out)
