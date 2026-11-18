@@ -673,7 +673,20 @@ install -m 644 scripts/texas-bill-atlas.service scripts/texas-bill-atlas.timer /
 systemctl daemon-reload
 systemctl start texas-bill-atlas.service
 systemctl enable --now texas-bill-atlas.timer
+# Push-triggered server jobs (see below)
+install -d -m 755 -o texas-bill-atlas -g texas-bill-atlas /var/lib/texas-bill-atlas/refresh
+install -m 644 scripts/refresh_jobs.sh /usr/local/lib/texas-bill-atlas/refresh_jobs.sh
+install -m 644 scripts/texas-bill-refresh.service scripts/texas-bill-refresh.path /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now texas-bill-refresh.path
 ```
+
+After each publish the deployer compares the old and new `main` and, for every server job whose code or inputs
+changed (`JOB_INPUTS` in `deploy_static.py`), leaves a file named after the job in `/var/lib/texas-bill-atlas/refresh`.
+`texas-bill-refresh.path` starts `texas-bill-refresh.service` (root), which runs the installed `refresh_jobs.sh`: it
+starts members, data, agent and share cards in that order for the markers present, waiting out a run already in
+progress and then running it again. The review unit is never started this way. To refresh by hand:
+`sudo -u texas-bill-atlas touch /var/lib/texas-bill-atlas/refresh/{data,agent,og}`.
 
 Requires existing Python 3, Git and systemd. The unprivileged service writes only its
 state directory and this site's directory. Check `systemctl status texas-bill-atlas.timer`

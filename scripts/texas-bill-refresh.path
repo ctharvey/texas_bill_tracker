@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch for server job refreshes requested by the Texas Bill Atlas deployer
+
+[Path]
+# deploy_static.py (user texas-bill-atlas) creates this folder and leaves one file per job to rerun.
+DirectoryNotEmpty=/var/lib/texas-bill-atlas/refresh
+Unit=texas-bill-refresh.service
+
+[Install]
+WantedBy=paths.target

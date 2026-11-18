@@ -1,0 +1,15 @@
+[Unit]
+Description=Rerun the Texas Bill Atlas server jobs a push changed
+OnFailure=texas-bill-alert@%n.service
+
+[Service]
+Type=oneshot
+# Root only to run systemctl start for the fixed job list in the installed script; it reads no file contents.
+ExecStart=/bin/sh /usr/local/lib/texas-bill-atlas/refresh_jobs.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/texas-bill-atlas/refresh
+# The data job alone can take 20 minutes when its parser changes, and a running one is waited for first.
+TimeoutStartSec=3h

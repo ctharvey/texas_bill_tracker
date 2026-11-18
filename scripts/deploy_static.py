@@ -89,6 +89,51 @@ def carry_previous_assets(current: Path, staging: Path, digest: str) -> None:
         shutil.copytree(current / ASSETS / match.group(1), staging / ASSETS / match.group(1))
 
 
+# Server jobs, and the paths in main each one runs or reads. After a publish that changes any of them the deployer
+# leaves a marker file named after the job in STATE/refresh; texas-bill-refresh.path (root) sees it and
+# refresh_jobs.sh starts that job once, in this order. A prefix ending in '/' matches a whole folder.
+JOB_INPUTS = {
+    'members': ('scripts/sync_members.py', 'data/members_elect_2026.json'),
+    'data': ('scripts/sync_ftp.py', 'scripts/build_feeds.py', 'scripts/api/', 'scripts/atlas/', 'scripts/og_art/',
+             'scripts/og_art_alt.json', 'data/census/'),
+    'agent': ('scripts/build_agent.mjs', 'src/taxonomy.js', 'src/prefs.js', 'src/geo.js', 'data/geo/districts.json'),
+    'og': ('scripts/build_og.mjs', 'scripts/og_card.mjs', 'scripts/og_warbler.mjs', 'scripts/og_art/',
+           'package.json', 'package-lock.json'),
+}
+
+
+def jobs_for(changed: list[str]) -> list[str]:
+    return [job for job, inputs in JOB_INPUTS.items()
+            if any(path == item or (item.endswith('/') and path.startswith(item)) for path in changed for item in inputs)]
+
+
+def main_commit() -> str | None:
+    try:
+        return git('rev-parse', '--verify', '--quiet', 'refs/heads/main^{commit}').decode().strip() or None
+    except subprocess.CalledProcessError:
+        return None
+
+
+def request_refresh(previous: str | None, commit: str) -> None:
+    """Call after refs/heads/main moved to commit, so a job started from the marker runs the new code."""
+    if previous == commit:
+        return
+    try:
+        changed = git('diff', '--name-only', previous, commit).decode().splitlines() if previous else None
+    except subprocess.CalledProcessError:
+        changed = None  # The old commit is unreadable: refresh everything rather than guess.
+    jobs = list(JOB_INPUTS) if changed is None else jobs_for(changed)
+    try:
+        folder = STATE / 'refresh'
+        folder.mkdir(mode=0o755, exist_ok=True)
+        for job in jobs:
+            (folder / job).touch()
+    except OSError as error:
+        print('Refresh request failed:', type(error).__name__)  # Never fail a publish; the hourly timers catch up.
+        return
+    print('Refresh requested:', ' '.join(jobs) or 'none')
+
+
 def git(*args: str) -> bytes:
     return subprocess.run(
         ['git', '--git-dir', str(REPOSITORY), *args], check=True, capture_output=True, timeout=120,
@@ -104,9 +149,11 @@ def main() -> None:
         commit = git('rev-parse', '--verify', f'{CANDIDATE}^{{commit}}').decode().strip()
         release = ROOT / 'releases' / commit
         current = ROOT / 'current'
+        previous = main_commit()
         if current.is_symlink() and current.resolve() == release:
             git('update-ref', 'refs/heads/main', commit)  # also heals a crash between publishing and this update
             print('Already current:', commit)
+            request_refresh(previous, commit)
             return
         bundle = {name: git('show', f'{commit}:{name}') for name in release_files(commit_files(commit))}
         snapshot = json.loads(bundle[SNAPSHOT])
@@ -144,6 +191,7 @@ def main() -> None:
                 shutil.rmtree(staging)
         git('update-ref', 'refs/heads/main', commit)
         print('Published:', commit, 'records:', len(bills), 'snapshot:', snapshot['generated_at'])
+        request_refresh(previous, commit)
         prune(release.parent, current.resolve())
 
 

@@ -1,6 +1,13 @@
 # Changelog
 
 ## 2026-11-17
+- Push-triggered server jobs: after publishing, `deploy_static.py` diffs the old and new `main` and leaves a marker in
+  `/var/lib/texas-bill-atlas/refresh` for each server job whose code or inputs changed (`JOB_INPUTS`: members, data,
+  agent, share cards; never review). `texas-bill-refresh.path` (root) sees the folder fill and
+  `texas-bill-refresh.service` runs the installed `refresh_jobs.sh`, which starts those jobs one at a time in that
+  order. A job already running is waited for and then run again, since it took its code before the push. Markers are
+  written only after `main` moves, so a refreshed job runs the new code. Site-only pushes rerun nothing; an unreadable
+  old commit reruns everything. The hourly timers are unchanged.
 - Checkable sources:
   - Text sync records `source_sha256`, the SHA-256 of the official file as the Legislative Council served it, beside
     `sha256`, which covers our Markdown copy. Versions downloaded before this change gain it on their next download.
