@@ -1,33 +1,38 @@
 """Draw public/social-card.png (1200x630).
 
 Run by hand when the card changes: python design/social/make_images.py --fonts C:/Windows/Fonts
-Colours are the default palette in src/styles.css (--nav-bg, --mark, --accent). The card still shows the old star mark;
-the icons (icon.png, apple-touch-icon.png, favicon.ico) come from the warbler logo: node design/social/make_icons.mjs.
+Colours are the default palette in src/styles.css (--nav-bg, the warbler yellow, --accent). The mark is the warbler
+logo (design/brand/warbler.svg), drawn by resvg through node (run npm install first), as make_icons.mjs draws the icons.
 """
 from __future__ import annotations
 
 import argparse
+import io
+import subprocess
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
-NAVY, GOLD, TEAL, WHITE, MUTED = "#14243a", "#ba822d", "#5fc7c2", "#ffffff", "#9fb0c4"
-# The old brand-mark star (viewBox 0 0 24 24).
-STAR = [(12, 1.6), (14.9, 8.7), (22.5, 9.2), (16.7, 14.1), (18.6, 21.5), (12, 17.4), (5.4, 21.5), (7.3, 14.1), (1.5, 9.2), (9.1, 8.7)]
+NAVY, GOLD, TEAL, WHITE, MUTED = "#14243a", "#f5b517", "#5fc7c2", "#ffffff", "#9fb0c4"  # GOLD: the warbler's cheek.
 SCALE = 4  # Draw large and shrink, for smooth edges.
 
 
-def star(draw: ImageDraw.ImageDraw, x: float, y: float, size: float, fill: str) -> None:
-    draw.polygon([(x + px / 24 * size, y + py / 24 * size) for px, py in STAR], fill=fill)
+RENDER = """
+const {readFileSync} = require('node:fs');
+const {initWasm, Resvg} = require('@resvg/resvg-wasm');
+initWasm(readFileSync(require.resolve('@resvg/resvg-wasm/index_bg.wasm'))).then(() => {
+  const resvg = new Resvg(readFileSync(process.argv[1], 'utf8'), {fitTo: {mode: 'width', value: Number(process.argv[2])}});
+  process.stdout.write(Buffer.from(resvg.render().asPng()));
+});
+"""
 
 
-def tile(size: int, radius: float) -> Image.Image:
-    big = Image.new("RGBA", (size * SCALE, size * SCALE), (0, 0, 0, 0))
-    d = ImageDraw.Draw(big)
-    d.rounded_rectangle((0, 0, size * SCALE - 1, size * SCALE - 1), radius=radius * size * SCALE, fill=GOLD)
-    star(d, size * SCALE * .14, size * SCALE * .12, size * SCALE * .72, NAVY)
-    return big.resize((size, size), Image.LANCZOS)
+def warbler(size: int) -> Image.Image:
+    """The warbler logo as a size x size RGBA image."""
+    png = subprocess.run(["node", "-e", RENDER, str(ROOT / "design/brand/warbler.svg"), str(size)],
+                         cwd=ROOT, check=True, capture_output=True).stdout
+    return Image.open(io.BytesIO(png)).convert("RGBA")
 
 
 def card(fonts: Path) -> Image.Image:
@@ -37,7 +42,8 @@ def card(fonts: Path) -> Image.Image:
     f = lambda name, px: ImageFont.truetype(str(fonts / name), px * SCALE)
     s = lambda v: v * SCALE
     d.rectangle((0, 0, s(14), s(h)), fill=GOLD)
-    big.paste(tile(112 * SCALE, .18), (s(84), s(78)), tile(112 * SCALE, .18))
+    mark = warbler(112 * SCALE)
+    big.paste(mark, (s(84), s(78)), mark)
     d.text((s(222), s(88)), "T E X A S", font=f("segoeuib.ttf", 26), fill=GOLD)
     d.text((s(220), s(116)), "BILL ATLAS", font=f("segoeuib.ttf", 62), fill=WHITE)
     lines = ["Every bill in the 90th Texas Legislature,", "tracked to the official source."]

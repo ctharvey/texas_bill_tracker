@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-17
+- The site's share card (public/social-card.png) shows the warbler instead of the gold star tile, and its stripe and
+  "TEXAS" take the logo yellow #f5b517, matching the per-bill cards.
 - Near you is about a third as long: each bill is one compact row (Luna's one-line summary, the official caption
   on one line, tags), five per section with "Show all N", and ceremonial resolutions (memorials, "Recognizing")
   fold into one line. Who filed a bill shows only when both legislators have bills here; a place tag shows the
