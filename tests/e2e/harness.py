@@ -122,7 +122,11 @@ class Site:
                 if entry is None:
                     site.misses.append(rel)
                 if not entry or entry["status"] != 200 or not file.is_file():
-                    self.send_error(404)
+                    # Empty, like the tests' own route stubs: an unread error body can hold a fetch open until its
+                    # timeout, and networkidle with it (the app releases bodies itself since 499cff3).
+                    self.send_response(404)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
                     return
                 body = file.read_bytes()
                 self.send_response(200)
