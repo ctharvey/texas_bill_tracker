@@ -717,7 +717,8 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int, pending_
                 continue
             counts["downloaded"] += 1
             try:
-                html = _decode_html(ftp_bytes(conn, path))
+                raw = ftp_bytes(conn, path)
+                html = _decode_html(raw)
                 data = bill_text_markdown(html, str(bill.get("number") or bill_id), str(version.get("name", code))).encode("utf-8")
                 bill_dir.mkdir(parents=True, exist_ok=True)
                 _atomic_write(md_path, data)
@@ -733,8 +734,10 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int, pending_
                 if exists and old is not None:
                     entries.append(old)
                 continue
+            # sha256 is our Markdown copy (the review pipeline keys on it); source_sha256 is the official file as served.
             entries.append({"code": code, "name": version.get("name", code), "path": f"{code}.md", "source_url": url,
-                            "source_modified": current or "", "sha256": hashlib.sha256(data).hexdigest(), "generated_at": now})
+                            "source_modified": current or "", "sha256": hashlib.sha256(data).hexdigest(),
+                            "source_sha256": hashlib.sha256(raw).hexdigest(), "generated_at": now})
         if entries:
             index = {"format": TEXT_INDEX_FORMAT, "bill_id": bill_id, "versions": entries}
             if complete and updated:

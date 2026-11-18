@@ -1,6 +1,14 @@
 # Changelog
 
 ## 2026-11-17
+- Checkable sources:
+  - Text sync records `source_sha256`, the SHA-256 of the official file as the Legislative Council served it, beside
+    `sha256`, which covers our Markdown copy. Versions downloaded before this change gain it on their next download.
+  - Agent bill pages list each text version's official file with its last-modified time (FTP MDTM, UTC) and SHA-256,
+    and our copy with when it was made and its own SHA-256.
+  - Share pages (`/bill/<ID>`, served to search crawlers and link previews) carry schema.org `Legislation` data:
+    identifier, type, jurisdiction, caption, filed and last-action dates, authors, subjects, the official TLO page
+    (`sameAs`/`isBasedOn`), and our Markdown text copy marked `UnofficialLegalValue`. No AI-written text goes in it.
 - Agent bill pages say what each part is, so AI assistants can tell the record from the analysis:
   - **Official record**: caption, bill text, authors, recorded actions, subjects and companions, copied unchanged
     from the Legislative Council files.

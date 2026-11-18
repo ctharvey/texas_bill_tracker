@@ -273,6 +273,15 @@ class SyncTextsTests(unittest.TestCase):
             counts=sync_texts(object(),bills,Path(directory),max_texts)
         return counts,patched
 
+    def test_index_records_the_official_files_own_hash_beside_the_copys(self):
+        # source_sha256 fingerprints the file as TLC served it, so a reader can check our copy against the original.
+        with tempfile.TemporaryDirectory() as tmp:
+            self.run_sync(tmp,self.bills(codes=('I',)))
+            version=json.loads((Path(tmp)/'HB1001'/'index.json').read_text(encoding='utf-8'))['versions'][0]
+            self.assertEqual(version['source_sha256'],hashlib.sha256(self.HTML.encode('utf-8')).hexdigest())
+            self.assertEqual(version['sha256'],hashlib.sha256((Path(tmp)/'HB1001'/'I.md').read_bytes()).hexdigest())
+            self.assertNotEqual(version['source_sha256'],version['sha256'])
+
     def test_writes_files_and_skips_unchanged(self):
         with tempfile.TemporaryDirectory() as tmp:
             counts,patched=self.run_sync(tmp,self.bills())

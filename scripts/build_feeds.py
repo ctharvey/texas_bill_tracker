@@ -278,6 +278,45 @@ def load_headlines(path: Path | None) -> dict[str, str]:
             if isinstance(v, dict) and isinstance(v.get("headline"), str) and v["headline"].strip()}
 
 
+LEGISLATION_TYPES = (("HJR", "Joint resolution"), ("SJR", "Joint resolution"), ("HCR", "Concurrent resolution"),
+                     ("SCR", "Concurrent resolution"), ("HB", "Bill"), ("SB", "Bill"), ("HR", "Resolution"), ("SR", "Resolution"))
+DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def legislation_jsonld(bill: dict, site: str = SITE) -> str:
+    """schema.org Legislation for search engines: the official record only (no AI text), with where to check it."""
+    bill_id = bill["id"]
+    caption = " ".join(str(bill.get("caption") or bill.get("title") or "").split())
+    official = f"https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill={bill_id}"
+    data = {"@context": "https://schema.org", "@type": "Legislation", "name": f"{bill_number(bill_id)}: {caption}" if caption else bill_number(bill_id),
+            "legislationIdentifier": bill_number(bill_id),
+            "legislationType": next((kind for prefix, kind in LEGISLATION_TYPES if bill_id.startswith(prefix)), "Bill"),
+            "legislationJurisdiction": {"@type": "AdministrativeArea", "name": "Texas"},
+            "legislationResponsible": {"@type": "GovernmentOrganization", "name": "Texas Legislature", "url": "https://capitol.texas.gov/"},
+            "inLanguage": "en", "url": f"{site}bill/{bill_id}", "sameAs": official, "isBasedOn": official,
+            "publisher": {"@type": "Organization", "name": "Texas Bill Atlas", "url": site}}
+    if caption:
+        data["description"] = caption
+    if DAY_RE.match(str(bill.get("filed_at") or "")):
+        data["dateCreated"] = bill["filed_at"]
+    if DAY_RE.match(str(bill.get("last_action_date") or "")):
+        data["dateModified"] = bill["last_action_date"]
+    authors = [str(a) for a in bill.get("authors") or [] if str(a).strip()]
+    if authors:
+        data["author"] = [{"@type": "Person", "name": a} for a in authors]
+    subjects = [str(s) for s in bill.get("subjects") or [] if str(s).strip()]
+    if subjects:
+        data["keywords"] = subjects
+    versions = [v for v in bill.get("text_versions") or [] if re.fullmatch(r"[A-Za-z0-9]{1,8}", str(v.get("code") or ""))]
+    if versions:
+        latest = versions[-1]
+        data["workExample"] = {"@type": "LegislationObject", "name": str(latest.get("name") or latest["code"]),
+                               "encodingFormat": "text/markdown", "contentUrl": f"{site}live/text/{bill_id}/{latest['code']}.md",
+                               "legislationLegalValue": "https://schema.org/UnofficialLegalValue"}
+    # "<" escaped so no caption can close the script element.
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
+
+
 def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_v: str | None = None) -> str:
     bill_id = bill["id"]
     caption = " ".join(str(bill.get("caption") or bill.get("title") or "No caption available").split())
@@ -311,6 +350,7 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_
 <link rel="canonical" href="{a(url)}">
 <link rel="icon" href="/favicon.ico">
 {tags}
+<script type="application/ld+json">{legislation_jsonld(bill, site)}</script>
 <script>location.replace({json.dumps(target)})</script>
 </head>
 <body>

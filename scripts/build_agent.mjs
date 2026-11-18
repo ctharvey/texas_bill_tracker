@@ -30,6 +30,9 @@ const textUrl = id => `https://capitol.texas.gov/BillLookup/Text.aspx?LegSess=90
 // Our copy of each text version (sync_ftp.py writes live/text/<ID>/<code>.md from the Legislative Council's files).
 export const TEXT_INLINE_MAX = 12000; // characters; longer bills are linked, not copied into the page
 const VERSION_CODE = /^[A-Za-z0-9]{1,8}$/;
+const SHA256 = /^[0-9a-f]{64}$/;
+// FTP MDTM stamps (RFC 3659) are UTC: 20261109160644 -> 2026-11-09 16:06:44 UTC.
+const mdtmText = stamp => /^\d{14}/.test(stamp || '') ? `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)} ${stamp.slice(8, 10)}:${stamp.slice(10, 12)}:${stamp.slice(12, 14)} UTC` : null;
 
 // id -> {versions: [{code, name, url, source_url}], body, chars} from live/text, or null when the folder is absent.
 export function loadTexts(textDir, ids) {
@@ -41,7 +44,9 @@ export function loadTexts(textDir, ids) {
     if (index?.format !== 'texas-bill-text-index-v1' || !Array.isArray(index.versions)) continue;
     const versions = index.versions.filter(v => v && VERSION_CODE.test(String(v.code)) && v.path === `${v.code}.md`)
       .map(v => ({code: v.code, name: String(v.name || v.code), url: `${SITE}live/text/${id}/${v.code}.md`,
-        source_url: typeof v.source_url === 'string' ? v.source_url : null}));
+        source_url: typeof v.source_url === 'string' ? v.source_url : null,
+        source_modified: mdtmText(v.source_modified), source_sha256: SHA256.test(v.source_sha256 || '') ? v.source_sha256 : null,
+        copied_at: typeof v.generated_at === 'string' ? v.generated_at : null, copy_sha256: SHA256.test(v.sha256 || '') ? v.sha256 : null}));
     if (!versions.length) continue;
     let body = null, chars = 0;
     try {
@@ -130,9 +135,12 @@ function textSection(r, text) {
   const latest = text.versions.at(-1), fence = '````';
   return `\n### Bill text
 
-The official wording of each version, copied from the Texas Legislative Council's bill text files and converted to Markdown with the wording unchanged. Language the bill adds is marked <ins>like this</ins>; language it removes is in [<del>brackets</del>].
+The official wording of each version, copied from the Texas Legislative Council's bill text files and converted to Markdown with the wording unchanged. Language the bill adds is marked <ins>like this</ins>; language it removes is in [<del>brackets</del>]. To check a copy, fetch the official file and compare its SHA-256 with the one listed; the copy's own SHA-256 confirms you received it unaltered.
 
-${text.versions.map(v => `- ${cell(v.name)}: ${v.url}${v.source_url ? ` (source file: ${v.source_url})` : ''}`).join('\n')}
+${text.versions.map(v => [`- ${cell(v.name)}: ${v.url}`,
+  v.source_url ? `  - Official file: ${v.source_url}${[v.source_modified && `last modified ${v.source_modified}`, v.source_sha256 && `SHA-256 ${v.source_sha256}`].filter(Boolean).map(x => `, ${x}`).join('')}` : '',
+  v.copied_at || v.copy_sha256 ? `  - This copy:${[v.copied_at && ` made ${v.copied_at}`, v.copy_sha256 && ` SHA-256 of the Markdown ${v.copy_sha256}`].filter(Boolean).join(',')}` : '',
+].filter(Boolean).join('\n')).join('\n')}
 
 ${text.body ? `#### Text of the latest version (${cell(latest.name)})
 

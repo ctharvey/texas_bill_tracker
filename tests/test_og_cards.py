@@ -170,3 +170,35 @@ def test_share_page_og_url_carries_the_card_version_and_canonical_stays_plain():
     assert '<link rel="canonical" href="https://billatlas.org/bill/HB486">' in page
     plain = bf.share_page({'id': 'HB486', 'caption': 'c'})
     assert meta(plain, 'og:url') == 'https://billatlas.org/bill/HB486'
+
+
+def jsonld(html):
+    found = re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)
+    assert len(found) == 1
+    return json.loads(found[0])
+
+
+def test_share_page_carries_schema_org_legislation_from_the_official_record_only():
+    bill = {**BILL, 'id': 'HJR3', 'filed_at': '2026-11-09', 'last_action_date': '2026-11-12', 'authors': ['Luther', ' '],
+            'subjects': ['Animals', 'State Symbols'],
+            'text_versions': [{'code': 'I', 'name': 'Introduced', 'html': 'ftp://x/HJ00003I.HTM'}, {'code': '../x', 'name': 'Bad'}]}
+    data = jsonld(bf.share_page(bill, headline='An AI line that must not appear'))
+    assert data['@type'] == 'Legislation' and data['legislationIdentifier'] == 'HJR 3'
+    assert data['legislationType'] == 'Joint resolution'
+    assert data['description'] == 'Relating to water rights.'
+    assert (data['dateCreated'], data['dateModified']) == ('2026-11-09', '2026-11-12')
+    assert data['author'] == [{'@type': 'Person', 'name': 'Luther'}]
+    assert data['keywords'] == ['Animals', 'State Symbols']
+    assert data['sameAs'] == data['isBasedOn'] == 'https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill=HJR3'
+    assert data['url'] == 'https://billatlas.org/bill/HJR3'
+    assert data['workExample']['contentUrl'] == 'https://billatlas.org/live/text/HJR3/I.md'
+    assert data['workExample']['legislationLegalValue'] == 'https://schema.org/UnofficialLegalValue'
+    assert 'AI line' not in json.dumps(data)
+
+
+def test_share_page_jsonld_cannot_be_closed_by_a_caption_and_skips_missing_fields():
+    html = bf.share_page({'id': 'SB9', 'caption': 'Relating to </script><script>alert(1)</script> things.'})
+    data = jsonld(html)
+    assert data['description'] == 'Relating to </script><script>alert(1)</script> things.'
+    assert '</script><script>alert' not in html.split('application/ld+json">', 1)[1].split('</script>', 1)[0]
+    assert not {'dateCreated', 'dateModified', 'author', 'keywords', 'workExample'} & set(data)

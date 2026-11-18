@@ -328,7 +328,8 @@ test('bill text: copied text is linked and short texts are inlined; long, missin
       for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, id, name), body);
     };
     put('HB5', [{code: 'I', name: 'Introduced', path: 'I.md', source_url: 'ftp://ftp.legis.state.tx.us/HB00005I.HTM'},
-      {code: 'H', name: 'Committee Report', path: 'H.md', source_url: 'ftp://ftp.legis.state.tx.us/HB00005H.HTM'},
+      {code: 'H', name: 'Committee Report', path: 'H.md', source_url: 'ftp://ftp.legis.state.tx.us/HB00005H.HTM',
+        source_modified: '20261109160644', source_sha256: 'a'.repeat(64), sha256: 'b'.repeat(64), generated_at: '2026-11-10T23:27:48Z'},
       {code: '../x', name: 'Bad', path: '../x.md'}], {'I.md': '# HB 5 - Introduced\n\nOld.', 'H.md': '# HB 5 - Committee Report\n\nSECTION 1. The <ins>new</ins> rule.\n'});
     put('SB12', [{code: 'I', name: 'Introduced', path: 'I.md'}], {'I.md': 'x'.repeat(TEXT_INLINE_MAX + 1)});
     const texts = loadTexts(dir, ['HB5', 'SB12', 'XX1']);
@@ -339,7 +340,11 @@ test('bill text: copied text is linked and short texts are inlined; long, missin
     const files = build({texts});
     const hb5 = files.get('bills/HB5.md');
     assert.match(hb5, /## Bill text\n\nThe official wording of each version/);
-    assert.ok(hb5.includes('- Committee Report: https://billatlas.org/live/text/HB5/H.md (source file: ftp://ftp.legis.state.tx.us/HB00005H.HTM)'));
+    assert.ok(hb5.includes('- Committee Report: https://billatlas.org/live/text/HB5/H.md\n'
+      + `  - Official file: ftp://ftp.legis.state.tx.us/HB00005H.HTM, last modified 2026-11-09 16:06:44 UTC, SHA-256 ${'a'.repeat(64)}\n`
+      + `  - This copy: made 2026-11-10T23:27:48Z, SHA-256 of the Markdown ${'b'.repeat(64)}`));
+    // An older index entry without the official file's hash or time lists only what it has.
+    assert.ok(hb5.includes('- Introduced: https://billatlas.org/live/text/HB5/I.md\n  - Official file: ftp://ftp.legis.state.tx.us/HB00005I.HTM\n'));
     assert.ok(hb5.includes('### Text of the latest version (Committee Report)\n\n````markdown\n# HB 5 - Committee Report\n\nSECTION 1. The <ins>new</ins> rule.\n````'));
     assert.ok(hb5.includes('- Full bill text (official wording, Markdown): https://billatlas.org/live/text/HB5/H.md'));
     assert.ok(hb5.indexOf('### Bill text') < hb5.indexOf('## AI analysis (Luna)'));
