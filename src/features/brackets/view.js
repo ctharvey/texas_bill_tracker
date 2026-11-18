@@ -2,7 +2,7 @@ import {validBracketIndex, bracketRows, placeCount, BRACKET_RELATIONS} from './m
 
 import {state} from '../../core/state.js';
 import {$, esc} from '../../core/dom.js';
-import {timeoutSignal} from '../../core/net.js';
+import {timeoutSignal, httpError} from '../../core/net.js';
 
 // Appended after styles.css, so these rules keep the cascade position they had at the end of its law block.
 const sheet = document.createElement('link');
@@ -17,7 +17,7 @@ function loadBrackets(){
   return bracketsLoad||(bracketsLoad=(async()=>{
     try{
       const r=await fetch('./live/brackets/index.json',{cache:'no-cache',signal:timeoutSignal(15000)});
-      if(!r.ok)throw Error(`HTTP ${r.status}`);
+      if(!r.ok)throw httpError(r);
       const index=await r.json();
       if(!validBracketIndex(index))throw Error('Unrecognized bracket index');
       state.brackets=index;

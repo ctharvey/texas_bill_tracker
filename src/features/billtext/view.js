@@ -1,7 +1,7 @@
 // Drawing bill text: renderBillText fills a root with the parsed paragraphs and Luna's highlight chips;
 // billTextSection is the bill page's "Bill text" section, which fetches a version and its highlights on demand.
 import {state} from '../../core/state.js';
-import {timeoutSignal} from '../../core/net.js';
+import {timeoutSignal, httpError, discard} from '../../core/net.js';
 import {officialUrl} from '../../taxonomy.js';
 import {KINDS, CHIPS, chipOf, paragraphSegments, parseBillMarkdown, validHighlights, sha256Hex} from './model.js';
 
@@ -142,7 +142,7 @@ export function billTextSection(b){
   official.append(link);
   section.append(heading,intro,button,picker,area,official);
   const idOk=/^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)\d{1,5}$/.test(b.id);
-  const fetchText=async url=>{const r=await fetch(url,{cache:'no-cache',signal:timeoutSignal(20000)});if(r.status===404)return null;if(!r.ok)throw Error('HTTP '+r.status);return r};
+  const fetchText=async url=>{const r=await fetch(url,{cache:'no-cache',signal:timeoutSignal(20000)});if(r.status===404)return discard(r);if(!r.ok)throw httpError(r);return r};
   let selected=null,versions=[],select=null,highlightsPromise=null;
   const highlightsOnce=()=>highlightsPromise||(highlightsPromise=(async()=>{try{const hr=await fetchText(`./live/luna/highlights/${b.id}.json`);return hr?await hr.json():null}catch{return null}})());
   const loadVersion=async(index,version)=>{

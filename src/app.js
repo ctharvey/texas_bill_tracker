@@ -20,7 +20,7 @@ import {setupThemePicker, setupModePicker, setTheme, savedTheme, applyTheme, app
 import {TUMBLEWEED, noticeSearch, setupEasterEggs} from './features/easter/view.js';
 import {state} from './core/state.js';
 import {$, esc, toast} from './core/dom.js';
-import {timeoutSignal, loadShardedMap} from './core/net.js';
+import {timeoutSignal, loadShardedMap, httpError, discard} from './core/net.js';
 import {registerView, setFallbackView, viewHeading, renderView} from './core/router.js';
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
 import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, visitKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
@@ -98,7 +98,7 @@ async function init(){
     for(const [url,ms] of urls){
       try{
         const response=await fetch(url,{cache:'no-cache',signal:timeoutSignal(ms)});
-        if(!response.ok)throw Error(`HTTP ${response.status}`);
+        if(!response.ok)throw httpError(response);
         const candidate=await response.json();
         if(candidate.session!=='90R'||!Array.isArray(candidate.bills)||!candidate.bills.length)throw Error('Invalid bill snapshot');
         if(url==='./live/bills.json'&&(candidate.data_mode!=='official-ftp'||candidate.bills.length<1000))throw Error('Live snapshot failed validation');
@@ -627,7 +627,7 @@ async function loadRoster(){
   for(const url of ['./live/members.json','./data/members.json']){
     try{
       const response=await fetch(url,{cache:'no-cache',signal:timeoutSignal(7500)});
-      if(!response.ok)throw Error(`HTTP ${response.status}`);
+      if(!response.ok)throw httpError(response);
       const roster=await response.json();
       if(roster?.format!=='texas-bill-members-v1'||!roster.members||typeof roster.members!=='object'||Array.isArray(roster.members))throw Error('Unrecognized roster format');
       return roster;
@@ -642,7 +642,7 @@ async function fetchLuna(){
   const load=async(name,format,valid)=>{
     try{
       const response=await fetch(`./live/luna/${name}.json`,{cache:'no-cache',signal:timeoutSignal(20000)});
-      if(!response.ok)throw Error(`HTTP ${response.status}`);
+      if(!response.ok)throw httpError(response);
       const body=await response.json();
       if(body?.format!==format||!valid(body))throw Error(`Unrecognized ${name} format`);
       return body;
@@ -686,7 +686,7 @@ async function loadReviewStatus(){
     // The edge cache keeps this file for minutes whatever the origin says; a 15-second bucket in the query keeps the
     // live run view fresh while still letting the edge share one copy per bucket.
     const response=await fetch(`./live/luna/status.json?t=${Math.floor(Date.now()/15000)}`,{cache:'no-cache',signal:timeoutSignal(7500)});
-    if(!response.ok)throw Error(`HTTP ${response.status}`);
+    if(!response.ok)throw httpError(response);
     const status=await response.json();
     if(status?.format!=='texas-bill-luna-status-v1'||!Array.isArray(status.reviewed))throw Error('Unrecognized status format');
     state.reviewStatus=status;
@@ -1251,7 +1251,7 @@ function keepTyping(render){
 function loadNearGeo(){
   if(state.nearGeo||nearLoading)return nearLoading;
   nearLoading=Promise.all(Object.entries(NEAR_FILES).map(async([k,url])=>{
-    const r=await fetch(url,{signal:timeoutSignal(15000)});if(!r.ok)throw Error(`HTTP ${r.status}`);return [k,await r.json()];
+    const r=await fetch(url,{signal:timeoutSignal(15000)});if(!r.ok)throw httpError(r);return [k,await r.json()];
   })).then(parts=>{
     const geo=Object.fromEntries(parts);
     if(geo.tables?.format!=='texas-bill-districts-v1'||!Array.isArray(geo.house?.features))throw Error('Unrecognized district files');
@@ -1394,7 +1394,7 @@ function districtTables(){
   if(state.nearGeo?.tables)return state.nearGeo.tables;
   if(state.geoTables)return state.geoTables;
   if(!tablesLoading)tablesLoading=fetch(NEAR_FILES.tables,{signal:timeoutSignal(15000)})
-    .then(r=>{if(!r.ok)throw Error(`HTTP ${r.status}`);return r.json()})
+    .then(r=>{if(!r.ok)throw httpError(r);return r.json()})
     .then(t=>{if(t?.format!=='texas-bill-districts-v1')throw Error('Unrecognized district tables');state.geoTables=t})
     .catch(error=>console.warn('District tables unavailable',error.message))
     .finally(()=>{if(state.view==='member')renderContent()});
@@ -1441,7 +1441,7 @@ function loadStatutes(){
   return statutesLoad||(statutesLoad=(async()=>{
     try{
       const r=await fetch('./live/statutes/index.json',{cache:'no-cache',signal:timeoutSignal(15000)});
-      if(!r.ok)throw Error(`HTTP ${r.status}`);
+      if(!r.ok)throw httpError(r);
       const index=await r.json();
       if(!validStatuteIndex(index))throw Error('Unrecognized statute index');
       state.statutes=index;statuteBills=statutesByBill(index);
@@ -1461,7 +1461,7 @@ function statuteDoc(key){
   (async()=>{
     try{
       const r=await fetch(`./live/statutes/sections/${file}`,{cache:'no-cache',signal:timeoutSignal(15000)});
-      if(!r.ok)throw Error(`HTTP ${r.status}`);
+      if(!r.ok)throw httpError(r);
       const doc=await r.json();
       if(!validStatuteSection(doc,key))throw Error('Unrecognized statute section');
       statuteDocs.set(key,doc);
@@ -1683,7 +1683,7 @@ const stageFiles={id:null,files:null,reuse:false};
 function stageSections(b){
   const holder=document.createElement('div');
   if(!/^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)\d{1,5}$/.test(b.id))return holder;
-  const getJson=async url=>{try{const r=await fetch(url,{cache:'no-cache',signal:timeoutSignal(20000)});return r.ok?await r.json():null}catch{return null}};
+  const getJson=async url=>{try{const r=await fetch(url,{cache:'no-cache',signal:timeoutSignal(20000)});return r.ok?await r.json():discard(r)}catch{return null}};
   const show=node=>{if(node&&state.openBill===b.id&&holder.isConnected!==false)holder.append(node)};
   if(!(stageFiles.reuse&&stageFiles.id===b.id&&stageFiles.files)){
     stageFiles.id=b.id;
