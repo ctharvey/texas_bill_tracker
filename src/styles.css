@@ -188,7 +188,7 @@ button[disabled]{opacity:.5;cursor:not-allowed}
 a.bill-number{text-decoration:none}
 a.bill-number:hover{text-decoration:underline}
 .bill-title-link:hover{text-decoration:underline}
-.ai-copy{margin-top:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.ai-copy{margin-top:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}.ask-ai{position:relative}.ask-ai>summary{list-style:none;cursor:pointer;display:block;height:100%;text-align:center}.bill-bar .drawer-actions>.ask-ai{padding:0}.ask-ai>summary::-webkit-details-marker{display:none}.ask-ai-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:8;display:grid;gap:2px;min-width:220px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:calc(9px*var(--rs));box-shadow:var(--shadow)}.ask-ai-menu a{padding:9px 10px;border-radius:calc(6px*var(--rs));font-size:var(--fs-xs);font-weight:700;color:var(--ink)}.ask-ai-menu a:hover,.ask-ai-menu a:focus-visible{background:var(--teal-soft);color:var(--teal)}.ask-ai-menu small{padding:4px 10px 6px;font-size:var(--fs-xs);color:var(--muted);line-height:1.4}
 .ai-fallback{width:100%;font:12px/1.4 monospace;padding:8px;border:1px solid var(--line);border-radius:calc(6px*var(--rs))}
 .ai-top-button{border:1px solid color-mix(in srgb,var(--accent) 41%,var(--surface));background:color-mix(in srgb,var(--accent) 11%,var(--surface));color:var(--teal);font-size:var(--fs-xs);font-weight:700;padding:7px 12px;border-radius:calc(8px*var(--rs));white-space:nowrap}
 .ai-top-button:hover{background:color-mix(in srgb,var(--accent) 15%,var(--surface))}

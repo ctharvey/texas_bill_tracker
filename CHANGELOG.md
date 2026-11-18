@@ -7,8 +7,9 @@
   `text_versions`. Copy for AI and the Ask links now point to the same copy; before, the prompt never linked the
   text at all, because the snapshot's version links are ftp:// and were filtered out. capitol.texas.gov refuses
   most AI fetchers.
-- Bill pages: "Ask ChatGPT" and "Ask Claude" links in Sources open each assistant with the Copy for AI prompt
-  already filled in. Copy for AI stays, since the prefill links are not a documented feature of either assistant.
+- Bill pages: an "Ask AI" menu in the top bar, next to Copy for AI, opens ChatGPT or Claude with the Copy for AI
+  prompt already filled in (first shipped as links in Sources). Copy for AI stays, since the prefill links are not a
+  documented feature of either assistant. The menu closes after a pick, on a click elsewhere, or on Escape.
 - The site's share card (public/social-card.png) shows the warbler instead of the gold star tile, and its stripe and
   "TEXAS" take the logo yellow #f5b517, matching the per-bill cards.
 - Near you is about a third as long: each bill is one compact row (Luna's one-line summary, the official caption
