@@ -62,8 +62,11 @@ Cache rules:
 | `/api/sync/health` | 30 seconds | origin |
 | `/favicon.ico`, `/icon.png`, `/apple-touch-icon.png` | 1 week | 1 week |
 
-The page itself and `/bill/<ID>` are not cached, because the gateway answers crawlers and people differently by user
-agent. Transform rules serve `/.well-known/api-catalog`, `/openapi.json` and `/auth.md` from `live/`. A WAF rule
+The page itself is not cached. `/bill/<ID>` is the same page for every visitor: a URL rewrite serves
+`live/share/<ID>.html` (IDs with a bill prefix, case-sensitive), so it shares that file's cache entry and purge, and
+the page sends people on to the app. A redirect rule sends `/bill/<ID>` with `Accept: text/markdown` to
+`agent.billatlas.org/bills/<ID>.md`; agents otherwise find that record from the page's `rel="alternate"` link. The
+gateway's own user-agent rules for `/bill/<ID>` now apply only to bills.ctharvey.me. Transform rules also serve `/.well-known/api-catalog`, `/openapi.json` and `/auth.md` from `live/`. A WAF rule
 blocks `/wp-*`, `.php`, `/.env` and `/.git` probes.
 
 ## Rollback

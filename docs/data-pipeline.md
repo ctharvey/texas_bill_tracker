@@ -37,8 +37,8 @@ between files without reinstalling units. A push that changes a job's code or in
 `build_feeds.py` then builds from the snapshot, Luna's tags and the roster:
 
 - RSS feeds: `live/feeds/<ID>.xml` per bill and `live/feeds/members/<CODE>.xml` per legislator (newest 200 items).
-- Share pages `live/share/<ID>.html`, served at `/bill/<ID>` to search and link-preview crawlers, with the official
-  record, schema.org `Legislation` data and the first 3,000 characters of text. Rewritten pages are submitted to
+- Share pages `live/share/<ID>.html`, served at `/bill/<ID>` to every visitor (people are sent on to the app), with the
+  official record, a `text/markdown` alternate link to the agent edition, schema.org `Legislation` data and the first 3,000 characters of text. Rewritten pages are submitted to
   IndexNow (`--no-indexnow` turns this off).
 - `live/sitemap.xml`; the API docs from `scripts/api/` (`api-catalog.json`, `openapi.json`, `auth.md`).
 - Share-card inputs `live/og/cards.json`, and bill art `live/og/art/<ID>.jpg` with `art.json`.

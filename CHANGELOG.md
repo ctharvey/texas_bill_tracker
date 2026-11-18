@@ -2,6 +2,7 @@
 
 ## 2026-11-18
 - Data files stay at the Cloudflare edge until they change: each data run purges only the files it added, rewrote or deleted (by modification time and size against `live/purge-state.json`), a failed purge is retried with the next run, and the daily check flags a purge pending over 2 hours. The edge TTL on those paths goes from 1 hour to 30 days.
+- `/bill/<ID>` is one cached page for every visitor: Cloudflare serves the share page (people are sent on to the app), agents pick the Markdown record from its `rel="alternate"` link, and `Accept: text/markdown` is redirected to it. Before, every `/bill/<ID>` request reached the server.
 - Following names which legislator and role each bill comes from again (lost in the compact rows); nightly E2E selectors follow the Nov 17 row redesign.
 - Session readiness, checked against 558 real 89R histories: committees come from TLC's attributes (they were never read), hearing status from the full history (it saw only the last 12 actions), and status covers vetoes, laws without a signature and "Sent to the Governor". Referred bills no longer say "Prefiling stage".
 - Cloudflare caching: the data run purges the files only it writes after every run, so the edge keeps them an hour (2aeefd2, 2202e8e).
