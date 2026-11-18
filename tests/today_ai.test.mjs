@@ -16,7 +16,7 @@ test('aiPrompt names the bill, both URLs and one neutral instruction', () => {
 
 test('aiPrompt tells an assistant that cannot open the links to search for the bill on BillAtlas', () => {
   const lines = aiPrompt(bill('HB5')).split('\n');
-  assert.equal(lines.at(-2), `If you can't open these links, search the web for "Texas Bill Atlas HB 5" (billatlas.org) and use its bill page and the official Texas Legislature pages.`);
+  assert.equal(lines.at(-2), `If you can't open these links, search the web for "Texas Bill Atlas HB 5" (billatlas.org) and use its bill page and the official Texas Legislature pages. Earlier sessions reused this bill number: use only the 90th Legislature (2027) bill.`);
 });
 
 test('aiPrompt links the latest text version when there is one', () => {

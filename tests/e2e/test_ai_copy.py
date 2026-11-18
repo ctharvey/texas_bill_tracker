@@ -36,7 +36,7 @@ def test_copy_for_ai_in_the_drawer_copies_a_prompt_for_the_bill(device):
         "Full bill text (Introduced), the official wording as Markdown: https://billatlas.org/live/text/HB147/I.md",
         "Official bill history and text: https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill=HB147",
         "",
-        "If you can't open these links, search the web for \"Texas Bill Atlas HB 147\" (billatlas.org) and use its bill page and the official Texas Legislature pages.",
+        "If you can't open these links, search the web for \"Texas Bill Atlas HB 147\" (billatlas.org) and use its bill page and the official Texas Legislature pages. Earlier sessions reused this bill number: use only the 90th Legislature (2027) bill.",
         "Summarize what this bill does, who it affects, and its current status, citing the bill text.",
     ]
 
@@ -131,7 +131,7 @@ def test_when_the_clipboard_is_blocked_the_bill_page_shows_the_text_to_copy_by_h
         f"AI-readable version with history and review: {AGENT}bills/HB147.md\n"
         "Full bill text (Introduced), the official wording as Markdown: https://billatlas.org/live/text/HB147/I.md\n"
         "Official bill history and text: https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill=HB147\n\n"
-        "If you can't open these links, search the web for \"Texas Bill Atlas HB 147\" (billatlas.org) and use its bill page and the official Texas Legislature pages.\n"
+        "If you can't open these links, search the web for \"Texas Bill Atlas HB 147\" (billatlas.org) and use its bill page and the official Texas Legislature pages. Earlier sessions reused this bill number: use only the 90th Legislature (2027) bill.\n"
         "Summarize what this bill does, who it affects, and its current status, citing the bill text.")
     expect(page.locator("#toast")).to_have_text("Press Ctrl+C to copy")
 

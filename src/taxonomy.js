@@ -795,7 +795,7 @@ export function aiPrompt(bill, companions = []) {
     ...companions.map(c => `Companion bill ${companionLabel(c)}: ${agentUrl(c)}`), '',
     // Some assistants (Claude on the web) won't open links that arrive in a prefilled prompt but will open pages
     // their own web search finds, so name the site and bill as a search too.
-    `If you can't open these links, search the web for "Texas Bill Atlas ${bill.number}" (billatlas.org) and use its bill page and the official Texas Legislature pages.`,
+    `If you can't open these links, search the web for "Texas Bill Atlas ${bill.number}" (billatlas.org) and use its bill page and the official Texas Legislature pages. Earlier sessions reused this bill number: use only the 90th Legislature (2027) bill.`,
     'Summarize what this bill does, who it affects, and its current status, citing the bill text.'].join('\n');
 }
 
