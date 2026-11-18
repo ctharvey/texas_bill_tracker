@@ -1,6 +1,12 @@
 # Changelog
 
 ## 2026-11-18
+- Official-file fingerprints for older texts: text versions stored before `source_sha256` existed are fingerprinted,
+  up to 200 per data run (`SOURCE_BACKFILL_PER_RUN`), by downloading the official file again only when its MDTM still
+  matches the stored copy. Our Markdown, its `sha256` and `generated_at` are not touched, so nothing is re-reviewed.
+  Bills waiting their turn cost no extra FTP calls. Counted as `fingerprinted` in the text stats.
+- Cloudflare Browser Integrity Check is off for the billatlas.org zone: it answered Python's default user agent
+  (used by some AI fetch tools) with error 1010.
 - Bill pages can be indexed by search engines:
   - Search crawlers were getting the app at `/bill/<ID>`, whose canonical address is the home page, so the sitemap's
     1,600 bill URLs all folded into the home page and no share page or Legislation data reached them. The gateway

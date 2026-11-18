@@ -602,6 +602,9 @@ def _source_modified(conn, bill: dict, path: str) -> str | None:
 TEXT_PENDING_FORMAT = "texas-bill-text-pending-v1"
 TEXT_RECHECK_RUNS = 24  # an unchanged bill's texts are still MDTM-checked once a day (hourly runs)
 PLACEHOLDER_RECHECK_S = 6 * 3600  # a remembered placeholder is downloaded again at least this often
+# Texts stored before source_sha256 existed: per run, this many unchanged official files are downloaded again just
+# to fingerprint them. Our Markdown and its sha256 are left as they are, so nothing is re-reviewed.
+SOURCE_BACKFILL_PER_RUN = 200
 _MDTM_STAMP = re.compile(r"^\d{14}(?:\.\d+)?$")
 
 
@@ -635,7 +638,7 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int, pending_
     every version. With pending_path, TLC placeholder pages are remembered by MDTM and read again only once they change.
     """
     counts = {"bills": 0, "versions": 0, "downloaded": 0, "unchanged": 0, "deferred": 0, "failed": 0, "not_posted": 0,
-              "skipped_bills": 0, "placeholder_unchanged": 0, "rechecked_bills": 0}
+              "skipped_bills": 0, "placeholder_unchanged": 0, "rechecked_bills": 0, "fingerprinted": 0}
     moment = dt.datetime.now(dt.timezone.utc)
     now = moment.isoformat().replace("+00:00", "Z")
     turn = int(moment.timestamp() // 3600) if turn is None else turn
@@ -658,7 +661,10 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int, pending_
         # Same lastUpdate as the last complete check, every version on disk, nothing waiting: the bill is as it was.
         if (updated and checked == updated and not waiting and all(c in previous for c in codes)
                 and all((bill_dir / f"{c}.md").is_file() for c in codes)):
-            if text_recheck_due(bill_id, turn):
+            unfingerprinted = any("source_sha256" not in previous[c] for c in codes)
+            if unfingerprinted and counts["fingerprinted"] < SOURCE_BACKFILL_PER_RUN:
+                pass  # falls through: the versions without a source fingerprint get one below
+            elif text_recheck_due(bill_id, turn):
                 counts["rechecked_bills"] += 1  # falls through to one MDTM per version; downloads only on a change
             else:
                 counts["skipped_bills"] += 1
@@ -689,6 +695,14 @@ def sync_texts(conn, bills: list[dict], text_dir: Path, max_texts: int, pending_
                     stamp = mdtm
                 if not current or stamp == current:
                     counts["unchanged"] += 1
+                    # Same official file as our copy came from (same MDTM): fingerprint it, keep everything else.
+                    if (mdtm and stamp == mdtm and "source_sha256" not in old
+                            and counts["fingerprinted"] < SOURCE_BACKFILL_PER_RUN):
+                        counts["fingerprinted"] += 1
+                        try:
+                            old = {**old, "source_sha256": hashlib.sha256(ftp_bytes(conn, path)).hexdigest()}
+                        except ftplib.all_errors as exc:
+                            print(f"text {bill_id}/{code} fingerprint: {exc}", file=sys.stderr)
                     entries.append(old)
                     continue
             remembered = waiting.get(code) if isinstance(waiting.get(code), dict) else None
