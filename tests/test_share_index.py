@@ -79,6 +79,16 @@ class CrawlerRedirect(unittest.TestCase):
                        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148'):
             self.assertFalse(pattern.search(person), person)
 
+    def test_agents_get_the_page_with_the_markdown_record_advertised(self):
+        # Every visitor gets this page at /bill/<ID>; agents choose the Markdown record from the link.
+        html = bf.share_page(BILL)
+        self.assertIn('<link rel="alternate" type="text/markdown" href="https://agent.billatlas.org/bills/HB486.md">',
+                      html.split('</head>')[0])
+        pattern = re.compile(re.search(r'!/(.*?)/i\.test', html).group(1), re.I)
+        for agent in ('Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)',
+                      'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; ClaudeBot/1.0; +claudebot@anthropic.com)'):
+            self.assertTrue(pattern.search(agent), agent)
+
 
 class WriteSharePages(unittest.TestCase):
     def test_changed_lists_only_rewritten_pages_and_text_is_read_from_the_text_folder(self):

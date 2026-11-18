@@ -422,6 +422,7 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_
 <meta name="theme-color" content="#112136">
 <title>{escape(title)} · Texas Bill Atlas</title>
 <link rel="canonical" href="{a(url)}">
+<link rel="alternate" type="text/markdown" href="{a(f"{AGENT_SITE}bills/{bill_id}.md")}">
 <link rel="icon" href="/favicon.ico">
 {tags}
 <script type="application/ld+json">{legislation_jsonld(bill, site)}</script>
