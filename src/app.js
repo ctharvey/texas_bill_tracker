@@ -9,6 +9,10 @@ import {reviewModel, renderReview, parseBillMarkdown, validHighlights, sha256Hex
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
 import {fillDrawerBrackets} from './features/brackets/view.js';
 import {exportMarkup} from './features/export/view.js';
+import {methodMarkup} from './features/pages/method.js';
+import {savingMarkup} from './features/pages/saving.js';
+import {dataMarkup} from './features/pages/data.js';
+import {setupDisclaimer} from './features/pages/dialogs.js';
 import {setupThemePicker, setupModePicker, setTheme, savedTheme, applyTheme, applyMode} from './features/theme/view.js';
 import {TUMBLEWEED, noticeSearch, setupEasterEggs} from './features/easter/view.js';
 import {state} from './core/state.js';
@@ -168,18 +172,6 @@ async function init(){
       if(again&&focused){again.focus();if(caret!==null)again.setSelectionRange(caret,caret)}
     }
   },60000);
-}
-
-function setupDisclaimer(){
-  const dialog=$('#disclaimer');
-  if(!dialog||typeof dialog.showModal!=='function')return;
-  // Closing by button or Escape both count as seen; without storage it simply shows on each visit.
-  dialog.addEventListener('close',()=>{try{localStorage.setItem(disclaimerKey,new Date().toISOString())}catch{}});
-  $('#disclaimer-open')?.addEventListener('click',()=>{if(!dialog.open)dialog.showModal()});
-  let seen=false;try{seen=Boolean(localStorage.getItem(disclaimerKey))}catch{}
-  if(!seen)dialog.showModal();
-  const privacy=$('#privacy');
-  $('#privacy-open')?.addEventListener('click',()=>{if(privacy&&!privacy.open)privacy.showModal()});
 }
 
 // ---- Saving choices without accounts: URL state, remembered filters, files and private sync links ----
@@ -809,9 +801,9 @@ function registerViews(){
   registerView('agencies',{heading:['Follow the agencies.','Explore where legislation might land across Texas government.'],render:agenciesMarkup});
   registerView('review',{heading:['Full-text review.','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:reviewMarkup});
   registerView('method',{heading:['How the atlas works.','Signals and uncertainty are displayed separately from verified legislative actions.'],render:methodMarkup});
-  registerView('saving',{heading:['Save your work.','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],render:savingMarkup});
+  registerView('saving',{heading:['Save your work.','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],render:()=>savingMarkup({linked:sync.linked,syncAvailable})});
   registerView('export',{heading:['Export your saved info.','Everything this browser has saved, in one file you can keep or import on another device.'],render:()=>exportMarkup({watch:state.watch,follows:state.follow,searches:state.searches,theme:savedTheme(),memberName:code=>{const m=memberByCode(state.roster,code);return m?memberTitle(m):null},synced:Boolean(sync.linked?.editKey),kept:STORAGE_OK?heldCount(listStore):0,previous:STORAGE_OK?previousLinks(listStore):[]})});
-  registerView('data',{heading:['Behind the tracker.','Understand coverage, refreshes, and how to load or export bill data.'],render:dataMarkup});
+  registerView('data',{heading:['Behind the tracker.','Understand coverage, refreshes, and how to load or export bill data.'],render:()=>dataMarkup({stampText,reviewParts})});
   setFallbackView('data');
 }
 
@@ -1666,65 +1658,6 @@ function reviewMarkup(){
     </div>
   </div>
   <p class="review-legend"><span class="review-chip tagged">HB1</span> verified Luna tags published · <span class="review-chip">HB1</span> reviewed, no claims verified against the text yet. Bills waiting for text are retried automatically once the legislature posts it. Follow-up questions refine a review that is already published.</p>`;
-}
-
-function methodMarkup(){
-  const parts=[
-    ['01','What is affected','Bills can carry many policy tags, legal effects, affected populations, local-government layers, and agencies. A tag can be explicitly supported or an inference, and we show that distinction.'],
-    ['02','Who filed it','Author influence is based on independently verified roles: chamber leadership, committee chairmanship, relevant committee seats, and legislative tenure. We do not assign prominence just for party or media attention.'],
-    ['03','Chance of a hearing','The atlas shows the strongest hearing signal supported by the record. A referral alone does not guarantee a hearing.'],
-    ['04','Likelihood of passage','Passage requires a separate model: committee action, chamber calendars and votes, companion progress, cross-chamber support, deadlines, and executive position. No passage probabilities are currently claimed.'],
-    ['05','What changes over time','Each action, bill version, fiscal note, referral, hearing notice, companion filing, and author role can add or change signals. The dataset preserves source timestamps and links to the state record.'],
-    ['06','Who Luna is','Luna is the AI model that reads each bill’s full text. It writes the “In brief” line and the summary, adds topic, agency and search tags, and marks the passages its notes rest on. Everything it writes carries an AI label, can be wrong, and is never official: the bill text and the legislature’s record are. Review progress shows which bills it has read.'],
-    ['07','Known limitations','Automated agency extraction from captions is incomplete. Predictions in early prefiling are particularly unstable, and committee assignments after the election must be verified before influence scoring.']
-  ];
-  return `<div class="section-head"><div><div class="section-overline">EXPLAINABLE SIGNALS</div><h2>Verified facts first. Forecasts second.</h2></div></div><div class="info-callout"><strong>A filed bill is not a viable bill by default.</strong> Hearing progress, author prominence, policy impact, and predicted enactment are separate dimensions. No numeric forecast appears without a measured historical basis and a stated confidence level.</div><figure class="hearing-guide"><figcaption>How to read hearing status</figcaption>
-    <ol><li><strong>Referred</strong><span>The bill goes to a committee.</span></li>
-    <li><strong>Scheduled</strong><span>A notice sets a hearing date.</span></li>
-    <li><strong>Heard</strong><span>The record confirms a hearing took place.</span></li></ol>
-    </figure><div class="method-grid">${parts.map(([,title,body])=>`<article class="method-card"><h3>${title}</h3><p>${body}</p></article>`).join('')}</div>`;
-}
-
-function savingMarkup(){
-  const linked=sync.linked;
-  const syncState=syncAvailable===false?'Not switched on for this site':syncAvailable?'Available':'Checking…';
-  const deviceState=linked?.editKey?'Synced (edit link)':'Not synced';
-  const parts=[
-    ['01','Your watchlist','Star any bill to follow it. The list is kept in this browser on this device, with nothing sent anywhere. Clearing site data, or using a private window, removes it, so use one of the options below if you want a copy.'],
-    ['02','Remembered filters','Your last filters and sort order are remembered on this device and come back the next time you visit.'],
-    ['03','Links to any view','The address bar always describes what you are looking at: the page, filters, sort and any open bill. Use <strong>Copy link</strong> above the results, or bookmark the page, to return to it or send it to someone.'],
-    ['05','Export and import a file','<strong>Export file</strong> saves your watchlist, followed legislators, saved searches and colour theme as one small file you can keep or email. <strong>Import file</strong> adds them from that file (or an older watchlist export), or from any text or spreadsheet export that mentions bill numbers such as “HB 5” or “SJR 9”. Importing only adds; it never removes bills.'],
-    ['06','Private sync links','<strong>Create sync link</strong> on the Watchlist keeps your watchlist, followed legislators, saved searches and colour theme the same on your phone, laptop and work computer, with no account. Light or dark stays a choice for each device. Open the <strong>edit link</strong> on each device; treat it like a password, because anyone with it can change the list. The <strong>view-only link</strong> is safe to share: it shows your watchlist’s bills only, never who you follow or what you saved, and stays current as you edit. You can stop syncing one device, or delete the link for every device.'],
-    ['07','RSS feeds','Each bill’s details include an <strong>RSS feed</strong> of its recorded actions, for Outlook or any feed reader. A synced watchlist also has one feed for all of its bills, linked from the Watchlist. Each legislator has a feed too, linked from their member page.'],
-    ['08','Followed legislators','<strong>Follow</strong> a legislator on their member page or in Near you, and their bills appear under <strong>Following</strong>. Follows are kept in this browser like the watchlist, and go into exported files and sync links. Share links and view-only links never include them.'],
-    ['09','Saved searches','On the Bill explorer, <strong>Save search</strong> keeps the current search words and filters under <strong>Following</strong>, with how many bills have new actions since you last opened it. Saved searches go into exported files and sync links like follows; share and view-only links never include them.']
-  ];
-  // Both examples start with two bills. Only the live link gains the third bill.
-  const example=live=>`<div class="share-example" aria-hidden="true">
-    <div><span>When shared</span><b class="bill-slips"><i></i><i></i></b></div>
-    <span class="share-arrow">→</span>
-    <div><span>After you add a bill</span><b class="bill-slips"><i></i><i></i>${live?'<i class="added-slip"></i>':''}</b></div>
-  </div>`;
-  return `<div class="section-head"><div><div class="section-overline">NO ACCOUNT NEEDED</div><h2>Saving and sharing your info</h2></div><button class="outline-button" data-view="watchlist">Open your watchlist →</button></div><div class="info-callout"><strong>There are no logins on this site.</strong> Everything below works without an account, email address or name. Pick whichever fits: keep things on one device, carry them in a link or file, or sync a private link across devices.</div>
-    <h2 class="saving-reference-title">Share your watchlist</h2>
-    <p class="share-intro">Both links show only your watched bills. On your watchlist, open <strong>Save, share and sync</strong> to choose one.</p>
-    <div class="sharing-options">
-      <article><h3>Share a snapshot</h3>${example(false)}
-        <p>Readers see the bills you picked that day. They can add those bills to their own watchlist.</p>
-        <p class="sharing-instruction">Star the bills you want to include, then choose <strong>Copy share link</strong>.</p></article>
-      <article><h3>Share a live list</h3>${example(true)}
-        <p>Readers see your latest list at the same address, including bills you add or remove later.</p>
-        <p class="sharing-instruction">${syncAvailable===false?'Sync is unavailable on this site right now.':linked?.editKey?'Choose <strong>Copy view-only link</strong>.':'Choose <strong>Create sync link</strong>, then <strong>Copy view-only link</strong>.'} Keep your edit link private.</p></article>
-    </div>
-    <h2 class="saving-reference-title">Saving on your devices</h2>
-    <div class="saving-reference">${parts.map(([,title,body])=>`<details><summary>${title}</summary><p>${body}</p></details>`).join('')}</div><div class="section-head"><div><div class="section-overline">PRIVACY</div><h2>What is stored, and where</h2></div></div><div class="subpage-card"><div class="storage-map">
-      <section class="data-field long"><span class="storage-icon device-icon" aria-hidden="true"></span><h3>On this device</h3><ul><li>Watched bills, followed legislators and saved searches</li><li>Last filters, theme and disclaimer preference</li><li>Your browser stores your sync link if you made one</li></ul></section>
-      <section class="data-field long"><span class="storage-icon server-icon" aria-hidden="true"></span><h3>On the server</h3><p>Only when you use a sync link</p><ul><li>Watched bill numbers, followed member codes and colour theme</li><li>Saved search names, search words and filters</li><li>A version number and dates</li><li>Links only as one-way fingerprints, so the database cannot be used to open a list</li></ul></section>
-    </div><div class="data-field long"><span class="data-label">Never collected</span><span class="data-value">Names, email addresses, accounts, tracking cookies or analytics</span></div><div class="data-field long"><span class="data-label">Abuse limits</span><span class="data-value">The sync service counts requests per address in memory for up to an hour, and never writes addresses down</span></div><div class="data-field long"><span class="data-label">Retention</span><span class="data-value">A sync link unused for a year is deleted. Deleting it yourself removes it at once; each device keeps its own copy of the list.</span></div><div class="data-field"><span class="data-label">Sync on this site</span><span class="data-value">${esc(syncState)}</span></div><div class="data-field"><span class="data-label">This device</span><span class="data-value">${esc(deviceState)} · ${state.watch.size} ${state.watch.size===1?'bill':'bills'} watched</span></div><p style="font-size:var(--fs-xs);color:color-mix(in srgb,var(--ink) 45%,var(--surface));margin:14px 0 0">Limits: up to 500 bills per synced list. Lost your edit link? Your list is still on each device that had it; create a new sync link from any of them.</p></div>`;
-}
-
-function dataMarkup(){
-  return `<div class="section-head"><div><div class="section-overline">DATA PROVENANCE</div><h2>Source, coverage & export</h2></div></div><div class="subpage-card"><div class="data-field"><span class="data-label">Legislative session</span><span class="data-value">90R · 2027</span></div><div class="data-field"><span class="data-label">Loaded records</span><span class="data-value">${state.bills.length}</span></div><div class="data-field"><span class="data-label">Snapshot mode</span><span class="data-value">${esc(state.meta?.data_mode||'Unknown')}</span></div><div class="data-field"><span class="data-label">Read from</span><span class="data-value">${esc(state.meta?.loaded_from||'User import')}</span></div><div class="data-field"><span class="data-label">Last generated</span><span class="data-value">${stampText(state.meta?.generated_at)}</span></div><div class="data-field"><span class="data-label">Luna reviews</span><span class="data-value">${state.luna?`${reviewParts().summary.reviewed.length.toLocaleString()} reviewed, ${Object.keys(state.luna.bills).length.toLocaleString()} with published tags · updated ${esc(stampText(state.luna.generated_at))}`:'not available'}</span></div><div class="data-field"><span class="data-label">Member roster</span><span class="data-value">${state.roster?`${state.roster.counts?.house??'?'} House · ${state.roster.counts?.senate??'?'} Senate · updated ${esc(stampText(state.roster.generated_at))}`:'not available'}</span></div><p style="font-size:12px;color:color-mix(in srgb,var(--ink) 57%,var(--surface));line-height:1.65;margin:18px 0">${esc(state.meta?.coverage_note||'Coverage is not guaranteed complete.')}</p><div class="info-callout"><strong>Official source policy:</strong> The Texas Legislative Council publishes bulk material through anonymous FTP and discourages data mining the public Legislature Online pages. The project includes an updater for the official bulk files, with snapshot validation so a failed import cannot silently replace data with an empty result. <a class="text-link" href="https://capitol.texas.gov/billlookup/filedownloads.aspx" target="_blank" rel="noopener noreferrer">Read the source policy ↗</a></div><div class="data-actions"><button class="primary-button" id="import-trigger">↑ Import CSV or JSON</button><button class="outline-button" id="export-csv">↓ Export current results</button><a class="outline-button" href="https://github.com/ctharvey/texas_bill_tracker" target="_blank" rel="noopener noreferrer">Source code ↗</a><input type="file" id="import-file" accept=".csv,.json,text/csv,application/json" hidden></div><p style="font-size:var(--fs-xs);color:color-mix(in srgb,var(--ink) 45%,var(--surface));margin:14px 0 0">Imports are temporary to this browser session; they do not alter the public dataset. Watchlist stars are stored on this device.</p></div>`;
 }
 
 function lunaBlock(b){
