@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, mkdirSync, statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {buildPages, writePages, loadBills, billRecord, slug, AGENT, loadTexts, TEXT_INLINE_MAX} from '../scripts/build_agent.mjs';
+import {buildPages, writePages, loadBills, billRecord, slug, AGENT, loadTexts, TEXT_INLINE_MAX, BILL_DISCLAIMER, DISCLAIMER} from '../scripts/build_agent.mjs';
 import {assessHearing, lastActionInfo, normalizeBill} from '../src/taxonomy.js';
 
 const snapshot = (bills, extra = {}) => ({session: '90R', data_mode: 'official-ftp', generated_at: '2026-11-10T12:00:00Z',
@@ -342,7 +342,7 @@ test('bill text: copied text is linked and short texts are inlined; long, missin
     assert.ok(hb5.includes('- Committee Report: https://billatlas.org/live/text/HB5/H.md (source file: ftp://ftp.legis.state.tx.us/HB00005H.HTM)'));
     assert.ok(hb5.includes('### Text of the latest version (Committee Report)\n\n````markdown\n# HB 5 - Committee Report\n\nSECTION 1. The <ins>new</ins> rule.\n````'));
     assert.ok(hb5.includes('- Full bill text (official wording, Markdown): https://billatlas.org/live/text/HB5/H.md'));
-    assert.ok(hb5.indexOf('## Bill text') < hb5.indexOf('## Full-text review (Luna)'));
+    assert.ok(hb5.indexOf('### Bill text') < hb5.indexOf('## AI analysis (Luna)'));
     const json = JSON.parse(files.get('bills/HB5.json'));
     assert.equal(json.links.full_text, 'https://billatlas.org/live/text/HB5/H.md');
     assert.deepEqual(json.text_versions.map(v => v.name), ['Introduced', 'Committee Report']);
@@ -357,4 +357,26 @@ test('bill text: copied text is linked and short texts are inlined; long, missin
     assert.ok(!none.includes('Full bill text (official wording'));
     assert.ok(!build().get('bills/HB5.md').includes('## Bill text'));
   } finally { rmSync(dir, {recursive: true, force: true}); }
+});
+
+test('bill pages separate the official record, computed fields and AI analysis, and say how current the record is', () => {
+  const bills = [{...BILLS[0], source_updated: '11/17/2026 11:00:11 AM'}, BILLS[1]];
+  const files = buildPages({snapshot: snapshot(bills), tags: TAGS, roster: ROSTER, minBills: 1});
+  const hb5 = files.get('bills/HB5.md');
+  const at = heading => hb5.indexOf(`\n${heading}\n`);
+  const order = ['## Official record', '### Caption', '### Authors and sponsors', '### Recorded actions', '## Computed by this site',
+    '## AI analysis (Luna)', '### Summary', '### Topics', '### Potentially affected agencies', '## Links'];
+  for (const h of order) assert.ok(at(h) > 0, `missing ${h}`);
+  assert.deepEqual([...order].sort((a, b) => at(a) - at(b)), order);
+  assert.ok(hb5.includes('Record current as of: the Legislative Council last updated this bill\'s record 11/17/2026 11:00:11 AM; this site copied it 2026-11-10T12:00:00Z.'));
+  // Rule outputs leave the official section; the action text stays there.
+  const official = hb5.slice(at('## Official record'), at('## Computed by this site'));
+  assert.ok(official.includes('- Most recent action: 2026-11-09 · House: Referred to Natural Resources'));
+  assert.ok(!official.includes('Hearing status') && !official.includes('Author prominence'));
+  assert.match(hb5.slice(at('## Computed by this site'), at('## AI analysis (Luna)')), /- Hearing status: /);
+  assert.ok(hb5.includes('Changes groundwater district rules.'));
+  assert.ok(hb5.trimEnd().endsWith(BILL_DISCLAIMER) && !hb5.includes(DISCLAIMER));
+  assert.equal(JSON.parse(files.get('bills/HB5.json')).record_updated, '11/17/2026 11:00:11 AM');
+  // Without a Legislative Council update time the line still gives the copy time.
+  assert.ok(files.get('bills/SB12.md').includes('Record current as of: this site copied it 2026-11-10T12:00:00Z.'));
 });

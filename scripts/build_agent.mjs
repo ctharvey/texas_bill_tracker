@@ -15,6 +15,11 @@ export const DISCLAIMER = 'Unofficial, independent open-source project; not a st
   + 'Texas Legislative Council bulk files and can lag or contain errors. Topic, agency and impact tags are automated '
   + '(caption rules or the Luna model reading the full text) and can be wrong. Not legal advice. Confirm on Texas '
   + 'Legislature Online before relying on anything here.';
+// Bill pages separate the copied record from what this site computes and what the AI writes, so the footer says so.
+export const BILL_DISCLAIMER = 'Unofficial, independent open-source project; not a state website. The official record '
+  + 'and bill text on this page are copied unchanged from the Texas Legislative Council bill files, refreshed hourly, so '
+  + 'they can trail the Legislature by up to an hour or two. Computed fields and the AI analysis can be wrong. Not legal '
+  + 'advice. For anything that matters, confirm on Texas Legislature Online.';
 const OWNED = /\.(md|json|txt)$/;
 const HEARING_ORDER = ['Heard', 'Scheduled', 'Referred', NO_HEARING];
 const HEARD = new Set(['Heard', 'Scheduled']);
@@ -103,6 +108,7 @@ export function billRecord(b) {
       relation: c.relation || null, in_snapshot: Boolean(c.title), title: c.title,
       markdown: c.title ? `${AGENT}bills/${c.id}.md` : null})),
     subjects: b.subjects,
+    record_updated: typeof b.source_updated === 'string' ? b.source_updated : null,
     topics: b.topics,
     agencies: b.agencies.map(a => ({id: a.id, name: b.agencyNames[a.id], relationship: a.relationship,
       source: a.source === 'luna' ? 'luna-full-text' : 'caption-rules', reason: a.reason || ''})),
@@ -120,15 +126,15 @@ export function billRecord(b) {
 // text: undefined when no text folder was given (no section), null when this bill has no text copied yet.
 function textSection(r, text) {
   if (text === undefined) return '';
-  if (!text) return `\n## Bill text\n\n_No text has been copied here yet: the Legislature may not have published it. Official text: ${r.links.text}_\n`;
+  if (!text) return `\n### Bill text\n\n_No text has been copied here yet: the Legislature may not have published it. Official text: ${r.links.text}_\n`;
   const latest = text.versions.at(-1), fence = '````';
-  return `\n## Bill text
+  return `\n### Bill text
 
 The official wording of each version, copied from the Texas Legislative Council's bill text files and converted to Markdown with the wording unchanged. Language the bill adds is marked <ins>like this</ins>; language it removes is in [<del>brackets</del>].
 
 ${text.versions.map(v => `- ${cell(v.name)}: ${v.url}${v.source_url ? ` (source file: ${v.source_url})` : ''}`).join('\n')}
 
-${text.body ? `### Text of the latest version (${cell(latest.name)})
+${text.body ? `#### Text of the latest version (${cell(latest.name)})
 
 ${fence}markdown
 ${text.body}
@@ -136,7 +142,7 @@ ${fence}` : `The latest version (${cell(latest.name)}) is ${text.chars.toLocaleS
 `;
 }
 
-function billMarkdown(b, coverage, reviewState = '', queueNote = '', text = undefined) {
+function billMarkdown(b, coverage, reviewState = '', queueNote = '', text = undefined, copiedAt = '') {
   const r = billRecord(b), last = r.last_action, pending = !r.full_text_review;
   if (text) r.links.full_text = text.versions.at(-1).url;
   // Say whether an empty field is a finding or data we do not have yet.
@@ -155,7 +161,7 @@ function billMarkdown(b, coverage, reviewState = '', queueNote = '', text = unde
   // Roles no bill in the snapshot lists yet share one note instead of an empty section each.
   const roles = keys => {
     const absent = keys.filter(k => Array.isArray(r.people[k]) && !r.people[k].length && coverage?.[`with_${k}`] === 0);
-    const shown = keys.filter(k => !absent.includes(k)).map(k => `\n### ${k[0].toUpperCase()}${k.slice(1)}\n\n${people(k)}\n`).join('');
+    const shown = keys.filter(k => !absent.includes(k)).map(k => `\n#### ${k[0].toUpperCase()}${k.slice(1)}\n\n${people(k)}\n`).join('');
     const names = absent.length > 1 ? `${absent.slice(0, -1).join(', ')} or ${absent.at(-1)}` : absent[0];
     return shown + (absent.length ? `\n_No ${names} listed: no bill in this snapshot lists any yet, so this reflects the stage of the source data, not this bill._\n` : '');
   };
@@ -165,58 +171,77 @@ function billMarkdown(b, coverage, reviewState = '', queueNote = '', text = unde
     : pending ? `_No agency tagged yet: the full-text review is pending (${reviewState || 'not started'}). This does not establish that none are affected._`
       : '_The full-text review tagged no state agency. This does not establish that none are affected._';
   const review = r.full_text_review;
+  const fresh = [r.record_updated ? `the Legislative Council last updated this bill's record ${cell(r.record_updated)}` : '',
+    copiedAt ? `this site copied it ${copiedAt}` : ''].filter(Boolean).join('; ');
   return `# ${r.number}: ${cell(r.title)}
 
 90th Legislature (90R) · ${r.chamber} · Status: ${cell(r.status)}
+${fresh ? `\nRecord current as of: ${fresh}.\n` : ''}
+How to read this page: **Official record** is copied unchanged from the Texas Legislative Council's bill files, the data behind Texas Legislature Online. **Computed by this site** is worked out by fixed rules from that record. **AI analysis (Luna)** is written by an AI model that read the bill text; it can be wrong, so check it against the bill text.
+
+## Official record
+
+Source: Texas Legislative Council bill files (ftp.legis.state.tx.us), copied unchanged.
 
 - Filed: ${r.filed_at || 'not in the source data'}
-- Most recent action: ${cell(last.category)}${last.chamber ? ` · ${last.chamber}` : ''} · ${last.date || 'date unknown'}: ${cell(last.text)}
-- Hearing status: ${r.hearing.status}. ${cell(r.hearing.detail)}
-- Authorship: ${cell(r.authorship_party.label)}. ${cell(r.authorship_party.detail)}
-- Author prominence: ${cell(r.author_prominence.label)}. ${r.author_prominence.factors.map(cell).join('; ')}
+- Most recent action: ${last.date || 'date unknown'}${last.chamber ? ` · ${last.chamber}` : ''}: ${cell(last.text)}
 - Official subjects (Legislative Council index): ${r.subjects === null ? 'not in this snapshot yet' : r.subjects.length ? r.subjects.map(cell).join('; ') : 'none listed'}
 - Companion bills: ${r.companions.length ? r.companions.map(c => `${c.in_snapshot ? `[${c.number}](${c.markdown})` : `${c.number} (not in this snapshot yet)`}${c.relation ? `, ${cell(c.relation).toLowerCase()}` : ''}${c.author ? `, by ${cell(c.author)}` : ''}`).join('; ') : 'none listed in the source data'}
 
-## Caption
+### Caption
 
 ${cell(r.caption) || '_No caption available._'}
 ${textSection(r, text)}
-## Full-text review (Luna)
+### Authors and sponsors
+
+Authors and coauthors serve in the originating chamber; sponsors and cosponsors in the other chamber. Authorship does not indicate a vote or caucus position.
+
+#### Authors
+
+${people('authors')}
+${roles(['coauthors', 'sponsors', 'cosponsors'])}
+### Recorded actions
+
+${actions}
+
+## Computed by this site
+
+Worked out by fixed rules from the official record above; not a statement by the Legislature.
+
+- Status: ${cell(r.status)}
+- Most recent action type: ${cell(last.category)}
+- Hearing status: ${r.hearing.status}. ${cell(r.hearing.detail)}
+- Authorship: ${cell(r.authorship_party.label)}. ${cell(r.authorship_party.detail)}
+- Author prominence: ${cell(r.author_prominence.label)}. ${r.author_prominence.factors.map(cell).join('; ')}
+
+## AI analysis (Luna)
+
+Written by Luna, an AI model that reads the full bill text. It can be wrong; the bill text above is the authority. Tags marked caption-rules come from keyword rules applied to the caption, not from the AI.
+
+### Summary
 
 ${review ? `Reviewed ${review.reviewed_at || 'date unknown'}${review.text_version ? ` · ${cell(review.text_version)} text` : ''}. Fields from the full text: ${review.fields_from_full_text.join(', ') || 'none'}; other fields use caption inference.
 
-${cell(review.summary) || '_The review published no summary._'}${reviewState && reviewState !== 'reviewed' ? `\n\nA newer review is pending (${reviewState}); this one stays until it publishes.` : ''}` : `_Pending: ${reviewState || 'not started'}${queueNote ? `; ${queueNote}` : ''}${coverage ? `. ${coverage.full_text_reviewed} of ${coverage.bills} bills have a published review so far; see ${AGENT}review-progress.md` : ''}. Until then, tags below come from rules applied to the caption. The full text is linked below._`}
+${cell(review.summary) || '_The review published no summary._'}${reviewState && reviewState !== 'reviewed' ? `\n\nA newer review is pending (${reviewState}); this one stays until it publishes.` : ''}` : `_Pending: ${reviewState || 'not started'}${queueNote ? `; ${queueNote}` : ''}${coverage ? `. ${coverage.full_text_reviewed} of ${coverage.bills} bills have a published review so far; see ${AGENT}review-progress.md` : ''}. Until then, tags below come from rules applied to the caption._`}
 
-## Topics
+### Topics
 
 ${list(r.topics, 'topics')}
 
-## Potentially affected agencies
+### Potentially affected agencies
 
 Possible links are rule or model inferences, not confirmed legal obligations.
 
 ${agencies}
 
-## Types of impact
+### Types of impact
 
 ${list(r.impacts, 'types of impact')}
 
-## People and institutions affected
+### People and institutions affected
 
 ${list(r.affected_groups, 'affected people or institutions')}
-${r.locations.length ? `\n## Locations\n\n${r.locations.map(l => `- ${cell(l.name)}${l.kind ? ` (${cell(l.kind)})` : ''}${l.explanation ? `: ${cell(l.explanation)}` : ''}`).join('\n')}\n` : ''}
-## Authors and sponsors
-
-Authors and coauthors serve in the originating chamber; sponsors and cosponsors in the other chamber. Authorship does not indicate a vote or caucus position.
-
-### Authors
-
-${people('authors')}
-${roles(['coauthors', 'sponsors', 'cosponsors'])}
-## Recorded actions
-
-${actions}
-
+${r.locations.length ? `\n### Locations\n\n${r.locations.map(l => `- ${cell(l.name)}${l.kind ? ` (${cell(l.kind)})` : ''}${l.explanation ? `: ${cell(l.explanation)}` : ''}`).join('\n')}\n` : ''}
 ## Links
 ${r.links.full_text ? `\n- Full bill text (official wording, Markdown): ${r.links.full_text}` : ''}
 - Official bill history: ${r.links.official}
@@ -227,7 +252,7 @@ ${r.links.full_text ? `\n- Full bill text (official wording, Markdown): ${r.link
 - Search all bills: ${AGENT}search?q= followed by your words${r.topics.length ? `, e.g. ${AGENT}search?q=${encodeURIComponent(r.topics[0])}` : ''}
 
 ---
-${DISCLAIMER}
+${BILL_DISCLAIMER}
 `;
 }
 
@@ -351,7 +376,7 @@ export function buildPages({snapshot, tags = null, extras = null, roster = null,
   }));
   for (const b of bills) {
     const text = texts ? texts.get(b.id) || null : undefined, record = records.get(b.id);
-    put(`bills/${b.id}.md`, billMarkdown(b, coverage, reviewState.get(b.id), queueNote.get(b.id), text));
+    put(`bills/${b.id}.md`, billMarkdown(b, coverage, reviewState.get(b.id), queueNote.get(b.id), text, dataDate));
     const json = text ? {...record, links: {full_text: text.versions.at(-1).url, ...record.links}, text_versions: text.versions} : record;
     put(`bills/${b.id}.json`, JSON.stringify(json, null, 1) + '\n');
   }

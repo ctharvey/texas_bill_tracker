@@ -1,6 +1,15 @@
 # Changelog
 
 ## 2026-11-17
+- Agent bill pages say what each part is, so AI assistants can tell the record from the analysis:
+  - **Official record**: caption, bill text, authors, recorded actions, subjects and companions, copied unchanged
+    from the Legislative Council files.
+  - **Computed by this site**: status, action type, hearing status, authorship and prominence, worked out by rules.
+  - **AI analysis (Luna)**: the summary and tags.
+  - A "Record current as of" line gives the Legislative Council's last update to the bill and when this site copied it.
+  - The footer no longer says the record "can contain errors"; it says the copied record can trail the Legislature
+    by an hour or two, and that computed fields and the AI analysis can be wrong.
+  - The JSON record adds `record_updated`.
 - AI assistants can read the bill text. Agent bill pages (agent.billatlas.org/bills/<ID>.md) gain a "Bill text"
   section: each version's official wording as our Markdown copy (live/text), its source file, and the latest
   version copied in full when it is 12,000 characters or less. The JSON record adds `links.full_text` and
