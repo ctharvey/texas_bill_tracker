@@ -188,7 +188,7 @@ button[disabled]{opacity:.5;cursor:not-allowed}
 a.bill-number{text-decoration:none}
 a.bill-number:hover{text-decoration:underline}
 .bill-title-link:hover{text-decoration:underline}
-.ai-copy{margin-top:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}.ask-ai{position:relative}.ask-ai>summary{list-style:none;cursor:pointer;display:block;height:100%;text-align:center}.bill-bar .drawer-actions>.ask-ai{padding:0}.ask-ai>summary::-webkit-details-marker{display:none}.ask-ai-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:8;display:grid;gap:2px;min-width:220px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:calc(9px*var(--rs));box-shadow:var(--shadow)}.ask-ai-menu a{padding:9px 10px;border-radius:calc(6px*var(--rs));font-size:var(--fs-xs);font-weight:700;color:var(--ink)}.ask-ai-menu a:hover,.ask-ai-menu a:focus-visible{background:var(--teal-soft);color:var(--teal)}.ask-ai-menu small{padding:4px 10px 6px;font-size:var(--fs-xs);color:var(--muted);line-height:1.4}
+.ai-copy{margin-top:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}.ask-ai{position:relative}.ask-ai>summary{list-style:none;cursor:pointer;display:block;height:100%;text-align:center}.bill-bar .drawer-actions>.ask-ai{padding:0}.ask-ai>summary::-webkit-details-marker{display:none}.ask-ai-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:8;display:grid;gap:2px;min-width:220px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:calc(9px*var(--rs));box-shadow:var(--shadow)}.ask-ai-menu a,.ask-ai-menu button{padding:9px 10px;border:0;background:none;text-align:left;font:inherit;border-radius:calc(6px*var(--rs));font-size:var(--fs-xs);font-weight:700;color:var(--ink);cursor:pointer}.ask-ai-menu button{border-top:1px solid var(--line);border-radius:0 0 calc(6px*var(--rs)) calc(6px*var(--rs));margin-top:2px}.ask-ai-menu a:hover,.ask-ai-menu a:focus-visible,.ask-ai-menu button:hover,.ask-ai-menu button:focus-visible{background:var(--teal-soft);color:var(--teal)}.ask-ai-menu small{padding:2px 10px 8px;font-size:var(--fs-xs);color:var(--muted);line-height:1.4}
 .ai-fallback{width:100%;font:12px/1.4 monospace;padding:8px;border:1px solid var(--line);border-radius:calc(6px*var(--rs))}
 .ai-top-button{border:1px solid color-mix(in srgb,var(--accent) 41%,var(--surface));background:color-mix(in srgb,var(--accent) 11%,var(--surface));color:var(--teal);font-size:var(--fs-xs);font-weight:700;padding:7px 12px;border-radius:calc(8px*var(--rs));white-space:nowrap}
 .ai-top-button:hover{background:color-mix(in srgb,var(--accent) 15%,var(--surface))}
@@ -559,7 +559,9 @@ summary:focus-visible,.disclaimer-ok:focus-visible,.footer-link:focus-visible{ou
   .today-topics{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding:3px 3px 6px;margin:-3px -3px 8px}
   .today-topics>*{flex:0 0 auto;white-space:nowrap}
   .bill-bar .drawer-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%}
-  .bill-bar .drawer-actions>*{text-align:center;padding:8px 10px;font-size:var(--fs-xs)}}
+  .bill-bar .drawer-actions>*{text-align:center;padding:8px 10px;font-size:var(--fs-xs)}
+  /* The Ask AI menu spans the whole button grid, wherever the button lands in it. */
+  .bill-bar .drawer-actions{position:relative}.bill-bar .drawer-actions>.ask-ai{position:static;padding:0}.bill-bar .ask-ai-menu{left:0;right:0;min-width:0}}
 /* Phones: the bundled-copy notice keeps its lead and the Coverage link; the details are on the Data page. */
 @media(max-width:760px){.source-notice .notice-more{display:none}}
 /* #15: nav items are links, so they can open in a new tab. */

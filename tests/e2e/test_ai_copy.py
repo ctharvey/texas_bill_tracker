@@ -15,10 +15,16 @@ def clipboard(page):
     return page.evaluate("navigator.clipboard.readText()").replace("\r\n", "\n")
 
 
+def copy_for_ai(page):
+    """Copy for AI is the last item of the bill page's Ask AI menu: open the menu and return the item."""
+    page.locator(f"{DRAWER} details.ask-ai summary").click()
+    return page.locator(f"{DRAWER} [data-copy-ai]")
+
+
 def test_copy_for_ai_in_the_drawer_copies_a_prompt_for_the_bill(device):
     grant(device)
     page = device.open("#bill?id=HB147")
-    button = page.locator(f"{DRAWER} [data-copy-ai]")
+    button = copy_for_ai(page)
     expect(button).to_have_text("Copy for AI")
     button.click()
     expect(button).to_have_text("Copied")
@@ -27,6 +33,7 @@ def test_copy_for_ai_in_the_drawer_copies_a_prompt_for_the_bill(device):
         "Texas HB 147 (90th Legislature): Relating to a community health clinic grant program.",
         "",
         f"AI-readable version with history and review: {AGENT}bills/HB147.md",
+        "Full bill text (Introduced), the official wording as Markdown: https://billatlas.org/live/text/HB147/I.md",
         "Official bill history and text: https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill=HB147",
         "",
         "Summarize what this bill does, who it affects, and its current status, citing the bill text.",
@@ -36,7 +43,7 @@ def test_copy_for_ai_in_the_drawer_copies_a_prompt_for_the_bill(device):
 def test_copy_for_ai_includes_each_companion(device):
     grant(device)
     page = device.open("#bill?id=HB110")
-    page.locator(f"{DRAWER} [data-copy-ai]").click()
+    copy_for_ai(page).click()
     expect(page.locator(f"{DRAWER} [data-copy-ai]")).to_have_text("Copied")
     text = clipboard(page)
     assert f"Companion bill HB 972 (duplicate): {AGENT}bills/HB972.md" in text.split("\n")
@@ -46,7 +53,7 @@ def test_copy_for_ai_includes_each_companion(device):
 def test_copied_label_goes_back_to_copy_for_ai(device):
     grant(device)
     page = device.open("#bill?id=HB110")
-    button = page.locator(f"{DRAWER} [data-copy-ai]")
+    button = copy_for_ai(page)
     button.click()
     expect(button).to_have_text("Copied")
     expect(button).to_have_text("Copy for AI", timeout=5000)
@@ -115,12 +122,13 @@ def test_when_the_clipboard_is_blocked_the_bill_page_shows_the_text_to_copy_by_h
         navigator.clipboard.writeText = () => Promise.reject(new Error('blocked'));
         document.execCommand = () => false;
     }""")
-    page.locator(f"{DRAWER} [data-copy-ai]").click()
+    copy_for_ai(page).click()
     box = page.locator("#ai-fallback")
     expect(box).to_be_visible()
     expect(box).to_have_value(
         f"Texas HB 147 (90th Legislature): Relating to a community health clinic grant program.\n\n"
         f"AI-readable version with history and review: {AGENT}bills/HB147.md\n"
+        "Full bill text (Introduced), the official wording as Markdown: https://billatlas.org/live/text/HB147/I.md\n"
         "Official bill history and text: https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill=HB147\n\n"
         "Summarize what this bill does, who it affects, and its current status, citing the bill text.")
     expect(page.locator("#toast")).to_have_text("Press Ctrl+C to copy")
