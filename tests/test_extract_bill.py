@@ -5,13 +5,13 @@ import json
 from pathlib import Path
 import sys
 import tempfile
-import types
 import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import extract_bill as extraction
+import flex_boundary
 from extraction_cache import ResponseCache, UnresolvedCall
 
 HAS_SCHEMA = importlib.util.find_spec("jsonschema") is not None
@@ -248,10 +248,19 @@ class SchemaAndExecutionTests(unittest.TestCase):
         self.assertEqual(report["action"], "not_submitted")
         self.assertEqual(report["new_api_cost_estimate"], [0, 0])
 
+    def boundary(self):
+        # A paid call goes through the run's FlexBoundary (phase 5); the fake sender stands in for its send.
+        return flex_boundary.FlexBoundary(self.cache, None, None)
+
+    def test_execute_without_the_runs_boundary_is_refused(self):
+        with self.assertRaises(TypeError):
+            extraction.extract(self.doc, self.registry, self.cache, execute=True,
+                               sender=lambda _: self.fail("A paid call needs the run's boundary"))
+
     def test_cache_replay_needs_no_client_or_credentials_and_cost_is_zero(self):
         first = extraction.extract(self.doc, self.registry, self.cache, execute=True,
-                                   sender=lambda _: response(result()))
-        with patch.object(extraction, "send_request", side_effect=AssertionError("No client or key access")):
+                                   sender=lambda _: response(result()), cache=self.boundary())
+        with patch.object(flex_boundary, "_default_openai", side_effect=AssertionError("No client or key access")):
             second = extraction.extract(self.doc, self.registry, self.cache)
         self.assertFalse(first["cache_hit"])
         self.assertTrue(second["cache_hit"])
@@ -261,14 +270,17 @@ class SchemaAndExecutionTests(unittest.TestCase):
 
     def test_invalid_and_incomplete_outputs_are_saved_without_automatic_retry(self):
         raw = response({}, status="incomplete")
-        first = extraction.extract(self.doc, self.registry, self.cache, execute=True, sender=lambda _: raw)
+        first = extraction.extract(self.doc, self.registry, self.cache, execute=True, sender=lambda _: raw,
+                                   cache=self.boundary())
         second = extraction.extract(self.doc, self.registry, self.cache, execute=True,
-                                    sender=lambda _: self.fail("Do not resubmit an incomplete response"))
+                                    sender=lambda _: self.fail("Do not resubmit an incomplete response"),
+                                    cache=self.boundary())
         self.assertTrue(first["errors"])
         self.assertTrue(second["cache_hit"])
 
     def test_response_is_revalidated_without_a_new_call(self):
-        extraction.extract(self.doc, self.registry, self.cache, execute=True, sender=lambda _: response(result()))
+        extraction.extract(self.doc, self.registry, self.cache, execute=True, sender=lambda _: response(result()),
+                           cache=self.boundary())
         with patch.object(extraction, "validate_result", return_value={"errors": ["new validator finding"],
                                                                       "publishable": False}):
             report = extraction.extract(self.doc, self.registry, self.cache,
@@ -284,56 +296,9 @@ class SchemaAndExecutionTests(unittest.TestCase):
         for bound in extraction.response_cost(raw):
             self.assertAlmostEqual(bound, cost)
 
-    def test_capacity_retry_is_bounded_and_unknown_timeout_not_retried(self):
-        calls = []
-        class Capacity(Exception):
-            code = "flex_unavailable"
-        def create(**kwargs):
-            calls.append(kwargs)
-            raise Capacity()
-        client = types.SimpleNamespace(responses=types.SimpleNamespace(create=create))
-        fake_module = types.SimpleNamespace(OpenAI=lambda **_: client)
-        with patch.dict(sys.modules, {"openai": fake_module}), patch.dict("os.environ", {"OPENAI_API_KEY": "test"}), \
-                patch.object(extraction.time, "sleep") as sleep:
-            with self.assertRaises(extraction.CapacityUnavailable):
-                extraction.send_request(extraction.build_request(self.doc, self.registry))
-        self.assertEqual(len(calls), 3)
-        self.assertEqual([x.args[0] for x in sleep.call_args_list], [30, 60])
-        calls.clear()
-        def timeout(**kwargs):
-            calls.append(kwargs)
-            raise TimeoutError("unknown submission outcome")
-        client.responses.create = timeout
-        with patch.dict(sys.modules, {"openai": fake_module}), patch.dict("os.environ", {"OPENAI_API_KEY": "test"}), \
-                patch.object(extraction.time, "sleep") as sleep:
-            with self.assertRaises(TimeoutError):
-                extraction.send_request(extraction.build_request(self.doc, self.registry))
-        self.assertEqual(len(calls), 1)
-        sleep.assert_not_called()
-
-    def test_long_retry_after_and_quota_errors_do_not_loop(self):
-        calls = []
-        class Capacity(Exception):
-            code = "flex_unavailable"
-            response = types.SimpleNamespace(headers={"retry-after": "3600"})
-        def create(**kwargs):
-            calls.append(kwargs)
-            raise Capacity()
-        client = types.SimpleNamespace(responses=types.SimpleNamespace(create=create))
-        fake_module = types.SimpleNamespace(OpenAI=lambda **_: client)
-        with patch.dict(sys.modules, {"openai": fake_module}), patch.dict("os.environ", {"OPENAI_API_KEY": "test"}), \
-                patch.object(extraction.time, "sleep") as sleep:
-            with self.assertRaises(extraction.CapacityUnavailable) as caught:
-                extraction.send_request(extraction.build_request(self.doc, self.registry))
-        self.assertEqual(caught.exception.retry_after, 3600)
-        self.assertEqual(len(calls), 1)
-        sleep.assert_not_called()
-        calls.clear()
-        Capacity.code = "insufficient_quota"
-        with patch.dict(sys.modules, {"openai": fake_module}), patch.dict("os.environ", {"OPENAI_API_KEY": "test"}):
-            with self.assertRaises(Capacity):
-                extraction.send_request(extraction.build_request(self.doc, self.registry))
-        self.assertEqual(len(calls), 1)
+    # The legacy send_request retry tests were dropped with send_request (phase 5). Flex pins the same rules:
+    # test_flex_boundary.OutcomeTests capacity (3 sends, 30/60 s), timeout (one send, held), long retry-after
+    # (defers without sleeping) and quota/auth (one send, run stops).
 
     @unittest.skipUnless(HAS_OPENAI, "Install optional OpenAI SDK for mock wire test")
     def test_sdk_receives_cache_controls_and_complete_source_without_network(self):

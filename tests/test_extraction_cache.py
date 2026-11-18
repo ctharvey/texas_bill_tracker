@@ -8,9 +8,13 @@ import unittest
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-from extraction_cache import (
-    CacheBusy, CacheCoolingDown, CapacityUnavailable, NotSubmitted, ResponseCache, UnresolvedCall,
-)
+from extraction_cache import CacheBusy, NotSubmitted, UnresolvedCall  # noqa: E402
+from flex_boundary import FlexBoundary  # noqa: E402
+
+# The response cache is the vendored cth_flex cache behind FlexBoundary (phase 5 removed the legacy
+# extraction_cache.ResponseCache.execute). These pin the same reuse and duplicate-protection behaviour through it.
+# The legacy-only capacity tests (a send raising CapacityUnavailable recorded capacity_wait) were dropped: flex
+# records capacity from FlexClient's own refusal, covered by test_flex_boundary's capacity and cooldown tests.
 
 
 class ResponseCacheTests(unittest.TestCase):
@@ -18,12 +22,15 @@ class ResponseCacheTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(prefix="bill-cache-")
         self.addCleanup(self.temporary.cleanup)
         self.directory = Path(self.temporary.name)
-        self.cache = ResponseCache(self.directory)
+        self.cache = FlexBoundary(self.directory, None, None)
         self.request = {"model": "test", "input": "full source", "reasoning": {"effort": "high"}}
+
+    def entry_path(self, request):
+        return self.directory / "responses" / (self.cache.key(request) + ".json")
 
     def test_persistent_replay_does_not_send(self):
         original = self.cache.execute(self.request, lambda: {"status": "completed", "output": "saved"})
-        other = ResponseCache(self.directory)
+        other = FlexBoundary(self.directory, None, None)
         replay = other.execute(dict(reversed(list(self.request.items()))),
                                lambda: self.fail("Identical request must not be submitted"))
         self.assertFalse(original.cache_hit)
@@ -45,7 +52,7 @@ class ResponseCacheTests(unittest.TestCase):
             self.cache.execute(self.request, uncertain)
         with self.assertRaises(UnresolvedCall):
             self.cache.execute(self.request, lambda: self.fail("Uncertain call must not be repeated"))
-        self.assertNotIn("SECRET", (self.directory / (self.cache.key(self.request) + ".json")).read_text())
+        self.assertNotIn("SECRET", self.entry_path(self.request).read_text())
 
     def test_known_not_submitted_can_be_retried(self):
         def not_sent():
@@ -54,23 +61,9 @@ class ResponseCacheTests(unittest.TestCase):
             self.cache.execute(self.request, not_sent)
         self.assertFalse(self.cache.execute(self.request, lambda: {"status": "completed"}).cache_hit)
 
-    def test_capacity_cooldown_prevents_an_immediate_request(self):
-        def capacity():
-            raise CapacityUnavailable(60)
-        with self.assertRaises(CapacityUnavailable):
-            self.cache.execute(self.request, capacity)
-        with self.assertRaises(CacheCoolingDown):
-            self.cache.execute(self.request, lambda: self.fail("Cooldown must suppress provider calls"))
-
-    def test_capacity_expiry_allows_retry(self):
-        def capacity():
-            raise CapacityUnavailable(0)
-        with self.assertRaises(CapacityUnavailable):
-            self.cache.execute(self.request, capacity)
-        self.cache.execute(self.request, lambda: {"status": "completed"})
-
     def test_crash_and_corruption_do_not_trigger_a_new_call(self):
-        path = self.directory / (self.cache.key(self.request) + ".json")
+        path = self.entry_path(self.request)
+        path.parent.mkdir(parents=True, exist_ok=True)
         for contents in ("invalid JSON", json.dumps({"cache_format": 1,
                          "request_key": self.cache.key(self.request), "state": "pending"})):
             with self.subTest(contents=contents):
@@ -89,7 +82,7 @@ class ResponseCacheTests(unittest.TestCase):
 import json,sys,time
 from pathlib import Path
 sys.path.insert(0,sys.argv[1])
-from extraction_cache import ResponseCache
+from flex_boundary import FlexBoundary
 root=Path(sys.argv[2])
 def send():
     (root/'ready').write_text('ready')
@@ -98,7 +91,7 @@ def send():
         if time.monotonic()>deadline: raise TimeoutError('test deadline')
         time.sleep(.02)
     return {'status':'completed','from':'child'}
-ResponseCache(root).execute(json.loads(sys.argv[3]),send)
+FlexBoundary(root,None,None).execute(json.loads(sys.argv[3]),send)
 """
         process = subprocess.Popen([sys.executable, "-c", child, str(SCRIPTS), str(self.directory),
                                     json.dumps(self.request)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)

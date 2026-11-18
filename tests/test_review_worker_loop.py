@@ -105,7 +105,9 @@ class WorkerLoopTests(unittest.TestCase):
         self.assertEqual(json.loads((reviews / 'HB1.json').read_text('utf-8')), {'earlier': True})
 
     def test_run_time_limit_is_checked_between_bills(self):
-        clock = iter([0, 0, 10, 4000, 4000])
+        # The first reading is the flex spend ledger's lock during the start-of-run hold_stranded (phase 5: every
+        # run is flex); the rest are main's start time and its between-bill checks, as before.
+        clock = iter([0, 0, 0, 10, 4000, 4000])
         with patch.object(pipeline.time, 'monotonic', side_effect=lambda: next(clock)):
             queue = self.run_main(lambda b, r: {'bill_id': b}, lambda doc, *a, **k: bundle(doc['bill_id']),
                                   '--max-minutes', '1')
@@ -534,38 +536,8 @@ class EnvironmentFailureLoopTests(WorkerLoopTests):
         self.assertEqual(caught.exception.code, 2)
 
 
-class LedgerDayTests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
-        self.path = Path(self.temp.name) / 'budget.json'
-        self.request = {'model': classification.MODEL, 'max_output_tokens': 5000, 'input': 'Source'}
-
-    def test_spend_after_chicago_midnight_books_to_the_new_day(self):
-        days = iter(['2026-11-09', '2026-11-10', '2026-11-10'])
-        with patch.object(pipeline, 'ledger_day', side_effect=lambda: next(days)), \
-                patch.object(classification, 'response_cost', return_value=(0, 0.01)):
-            budget = pipeline.Budget(self.path, 1, .1)
-            budget.send(self.request, sender=lambda _: {'ok': True})
-        ledger = json.loads(self.path.read_text('utf-8'))
-        self.assertEqual(ledger['2026-11-09'], {})
-        self.assertEqual(sum(r['cost'] for r in ledger['2026-11-10'].values()), 0.01)
-
-    def test_previous_day_spend_does_not_count_against_today(self):
-        self.path.write_text(json.dumps({'2026-11-09': {'old': {'state': 'returned', 'cost': 0.99, 'reserved': 0}}}))
-        with patch.object(pipeline, 'ledger_day', return_value='2026-11-10'), \
-                patch.object(classification, 'response_cost', return_value=(0, 0.01)):
-            pipeline.Budget(self.path, 1, .1).send(self.request, sender=lambda _: {'ok': True})
-
-    def test_ledger_day_uses_chicago_time(self):
-        import datetime as dt
-        from zoneinfo import ZoneInfo
-        self.assertEqual(pipeline.ledger_day(), dt.datetime.now(ZoneInfo('America/Chicago')).date().isoformat())
-
-    def test_oversized_request_is_a_long_context_not_submitted(self):
-        big = {**self.request, 'input': 'x' * 300000}
-        with self.assertRaises(pipeline.LongContext) as caught:
-            pipeline.Budget(self.path, 1, .1).send(big, sender=lambda _: self.fail('Must not send'))
-        self.assertIsInstance(caught.exception, NotSubmitted)
+# The legacy Budget's LedgerDayTests were removed with it (phase 5); test_flex_worker_loop.LedgerDayTests pins the
+# same four rules (Chicago midnight, previous-day spend, Chicago day, long context) on the flex spend ledger.
 
 
 if __name__ == '__main__':

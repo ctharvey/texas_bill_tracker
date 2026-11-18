@@ -52,7 +52,6 @@ NOT_SUBMITTED_STEPS = {
 }
 # Review errors the worker loop records against one bill and continues past; any other error stops the run.
 PER_BILL_ERRORS = (CacheCoolingDown, CacheBusy, CapacityUnavailable, OSError, ValueError)
-LEDGER_ZONE = "America/Chicago"
 
 
 def held_outcome(error: BaseException) -> bool:
@@ -189,65 +188,12 @@ def next_step(error: BaseException) -> str:
         " at " + where if where else "")
 
 
-def ledger_day() -> str:
-    # Recomputed per call so a run spanning Chicago midnight books spend to the correct day.
-    from zoneinfo import ZoneInfo
-    return dt.datetime.now(ZoneInfo(LEDGER_ZONE)).date().isoformat()
-
-
 def check_limits(daily_limit: float | None, run_limit: float | None) -> None:
     # None/None disables the spending ceilings only; reservation and double-billing checks still apply.
     if (daily_limit is None) != (run_limit is None):
         raise ValueError("Disable both limits or neither")
     if daily_limit is not None and (not 0 < daily_limit <= 1 or not 0 < run_limit <= daily_limit):
         raise ValueError("Limits must satisfy 0 < run limit <= daily limit <= $1")
-
-
-class Budget:
-    """One worker lock covers this ledger; unknown submission outcomes retain their reservation."""
-    def __init__(self, path: Path, daily_limit: float | None, run_limit: float | None):
-        check_limits(daily_limit, run_limit)
-        self.path, self.daily_limit, self.run_limit = path, daily_limit, run_limit
-        self.run_spent = 0.0
-        self.day = ledger_day()
-        self.ledger = json.loads(path.read_text("utf-8")) if path.exists() else {}
-        self.ledger.setdefault(self.day, {})
-
-    def send(self, request: dict, sender=detailed.send_request) -> dict:
-        self.day = ledger_day()
-        self.ledger.setdefault(self.day, {})
-        key = ResponseCache.key(request)
-        if any(row.get("state") == "pending" for day in self.ledger.values() for row in day.values()):
-            raise OutcomeUnresolved("A prior billing outcome is unresolved; new calls are blocked")
-        if any(key in day for day in self.ledger.values()):
-            raise AlreadyBilled("This request was already billed; restore its response cache before proceeding")
-        # UTF-8 bytes conservatively bound tokens, including the response schema. Reserve the
-        # most expensive cache-write rate for every input token and all allowed output tokens.
-        size = len(json.dumps(request, ensure_ascii=False).encode("utf-8"))
-        if size > 272000:
-            raise LongContext("Long-context requests require separate pricing review")
-        ceiling = (size * .125 + request["max_output_tokens"] * .25) / 1e6
-        outstanding = sum(v["reserved"] for day in self.ledger.values() for v in day.values()
-                          if v.get("state") == "pending")
-        spent = sum(v.get("cost", 0) for v in self.ledger[self.day].values())
-        if self.daily_limit is not None and (spent + outstanding + ceiling > self.daily_limit
-                                             or self.run_spent + ceiling > self.run_limit):
-            raise BudgetExceeded("Spending ceiling reached; remaining work stays queued")
-        self.ledger[self.day][key] = {"state": "pending", "reserved": ceiling}
-        atomic_json(self.path, self.ledger)
-        try:
-            raw = sender(request)
-        except (CapacityUnavailable, NotSubmitted):
-            self.ledger[self.day].pop(key)
-            atomic_json(self.path, self.ledger)
-            raise
-        cost = classification.response_cost(raw)
-        if cost is None:
-            raise RuntimeError("Unknown billing outcome; reservation retained")
-        self.run_spent += cost[1]
-        self.ledger[self.day][key] = {"state": "returned", "cost": cost[1], "reserved": 0}
-        atomic_json(self.path, self.ledger)
-        return raw
 
 
 def questions_for(result: dict, document: dict, validation: dict | None = None) -> list[dict]:
@@ -472,8 +418,7 @@ def resolution_request(question: dict, result: dict, document: dict, sources: li
 def resolve(question, result, document, registry, cache_root, budget, execute, sources=None, effort="high"):
     sources = sources if sources is not None else statutory_sources(question, document, cache_root)
     request = resolution_request(question, result, document, sources, effort)
-    # --transport flex: the budget is a FlexBoundary, which is also the response cache.
-    cache = getattr(budget, "response_cache", None) or ResponseCache(cache_root / "responses")
+    cache = budget.response_cache  # the run's FlexBoundary is both the spend ledger and the response cache
     atomic_json(cache_root / "requests" / (cache.key(request) + ".json"), request)
     def submit():
         if not execute:
@@ -530,7 +475,7 @@ QUESTIONS_LATER = "Deferred: questions follow other bills' first passes"
 
 def spend_marker(budget) -> float:
     """Rises when this bill's own call was billed. Under --workers the run total also moves with other bills'
-    calls, so a FlexBoundary counts per thread; the legacy Budget has one call in flight, so its total is exact."""
+    calls, so a FlexBoundary counts per thread; a budget without a per-thread count falls back to the run total."""
     calls = getattr(budget, "thread_calls", None)
     return budget.run_spent if calls is None else calls
 
@@ -1463,11 +1408,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Reasoning effort for targeted follow-up questions (first pass stays high)")
     parser.add_argument("--no-companion-reuse", action="store_true",
                         help="Always review a bill itself, even when an identical companion's review matches its text")
-    parser.add_argument("--transport", choices=("legacy", "flex"), default="legacy",
-                        help="Provider call stack: the built-in sender, budget and cache (legacy, default) or the "
-                             "vendored cth.flex client, spend ledger and cache (flex); both use the same files")
-    parser.add_argument("--workers", type=int, default=1,
-                        help="Bills reviewed at once (default 1). More than one needs --transport flex")
+    # Kept so existing units that pass --transport flex still start; the legacy stack was removed (phase 5).
+    parser.add_argument("--transport", choices=("flex",), default="flex",
+                        help="Provider call stack: the vendored cth.flex client, spend ledger and cache (the only one)")
+    parser.add_argument("--workers", type=int, default=1, help="Bills reviewed at once (default 1)")
     parser.add_argument("--later-workers", type=int, default=None,
                         help="Bills the later passes (entities, topics, audit) work on at once; a bill's topic votes "
                              "run back to back in one slot (default: --workers, at most the crash-hold allowance). "
@@ -1732,10 +1676,7 @@ def flex_crash_allowance() -> int:
 
 def later_slots(args) -> int:
     """Bills a later pass works on at once: --later-workers, else --workers, both capped at the crash-hold allowance.
-    Flex only (the legacy budget allows one call in flight). Later passes run after the first pass's pool closes, so
-    calls in flight are at most max(--workers, slots)."""
-    if args.transport != "flex":
-        return 1
+    Later passes run after the first pass's pool closes, so calls in flight are at most max(--workers, slots)."""
     return args.later_workers if args.later_workers is not None else min(args.workers, flex_crash_allowance())
 
 
@@ -2137,12 +2078,8 @@ def main():
     if args.later_workers is not None and not 1 <= args.later_workers <= flex_crash_allowance():
         parser.error("--later-workers must be 1 to %d (one stopped run's calls must fit the crash-hold allowance)"
                      % flex_crash_allowance())
-    if args.later_workers is not None and args.later_workers > 1 and args.transport != "flex":
-        parser.error("--later-workers above 1 needs --transport flex (the legacy budget allows one call in flight)")
     if args.allow_text_rereview < 0:
         parser.error("--allow-text-rereview must be 0 or more")
-    if args.workers > 1 and args.transport != "flex":
-        parser.error("--workers above 1 needs --transport flex (the legacy budget allows one call in flight)")
     if args.stages and args.input != "markdown":
         parser.error("--stages needs --input markdown")
     if (args.publish_tags and args.input == "markdown"
@@ -2203,24 +2140,21 @@ def main():
                      account_summary(code) if code or "code" in stop else stop.get("reason"), ACCOUNT_STOP),
                   flush=True)
             return 0
-        if args.transport == "flex":
-            import flex_boundary
-            check_limits(*limits)
-            budget = flex_boundary.FlexBoundary(args.cache_dir, *limits)
-            if args.execute:
-                # Under the worker lock, before any send: no other run can still be making these calls.
-                held, left = budget.hold_stranded()
-                held_any = bool(held or left)
-                for key, bound in held:
-                    print("Held request %s a stopped run left pending (booked $%.6f); its bill waits, other bills go "
-                          "on. Check the provider usage log, then --release it if it was not billed" % (key, bound),
-                          flush=True)
-                if left:
-                    print("Not holding %d pending requests (%s): more than %d stopped-run calls were held today; "
-                          "check for a crash loop, then --hold them" % (len(left), ", ".join(left[:3]),
-                                                                       flex_boundary.CRASH_HOLD_LIMIT), flush=True)
-        else:
-            budget = Budget(args.cache_dir / "budget.json", *limits)
+        import flex_boundary
+        check_limits(*limits)
+        budget = flex_boundary.FlexBoundary(args.cache_dir, *limits)
+        if args.execute:
+            # Under the worker lock, before any send: no other run can still be making these calls.
+            held, left = budget.hold_stranded()
+            held_any = bool(held or left)
+            for key, bound in held:
+                print("Held request %s a stopped run left pending (booked $%.6f); its bill waits, other bills go "
+                      "on. Check the provider usage log, then --release it if it was not billed" % (key, bound),
+                      flush=True)
+            if left:
+                print("Not holding %d pending requests (%s): more than %d stopped-run calls were held today; "
+                      "check for a crash loop, then --hold them" % (len(left), ", ".join(left[:3]),
+                                                                   flex_boundary.CRASH_HOLD_LIMIT), flush=True)
         snapshot = json.loads(args.snapshot.read_text("utf-8"))
         companions = {b["id"]: b.get("companions") or [] for b in snapshot["bills"] if isinstance(b, dict) and "id" in b}
         ids = args.bill_id or [b["id"] for b in snapshot["bills"]]
@@ -2382,8 +2316,8 @@ def main():
                     time.sleep(seconds)
 
             def defer_for_capacity(bill_id: str, retry_after: float) -> None:
-                # Only provably unbilled rejections reach here: Budget released the reservation and the
-                # response cache recorded capacity_wait until retry-after, so revisiting cannot double-bill.
+                # Only provably unbilled rejections reach here: the ledger released the reservation and the
+                # response cache recorded the call as not sent, so revisiting cannot double-bill.
                 nonlocal capacity_waits
                 ready = time.monotonic() + max(0, retry_after or 0) + 1
                 if ready < deadline:

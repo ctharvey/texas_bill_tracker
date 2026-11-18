@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 import review_pipeline as pipeline
 import classify_bill as classification
 import extract_bill as detailed
-from extraction_cache import CapacityUnavailable, NotSubmitted, ResponseCache
+import flex_boundary
 
 
 def raw(value=None):
@@ -22,62 +22,17 @@ def raw(value=None):
 
 
 class BudgetTests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
-        self.path = Path(self.temp.name) / 'budget.json'
-        self.request = {'model': classification.MODEL, 'max_output_tokens': 5000, 'input': 'Source'}
-
+    # Phase 5 removed the legacy Budget. Its limit validation lives on in check_limits, which main runs before
+    # building the FlexBoundary. Its ledger tests moved to the flex path: spend, budget stops and capacity in
+    # test_flex_boundary / test_flex_worker_loop. "An unknown outcome blocks every new call" was legacy-only:
+    # the continuous worker holds just that bill (test_timeout_is_uncertain_..._held_without_blocking_other_requests).
     def test_cap_cannot_be_raised_above_authorized_dollar(self):
         for daily, run in ((1.01, .1), (1, 2), (0, 0), (1, -1)):
-            with self.assertRaises(ValueError): pipeline.Budget(self.path, daily, run)
+            with self.assertRaises(ValueError): pipeline.check_limits(daily, run)
 
     def test_uncapped_budget_must_disable_both_limits(self):
         for daily, run in ((None, .1), (1, None)):
-            with self.assertRaises(ValueError): pipeline.Budget(self.path, daily, run)
-
-    def test_uncapped_budget_records_spend_and_keeps_billing_safety(self):
-        budget = pipeline.Budget(self.path, None, None)
-        with patch.object(classification, 'response_cost', return_value=(0, 5.0)):
-            budget.send(self.request, sender=lambda _: raw())
-            budget.send({**self.request, 'input': 'Second'}, sender=lambda _: raw())
-        self.assertEqual(budget.run_spent, 10.0)
-        with self.assertRaises(pipeline.AlreadyBilled):
-            budget.send(self.request, sender=lambda _: self.fail('No double charge'))
-        def timeout(_): raise TimeoutError('Unknown submission')
-        with self.assertRaises(TimeoutError): budget.send({**self.request, 'input': 'Third'}, sender=timeout)
-        with self.assertRaises(pipeline.OutcomeUnresolved):
-            pipeline.Budget(self.path, None, None).send({**self.request, 'input': 'Fourth'},
-                                                        sender=lambda _: self.fail('Unknown charge stops new calls'))
-
-    def test_budget_stops_before_sender_and_persists_across_runs(self):
-        budget = pipeline.Budget(self.path, .001, .001)
-        with self.assertRaises(pipeline.BudgetExceeded):
-            budget.send(self.request, sender=lambda _: self.fail('Must not submit'))
-        budget = pipeline.Budget(self.path, 1, 1)
-        budget.send(self.request, sender=lambda _: raw())
-        next_run = pipeline.Budget(self.path, 1, 1)
-        self.assertGreater(sum(r.get('cost', 0) for r in next_run.ledger[next_run.day].values()), 0)
-        next_run.daily_limit = .000001
-        with self.assertRaises(pipeline.BudgetExceeded):
-            next_run.send({**self.request, 'input': 'Changed'}, sender=lambda _: self.fail('No overspend'))
-
-    def test_unknown_call_retains_reservation_and_blocks_resubmission(self):
-        budget = pipeline.Budget(self.path, 1, .1)
-        def timeout(_): raise TimeoutError('Unknown submission')
-        with self.assertRaises(TimeoutError): budget.send(self.request, sender=timeout)
-        next_run = pipeline.Budget(self.path, 1, .1)
-        self.assertEqual(next_run.ledger[next_run.day][ResponseCache.key(self.request)]['state'], 'pending')
-        with self.assertRaises(NotSubmitted):
-            next_run.send(self.request, sender=lambda _: self.fail('No duplicate unknown charge'))
-        with self.assertRaises(NotSubmitted):
-            next_run.send({**self.request, 'input': 'Another bill'}, sender=lambda _: self.fail('Unknown charge stops new calls'))
-
-    def test_known_capacity_rejection_does_not_consume_budget(self):
-        budget = pipeline.Budget(self.path, 1, .1)
-        def capacity(_): raise CapacityUnavailable(300)
-        with self.assertRaises(CapacityUnavailable): budget.send(self.request, sender=capacity)
-        self.assertEqual(budget.ledger[budget.day], {})
-        self.assertEqual(budget.run_spent, 0)
+            with self.assertRaises(ValueError): pipeline.check_limits(daily, run)
 
 
 class QuestionTests(unittest.TestCase):
@@ -150,9 +105,9 @@ class ResolutionTests(unittest.TestCase):
                                    'value': 'The commission must publish maps when receiving an application.'}]}
         with tempfile.TemporaryDirectory() as directory:
             cache = Path(directory); before = copy.deepcopy(value)
-            budget = pipeline.Budget(cache / 'budget.json', 1, .1)
+            budget = flex_boundary.FlexBoundary(cache, 1, .1)
             request = pipeline.resolution_request(question, value, doc, [])
-            ResponseCache(cache / 'responses').execute(request, lambda: raw(answer))
+            budget.execute(request, lambda: raw(answer))
             with patch.object(budget, 'send', side_effect=AssertionError('No new call')):
                 report, derived = pipeline.resolve(question, value, doc, detailed.load_registry(),
                                                    cache, budget, True, sources=[])

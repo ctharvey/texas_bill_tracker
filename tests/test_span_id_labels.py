@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import classify_bill as classification  # noqa: E402
 import extract_bill as detailed  # noqa: E402
+import flex_boundary  # noqa: E402
 
 MARKDOWN = ("# H.B. No. 1 - Introduced\n\n### SECTION 1.\n\n"
             "<ins>The commission shall publish maps.</ins>\n\n<ins>The board shall report yearly.</ins>\n")
@@ -60,7 +61,8 @@ class SpanLabelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = classification.classify(
                 self.doc, registry, Path(directory), execute=True,
-                sender=lambda _: response(labelled_result(f"[{self.target}; paragraph {page}")))
+                sender=lambda _: response(labelled_result(f"[{self.target}; paragraph {page}")),
+                cache=flex_boundary.FlexBoundary(Path(directory), None, None))
         self.assertEqual(report["errors"], [])
         self.assertEqual(report["citation_counts"]["relocated"], 0)
         self.assertEqual(report["result"]["summary"]["evidence"][0]["span_id"], self.target)
@@ -71,7 +73,8 @@ class SpanLabelTests(unittest.TestCase):
         result["uncertainties"][0]["span_ids"] = ["[P999S001; paragraph 999]"]
         with tempfile.TemporaryDirectory() as directory:
             report = classification.classify(self.doc, detailed.load_registry(), Path(directory), execute=True,
-                                             sender=lambda _: response(result))
+                                             sender=lambda _: response(result),
+                                             cache=flex_boundary.FlexBoundary(Path(directory), None, None))
         self.assertIn("Question cites an unknown bill span", report["errors"])
 
     def test_markdown_label_is_the_bare_id(self):

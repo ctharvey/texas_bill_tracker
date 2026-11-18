@@ -1,23 +1,16 @@
-#!/usr/bin/env python3
-"""Optional Terra Flex extraction into a private review cache. Never writes the shared bill dataset."""
+"""Bill documents, request building, validation and the shared `extract` step behind every Luna pass.
+
+Never writes the shared bill dataset; provider calls go only through the run's flex_boundary.FlexBoundary."""
 from __future__ import annotations
 
-import argparse
 import ast
 import datetime as dt
-from email.utils import parsedate_to_datetime
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
-import sys
-import time
 
-from extraction_cache import (
-    CacheBusy, CacheCoolingDown, CapacityUnavailable, NotSubmitted, ResponseCache, UnresolvedCall,
-    atomic_json, canonical_hash,
-)
+from extraction_cache import NotSubmitted, atomic_json, canonical_hash
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL = "gpt-6.1-terra"
@@ -367,45 +360,6 @@ def response_cost(raw: dict, *, model: str = MODEL,
     return [fixed + writes * short_write / 1e6, fixed + writes * long_write / 1e6]
 
 
-def send_request(request: dict) -> dict:
-    # This function runs only after explicit execution and a response-cache miss, under its lock.
-    try:
-        from openai import OpenAI
-    except ImportError as error:
-        raise NotSubmitted("Install requirements-extraction.txt before execution") from error
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        raise NotSubmitted("OPENAI_API_KEY is required for execution on a cache miss")
-    client = OpenAI(api_key=key, base_url="https://api.openai.com/v1", timeout=900, max_retries=0)
-    for attempt in range(3):
-        try:
-            arguments = dict(request)
-            options = arguments.pop("prompt_cache_options")
-            response = client.responses.create(**arguments, extra_body={"prompt_cache_options": options})
-            return response.model_dump(mode="json")
-        except Exception as error:
-            if getattr(error, "code", None) not in ("flex_unavailable", "resource_unavailable", "rate_limit_exceeded"):
-                raise
-            delay = (30, 60, 60)[attempt]
-            retry_after = getattr(getattr(error, "response", None), "headers", {}).get("retry-after")
-            if retry_after:
-                try:
-                    delay = max(delay, float(retry_after))
-                except ValueError:
-                    try:
-                        until = parsedate_to_datetime(retry_after)
-                        if until.tzinfo is None:
-                            until = until.replace(tzinfo=dt.timezone.utc)
-                        delay = max(delay, (until - dt.datetime.now(dt.timezone.utc)).total_seconds())
-                    except (TypeError, ValueError, OverflowError):
-                        raise CapacityUnavailable(60) from None
-            if attempt == 2 or delay > 60:
-                raise CapacityUnavailable(delay) from None
-            print(f"Flex capacity unavailable; retrying in {delay:g} seconds", file=sys.stderr, flush=True)
-            time.sleep(delay)
-    raise AssertionError("Unreachable retry state")
-
-
 # A span ID copied together with its source label, e.g. "[P015S001; paragraph 15]" or "[P015S001; paragraph".
 _LABELED_SPAN = re.compile(r"\[\s*(P\d{3,}S\d{3,})\s*(?:[;\]].*)?", re.S)
 
@@ -445,15 +399,20 @@ def extract(document: dict, registry: list[dict], cache_root: Path, *, execute: 
     request = request if request is not None else build_request(document, registry)
     import jsonschema
     jsonschema.Draft202012Validator.check_schema(request["text"]["format"]["schema"])
-    # `cache`: anything with key/execute, e.g. a FlexBoundary (--transport flex); default is the built-in cache.
-    cache = cache if cache is not None else ResponseCache(cache_root / "responses")
+    # `cache`: the run's FlexBoundary (response cache and spend ledger). A paid call must come through the run's own
+    # boundary, whose spending limits and held-call caps apply; only a prepare-only call may open one here.
+    if cache is None:
+        if execute:
+            raise TypeError("extract(execute=True) needs the run's FlexBoundary as cache")
+        import flex_boundary
+        cache = flex_boundary.FlexBoundary(cache_root, None, None)
     key = cache.key(request)
     atomic_json(cache_root / "requests" / (key + ".json"), request)
 
     def submit():
         if not execute:
             raise NotSubmitted("Prepared only; use --execute to authorize a new provider call")
-        return (sender or send_request)(request)
+        return (sender or cache.send)(request)
 
     try:
         cached = cache.execute(request, submit)
@@ -483,47 +442,3 @@ def extract(document: dict, registry: list[dict], cache_root: Path, *, execute: 
         report["audit_recommended"] = True
     atomic_json(cache_root / "results" / (key + ".json"), report)
     return report
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--pdf", type=Path, required=True, help="Local official TLC full-bill PDF")
-    parser.add_argument("--bill-id", required=True)
-    parser.add_argument("--session", default="90R")
-    parser.add_argument("--version", required=True, help="Official text version, e.g. introduced")
-    parser.add_argument("--source-url", required=True, help="Official TLC FTP provenance URL")
-    default_cache = Path(os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
-    parser.add_argument("--cache-dir", type=Path, default=default_cache / "texas-bill-atlas" / "extraction")
-    parser.add_argument("--execute", action="store_true", help="Allow a paid call only on a cache miss")
-    args = parser.parse_args()
-    if args.execute:
-        parser.error("PDF reviews are retired: paid reviews read only the live Markdown text "
-                     "(scripts/review_pipeline.py --input markdown); without --execute this only prepares a request")
-    if not args.source_url.startswith("ftp://ftp.legis.state.tx.us/bills/"):
-        parser.error("Use the official TLC bulk FTP source URL")
-    try:
-        check_cache_location(args.cache_dir)
-    except ValueError as error:
-        parser.error(str(error))
-    document = read_pdf(args.pdf, args.bill_id, args.session, args.version)
-    document["source_url"] = args.source_url
-    report = extract(document, load_registry(), args.cache_dir, execute=args.execute)
-    summary = {k: v for k, v in report.items() if k not in ("result", "evidence_reverse_index")}
-    print(json.dumps(summary, indent=2))
-    return 2 if report.get("errors") or (args.execute and report.get("action") == "not_submitted") else 0
-
-
-if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as error:
-        # Avoid leaking SDK exception contents or credentials into scheduled logs.
-        detail = ""
-        if isinstance(error, (CacheBusy, CacheCoolingDown, CapacityUnavailable, NotSubmitted, UnresolvedCall)):
-            detail = ": " + str(error)
-        else:
-            code = getattr(error, "code", None)
-            if isinstance(code, str) and re.fullmatch(r"[a-z_]{1,80}", code):
-                detail = ": " + code
-        print("Extraction stopped: " + type(error).__name__ + detail, file=sys.stderr)
-        raise SystemExit(2)

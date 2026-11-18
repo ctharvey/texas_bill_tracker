@@ -1,6 +1,13 @@
 # Changelog
 
 ## 2026-11-18
+- The legacy Luna call stack is gone (cth.flex migration phase 5): `review_pipeline.Budget`, `ledger_day`,
+  `extract_bill.send_request` and the legacy cache's `execute` were removed, along with the manual
+  `extract_bill.py`/`classify_bill.py` command lines (they already refused `--execute`). Every call goes through
+  `FlexBoundary`; `--transport` defaults to `flex` and accepts only it, so the installed unit is unchanged. `extract`
+  refuses a paid call that does not come through the run's boundary. Tests that pinned the legacy classes moved to
+  the flex path with their assertions; ones pinning legacy-only behaviour (an unknown outcome blocking every call,
+  the sender's own retry loop, a send-raised capacity cooldown) were dropped where flex tests pin the replacement.
 - Official-file fingerprints for older texts: text versions stored before `source_sha256` existed are fingerprinted,
   up to 200 per data run (`SOURCE_BACKFILL_PER_RUN`), by downloading the official file again only when its MDTM still
   matches the stored copy. Our Markdown, its `sha256` and `generated_at` are not touched, so nothing is re-reviewed.

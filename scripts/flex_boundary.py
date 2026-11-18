@@ -37,7 +37,7 @@ from extraction_cache import (  # noqa: E402
 LUNA_RATES = Rates(input=.05, cached_input=.005, output=.25, cache_write_30m=.0625, cache_write_12h=.125)
 MAX_REQUEST_BYTES = 272000  # longer requests need long-context pricing review (legacy LongContext)
 LEDGER_ZONE = "America/Chicago"
-# Legacy send_request: three sends 30 s then 60 s apart; a wait over 60 s (including a provider hint, honoured in
+# As the removed legacy sender did: three sends 30 s then 60 s apart; a wait over 60 s (including a provider hint, honoured in
 # full) hands the bill back to the worker's cooling list instead of sleeping.
 # A 5xx the provider proved it did not process (500-503, 505-519) is resent the same way, so a brief provider error
 # no longer parks the bill for PARK_RETRY_S; a maybe-processed 5xx (504, 520-527) is never resent (retry_uncertain

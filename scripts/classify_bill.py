@@ -1,10 +1,7 @@
-#!/usr/bin/env python3
-"""Focused Luna Flex classification of a complete TLC bill into a private review cache."""
+"""Focused Luna Flex classification of a complete TLC bill into a private review cache (the first pass)."""
 from __future__ import annotations
 
-import argparse
 import json
-import os
 from pathlib import Path
 import re
 
@@ -223,37 +220,3 @@ def classify(document: dict, registry: list[dict], cache_root: Path, *, execute=
     return detailed.extract(document, registry, cache_root, execute=execute, sender=sender,
                             request=build_request(document, registry), validator=validate_result,
                             cost_estimator=response_cost, cache=cache)
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--pdf", type=Path, required=True)
-    parser.add_argument("--bill-id", required=True)
-    parser.add_argument("--session", default="90R")
-    parser.add_argument("--version", required=True)
-    parser.add_argument("--source-url", required=True)
-    default_cache = Path(os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
-    parser.add_argument("--cache-dir", type=Path, default=default_cache / "texas-bill-atlas" / "extraction")
-    parser.add_argument("--execute", action="store_true", help="Allow one paid call on a cache miss")
-    args = parser.parse_args()
-    if args.execute:
-        parser.error("PDF reviews are retired: paid reviews read only the live Markdown text "
-                     "(scripts/review_pipeline.py --input markdown); without --execute this only prepares a request")
-    if not args.source_url.startswith("ftp://ftp.legis.state.tx.us/bills/"):
-        parser.error("Use the official TLC bulk FTP source URL")
-    detailed.check_cache_location(args.cache_dir)
-    document = detailed.read_pdf(args.pdf, args.bill_id, args.session, args.version)
-    document["source_url"] = args.source_url
-    report = classify(document, detailed.load_registry(), args.cache_dir, execute=args.execute)
-    print(json.dumps({k: v for k, v in report.items()
-                      if k not in ("result", "evidence_reverse_index", "verified_citations")}, indent=2))
-    return 2 if report.get("errors") or (args.execute and report.get("action") == "not_submitted") else 0
-
-
-if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as error:
-        # Keep provider exception bodies and credentials out of logs.
-        print("Classification stopped: " + type(error).__name__, flush=True)
-        raise SystemExit(2)

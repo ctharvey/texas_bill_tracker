@@ -80,9 +80,8 @@ is not yet implemented; the worker explicitly processes introduced text and labe
 The authorized hard ceiling is **$1 per `America/Chicago` calendar day** (the ledger day is computed in that
 zone on every call, so a run spanning midnight books spend to the correct day), with a
 default **$0.10 per run**. A private durable ledger reserves a conservative upper bound before each provider
-call, accounts for cache writes and output, and records actual estimates afterward. Unknown outcomes retain
-their reservation and block new calls until reconciled. Under `--transport flex`, an unknown outcome reported by
-the client (a timeout or a 5xx after sending) is instead **held**: booked at its upper bound, never resent, and only
+call, accounts for cache writes and output, and records actual estimates afterward. An unknown outcome reported by
+the client (a timeout or a 5xx after sending) is **held**: booked at its upper bound, never resent, and only
 its bill waits while the other lanes keep going; three held calls within 30 minutes, or ten within 24 hours, refuse
 every new call until they age out (see "Held calls" below). A crash mid-call leaves a pending row that refuses every
 call until the next run's start holds it (at most six in 24 hours; past that the rows stay pending until older
@@ -112,7 +111,7 @@ between bills; on newer code it can fast-forward to, it starts no new bills, let
 the later passes and exits successfully, so the timer's next start pulls and runs the new code. Never kill a run
 to deploy: a call cut off mid-request is held and needs a manual release.
 Reviews read only the official Markdown. The PDF path is retired: `--input pdf` stops the run before any connection
-or call, and `classify_bill.py`/`extract_bill.py` refuse `--execute`. A run that publishes must read the text the
+or call, and the manual `classify_bill.py`/`extract_bill.py` command lines were removed. A run that publishes must read the text the
 site serves (`live/text`, beside `--publish-tags`). Every publisher (tags, highlights, changes, fiscal, extras, audit
 counts, related summaries) includes a bill only when its review was read from Markdown and its `text_sha256` equals
 both the served `index.json` entry and the served file's bytes for that version (any served version, not only the
@@ -135,16 +134,18 @@ only). It is rewritten when each bill starts and finishes, and on every exit. Th
 **Review progress** view reads it, refreshes it every minute while open, and treats a running status older
 than 90 minutes as possibly stopped; without it, bills with published tags count as reviewed.
 The limit cannot be raised above $1 via CLI. Do not remove the ledger or uncertain response records to retry.
-`--transport flex` (default `legacy`) sends through the vendored cth.flex library (`scripts/vendor/cth_flex`,
-see its `VENDORED.json`; `scripts/flex_boundary.py` is the only importer). It uses the same `budget.json` and
-`responses/` files and the same retry schedule. Differences:
+Every provider call goes through the vendored cth.flex library (`scripts/vendor/cth_flex`, see its
+`VENDORED.json`; `scripts/flex_boundary.py` is the only importer), with the spend ledger in `budget.json` and the
+response cache in `responses/` under `--cache-dir`. The built-in legacy sender, budget and cache were removed
+(`--transport flex` is still accepted, as the only choice, so existing units keep starting). In this stack:
 - an error that provably never reached OpenAI (quota, auth, a rejected request, most 5xx, no connection) releases
   its reservation instead of blocking later calls;
 - quota and auth end the run;
-- an incomplete or wrong-tier reply is kept as `refused` with its real cost.
+- an incomplete Flex reply from the requested model is kept as `refused` with its real cost; a wrong-tier or
+  wrong-model reply keeps its reservation for an operator.
 The production unit runs `--transport flex --input markdown`.
 
-`--workers N` (default 1, needs `--transport flex`) reviews up to N bills at once. Workers only download and call
+`--workers N` (default 1) reviews up to N bills at once. Workers only download and call
 the model; queue, status and review files are written by the main thread. A capacity refusal pauses new bills for
 every worker; an unknown outcome, quota/auth error or budget stop lets in-flight bills finish and starts no new
 one. The ledger and response cache stop two workers from sending the same request. The production unit runs 3.
@@ -506,13 +507,10 @@ still requires a bill citation, and identity derived from a supplied definition 
 External identity context does not itself establish substantive impact. Definition quotes cannot match an
 unrelated chapter or silently fall back to bill text.
 
-```sh
-python scripts/classify_bill.py --pdf /path/to/HB00529I.pdf --bill-id HB529 --session 90R --version introduced --source-url ftp://ftp.legis.state.tx.us/bills/90R/billtext/PDF/house_bills/HB00500_HB00599/HB00529I.pdf
-```
-
-Install `requirements-extraction.txt` first. Preparation is free; `--execute` authorizes a cache-miss call
-using `OPENAI_API_KEY`. This path reuses the detailed extractor's complete-text reader, private persistent
-response cache, prompt-cache breakpoints, bounded capacity backoff and uncertain-call protection. Its model,
+`classify_bill.classify` runs as the review pipeline's first pass (`scripts/review_pipeline.py`); it has no
+standalone command line any more. It reuses the extractor's complete-text reader, the run's response cache and
+spend ledger (`FlexBoundary`), prompt-cache breakpoints, bounded capacity backoff and uncertain-call protection. A
+paid call is refused unless it comes through the run's boundary. Its model,
 schema and prompt produce a distinct cache key. A response hit makes no provider call. Shared instructions
 and vocabulary target a 12-hour prompt cache; the complete changing bill remains the variable suffix.
 
@@ -539,31 +537,15 @@ of corpus-wide accuracy or demonstrated provider prompt-cache hits across bills.
 
 The detailed version is preserved at
 [`archive/detailed-extraction-v1`](https://github.com/ctharvey/texas_bill_tracker/tree/archive/detailed-extraction-v1)
-(commit `a78c67d`) and the local tag `detailed-extraction-v1`. Its script and contract remain available below.
+(commit `a78c67d`) and the local tag `detailed-extraction-v1`.
 
-### Detailed full-text extraction (preserved, pending evaluation)
+### Shared extraction step
 
-`scripts/extract_bill.py` prepares a single Terra Flex/high request from a local official TLC full-bill PDF.
-It extracts entities, authority changes, obligations and timing into a **private review cache**. It does not
-write `data/bills.json`, run on the hourly history job, or publish classifications. The current tool does not
-implement the planned complete policy/geography taxonomy. The existing UI and metadata importer keep working
-without these optional dependencies:
-
-```sh
-python -m pip install -r requirements-extraction.txt
-python scripts/extract_bill.py --pdf /path/to/official-bill.pdf --bill-id HJR31 --session 90R --version introduced --source-url ftp://ftp.legis.state.tx.us/bills/90R/billtext/PDF/house_joint_resolutions/HJ00001_HJ00099/HJ00031I.pdf
-```
-
-By default this only prepares the request, or replays and revalidates an existing response. A **new paid call**
-requires `--execute` and `OPENAI_API_KEY` in the process environment. The tool does not load repository `.env`
-files or credentials from another project. It uses `gpt-6.1-terra`, Flex, high reasoning and a 48,000-token
-output allowance with SDK retries disabled. Only explicit capacity/rate rejections get bounded retries;
-quota/auth errors and unknown timeouts stop. No automatic model/tier fallback or repair/audit call is made.
-
-The cache persists across invocations at `%LOCALAPPDATA%/texas-bill-atlas/extraction` on Windows or
-`$XDG_CACHE_HOME/texas-bill-atlas/extraction` (default `~/.cache/...`) elsewhere. `--cache-dir` selects another
-private persistent location **outside the checkout/web root**, including the primary checkout when using a
-Git worktree. Ephemeral CI storage would need a persistent cache restored across jobs; no such job is enabled.
+`scripts/extract_bill.py` holds the complete-text reader, request building, validation and the `extract` step
+that every Luna pass runs through. Its standalone Terra command line was removed with the legacy sender; the
+detailed Terra contract is preserved at the archive branch above. Nothing here writes `data/bills.json` or runs on
+the hourly history job. The response cache must be a private persistent location **outside the checkout/web root**
+(`--cache-dir` of the review pipeline).
 
 Call reduction and cache rules:
 

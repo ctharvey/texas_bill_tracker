@@ -638,9 +638,10 @@ class LegacyDiskCompatibilityTests(BoundaryCase):
         self.assertEqual(len(self.sdk.calls), 1)
 
     def test_lock_sibling_file_is_not_an_entry(self):
-        legacy = ec.ResponseCache(self.dir / "responses")
-        legacy.execute(REQ, lambda: OK)  # the legacy cache leaves <key>.lock next to <key>.json
+        # The removed legacy cache left <key>.lock next to <key>.json; production caches still hold them.
+        self.write_entry(REQ, "returned", response=OK, returned_at=time.time())
         key = fb.FlexBoundary.key(REQ)
+        (self.dir / "responses" / (key + ".lock")).write_bytes(b"0")
         self.assertTrue((self.dir / "responses" / (key + ".lock")).exists())
         b = self.boundary([])
         self.assertEqual(list(b.cache.entries()), [(key, "returned")])

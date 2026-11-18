@@ -245,7 +245,10 @@ class Slots(SlotCase):
         self.assertEqual(pipeline.later_slots(parse('--transport', 'flex', '--workers', '2')), 2)
         self.assertEqual(pipeline.later_slots(parse('--transport', 'flex')), 1)
         self.assertEqual(pipeline.later_slots(parse('--transport', 'flex', '--later-workers', '5')), 5)
-        self.assertEqual(pipeline.later_slots(parse('--transport', 'legacy', '--workers', '6')), 1)
+        self.assertEqual(pipeline.later_slots(parse('--workers', '2')), 2)  # flex is the default and only stack
+        # Phase 5 removed the legacy stack, so --transport legacy no longer parses.
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            parse('--transport', 'legacy', '--workers', '6')
 
     def test_later_workers_must_fit_the_crash_hold_allowance(self):
         for bad in (['--later-workers', '0'], ['--later-workers', str(pipeline.flex_crash_allowance() + 1)],

@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import classify_bill as classification
 import extract_bill as detailed
+import flex_boundary
 import review_stages as stages
 from extraction_cache import ResponseCache
 
@@ -163,7 +164,8 @@ class VersionUpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             cache = Path(directory)
             args = (self.new, self.old, self.previous, self.registry, cache)
-            report = stages.version_update(*args, execute=True, sender=sender)
+            boundary = flex_boundary.FlexBoundary(cache, None, None)
+            report = stages.version_update(*args, execute=True, sender=sender, cache=boundary)
             self.assertNotIn("changes", report["result"])
             self.assertEqual([c["verified"] for c in report["changes"]], [True, True, False])
             self.assertEqual(report["errors"], ["Unresolved change excerpt: Invented"])
@@ -171,7 +173,7 @@ class VersionUpdateTests(unittest.TestCase):
             self.assertTrue(report["audit_recommended"])
             self.assertIn("verified_citations", report)
             self.assertTrue(report["verified_citations"])
-            again = stages.version_update(*args, execute=True, sender=sender)
+            again = stages.version_update(*args, execute=True, sender=sender, cache=boundary)
             self.assertTrue(again["cache_hit"])
             self.assertEqual(len(calls), 1)
 
@@ -230,7 +232,8 @@ class FiscalTests(unittest.TestCase):
                  "no_fiscal_implication": False}
         with tempfile.TemporaryDirectory() as directory:
             report = stages.fiscal_check(self.bundle, docs, self.registry, Path(directory), execute=True,
-                                         sender=lambda _: raw_for(value))
+                                         sender=lambda _: raw_for(value),
+                                         cache=flex_boundary.FlexBoundary(Path(directory), None, None))
         self.assertEqual(report["verified"], {"fiscal_summary": True, "agencies": [True, False, False],
                                               "disagreements": [True, False]})
         self.assertEqual(report["status"], "needs_review")

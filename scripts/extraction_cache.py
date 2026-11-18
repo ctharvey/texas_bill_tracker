@@ -1,4 +1,6 @@
-"""Private, persistent response reuse with per-request duplicate protection."""
+"""The pipeline's exception classes, the response-cache key, atomic JSON writes and the worker file lock.
+
+Responses are cached by the vendored cth_flex cache behind flex_boundary.FlexBoundary, which uses the same key."""
 from __future__ import annotations
 
 import contextlib
@@ -8,8 +10,6 @@ import json
 import os
 from pathlib import Path
 import tempfile
-import time
-from typing import Callable
 
 
 class CacheBusy(RuntimeError):
@@ -132,43 +132,3 @@ class ResponseCache:
                     yield
                 finally:
                     fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-
-    def execute(self, request: dict, send: Callable[[], dict]) -> CachedResponse:
-        key = self.key(request)
-        path = self.directory / (key + ".json")
-        with self._lock(key):
-            if path.exists():
-                try:
-                    entry = json.loads(path.read_text("utf-8"))
-                except (ValueError, OSError) as error:
-                    raise UnresolvedCall("Corrupt cache entry; reconcile before resubmission") from error
-                if entry.get("request_key") != key or entry.get("cache_format") != 1:
-                    raise UnresolvedCall("Incompatible cache entry; reconcile before resubmission")
-                state = entry.get("state")
-                if state == "returned" and isinstance(entry.get("response"), dict):
-                    return CachedResponse(entry["response"], True, key)
-                if state == "capacity_wait":
-                    if time.time() < entry["retry_not_before"]:
-                        raise CacheCoolingDown("Capacity cooldown is active")
-                elif state != "not_submitted":
-                    raise UnresolvedCall("Earlier outcome is uncertain; reconcile before resubmission")
-            pending = {"cache_format": 1, "request_key": key, "state": "pending", "started_at": time.time()}
-            atomic_json(path, pending)
-            try:
-                response = send()
-                if not isinstance(response, dict):
-                    raise TypeError("Expected a JSON response object")
-                atomic_json(path, {**pending, "state": "returned", "response": response,
-                                   "returned_at": time.time()})
-                return CachedResponse(response, False, key)
-            except NotSubmitted:
-                atomic_json(path, {**pending, "state": "not_submitted"})
-                raise
-            except CapacityUnavailable as error:
-                atomic_json(path, {**pending, "state": "capacity_wait",
-                                   "retry_not_before": time.time() + max(0, error.retry_after)})
-                raise
-            except Exception as error:
-                # Never store exception messages: SDK messages may contain request/credential details.
-                atomic_json(path, {**pending, "state": "indeterminate", "error_type": type(error).__name__})
-                raise

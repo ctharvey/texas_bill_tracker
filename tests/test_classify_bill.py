@@ -230,12 +230,15 @@ class ClassificationTests(unittest.TestCase):
                    "usage": {"input_tokens": 1000, "output_tokens": 100, "input_tokens_details": {
                        "cached_tokens": 200, "cache_write_tokens": 300,
                        "cache_write_tokens_details": {"ttl_30m_tokens": 100, "ttl_12h_tokens": 200}}}}
-            first = classification.classify(self.doc, self.registry, cache, execute=True, sender=lambda _: raw)
+            import flex_boundary  # paid calls go through the run's FlexBoundary (phase 5)
+            boundary = flex_boundary.FlexBoundary(cache, None, None)
+            first = classification.classify(self.doc, self.registry, cache, execute=True, sender=lambda _: raw,
+                                            cache=boundary)
             self.assertEqual(first["errors"], [])
             expected = (500 * .05 + 200 * .005 + 100 * .0625 + 200 * .125 + 100 * .25) / 1e6
             self.assertAlmostEqual(first["new_api_cost_estimate"][0], expected)
-            with patch.object(detailed, "send_request", side_effect=AssertionError("No provider call")):
-                replay = classification.classify(self.doc, self.registry, cache, execute=True)
+            with patch.object(flex_boundary, "_default_openai", side_effect=AssertionError("No provider call")):
+                replay = classification.classify(self.doc, self.registry, cache, execute=True, cache=boundary)
             self.assertTrue(replay["cache_hit"])
             self.assertEqual(replay["new_api_cost_estimate"], [0, 0])
             self.assertFalse(replay["publishable"])

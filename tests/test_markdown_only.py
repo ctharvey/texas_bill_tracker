@@ -98,14 +98,11 @@ class PdfRetiredTests(SuggestionCase):
         queue = self.cache / 'queue.json'
         self.assertTrue(not queue.exists() or json.loads(queue.read_text('utf-8')).get('failed') in ({}, None))
 
-    def test_the_manual_pdf_tools_refuse_a_paid_call(self):
+    def test_the_manual_pdf_tools_cannot_make_a_paid_call(self):
+        # Phase 5 deleted the manual PDF command lines (they already refused --execute), so they have no entry
+        # point left; the only paid path is review_pipeline's --input markdown run.
         for module in (classify_bill, extract_bill):
-            argv = [module.__name__, '--pdf', 'x.pdf', '--bill-id', 'HB1', '--version', 'introduced',
-                    '--source-url', 'ftp://ftp.legis.state.tx.us/bills/x', '--execute']
-            with patch.object(sys, 'argv', argv), contextlib.redirect_stderr(io.StringIO()) as err, \
-                    self.assertRaises(SystemExit):
-                module.main()
-            self.assertIn('PDF reviews are retired', err.getvalue())
+            self.assertFalse(hasattr(module, 'main'), module.__name__)
 
 
 def pipeline_boundary(case, cache_dir, daily, run):
