@@ -26,14 +26,15 @@ a **view-only link**, safe to share, and an **edit link**, which works like a pa
 their *view-only* link (Watchlist page, "Copy view-only link"). Never ask for the edit link.
 
 Read it only through the watchlist feed: `GET https://billatlas.org/api/sync/feed/<key>.xml` (RSS of every
-watched bill's recorded actions). The feed accepts view-only keys and answers 404 for an edit key, so if it 404s,
+watched bill's recorded actions and published reviews). The feed accepts view-only keys and answers 404 for an edit key, so if it 404s,
 tell the person they may have shared their private edit link and should copy the view-only one instead. Do not
 send keys anywhere else, never store them beyond the task the person gave you, and never create sync links.
 
 ## Limits
 
 Search (`https://agent.billatlas.org/search`) is rate limited per visitor; on HTTP 429, wait and retry. Every other
-file is static and rebuilt hourly, so polling more than once an hour gains nothing.
+file is static: bill data is rebuilt hourly, so polling it more than once an hour gains nothing; review files
+under `/live/luna/` change every few minutes while reviews run.
 
 ## Where to start
 

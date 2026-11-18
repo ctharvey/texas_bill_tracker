@@ -2,11 +2,12 @@
 
 Runs `scripts/sync_service.py` (standard library only) in a locked-down container on the hosting network
 `edge-bills`, which only the shared gateway and this container join. The gateway route and network belong to
-cth.hosting (`gateway/sites.d/07-bills.ctharvey.me.caddy`, `docs/gateway-migration.md`).
+cth.hosting (`gateway/sites.d/09-billatlas.org.caddy`; `07-bills.ctharvey.me.caddy` serves the old name;
+`docs/gateway-migration.md`).
 
 Layout on the VPS (root-owned except the database directory):
 
-- `/srv/sites/texas-bill-atlas/sync/compose.yaml` - this file's copy.
+- `/srv/sites/texas-bill-atlas/sync/compose.yaml` - a copy of `deploy/sync/compose.yaml`.
 - `/srv/sites/texas-bill-atlas/sync/sync.env` - `PYTHON_IMAGE` (pinned digest), `SYNC_USER` (uid:gid of
   texas-bill-atlas), `SYNC_APP` (the extracted release below). No secrets.
 - `/srv/sites/texas-bill-atlas/sync/app/<commit>/scripts/` - the whole `scripts/` folder of that main commit, so moving
@@ -15,7 +16,7 @@ Layout on the VPS (root-owned except the database directory):
   `mkdir app/<commit> && tar -xf /tmp/sync-app.tar -C app/<commit>`. Releases extracted before this layout (flat files
   directly in `app/<commit>/`) only work with the previous compose command, `/app/sync_service.py`.
 - `/var/lib/texas-bill-atlas/sync/` - SQLite database, mode 0700, owned by texas-bill-atlas. It holds key hashes,
-  watchlists, followed legislators' member codes and saved searches only. There is no scheduled backup. A one-off
+  watchlists, filters, followed legislators' member codes, saved searches and the theme choice only. There is no scheduled backup. A one-off
   backup is taken before each deploy that touches sync (below); people also keep their lists on each device.
 
 Backup (before any sync deploy): copy `scripts/sync_backup.py` from the reviewed commit, then
