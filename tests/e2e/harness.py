@@ -63,6 +63,12 @@ def capture_info() -> dict:
     return json.loads(CAPTURE.read_text("utf-8")) if CAPTURE.is_file() else {"files": {}}
 
 
+class _Server(ThreadingHTTPServer):
+    # A page load opens about 50 module requests at once. The default listen backlog (5) refused some of them under
+    # parallel runs (ECONNREFUSED), and a refused module leaves the app unstarted: a 20 s selector timeout.
+    request_queue_size = 128
+
+
 class Site:
     """One running site. `misses` lists live/ paths the page asked for that the capture does not hold."""
 
@@ -77,7 +83,7 @@ class Site:
             self.digest = build_bundle(self.root)
         self.recorded = capture_info()["files"]
         self.misses: list[str] = []
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), partial(self._handler(), directory=str(self.root)))
+        self.server = _Server(("127.0.0.1", 0), partial(self._handler(), directory=str(self.root)))
         self.port = self.server.server_address[1]
         self.base = f"http://127.0.0.1:{self.port}/"
         self.new_sync_store()
