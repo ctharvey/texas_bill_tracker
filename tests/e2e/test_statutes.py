@@ -55,7 +55,7 @@ def test_section_page_groups_bills_with_identical_wording(device):
     expect(versions).to_have_count(4)
     same = versions.filter(has_text="same wording")
     expect(same).to_have_count(1)
-    text = same.inner_text()
+    text = same.text_content()  # A long group folds bills after the third into "and 2 more".
     for number in ("HB 110", "HB 132", "HB 856", "HB 972", "HB 1051"):
         assert number in text
     for number in ("HB 246", "SB 253", "SB 295"):
@@ -71,7 +71,7 @@ def test_side_by_side_defaults_to_current_law_against_a_version(device):
     page = open_section(device)
     left, right = pick_texts(page)
     assert left.startswith("Current law, as quoted in HB 110")
-    assert right.startswith("HB 110 = HB 132 = HB 856 = HB 972 = HB 1051 · amended")
+    assert right.startswith("HB 110 and 4 other bills · amended")
     legend = page.locator(".law-legend").inner_text()
     assert re.search(r"\d+ of \d+ parts? differs?", legend)
     expect(page.locator(".law-compare .law-row:not(.law-head)").first).to_be_visible()

@@ -119,3 +119,30 @@ test('a section no bill changes says so, and its title is not read twice', () =>
   assert.match(html, /no bill changes it yet/);
   assert.doesNotMatch(html, /every bill that changes it|<h2>/);
 });
+
+test('proposals on one subject in several wordings are compared, the most shared wording first', async () => {
+  const key = 'HR 32.351';
+  const ids = ['HB101', 'HB102', 'HB138', 'HB141', 'SB31'];
+  state.bills = [...ids, 'HB363'].map(id => bill(id, 'Relating to Medicaid expansion.'));
+  const pairs = [...ids, 'HB363'].map(id => [id, 'n']);
+  state.statutes = index({[key]: {h: 'EXPANDED ELIGIBILITY', b: pairs}}, Object.fromEntries(pairs.map(([id]) => [id, {v: 'I', n: 1, u: 0}])));
+  state.statutes.codes.HR = 'Human Resources Code';
+  state.statuteCompare = null;
+  const text = ['<ins>Sec. 32.351. EXPANDED ELIGIBILITY. (a) The commission shall provide medical assistance.</ins>'];
+  const more = ['<ins>Sec. 32.351. EXPANDED ELIGIBILITY. (a) The commission shall provide medical assistance. The commission may not require work.</ins>'];
+  const entry = (id, paragraphs) => ({bill: id, kind: 'add', version: 'I', version_name: 'Introduced', paragraphs});
+  const draw = await page(key, {format: 'texas-bill-statute-section-v1', key, entries: [...ids.map(id => entry(id, text)), entry('HB363', more)]});
+  let html = draw();
+  assert.match(html, /6 bills propose this new section in 2 versions/);
+  assert.doesNotMatch(html, /unrelated subjects/);
+  assert.match(main(html), /<h3>HB 101 and 4 other bills → HB 363<\/h3>/);
+  assert.match(main(html), /class="law-in">may<\/mark>/, 'the sentence only HB 363 has is marked');
+  // The page title is the shared heading, so no card repeats it; the long group folds its bills.
+  assert.doesNotMatch(bar(html), /law-pick-head/);
+  assert.match(bar(html), /<summary>and 2 more<\/summary>/);
+  assert.match(bar(html), /aria-label="Show HB 101 and 4 other bills"/);
+  // Picking the shared wording sets it against the other one.
+  state.statuteCompare.right = 'HB101';
+  html = draw();
+  assert.match(main(html), /<h3>HB 363 → HB 101 and 4 other bills<\/h3>/);
+});

@@ -271,6 +271,7 @@ a.bill-number:hover{text-decoration:underline}
 .law-version.active{border-color:var(--teal);box-shadow:inset 3px 0 0 var(--teal)}
 .law-pick-bills{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline}
 .law-pick-bills a{position:relative;z-index:1}
+.law-more-bills{display:inline;position:relative;z-index:1;font-size:var(--fs-xs)}.law-more-bills summary{display:inline;cursor:pointer;color:var(--teal)}.law-more-bills[open] summary{margin-right:6px}
 .law-pick-head{font-size:var(--fs-sm);line-height:1.35}
 .law-pick-btn{all:unset;font-size:var(--fs-xs);color:var(--muted);line-height:1.45;cursor:pointer}
 .law-pick-btn::after{content:"";position:absolute;inset:0;border-radius:inherit}
@@ -307,6 +308,7 @@ mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;
 .law-same .law-cell{color:var(--muted)}
 .law-single{border:1px solid var(--line);border-radius:calc(8px*var(--rs));padding:10px 14px;background:var(--white);font-size:var(--fs-sm);line-height:1.6}
 @media(max-width:760px){
+  .law-section-head{flex-direction:column;align-items:flex-start;gap:4px}
   .law-picks{grid-template-columns:1fr}.law-pick{grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px}
   .law-legend-long{display:none}.law-legend-short{display:inline}.law-legend{margin:8px 0}
   /* The section head carries the title, so the page heading is kept for screen readers only (law text sooner). */
