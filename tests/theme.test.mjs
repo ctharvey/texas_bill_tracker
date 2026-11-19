@@ -16,7 +16,7 @@ test('setting a theme keeps remembered filters, and a filter save keeps the them
   assert.deepEqual(withTheme({filters}, 'ranch'), {filters, theme: 'ranch'});
   assert.deepEqual(withTheme(null, 'granite'), {theme: 'granite'});
   assert.deepEqual(withTheme(['x'], 'nope'), {theme: DEFAULT_THEME});
-  const app = read('src/app.js');
+  const app = read('src/core/location.js');
   assert.match(app, /writeJson\(prefsKey,\{\.\.\.keptPrefs\(\),filters:pickFilters\(state\)\}\)/);
 });
 
