@@ -22,6 +22,8 @@ import {aiChatLinks, agentUrl} from './features/ai/model.js';
 import {setupThemePicker, setupModePicker, setTheme, savedTheme, applyTheme, applyMode} from './features/theme/view.js';
 import {TUMBLEWEED, noticeSearch, setupEasterEggs} from './features/easter/view.js';
 import {state} from './core/state.js';
+import {shortDate, dateText, stampText, unique, safeHref} from './core/format.js';
+import {billHref, memberHref} from './core/links.js';
 import {$, esc, toast} from './core/dom.js';
 import {timeoutSignal, loadShardedMap, httpError} from './core/net.js';
 import {registerView, setFallbackView, viewHeading, renderView} from './core/router.js';
@@ -52,28 +54,8 @@ function previousVisit(){
   return visit.prev;
 }
 
-// One formatter each, remembered per day: search formats two dates for every bill on every keystroke, and building a
-// formatter per call (toLocaleDateString with options) was most of the typing cost on a slow CPU.
-const dayFormat = (options, empty) => {
-  const format = new Intl.DateTimeFormat('en-US', {...options, timeZone: 'UTC'}), seen = new Map();
-  return iso => {
-    if (!iso) return empty;
-    const day = String(iso).slice(0,10);
-    let text = seen.get(day);
-    if (text === undefined) {
-      const date = new Date(`${day}T12:00:00Z`);  // a malformed day ("2026-13-45") shows as empty, not a thrown RangeError
-      text = Number.isNaN(date.getTime()) ? empty : format.format(date); seen.set(day, text);
-    }
-    return text;
-  };
-};
-const shortDate = dayFormat({month:'short',day:'numeric'}, '');
-const dateText = dayFormat({month:'short',day:'numeric',year:'numeric'}, 'Not available');
-const stampText = iso => iso ? new Date(iso).toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Chicago'})+' CT' : 'Unknown';
-const unique = a => [...new Set(a)];
 
 const realAgencies = b => b.agencies.filter(a=>a.id!==SCOPE_AGENCY_ID);
-const safeHref = value => {try{const u=new URL(String(value));return u.protocol==='https:'||u.protocol==='http:'?u.href:''}catch{return ''}};
 const NAME_TO_AGENCY_ID = new Map(AGENCIES.flatMap(a=>[[a.name.toLowerCase(),a.id],[a.id.toLowerCase(),a.id]]));
 
 const normalized=normalizeBill;
@@ -281,12 +263,6 @@ function currentHash(){
 function currentUrl(){
   return buildUrl(state.view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey});
-}
-
-// A bill's page address (/bill/<ID>), so a bill title is a real link (new tab, copy link) as well as a click target.
-function billHref(id){
-  return buildUrl('bill',{},{list:state.sharedMode==='link'?state.sharedList:null,bill:id,
-    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null});
 }
 
 // Opens a bill's page with a history entry, remembering where it was opened from (not when moving bill to bill).
@@ -1304,7 +1280,6 @@ function nearMarkup(){
 }
 
 // ---- Member page (#member?code=A1234): one legislator, their district and their bills by role ----
-const memberHref=code=>buildHash('member',{},{member:code});
 const memberTitle=m=>`${m.chamber==='house'?'Rep.':'Sen.'} ${m.full_name||m.display_name}`;
 // A name as the bill lists it, linked to the member page only when the roster places that exact (chamber, name).
 const rosterMember=(chamber,name)=>{const m=state.roster?.members?.[`${chamber}|${name}`];return m&&typeof m==='object'?m:null};
