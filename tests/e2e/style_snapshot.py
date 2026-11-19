@@ -9,7 +9,8 @@ commits' trees on ubuntu-server and compares the results. It snapshots the tree 
 A snapshot holds, for every page state below at both viewports, each element's (and its drawn ::before, ::after,
 ::marker and ::placeholder) full computed style as a hash, under light and dark mode and every colour theme. States
 open with the stored fixture data (watchlist, follows, saved searches, near-you location, sync link), so the lists
-are drawn. compare names the states and elements that differ; with --trees it re-runs the first few differing states
+are drawn. Not covered: the easter-egg layers (armadillo, petals, warbler and mockingbird flights, gavel), which only
+appear on chance or on a gesture. compare names the states and elements that differ; with --trees it re-runs the first few differing states
 in both trees and prints the differing properties.
 """
 
@@ -32,6 +33,7 @@ MODES_SHOWN = ("light", "dark")
 PALETTES = ("atlas", "granite", "lone-star", "bluebonnet", "ranch", "warbler")  # atlas = no data-palette
 IGNORED_CONSOLE = ("Failed to load resource",)
 DETAIL_STATES = 5
+SEEN_KEYS = ("tx-bill-atlas-armadillo-seen", "tx-bill-atlas-sine-die-seen", "tx-bill-atlas-warbler-flew")
 
 
 def _click(selector):
@@ -176,6 +178,9 @@ class _Worker:
             context.route("https://fonts.googleapis.com/**", lambda r: r.fulfill(status=200, body="", content_type="text/css"))
             context.route("https://fonts.gstatic.com/**", lambda r: r.fulfill(status=404, body=""))
             context.route("https://geocoding.geo.census.gov/**", lambda r: r.abort())
+            # The random and one-per-session decorations (armadillo, sine die petals, warbler flight) would land in some
+            # snapshots and not others; mark them seen, as the app does after showing them once.
+            context.add_init_script("for (const k of %s) sessionStorage.setItem(k, '1');" % json.dumps(SEEN_KEYS))
             if stored:
                 context.add_init_script("for (const [k, v] of Object.entries(%s)) localStorage.setItem(k, v);"
                                         % json.dumps(self.local))
