@@ -52,9 +52,11 @@ class ConcurrentWorkerTests(FlexLoopCase):
         rows = self.ledger_rows()
         self.assertEqual(sorted((r['state'], r.get('held', False)) for r in rows),
                          [('returned', False)] * (len(self.ids) - 1) + [('returned', True)])
-        # The next run, whatever its worker count, never resends HB1 and keeps it held.
+        # The next run, whatever its worker count, never resends HB1 and keeps it held. (OK carries no output, so
+        # the other bills' first passes fail validation; their bounded retries are tested elsewhere.)
         self.sdk.handler = lambda bill, n: self.fail('Must not resend a held call')
-        queue = self.run_workers(workers=3)
+        with patch.object(pipeline.classification, 'MAX_FIRST_PASS_RETRIES', 0):
+            queue = self.run_workers(workers=3)
         self.assertEqual(sorted(self.sdk.calls), sorted(self.ids))
         self.assertEqual(queue['failed']['HB1']['stage'], 'held')
 

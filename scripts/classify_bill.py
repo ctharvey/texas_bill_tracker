@@ -10,6 +10,14 @@ import extract_bill as detailed
 ROOT = detailed.ROOT
 MODEL = "gpt-6-luna"
 VALIDATOR_REVISION = 3  # bump when validate_result changes: every reviewed bill is then revisited under it
+FIRST_PASS_TOKENS = 12000
+# A first pass that was cut off or whose summary excerpt could not be verified is sent again, changed, at most this
+# many times per text. Each retry is a different request (more output room, a retry note), so the response cache can
+# never replay the failed answer.
+MAX_FIRST_PASS_RETRIES = 2
+RETRY_NOTE = ("\nRETRY {attempt}: an earlier review of this bill was cut off or quoted an excerpt that does not appear "
+              "verbatim in the cited span. Keep every explanation brief, and copy each quote exactly, character for "
+              "character, from the span it cites.")
 
 
 def load_policy_tags(path: Path = ROOT / "src/taxonomy.js") -> list[str]:
@@ -53,7 +61,8 @@ def load_statutory_context(document: dict, path: Path = ROOT / "scripts/statutor
     return context
 
 
-def build_request(document: dict, registry: list[dict]) -> dict:
+def build_request(document: dict, registry: list[dict], attempt: int = 0) -> dict:
+    """`attempt` 0 is the normal first pass; 1..MAX_FIRST_PASS_RETRIES are retries (see RETRY_NOTE)."""
     schema = json.loads((ROOT / "scripts/classification_schema.json").read_text("utf-8"))
     tags = load_policy_tags()
     schema["properties"]["policy_tags"]["items"]["properties"]["tag"]["enum"] = tags
@@ -62,13 +71,15 @@ def build_request(document: dict, registry: list[dict]) -> dict:
     if document.get("input_format") == "markdown":
         instructions += "\n" + (ROOT / "scripts/markdown_input_note.txt").read_text("utf-8")
     request = detailed.build_request(document, registry, schema=schema, instructions=instructions)
-    request.update(model=MODEL, max_output_tokens=12000)
+    request.update(model=MODEL, max_output_tokens=FIRST_PASS_TOKENS * (1 + attempt))
     request["text"]["format"]["name"] = "texas_bill_classification_v1"
     # Bill-dependent definitions stay after the shared prompt-cache breakpoint.
     request["input"][1]["content"][0]["text"] += (
         "\nREVIEWED STATUTORY DEFINITIONS (PARTIAL COVERAGE):\n"
         + json.dumps([{k: v for k, v in definition.items() if k != "verified_on"}
                       for definition in load_statutory_context(document)], sort_keys=True, ensure_ascii=False))
+    if attempt:
+        request["input"][1]["content"][0]["text"] += RETRY_NOTE.format(attempt=attempt)
     return request
 
 
@@ -216,7 +227,7 @@ def response_cost(raw: dict) -> list[float] | None:
 
 
 def classify(document: dict, registry: list[dict], cache_root: Path, *, execute=False, sender=None,
-             cache=None) -> dict:
+             cache=None, attempt: int = 0) -> dict:
     return detailed.extract(document, registry, cache_root, execute=execute, sender=sender,
-                            request=build_request(document, registry), validator=validate_result,
+                            request=build_request(document, registry, attempt), validator=validate_result,
                             cost_estimator=response_cost, cache=cache)

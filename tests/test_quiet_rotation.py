@@ -54,8 +54,8 @@ class QuietRotation(StagesCase):
     def test_a_prompt_change_brings_every_bill_back(self):
         real = classification.build_request
 
-        def changed_prompt(document, registry):
-            request = real(document, registry)
+        def changed_prompt(document, registry, attempt=0):
+            request = real(document, registry, attempt)
             request['input'][0]['content'][0]['text'] += '\nREVISED PROMPT'
             return request
         mark = len(self.sdk.requests)

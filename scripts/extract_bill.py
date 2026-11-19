@@ -440,5 +440,9 @@ def extract(document: dict, registry: list[dict], cache_root: Path, *, execute: 
     except (ValueError, KeyError, TypeError, jsonschema.ValidationError) as error:
         report["errors"] = ["Response failed validation: " + type(error).__name__]
         report["audit_recommended"] = True
+        if raw.get("status") != "completed":
+            # The provider's own reason (e.g. max_output_tokens), never a message: the review retry reads it.
+            report["incomplete_reason"] = str((raw.get("incomplete_details") or {}).get("reason")
+                                              or raw.get("status"))[:80]
     atomic_json(cache_root / "results" / (key + ".json"), report)
     return report

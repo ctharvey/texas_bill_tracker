@@ -481,11 +481,13 @@ def spend_marker(budget) -> float:
 
 
 def run_document(document, registry, cache_root, budget, execute=False, max_questions=3, question_effort="high",
-                 ask_questions=True, first_pass=None):
+                 ask_questions=True, first_pass=None, attempt=0):
     # `first_pass`: a stage-2 version update (review_stages.version_update) instead of a fresh classification.
+    # `attempt`: a first-pass retry (classify_bill.build_request); recorded on the bundle when not 0.
     first = first_pass() if first_pass is not None else classification.classify(
         document, registry, cache_root, execute=execute, sender=budget.send,
-        cache=getattr(budget, "response_cache", None))
+        cache=getattr(budget, "response_cache", None), attempt=attempt)
+    stamp = {"first_pass_attempt": attempt} if attempt else {}
     if "result" not in first:
         if first.get("action") != "not_submitted":
             status = "needs_review"
@@ -495,7 +497,7 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
             status = "needs_review"  # Per-bill obstacle; later bills still run.
         else:
             status = "deferred"
-        return {"bill_id": document["bill_id"], "status": status, "first_pass": first, "publishable": False}
+        return {"bill_id": document["bill_id"], "status": status, "first_pass": first, "publishable": False, **stamp}
     original = first["result"]
     questions = questions_for(original, document, first)
     derived, resolutions, pending, sources = copy.deepcopy(original), [], [], []
@@ -556,7 +558,7 @@ def run_document(document, registry, cache_root, budget, execute=False, max_ques
               "result": derived, "validation": validation, "questions": questions, "resolutions": resolutions,
               "pending_questions": pending, "first_pass_request_key": first["request_key"],
               "status": "needs_review" if pending or validation["errors"] else "ready_for_review",
-              "publishable": False, "stop_run": stop_run, "retry_after": retry_after}
+              "publishable": False, "stop_run": stop_run, "retry_after": retry_after, **stamp}
     if "changes" in first:
         bundle["changes"] = first["changes"]
     return bundle
@@ -1308,6 +1310,70 @@ PARKED_STAGES = ('held', 'processing')
 PARK_RETRY_S = 6 * 3600
 
 
+def review_text_hash(bundle) -> str | None:
+    if not isinstance(bundle, dict):
+        return None
+    return (bundle.get("document") or {}).get("text_hash") or (bundle.get("first_pass") or {}).get("text_hash")
+
+
+def verified_claims(bundle: dict) -> set[str]:
+    return {c["claim"] for c in (bundle.get("validation") or {}).get("verified_citations", [])
+            if c.get("status") == "resolved"}
+
+
+def first_pass_retry_reason(bundle) -> str | None:
+    """Why a fresh first pass is worth another, changed request: 'incomplete' (the answer was cut off or failed
+    validation) or 'summary_unverified' (the page would show no summary). None when nothing is wrong, the call was
+    never made, or the review came from a version update or a companion (their requests are built elsewhere)."""
+    if not isinstance(bundle, dict) or bundle.get("version_update") or bundle.get("reused_from"):
+        return None
+    if not isinstance(bundle.get("result"), dict):
+        return "incomplete" if (bundle.get("first_pass") or {}).get("errors") else None
+    return None if "summary" in verified_claims(bundle) else "summary_unverified"
+
+
+def review_rank(bundle) -> tuple:
+    """Higher is better: a result, then a verified summary, then more verified claims, then fewer errors."""
+    if not isinstance(bundle, dict) or not isinstance(bundle.get("result"), dict):
+        return (0,)
+    verified = verified_claims(bundle)
+    return (1, "summary" in verified, len(verified), -len((bundle.get("validation") or {}).get("errors", [])))
+
+
+def first_pass_attempt(queue: dict, bill_id: str, stored, text_hash: str | None) -> int:
+    """The first-pass request a visit builds for this text: the next retry while one is owed
+    (queue['first_pass_retry'], bound to the text it was recorded for), else the attempt behind the stored review,
+    so a revisit rebuilds the identical request and reads its cached answer."""
+    entry = (queue.get("first_pass_retry") or {}).get(bill_id)
+    if (isinstance(entry, dict) and text_hash and entry.get("text_hash") == text_hash and entry.get("reason")
+            and isinstance(entry.get("tried"), int) and entry["tried"] < classification.MAX_FIRST_PASS_RETRIES):
+        return entry["tried"] + 1
+    if text_hash and review_text_hash(stored) == text_hash and isinstance(stored.get("first_pass_attempt"), int):
+        return stored["first_pass_attempt"]
+    return 0
+
+
+def note_first_pass(queue: dict, bill_id: str, bundle: dict, effective: dict) -> bool:
+    """Record what this visit's first pass leaves owed; True while another retry is due. `effective` is the review
+    now standing for this text (the new bundle, or an earlier better one kept in its place). The count of tries
+    only grows for the same text, so a revisit of a cached answer never resets it."""
+    retries = queue.setdefault("first_pass_retry", {})
+    text_hash = review_text_hash(bundle)
+    if bundle.get("version_update") or bundle.get("reused_from") or not text_hash:
+        retries.pop(bill_id, None)
+        return False
+    entry = retries.get(bill_id)
+    tried = bundle.get("first_pass_attempt", 0)
+    if isinstance(entry, dict) and entry.get("text_hash") == text_hash and isinstance(entry.get("tried"), int):
+        tried = max(tried, entry["tried"])
+    reason = first_pass_retry_reason(effective)
+    if reason is None:
+        retries.pop(bill_id, None)
+        return False
+    retries[bill_id] = {"text_hash": text_hash, "tried": tried, "reason": reason}
+    return tried < classification.MAX_FIRST_PASS_RETRIES
+
+
 def queue_candidates(ids: list[str], queue: dict, limit: int | None = None, first_pass_first: bool = False,
                      now: float | None = None) -> list[str]:
     failed = queue.get('failed', {})
@@ -1366,7 +1432,9 @@ def quiet_bills(args, queue: dict, candidates: list[str], plans: dict, text_dir:
             if document.get("text_sha256") != (stored.get("document") or {}).get("text_sha256"):
                 continue
             key = stored.get("first_pass_request_key")
-            if not stored.get("version_update") and key != key_of(classification.build_request(document, registry)):
+            attempt = first_pass_attempt(queue, bill_id, stored, document.get("text_hash"))
+            if (not stored.get("version_update")
+                    and key != key_of(classification.build_request(document, registry, attempt))):
                 continue
         except Exception:  # noqa: BLE001 - no readable text or request: visit it, as before
             continue
@@ -2263,7 +2331,8 @@ def main():
             if plan and plan["review"] == "revisit" and stored.get("version_update"):
                 key = stored.get("first_pass_request_key")  # the revisit rebuilds the identical update request
             else:
-                key = key_of(classification.build_request(document, registry))
+                attempt = first_pass_attempt(queue, bill_id, stored, document.get("text_hash"))
+                key = key_of(classification.build_request(document, registry, attempt))
             return not answered(args.cache_dir, key)
 
         # Bills the review pass still owes a first pass, counted once here and removed as each review lands, so the
@@ -2402,13 +2471,19 @@ def main():
                                 document, old_document, update["previous"], registry, args.cache_dir,
                                 execute=args.execute, sender=budget.send, cache=getattr(budget, "response_cache", None),
                                 diff=update.get("diff"))
+                    attempt = 0
+                    if not update:
+                        stored = read_json(args.cache_dir / "reviews" / (bill_id + ".json"))
+                        attempt = first_pass_attempt(queue, bill_id, stored, document.get("text_hash"))
                     if plan and plan["review"] == "update" and first_pass_first:
                         ask = False  # a new or revised version's first pass comes first; questions on the next visit
                     bundle = run_document(document, registry, args.cache_dir, budget, args.execute,
                                           question_effort=args.question_effort, ask_questions=ask,
-                                          first_pass=first_pass)
+                                          first_pass=first_pass, attempt=attempt)
                     if update and "result" in bundle:
                         bundle["version_update"] = update
+                    if not update:
+                        bundle["fresh_first_pass"] = True  # read (and dropped) by `handle`: retries apply
                     if plan and plan["fiscal_due"] and "result" in bundle and not bundle.get("stop_run"):
                         fiscal_check(bill_id, bundle, registry)
                     return "bundle", bundle
@@ -2533,8 +2608,24 @@ def main():
                     return False
                 review_path = args.cache_dir / "reviews" / (bill_id + ".json")
                 fiscal = bundle.pop("fiscal_record", None)
-                if "result" in bundle or not review_path.exists():
-                    previous = read_json(review_path)
+                fresh = bundle.pop("fresh_first_pass", False)
+                previous = read_json(review_path)
+                # A retry (or a revisit of an earlier attempt) never replaces a better review of the same text.
+                kept = (fresh and isinstance(previous, dict) and review_text_hash(previous) == review_text_hash(bundle)
+                        and previous.get("first_pass_attempt", 0) != bundle.get("first_pass_attempt", 0)
+                        and review_rank(previous) > review_rank(bundle))
+                # A held question is never retried early: its call cannot be resent, so the bill waits its turn.
+                questions_waiting = any(not q.get('held') and q.get('reason', '').startswith((
+                    'CapacityUnavailable', 'CacheCoolingDown', 'NotSubmitted', 'BudgetExceeded', 'Deferred',
+                    'OutcomeUnresolved')) for q in bundle.get('pending_questions', []))
+                # Questions still owed may yet verify the summary: the first pass is judged once they are done.
+                retry_first_pass = (fresh and not questions_waiting
+                                    and note_first_pass(queue, bill_id, bundle, previous if kept else bundle))
+                if kept:
+                    print(bill_id, "kept its earlier review; first-pass attempt %d was not better"
+                          % bundle.get("first_pass_attempt", 0), flush=True)
+                    fiscal = None
+                elif "result" in bundle or not review_path.exists():
                     if (isinstance(previous, dict) and previous.get("text_rebindings")
                             and (previous.get("document") or {}).get("text_hash")
                             == (bundle.get("document") or {}).get("text_hash")):
@@ -2544,10 +2635,11 @@ def main():
                 if fiscal is not None and "result" in bundle:
                     atomic_json(args.cache_dir / "fiscal" / (bill_id + ".json"), fiscal)
                     print(bill_id, "fiscal check", fiscal["report"].get("status"), flush=True)
-                # A held question is never retried early: its call cannot be resent, so the bill waits its turn.
-                retryable = any(not q.get('held') and q.get('reason', '').startswith((
-                    'CapacityUnavailable', 'CacheCoolingDown', 'NotSubmitted', 'BudgetExceeded', 'Deferred',
-                    'OutcomeUnresolved')) for q in bundle.get('pending_questions', []))
+                retryable = retry_first_pass or questions_waiting
+                if retry_first_pass:
+                    entry = queue["first_pass_retry"][bill_id]
+                    print(bill_id, "first pass %s; retry %d of %d is queued" % (
+                        entry["reason"], entry["tried"] + 1, classification.MAX_FIRST_PASS_RETRIES), flush=True)
                 if retryable and bill_id not in queue['retry']:
                     queue['retry'].append(bill_id)
                 if not retryable and bill_id in queue['retry']:

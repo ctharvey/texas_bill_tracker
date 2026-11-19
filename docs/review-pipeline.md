@@ -12,6 +12,13 @@ only what it can verify. It runs as `texas-bill-review.service` under its own ac
 - **First pass** (`classify_bill.py`): summary, policy tags, affected agencies (direct or inferred), locations,
   groups, major effects, each with quotes. Quotes are matched against the text; unmatched or ambiguous quotes are
   rejected, never fuzzy-matched.
+- **First-pass retries**: a first pass that was cut off (`max_output_tokens`) or failed validation, or whose summary
+  still has no verified quote once its questions are done, is sent again at most twice per text
+  (`MAX_FIRST_PASS_RETRIES`). Each retry is a different request (12,000 more output tokens and a note to quote
+  exactly), so the cache never replays the failed answer. A retry replaces the review only if it is at least as good
+  (a result, then a verified summary, then more verified claims); otherwise the earlier review stays. The debt is kept
+  in `queue.json` (`first_pass_retry`, bound to the text's hash) and the bill stays on the retry list until it is paid
+  or the cap is reached. Version updates and companion reuses are not retried this way.
 - **Follow-up questions**: up to three targeted questions per bill per run for unresolved citations or agencies,
   answered from source-generated options. Official statute chapters are fetched from fixed URLs only and cached
   privately for seven days.
