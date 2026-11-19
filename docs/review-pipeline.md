@@ -19,6 +19,14 @@ only what it can verify. It runs as `texas-bill-review.service` under its own ac
   (a result, then a verified summary, then more verified claims); otherwise the earlier review stays. The debt is kept
   in `queue.json` (`first_pass_retry`, bound to the text's hash) and the bill stays on the retry list until it is paid
   or the cap is reached. Version updates and companion reuses are not retried this way.
+- **Current law** (`--law-context`, off in production for now): a first pass of a text not reviewed before also gets
+  the current law it changes, from `live/law` (`law_context.py`). That is the heading of every chapter the bill
+  repeals, amends, adds to or names (`build_feeds.bill_chapters`; a repealed chapter also lists its section
+  headings), then the current text of each section it amends or repeals and of the sections of each repealed
+  chapter, up to 2,000 characters a section and 20,000 a bill (headings are always kept). Each item has an `L_` id;
+  a quote citing one is accepted only if it appears verbatim in the item's text. The items are stored with the
+  review, and a revisit sends exactly those again, so a weekly law refresh never changes an answered request.
+  Without the flag, and for texts already reviewed without it, every request is unchanged.
 - **Follow-up questions**: up to three targeted questions per bill per run for unresolved citations or agencies,
   answered from source-generated options. Official statute chapters are fetched from fixed URLs only and cached
   privately for seven days.

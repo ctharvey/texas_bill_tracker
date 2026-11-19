@@ -25,6 +25,7 @@ from urllib.request import Request, urlopen
 
 import classify_bill as classification
 import extract_bill as detailed
+import law_context
 import contextlib
 from extraction_cache import (
     AlreadyBilled, ApiStopped, BudgetExceeded, CacheBusy, CacheCoolingDown, CapacityUnavailable, LongContext,
@@ -383,6 +384,7 @@ def resolution_request(question: dict, result: dict, document: dict, sources: li
     materials = [(sid, document['spans'][sid]['text']) for sid in ids if sid in keep]
     materials += [(s['id'], s['text']) for s in sources]
     materials += [(s['id'], s['quote']) for s in classification.load_statutory_context(document)]
+    materials += [(s['id'], s['text']) for s in classification.law_sources(document)]
     for source_id, passage in materials:
         start = 0
         while start < len(passage):
@@ -437,6 +439,7 @@ def resolve(question, result, document, registry, cache_root, budget, execute, s
     external = {x["id"]: x for x in sources}
     external.update({x["id"]: {**x, "text": x["quote"]}
                      for x in classification.load_statutory_context(document)})
+    external.update({x["id"]: x for x in classification.law_sources(document)})
     for e in value["evidence"]:
         if e["span_id"] in external:
             if e["quote"] not in external[e["span_id"]]["text"]:
@@ -619,12 +622,15 @@ def reuse_companion_review(bill_id: str, document: dict, companions: list, cache
                 continue
             sources = [s for r in donor.get("resolutions", []) if r["result"]["status"] == "resolved"
                        for s in r.get("sources", [])]
+            law = (donor.get("document") or {}).get("law_context")
+            # The same text changes the same law: the donor's law citations verify against what it was sent.
+            reused_document = {**document, "law_context": law} if law else document
             schema = classification.build_request(document, registry)["text"]["format"]["schema"]
             result = copy.deepcopy(donor["result"])
             if result.get("bill_id") != donor_id:
                 continue
             result["bill_id"] = bill_id  # The only bill-specific output field; the text is the same.
-            validation = classification.validate_result(result, document, registry, schema,
+            validation = classification.validate_result(result, reused_document, registry, schema,
                                                         donor["first_pass_request_key"], sources=sources)
         except Exception:
             continue
@@ -632,7 +638,7 @@ def reuse_companion_review(bill_id: str, document: dict, companions: list, cache
         if verified(validation) != verified(donor.get("validation") or {}) \
                 or len(validation["errors"]) > len((donor.get("validation") or {}).get("errors", [])):
             continue
-        return {"format": "texas-bill-review-v1", "bill_id": bill_id, "document": document, "result": result,
+        return {"format": "texas-bill-review-v1", "bill_id": bill_id, "document": reused_document, "result": result,
                 "validation": validation, "questions": donor.get("questions", []),
                 "resolutions": donor.get("resolutions", []), "pending_questions": donor.get("pending_questions", []),
                 "first_pass_request_key": donor["first_pass_request_key"], "status": donor.get("status"),
@@ -1316,6 +1322,31 @@ def review_text_hash(bundle) -> str | None:
     return (bundle.get("document") or {}).get("text_hash") or (bundle.get("first_pass") or {}).get("text_hash")
 
 
+def reuse_law_context(document: dict, stored) -> bool:
+    """True when `stored` reviewed this same text; its law items (if any) then go back on the document, so the
+    rebuilt first-pass request is the one that was answered, whatever the weekly law refresh changed since."""
+    if not isinstance(stored, dict) or review_text_hash(stored) != document.get("text_hash"):
+        return False
+    items = (stored.get("document") or {}).get("law_context")
+    if items:
+        document["law_context"] = items
+    return True
+
+
+def attach_law_context(document: dict, stored, markdown_path: Path, law_dir: Path | None) -> None:
+    """--law-context (law_dir set): a first pass of a text not reviewed before gets the current law it changes
+    (law_context.py). A text already reviewed keeps exactly what it was sent, law items or none."""
+    if reuse_law_context(document, stored) or law_dir is None:
+        return
+    try:
+        items = law_context.build(markdown_path.read_text("utf-8"), law_dir)
+    except (OSError, ValueError, KeyError) as error:
+        print(document.get("bill_id"), "law context unavailable:", type(error).__name__, error, flush=True)
+        return
+    if items:
+        document["law_context"] = items
+
+
 def verified_claims(bundle: dict) -> set[str]:
     return {c["claim"] for c in (bundle.get("validation") or {}).get("verified_citations", [])
             if c.get("status") == "resolved"}
@@ -1433,6 +1464,7 @@ def quiet_bills(args, queue: dict, candidates: list[str], plans: dict, text_dir:
                 continue
             key = stored.get("first_pass_request_key")
             attempt = first_pass_attempt(queue, bill_id, stored, document.get("text_hash"))
+            reuse_law_context(document, stored)
             if (not stored.get("version_update")
                     and key != key_of(classification.build_request(document, registry, attempt))):
                 continue
@@ -1512,6 +1544,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--questions-inline", action="store_true",
                         help="Ask a new bill's follow-up questions right after its first pass (default: first passes "
                              "for every unseen bill come first; questions run on the bill's next visit)")
+    parser.add_argument("--law-context", action="store_true",
+                        help="Send a text's first pass the current law it changes or names (from live/law); texts "
+                             "already reviewed keep the request they were answered with")
+    parser.add_argument("--law-dir", type=Path, default=None,
+                        help="Copy of current law for --law-context (default: law/ beside the text folder)")
     return parser
 
 
@@ -2235,6 +2272,7 @@ def main():
             ids, queue, args.max_bills, first_pass_first=first_pass_first)
         queue.setdefault('retry', []); queue.setdefault('failed', {})
         text_dir = args.text_dir or args.snapshot.parent / "text"
+        law_dir = args.law_dir or text_dir.parent / "law"
         history_dir = args.history_dir or args.snapshot.parent / "history"
         if args.input == "markdown" and args.execute:
             # Before planning: a re-rendered but identical text must neither trip the converter breaker nor be
@@ -2332,6 +2370,7 @@ def main():
                 key = stored.get("first_pass_request_key")  # the revisit rebuilds the identical update request
             else:
                 attempt = first_pass_attempt(queue, bill_id, stored, document.get("text_hash"))
+                reuse_law_context(document, stored)
                 key = key_of(classification.build_request(document, registry, attempt))
             return not answered(args.cache_dir, key)
 
@@ -2475,6 +2514,10 @@ def main():
                     if not update:
                         stored = read_json(args.cache_dir / "reviews" / (bill_id + ".json"))
                         attempt = first_pass_attempt(queue, bill_id, stored, document.get("text_hash"))
+                        if args.input == "markdown":
+                            attach_law_context(document, stored,
+                                               text_dir / bill_id / ((plan["code"] if plan else "I") + ".md"),
+                                               law_dir if args.law_context else None)
                     if plan and plan["review"] == "update" and first_pass_first:
                         ask = False  # a new or revised version's first pass comes first; questions on the next visit
                     bundle = run_document(document, registry, args.cache_dir, budget, args.execute,

@@ -837,6 +837,85 @@ def bill_statutes(markdown: str) -> tuple[dict[str, dict], int]:
     return sections, unparsed
 
 
+# Whole chapters a bill repeals, amends, adds or names. Not part of live/statutes/ (sections only); the review reads it.
+CHAPTER_RANK = {"repeal": 4, "amend": 3, "add": 2, "cited": 1}
+_CHAPTER_LIST = re.compile(r"\bChapters? ((?:\d+[A-Z]?(?:, and |, or |, | and | or )?)+)")
+_CHAPTER_NUM = re.compile(r"\d+[A-Z]?")
+_OTHER_CODE_AFTER = re.compile(r"^,? (?:of )?(?:the )?" + _CODE_RE.pattern)
+
+
+_SESSION_LAW_AFTER = re.compile(r"^,? ?(?:\([HS]\.|Acts\b|of the Acts\b)")  # "Chapter 377 (H.B. 5), Acts of ..."
+_PART_BEFORE = re.compile(r"(?:\b(?:Subchapters?|Subsections?|Subtitles?|Titles?|Parts?|Articles?) [0-9A-Z-]+"
+                          r"(?:(?:, and |, or |, | and | or )[0-9A-Z-]+)*, |\bprovisions of (?:the )?)$")
+_PART_AFTER = re.compile(r"^,? (?:Subchapters?|Subsections?|Parts?|Articles?) [0-9A-Z-]+")
+
+
+def _chapter_refs(text: str, default_code: str | None, whole: bool = False) -> list[tuple[str, str, bool]]:
+    """(code, chapter, part) for each "Chapter N" list in a line: the code named right after the list, else the
+    default (an unqualified chapter in a code's own text is that code's chapter). `part` is True when the list names
+    only part of the chapter ("Subchapter T, Chapter 403"). Session-law chapters ("Chapter 377 (H.B. 5), Acts of the
+    88th Legislature") are not code chapters and are skipped."""
+    found = []
+    for m in _CHAPTER_LIST.finditer(text):
+        listed = re.sub(r"(?:, and |, or |, | and | or )$", "", m.group(1))
+        after = text[m.start(1) + len(listed):]
+        if _SESSION_LAW_AFTER.match(after):
+            continue
+        part = bool(_PART_BEFORE.search(text[:m.start()]) or _PART_AFTER.match(after))
+        after = _PART_AFTER.sub("", after)  # "Chapter 29, Subchapter J, Education Code"
+        named = _OTHER_CODE_AFTER.match(after)
+        code = CODE_ABBR[named.group(1)] if named else default_code
+        if code:
+            found += [(code, n.upper(), part) for n in _CHAPTER_NUM.findall(listed)]
+    return found
+
+
+def bill_chapters(markdown: str) -> dict[str, str]:
+    """{"GV 2271": repeal|amend|add|cited} for the chapters one bill text repeals, amends or adds as a whole, or
+    names: a SECTION clause on a chapter ("Chapter 2271, Government Code, is repealed"), the items of a repealer list
+    ("The following chapters of the Government Code are repealed: (1) Chapter 2271; ..."), and "Chapter N" in an
+    amended or added section's text (that code's chapter unless another code is named)."""
+    lines = [line for line in markdown.split("\n") if line.strip()]
+    chapters: dict[str, str] = {}
+
+    def note(code: str, number: str, kind: str):
+        key = f"{code} {number}"
+        if CHAPTER_RANK[kind] > CHAPTER_RANK.get(chapters.get(key, ""), 0):
+            chapters[key] = kind
+
+    i = 0
+    while i < len(lines):
+        if not _HEADING_LINE.match(lines[i]) or i + 1 >= len(lines):
+            i += 1
+            continue
+        end = i + 2
+        while end < len(lines) and not _HEADING_LINE.match(lines[end]):
+            end += 1
+        clause, body = plain_text(lines[i + 1]).replace(" & ", " and "), lines[i + 2:end]
+        parsed = parse_clause(lines[i + 1])
+        kind, code = parsed["kind"], parsed["code"]
+        if kind == "repealer":
+            for line in body:
+                for item_code, number, part in _chapter_refs(plain_text(line).replace(" & ", " and "), code):
+                    note(item_code, number, "amend" if part else "repeal")
+        elif code and kind in ("chapter", "amend", "add", "repeal"):
+            verb = _VERB.search(clause)
+            path = clause[:verb.start()] if verb else clause
+            action = {"repealed": "repeal", "added": "add"}.get(verb.group(1) if verb else "", "amend")
+            for item_code, number, part in _chapter_refs(path, code):
+                note(item_code, number, "amend" if part and action == "repeal" else action)
+            adding = re.search(r"\badding Chapters? ([0-9A-Z, and]+)", clause[verb.end():] if verb else "")
+            for number in _CHAPTER_NUM.findall(adding.group(1)) if adding else []:
+                note(code, number.upper(), "add")
+            if kind != "repeal":
+                for line in body:
+                    proposed = plain_text(re.sub(r"\\\[<del>.*?</del>\\\]|<del>.*?</del>", "", line))
+                    for item_code, number, _ in _chapter_refs(proposed, code):
+                        note(item_code, number, "cited")
+        i = end
+    return chapters
+
+
 def _latest_text(text_dir: Path, bill_id: str) -> tuple[dict, str] | None:
     try:
         index = json.loads((text_dir / bill_id / "index.json").read_text("utf-8"))
