@@ -33,7 +33,7 @@ CSV import accepts columns such as `id`, `title`, `caption`, `author`, `status`,
 | `members.json` | `texas-bill-members-v1` | members job |
 | `history/<BILL>/history.json`, `documents.json`, `witnesses-<H\|S>.json` | `texas-bill-history-v1`, `-documents-v1`, `-witnesses-v1` | data run |
 | `text/<BILL>/<code>.md`, `index.json` | Markdown, one paragraph per line, `### SECTION n.` headings, `<ins>`/`<del>` | data run |
-| `statutes/index.json`, `statutes/sections/` | `texas-bill-statutes-v1` (kinds: `m` amends, `n` adds, `r` repeals; `sections[key].f` = `{bill: day}` for pairs first seen after `first_seen_from`, copied from `first-seen.json`) | data run |
+| `statutes/index.json`, `statutes/sections/` | `texas-bill-statutes-v1` (kinds: `m` amends, `n` adds, `r` repeals; `sections[key].h` = the section's heading: as current law reads when any bill amends or repeals it, else only when every adding bill gives the same one; `sections[key].hb` = `{bill: heading}` for adding bills whose own heading differs; `sections[key].f` = `{bill: day}` for pairs first seen after `first_seen_from`, copied from `first-seen.json`) | data run |
 | `statutes/first-seen.json` | `texas-bill-statutes-first-seen-v1`: `{from, pairs: {key: {bill: day or null}}}`, the Chicago day of the data run that first indexed each pair (null: already indexed at the `from` baseline). Only grows: a pair that leaves keeps its day; an unreadable file is left alone and stops new stamps rather than restarting | data run |
 | `brackets/index.json` | `texas-bill-brackets-v1` | data run |
 | `feeds/`, `share/`, `sitemap.xml`, `og/cards.json` | RSS, HTML, sitemap, card inputs | data run |

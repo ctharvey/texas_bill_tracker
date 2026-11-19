@@ -261,6 +261,7 @@ function setView(view,push=false,{focus=true}={}){
   $('#page-title').innerHTML=namedHeading(view)||title;$('#page-subtitle').textContent=subtitle;
   // A bill page has its own header in place of the page heading.
   $('.page-heading').hidden=view==='bill';
+  $('.page-heading').classList.toggle('law-page',view==='statute');
   $('#overview').hidden=!['all','watchlist'].includes(view);
   renderNotice();renderOverview();renderContent();persistState(push);
   // A new view starts at its top; arriving back from a bill, applyLocation restores the old place after this.

@@ -62,7 +62,8 @@ def test_section_page_groups_bills_with_identical_wording(device):
         expect(versions.filter(has_text=number)).to_have_count(1)
     # Every version of this section offers a comparison; each row names the bill's current stage.
     expect(page.locator("[data-law-compare]")).to_have_count(4)
-    expect(versions.first.locator(".law-status").first).to_have_text("Filed")
+    # A group whose bills share a stage names it once ("· all Filed").
+    expect(versions.first.locator(".law-status").first).to_contain_text("Filed")
     expect(page.locator(".law-bills h3")).to_contain_text("Bills")
 
 

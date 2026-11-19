@@ -933,14 +933,34 @@ def _latest_text(text_dir: Path, bill_id: str) -> tuple[dict, str] | None:
         return None
 
 
-def section_heading(paragraphs: list[str]) -> str:
-    """"Sec. 48.160. FUNDING FOR X." -> "Funding for X" style heading as written (proposed wording)."""
+def section_heading(paragraphs: list[str], current: bool = False) -> str:
+    """"Sec. 48.160. FUNDING FOR X." -> "FUNDING FOR X": the heading as the bill would write it, or with current=True
+    as it reads now (insertions dropped, deletions kept)."""
     for line in paragraphs:
-        proposed = plain_text(re.sub(r"\\\[<del>.*?</del>\\\]|<del>.*?</del>", "", line))
+        if current:
+            line = re.sub(r"\\[\[\]]", "", re.sub(r"<ins>.*?</ins>", "", line))
+        else:
+            line = re.sub(r"\\\[<del>.*?</del>\\\]|<del>.*?</del>", "", line)
+        proposed = re.sub(r"\s+", " ", plain_text(line)).strip()
         m = re.match(r"^(?:Sec|Art)\. " + SECTION_NUM.pattern + r"\.\s+([^a-z]{3,200}?)\.(?:\s|$)", proposed)
         if m:
             return m.group(1).strip()
     return ""
+
+
+def section_headings(entries: list[dict]) -> tuple[str, dict[str, str]]:
+    """(the section's heading, {adding bill: its own heading where it differs}).
+
+    An existing section (any bill amends or repeals it) takes the current heading the first amending bill quotes, never
+    an added section's: bills drafted separately can add unrelated sections under a number already in use. A section
+    only bills add has a heading only when every bill gives it the same one."""
+    adds = {e["bill"]: section_heading(e["paragraphs"]) for e in entries if e["kind"] == "add"}
+    if len(adds) < len(entries):
+        heading = next((h for e in entries if e["kind"] != "add" and (h := section_heading(e["paragraphs"], current=True))), "")
+    else:
+        found = set(adds.values())
+        heading = found.pop() if len(found) == 1 else ""
+    return heading, {bill: h for bill, h in adds.items() if h and h != heading}
 
 
 def build_statutes(snapshot: dict, text_dir: Path) -> tuple[dict, dict[str, dict]]:
@@ -965,8 +985,10 @@ def build_statutes(snapshot: dict, text_dir: Path) -> tuple[dict, dict[str, dict
     files = {}
     for key in sorted(by_key):
         entries = sorted(by_key[key], key=lambda e: (e["bill"][:2] != "HB", int(re.sub(r"\D", "", e["bill"]) or 0), e["bill"]))
-        heading = next((h for e in entries if (h := section_heading(e["paragraphs"]))), "")
+        heading, own = section_headings(entries)
         index["sections"][key] = {"h": heading, "b": [[e["bill"], KIND_LETTER[e["kind"]]] for e in entries]}
+        if own:
+            index["sections"][key]["hb"] = own
         code, number = key.split(" ")
         files[f"{code}-{number}.json"] = {"format": STATUTE_SECTION_FORMAT, "key": key, "code": code,
                                           "code_name": CODE_NAME[code], "section": number, "heading": heading,

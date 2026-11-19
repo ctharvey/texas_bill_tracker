@@ -188,6 +188,18 @@ class BillStatutesTests(unittest.TestCase):
         self.assertEqual(b.section_heading(self.sections["EL 1.02"]["paragraphs"]), "SECOND")
         self.assertEqual(b.section_heading(["(a) No heading here."]), "")
 
+    def test_section_heading_never_comes_from_an_unrelated_new_section(self):
+        e = lambda bill, kind, head: {"bill": bill, "kind": kind, "paragraphs": [f"Sec. 28.0022. {head}. (a) Text."] if head else []}
+        # ED 28.0022: HB 441 adds an unrelated section under a number HB 1100 amends; the amended heading wins.
+        self.assertEqual(b.section_headings([e("HB441", "add", "ARTIFICIAL INTELLIGENCE"), e("HB1100", "amend", "INSTRUCTION")]),
+                         ("INSTRUCTION", {"HB441": "ARTIFICIAL INTELLIGENCE"}))
+        # Only adds with different headings (TN 545.4575): no section heading, each bill keeps its own.
+        self.assertEqual(b.section_headings([e("HB487", "add", "EMERGENCY"), e("HB1250", "add", "COLLISION DATA")]),
+                         ("", {"HB487": "EMERGENCY", "HB1250": "COLLISION DATA"}))
+        self.assertEqual(b.section_headings([e("HB1", "add", "SAME"), e("SB2", "add", "SAME")]), ("SAME", {}))
+        # Repeal only: no quoted heading, and an add never stands in for the existing section's.
+        self.assertEqual(b.section_headings([e("HB2", "add", "NEW THING"), e("SB9", "repeal", "")]), ("", {"HB2": "NEW THING"}))
+
 
 def write_bill(text_dir, bill_id, versions, body):
     d = text_dir / bill_id

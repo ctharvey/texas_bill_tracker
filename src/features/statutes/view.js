@@ -61,7 +61,8 @@ export function fillDrawerStatutes(id){
   const rows=(statuteBills.get(id)||[]).slice().sort((a,b)=>b.others-a.others||a.key.localeCompare(b.key,undefined,{numeric:true}));
   const meta=state.statutes?.bills?.[id];
   if(!state.statutes||(!rows.length&&!meta?.u)){el.hidden=true;el.innerHTML='';return}
-  const item=r=>{const h=state.statutes.sections[r.key]?.h;
+  // A bill's own heading where it differs from the section's (an unrelated new section under a number in use).
+  const item=r=>{const s=state.statutes.sections[r.key],h=s?.hb?.[id]??s?.h;
     return `<li>${statuteLink(r.key)}${h?` <span class="law-heading">${esc(titleCase(h))}</span>`:''} <small>· ${esc(STATUTE_KINDS[r.kind])}${r.others?` · <strong>${r.others} other ${r.others===1?'bill':'bills'}</strong>`:''}</small></li>`};
   const shown=rows.slice(0,8),rest=rows.slice(8);
   const contested=rows.filter(r=>r.others&&r.kind==='m').length;
@@ -101,7 +102,7 @@ function lawCompareMarkup(options,right){
   const show=state.statuteShow||'both';
   return `<section class="law-compare-wrap"><h3>${left.id==='law'?'Current law':esc(left.name)} → ${esc(right.name)}</h3>
     <div class="law-picks">${select}</div>
-    <p class="law-legend"><mark class="law-out">Highlighted on the left</mark> is wording only the left has; <mark class="law-in">highlighted on the right</mark> is wording only the right has. ${left===right?'Pick a different version for the left.':`${changed} of ${rows.length} ${rows.length===1?'part differs':'parts differ'}.`}${rows.some(r=>r.approximate)?' Some parts are too long to compare word by word and are marked whole.':''}</p>
+    <p class="law-legend"><span class="law-legend-long"><mark class="law-out">Highlighted on the left</mark> is wording only the left has; <mark class="law-in">highlighted on the right</mark> is wording only the right has.</span><span class="law-legend-short"><mark class="law-out">Only in ${esc(left.name.split(' = ')[0])}</mark> <mark class="law-in">Only in ${esc(right.name.split(' = ')[0])}</mark></span> ${left===right?'Pick a different version for the left.':`${changed} of ${rows.length} ${rows.length===1?'part differs':'parts differ'}.`}${rows.some(r=>r.approximate)?' Some parts are too long to compare word by word and are marked whole.':''}</p>
     <div class="law-toggle" role="group" aria-label="Columns to show">${[['both','Both'],['left','Left'],['right','Right']].map(([v,t])=>`<button type="button" class="outline-button${show===v?' active':''}" data-law-show="${v}" aria-pressed="${show===v}">${t}</button>`).join('')}</div>
     <div class="law-compare" data-show="${show}"><div class="law-row law-head"><div class="law-label"></div><div class="law-cell">${esc(left.label)}</div><div class="law-cell">${esc(right.label)}</div></div>${body}</div></section>`;
 }
@@ -160,7 +161,10 @@ export function statuteMarkup(){
       :`The bills do not quote the current wording, so there is nothing to set this against. ${official}`);
   const card=g=>{
     const e=g.entries[0],on=g===chosen,heading=g.kind==='add'?unitHeading(g.units):'';
-    const bills=g.entries.map(x=>{const b=state.bills.find(y=>y.id===x.bill);return b?`${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)} <span class="law-status">${esc(lastActionInfo(b).label)}</span>`:esc(x.bill)}).join('<span class="law-same-text"> = </span>');
+    // One status for the card when every bill shares it (a long same-wording group stays short).
+    const found=g.entries.map(x=>state.bills.find(y=>y.id===x.bill)),labels=new Set(found.map(b=>b?lastActionInfo(b).label:''));
+    const one=found.length>1&&labels.size===1&&found[0]?[...labels][0]:'';
+    const bills=g.entries.map((x,i)=>{const b=found[i];return b?`${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}${one?'':` <span class="law-status">${esc(lastActionInfo(b).label)}</span>`}`:esc(x.bill)}).join('<span class="law-same-text"> = </span>')+(one?` <span class="law-status">· all ${esc(one)}</span>`:'');
     const parts=g.kind==='amend'&&g.partial&&e.subsections?.length?`subsections ${e.subsections.map(s=>`(${s})`).join(', ')}`:g.kind==='amend'?'whole section':'';
     const notes=[KIND_WORDS[g.kind],version(g),parts,g.entries.length>1?'same wording':'',g.broad?`broad bill · changes ${state.statutes.bills[e.bill]?.n} sections`:''].filter(Boolean);
     const caption=g.entries.length===1?state.bills.find(b=>b.id===e.bill)?.caption:'';
@@ -169,19 +173,25 @@ export function statuteMarkup(){
       <button type="button" class="law-pick-btn" data-law-compare="${esc(gid(g))}" aria-pressed="${on}" aria-label="Show ${esc(names(g))}">${esc(notes.join(' · '))}</button>${caption?`<span class="law-caption">${esc(caption)}</span>`:''}</li>`;
   };
   const bar=`<aside class="law-bills" aria-label="Bills that change this section"><h3>${proposed?'Proposals':'Bills'} <span>${count}</span></h3><p class="near-hint">${groups.length>1?'Pick one to show its version.':'The only version so far.'}</p><ul class="law-versions">${groups.map(card).join('')}</ul></aside>`;
-  const title=proposed?head(groups.length===1&&info.h?esc(titleCase(info.h)):esc(label),'Proposed new section · not in current law yet')+tools:loadingTitle;
-  const intro=proposed?`<div class="info-callout law-intro"><p>This section is not in current law. ${count===1?'One bill proposes':`${count} bills propose`} a new section with this number${groups.length>1?'. Bills drafted separately can pick the same next number for unrelated subjects, so each version is shown on its own':''}.</p><p>${LAW_LIMITS}</p></div>`
-    :`<div class="info-callout law-intro"><p>${law?'Current law is on the left, as the bills quote it; it can trail the official text if a later law changed it.':'Each bill quotes the wording it would change.'} ${official}</p><p>${LAW_LIMITS}</p></div>`;
+  // A heading only when every proposal shares it (an index from older code can carry one bill's heading for all).
+  const oneHead=info.h&&new Set(groups.map(g=>unitHeading(g.units)).filter(Boolean)).size<=1;
+  const title=proposed?head(oneHead?esc(titleCase(info.h)):esc(label),'Proposed new section · not in current law yet')+tools:loadingTitle;
+  const limits=`<details class="law-limits"><summary>How bills are matched</summary><p>${LAW_LIMITS}</p></details>`;
+  const intro=proposed?`<div class="info-callout law-intro"><p>${count===1?'One bill proposes':`${count} bills propose`} a section with this number${groups.length>1?'. Bills drafted separately can reuse a number for unrelated subjects, so each is shown on its own':''}.</p>${limits}</div>`
+    :law?`<div class="info-callout law-intro"><details class="law-limits"><summary>About this comparison</summary><p>Current law is on the left, as the bills quote it; it can trail the official text if a later law changed it. ${official}</p><p>${LAW_LIMITS}</p></details></div>`
+    :`<div class="info-callout law-intro"><p>Each bill quotes the wording it would change. ${official}</p>${limits}</div>`;
   return `${title}${intro}<div class="law-layout"><div class="law-main">${main}</div>${bar}</div>`;
 }
 
+// What opening a section shows: a proposed new section has no current law to compare with.
+const openHint=key=>(state.statutes.sections[key]?.b||[]).every(p=>p[1]==='n')?'Open it to read the proposals.':'Open it to compare with current law.';
 // Explorer: a search for a section number lists the bills that change it; this links to their comparison.
 export function statuteHintMarkup(keys,query=''){
   // Exactly a section key ("PE 46.06", what a law follow saves): only that section's bills, never text matches.
   if(isLawFollowQuery(query)){
     if(!state.statutes)return `<div class="info-callout${state.statutesFailed?' callout-warn':''} statute-hint">${state.statutesFailed?`The list of laws each bill changes is not available right now, so the bills that change ${esc(query)} cannot be shown. Try again later.`:`Loading the bills that change ${esc(query)}…`}</div>`;
-    return `<div class="info-callout statute-hint">Showing only bills that change ${statuteLink(query)}${state.statutes.sections[query]?'. Open it to compare their versions side by side.':': none yet.'}</div>`;
+    return `<div class="info-callout statute-hint">Showing only bills that change ${statuteLink(query)}${state.statutes.sections[query]?`. ${openHint(query)}`:': none yet.'}</div>`;
   }
   if(!keys.length)return '';
-  return `<div class="info-callout statute-hint">Bills that change ${keys.map(statuteLink).join(', ')} are included. Open ${keys.length===1?'it':'one'} to compare their versions side by side.</div>`;
+  return `<div class="info-callout statute-hint">Bills that change ${keys.map(statuteLink).join(', ')} are included. ${keys.length===1?openHint(keys[0]):'Open one to see what its bills change.'}</div>`;
 }

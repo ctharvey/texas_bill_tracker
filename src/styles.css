@@ -254,6 +254,8 @@ a.bill-number:hover{text-decoration:underline}
 .law-heading{color:var(--ink)}
 .law-more summary{cursor:pointer;color:var(--teal);font-size:var(--fs-sm);margin-top:8px}
 .law-intro p{margin:0}
+.law-legend-short{display:none}.law-intro>.law-limits:first-child{margin-top:0}
+.law-limits{margin-top:6px;font-size:var(--fs-xs)}.law-limits summary{cursor:pointer;color:var(--teal)}.law-limits p{margin-top:4px}
 .statute-hint{margin-bottom:12px}
 .law-layout{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:20px;align-items:start}
 .law-main{min-width:0}
@@ -302,7 +304,11 @@ mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;
 .law-same .law-cell{color:var(--muted)}
 .law-single{border:1px solid var(--line);border-radius:calc(8px*var(--rs));padding:10px 14px;background:var(--white);font-size:var(--fs-sm);line-height:1.6}
 @media(max-width:760px){
-  .law-picks{grid-template-columns:1fr}
+  .law-picks{grid-template-columns:1fr}.law-pick{grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px}
+  .law-legend-long{display:none}.law-legend-short{display:inline}.law-legend{margin:8px 0}
+  /* The section head carries the title, so the page heading is kept for screen readers only (law text sooner). */
+  .law-bills .near-hint{display:none}.law-bills .law-caption{-webkit-line-clamp:2}.law-main .law-compare-wrap{margin-top:12px}.law-bills .law-versions{grid-auto-columns:minmax(270px,1fr)}
+  .page-heading.law-page{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;margin:0}
   .law-toggle{display:flex}
   .law-row{grid-template-columns:minmax(0,1fr)}
   .law-head{display:none}
