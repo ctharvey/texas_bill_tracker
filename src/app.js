@@ -11,6 +11,7 @@ import {followButton, memberFeedHref} from './features/follows/view.js';
 import {followingMarkup} from './features/searches/view.js';
 import {sharedBanner, watchTools} from './features/watchlist/view.js';
 import {confirmJoin} from './features/sync/join.js';
+import {listStore, sync, changeFollow, toggleFollow, changeSearch, searchCounts, saveCurrentSearch, refreshWatch, onSynced, changeWatch, setupSync, openSyncLink, pullSync} from './features/sync/lists.js';
 import {exportCsv, parseCsv} from './features/explorer/csv.js';
 import {options, AGENCY_SORT_KEY, agencyOptionsMarkup, agencySortButtons} from './features/explorer/controls.js';
 import {lawKeysFor, reasonFor, filteredBills} from './features/explorer/model.js';
@@ -172,27 +173,6 @@ async function init(){
 }
 
 // ---- Saving choices without accounts: URL state, remembered filters, files and private sync links ----
-// Lists are saved through listStore; each change re-reads it (core/lists.js), so other tabs' saves are kept.
-const listStore=STORAGE_OK?localStorage:memoryStorage();
-const sync=createSyncClient({storage:STORAGE_OK?localStorage:memoryStorage(),getWatch:()=>readWatch(listStore,storageKey),getFollows:()=>readFollows(listStore,followKey),getSearches:()=>readSearches(listStore,searchesKey),getTheme:savedTheme,
-  adopt:adoptSynced,onDisplaced:keepAside});
-// The sync client calls this as it stores a new version: the lists become the link's copy plus pending changes.
-// Throws if storage refuses, so that version is not stored (core/lists.js adoptLists).
-let syncMoved=false;  // Whether the last adoption changed follows or searches (onSynced re-renders only then).
-function adoptSynced(d){
-  adoptLists(listStore,{watch:storageKey,follows:followKey,searches:searchesKey},d);
-  syncMoved=Boolean(d.follows&&d.follows.join()!==state.follow.join()||d.searches&&JSON.stringify(cleanSearches(d.searches))!==JSON.stringify(state.searches));
-  state.watch=new Set(d.watch);if(d.follows)state.follow=cleanFollows(d.follows);if(d.searches)state.searches=cleanSearches(d.searches);
-  if(d.theme)setTheme(d.theme);
-}
-// Items this browser added that the sync link has no room for (500 bills, 200 follows, 20 searches): kept aside
-// and listed on the Export page, never dropped. Throws when even that fails, so the write is not acknowledged.
-function keepAside(held){
-  if(!keepHeld(listStore,held))throw Error('This browser is out of storage space; sync paused so nothing is lost');
-  const n=held.watch.length+held.follows.length+held.searches.length;
-  toast(`${n} saved ${n===1?'item':'items'} did not fit the sync link and ${n===1?'was':'were'} kept aside: see Export`);
-}
-let lastPull=0;
 // The site root, whatever page is open: a bill page's path is /bill/<ID>.
 const siteBase=()=>`${location.origin}/`;
 // Every view but a bill page lives at /#view. A plain hash change on /bill/<ID> would stay under that path, so it
@@ -298,97 +278,6 @@ function persistState(push=false){
   if(canonical)canonical.href=state.view==='bill'&&state.openBill?`https://billatlas.org/bill/${state.openBill}`:'https://billatlas.org/';
   if(state.view==='all'&&filtersFor==='all'&&!state.sharedList&&!(readJson(prefsKey)?.filters&&sameFilters(readJson(prefsKey).filters,state)))writeJson(prefsKey,{...keptPrefs(),filters:pickFilters(state)});
   return pushed;
-}
-
-function changeFollow(op,codes){
-  const {list,changed}=changeFollowList(listStore,followKey,op,codes,MAX_FOLLOWS);
-  state.follow=list;for(const code of changed)sync.record(op,code,onSynced);
-  if(changed.length)renderMoveBanner();
-}
-function toggleFollow(code){
-  const on=state.follow.includes(code);
-  if(!on&&state.follow.length>=MAX_FOLLOWS){toast(`You can follow up to ${MAX_FOLLOWS} legislators`);return}
-  changeFollow(on?'unfollow':'follow',[code]);
-  const m=memberByCode(state.roster,code);
-  toast(`${on?'Unfollowed':'Following'} ${m?memberTitle(m):code}${on||state.view==='following'?'':' · their bills are under Following'}`);
-  renderOverview();renderContent();
-}
-// op: 'save-search' (search object) or 'delete-search' (id).
-function changeSearch(op,item){
-  const id=op==='save-search'?item.id:item;
-  state.searches=changeSearchList(listStore,searchesKey,op,item);
-  sync.record(op,id,onSynced,op==='save-search'?item:undefined);
-  renderMoveBanner();
-}
-// Bills matching a saved search now, and those with a dated action after the day it was last opened.
-function searchCounts(s){
-  const list=filteredBills({...FILTER_DEFAULTS,...s.filters}),today=todayDay();
-  const fresh=s.seen?list.filter(b=>(latestActivityDay([b],today)||'')>s.seen).length:0;
-  return {total:list.length,fresh};
-}
-function saveCurrentSearch(){
-  if(state.searches.length>=MAX_SEARCHES){toast(`You can save up to ${MAX_SEARCHES} searches`);return}
-  const filters=cleanFilters(Object.fromEntries(Object.entries(pickFilters(state)).filter(([k,v])=>v!==FILTER_DEFAULTS[k])));
-  if(!searchFitsSync(filters)){toast('This search is too long to save; shorten the search words');return}
-  const name=searchName(filters,agencyName,areaName);
-  if(state.searches.some(s=>JSON.stringify(s.filters)===JSON.stringify(filters))){toast(`Already saved as “${state.searches.find(s=>JSON.stringify(s.filters)===JSON.stringify(filters)).name}”`);return}
-  changeSearch('save-search',{id:newSearchId(),name,filters,seen:todayDay()});
-  renderOverview();toast(`Saved “${name}” · find it under Following`);
-}
-const FOLLOW_VIEWS=new Set(['following','member','local']);
-function refreshWatch(){renderOverview();if(state.view==='home')refreshHome();else if(state.view==='all'||state.view==='watchlist'||FOLLOW_VIEWS.has(state.view))renderContent()}
-// After a debounced write: the client has already adopted the link's copy (adoptSynced); show it.
-const onSynced=(watch,error)=>{if(error){toast(`Sync: ${error.message}`);return}renderOverview();
-  if(state.view==='all'||state.view==='watchlist')renderResults();else if(state.view==='home')refreshHome();else if(syncMoved&&FOLLOW_VIEWS.has(state.view))renderContent()};
-function changeWatch(op,ids){
-  const {list,changed}=changeWatchList(listStore,storageKey,op,ids);
-  state.watch=new Set(list);for(const id of changed)sync.record(op,id,onSynced);
-  if(changed.length)renderMoveBanner();
-}
-// Another tab of this site saved: show it. Read-only, so two open tabs never answer each other's saves.
-function onOtherTab(e){
-  if(e.storageArea&&e.storageArea!==localStorage)return;
-  const k=e.key;
-  if(k===null||k===storageKey||k===followKey||k===searchesKey){loadSaved();refreshWatch()}
-  if(k===null||k===prefsKey){const id=applyTheme(savedTheme()||'');const select=$('#theme-select');if(select)select.value=id}
-  renderMoveBanner();  // Includes another tab finishing the move (MOVED_KEY).
-  if((k===null||k==='tx-bill-atlas-sync-v1')&&(state.view==='watchlist'||state.view==='saving'||state.view==='export'))renderContent();
-}
-
-async function setupSync(key){
-  runtime.syncAvailable=await sync.isAvailable();
-  if(key)await openSyncLink(key);
-  else if(sync.linked)await pullSync();
-  window.addEventListener('focus',()=>{if(Date.now()-lastPull>30000)pullSync()});
-  if(STORAGE_OK)window.addEventListener('storage',onOtherTab);
-  persistState();
-  if(state.view==='home')refreshHome();else if(state.view==='watchlist'||state.view==='saving'||state.view==='export')renderContent();
-}
-
-async function openSyncLink(key){
-  if(runtime.syncAvailable===null)runtime.syncAvailable=await sync.isAvailable();
-  if(!runtime.syncAvailable){toast('Sync links are not available on this site yet');return}
-  try{
-    // Probe first: a view-only link is shown as a shared list and never replaces this device's own link.
-    const probe=createSyncClient({storage:memoryStorage(),getWatch:()=>[]});probe.connect(key);
-    const found=await probe.pull();
-    if(found.mode==='view'){Object.assign(state,{sharedList:found.watch,sharedMode:'sync-view',sharedSyncKey:key,visibleCount:30});setView('all');toast('Showing a shared watchlist (view-only)');return}
-    const joining=sync.linked?.editKey!==key;
-    if(joining&&!await confirmJoin(Boolean(sync.linked))){toast('Sync link not opened');return}
-    if(joining)sync.connect(key);  // Its bills are added to the link on the first pull that reaches it.
-    if(await pullSync()&&joining)toast('This device is now synced');
-  }catch(error){toast(error.message)}
-}
-
-// The client merges a join, adopts the link's copy and stores its version together (sync.js). True when it did.
-async function pullSync(){
-  if(!runtime.syncAvailable||!sync.linked)return false;
-  lastPull=Date.now();
-  try{
-    const pulled=await sync.pull();
-    loadSaved();refreshWatch();
-    return Boolean(pulled);  // Null: another tab or write changed the link meanwhile; the next pull catches up.
-  }catch(error){toast(`Sync: ${error.message}`);loadSaved();refreshWatch();return false}
 }
 
 // ---- Moving saved data from the old address (MOVE_FROM) to the new one (MOVE_TO); see core/move.js ----
