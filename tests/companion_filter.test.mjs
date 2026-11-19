@@ -30,7 +30,8 @@ test('a saved search with the companion filter is named for it', () => {
 });
 
 test('the explorer keeps only bills with a companion, and Clear all and the chip reset it', () => {
-  const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  const app = ['../src/app.js', '../src/features/explorer/model.js', '../src/features/explorer/view.js']
+    .map(p => readFileSync(new URL(p, import.meta.url), 'utf8')).join('\n');
   assert.match(app, /if\(f\.companion&&!companionsOf\(b\.id\)\.length\)return false;/);
   assert.match(app, /id="companion-filter"/);
   assert.match(app, /onlyWatch:false,companion:false,visibleCount:30\}\);renderContent\(\)/);

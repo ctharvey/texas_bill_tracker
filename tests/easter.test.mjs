@@ -53,7 +53,7 @@ test('every easter egg layer ignores the pointer and stays still under reduced m
   const css = read('src/styles.css');
   assert.match(css, /\.petal-sky,\.gavel-sky,\.dillo-sky\{position:fixed;inset:0;overflow:hidden;pointer-events:none/);
   assert.match(css, /prefers-reduced-motion:reduce\)\{\.tumbleweed-lane,\.petal-sky,\.gavel-sky,\.dillo-sky\{display:none\}/);
-  assert.match(read('src/app.js'), /state\.view==='watchlist'\?'':TUMBLEWEED/);
+  assert.match(read('src/features/explorer/view.js'), /state\.view==='watchlist'\?'':TUMBLEWEED/);
 });
 
 test('searching for the bird bills or the bird sends the warbler', () => {
