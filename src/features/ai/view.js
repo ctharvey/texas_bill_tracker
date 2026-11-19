@@ -1,7 +1,8 @@
 // "Copy for AI" on a bill and "Copy page for AI" in the top bar.
 import {state} from '../../core/state.js';
 import {$, toast} from '../../core/dom.js';
-import {memberByCode} from '../../geo.js';
+import {memberByCode, followedBills} from '../../geo.js';
+import {newestFirst} from '../../taxonomy.js';
 import {aiPrompt, pageAiText} from './model.js';
 import {memberTitle} from '../members/names.js';
 import {todayData} from '../today/view.js';
