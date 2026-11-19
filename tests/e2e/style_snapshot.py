@@ -33,6 +33,7 @@ MODES_SHOWN = ("light", "dark")
 PALETTES = ("atlas", "granite", "lone-star", "bluebonnet", "ranch", "warbler")  # atlas = no data-palette
 IGNORED_CONSOLE = ("Failed to load resource",)
 DETAIL_STATES = 5
+DISCLAIMER_KEY = "tx-bill-atlas-disclaimer-v1"
 SEEN_KEYS = ("tx-bill-atlas-armadillo-seen", "tx-bill-atlas-sine-die-seen", "tx-bill-atlas-warbler-flew")
 
 
@@ -59,39 +60,54 @@ def _bill_sections(page):
     page.locator("#drawer-statutes").wait_for(state="visible")
 
 
+def _bill_text(page):
+    page.locator("#bill-page button", has_text="Show bill text").click()
+    page.locator("#bill-page .bill-text").wait_for(state="visible")
+
+
+def _no_match(page):
+    page.fill("#bill-search", "zzzzqqqq nothing matches this")
+    page.locator("#bill-list .empty-state").wait_for(state="visible")
+
+
 def _privacy(page):
     page.locator("#privacy-open").click()
     page.locator("#privacy").wait_for(state="visible")
 
 
-# id: (address, setup or None, viewports, stored data loaded)
+# id: (address, setup or None, viewports, storage): "saved" = the stored fixture data, "fresh" = only the accepted
+# disclaimer, "none" = a first visit.
 STATES = {
-    "home": ("#home", None, VIEWPORTS, True),
-    "explorer": ("#all", None, VIEWPORTS, True),
-    "explorer-menus": ("#all", _open_details("#more-filters", "#share-menu"), VIEWPORTS, True),
-    "explorer-agency-picker": ("#all", _click("#filter-agency"), VIEWPORTS, True),
-    "explorer-search": ("#all?query=HB110", None, VIEWPORTS, True),
-    "explorer-agency": ("#all?agency=ers", None, VIEWPORTS, True),
-    "explorer-list": ("#all?list=HB110,HB1001", None, VIEWPORTS, True),
-    "preview": ("#all", _preview, ("desktop",), True),
-    "watchlist": ("#watchlist", None, VIEWPORTS, True),
-    "following": ("#following", None, VIEWPORTS, True),
-    "today": ("#today", None, VIEWPORTS, True),
-    "near": ("#local", None, VIEWPORTS, True),
-    "member": ("#member?code=A2150", None, VIEWPORTS, True),
-    "statute": ("#statute?law=LA&sec=62.051", None, VIEWPORTS, True),
-    "bill-HB110": ("#bill?id=HB110", None, VIEWPORTS, True),
-    "bill-HB717": ("#bill?id=HB717", _bill_sections, VIEWPORTS, True),
-    "bill-HB147": ("#bill?id=HB147", None, VIEWPORTS, True),
-    "agencies": ("#agencies", None, VIEWPORTS, True),
-    "review": ("#review", None, VIEWPORTS, True),
-    "method": ("#method", None, VIEWPORTS, True),
-    "saving": ("#saving", None, VIEWPORTS, True),
-    "export": ("#export", None, VIEWPORTS, True),
-    "data": ("#data", None, VIEWPORTS, True),
-    "nav-more": ("#all", _click("#nav-more"), ("phone",), True),
-    "privacy": ("#home", _privacy, VIEWPORTS, True),
-    "disclaimer": ("#home", None, VIEWPORTS, False),
+    "home": ("#home", None, VIEWPORTS, "saved"),
+    "explorer": ("#all", None, VIEWPORTS, "saved"),
+    "explorer-menus": ("#all", _open_details("#more-filters", "#share-menu"), VIEWPORTS, "saved"),
+    "explorer-agency-picker": ("#all", _click("#filter-agency"), VIEWPORTS, "saved"),
+    "explorer-search": ("#all?query=HB110", None, VIEWPORTS, "saved"),
+    "explorer-agency": ("#all?agency=ers", None, VIEWPORTS, "saved"),
+    "explorer-list": ("#all?list=HB110,HB1001", None, VIEWPORTS, "saved"),
+    "preview": ("#all", _preview, ("desktop",), "saved"),
+    "watchlist": ("#watchlist", None, VIEWPORTS, "saved"),
+    "following": ("#following", None, VIEWPORTS, "saved"),
+    "today": ("#today", None, VIEWPORTS, "saved"),
+    "near": ("#local", None, VIEWPORTS, "saved"),
+    "member": ("#member?code=A2150", None, VIEWPORTS, "saved"),
+    "statute": ("#statute?law=LA&sec=62.051", None, VIEWPORTS, "saved"),
+    "bill-HB110": ("#bill?id=HB110", None, VIEWPORTS, "saved"),
+    "bill-HB717": ("#bill?id=HB717", _bill_sections, VIEWPORTS, "saved"),
+    "bill-HB147": ("#bill?id=HB147", None, VIEWPORTS, "saved"),
+    "agencies": ("#agencies", None, VIEWPORTS, "saved"),
+    "review": ("#review", None, VIEWPORTS, "saved"),
+    "method": ("#method", None, VIEWPORTS, "saved"),
+    "saving": ("#saving", None, VIEWPORTS, "saved"),
+    "export": ("#export", None, VIEWPORTS, "saved"),
+    "data": ("#data", None, VIEWPORTS, "saved"),
+    "nav-more": ("#all", _click("#nav-more"), ("phone",), "saved"),
+    "privacy": ("#home", _privacy, VIEWPORTS, "saved"),
+    "disclaimer": ("#home", None, VIEWPORTS, "none"),
+    "bill-text": ("#bill?id=HB717", _bill_text, VIEWPORTS, "saved"),
+    "explorer-empty": ("#all", _no_match, VIEWPORTS, "saved"),
+    "near-setup": ("#local", None, VIEWPORTS, "fresh"),
+    "following-rename": ("#following", _click("[data-search-rename]"), VIEWPORTS, "saved"),
 }
 
 # In the page: finish running transitions and animations, then each element's computed style under one theme.
@@ -206,9 +222,9 @@ class _Worker:
             # The random and one-per-session decorations (armadillo, sine die petals, warbler flight) would land in some
             # snapshots and not others; mark them seen, as the app does after showing them once.
             context.add_init_script("for (const k of %s) sessionStorage.setItem(k, '1');" % json.dumps(SEEN_KEYS))
-            if stored:
-                context.add_init_script("for (const [k, v] of Object.entries(%s)) localStorage.setItem(k, v);"
-                                        % json.dumps(self.local))
+            values = {"saved": self.local, "fresh": {DISCLAIMER_KEY: "x"}, "none": {}}[stored]
+            context.add_init_script("for (const [k, v] of Object.entries(%s)) localStorage.setItem(k, v);"
+                                    % json.dumps(values))
             page = context.new_page()
             page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
             page.on("console", lambda m: m.type == "error" and not m.text.startswith(IGNORED_CONSOLE)
@@ -220,13 +236,15 @@ class _Worker:
             page.wait_for_load_state("networkidle")
             if not page.evaluate(QUIET_JS, [750, 15000]):
                 errors.append("the DOM never went quiet for 750 ms within 15 s")
-            coverage = page.evaluate(COVERAGE_JS)
+            coverage = {}
             themes = {}
             keys = props = None
             for mode in MODES_SHOWN:
                 for palette in PALETTES:
                     page.evaluate(SET_THEME_JS, [mode, palette])
                     snap = page.evaluate(SNAPSHOT_JS, {"detail": detail})
+                    for rule, hit in page.evaluate(COVERAGE_JS).items():
+                        coverage[rule] = coverage.get(rule, False) or hit
                     if keys is None:
                         keys, props = snap["keys"], snap["props"]
                     elif snap["keys"] != keys:
