@@ -401,7 +401,10 @@ function registerClicks(){
   clickOn('follow-more','#follow-more',()=>{state.followShow+=30;renderContent()});
   clickOn('law-compare','[data-law-compare]',lawCompare=>{
     const c=state.statuteCompare;c.right=lawCompare.dataset.lawCompare;if(!c.left||c.left===c.right)c.left='law';
-    renderContent();$('.law-compare-wrap')?.scrollIntoView({behavior:'smooth',block:'start'})});
+    renderContent();
+    // Where the bill bar sits above the text (narrow screens), bring the text into view; beside it, it already is.
+    if(matchMedia('(max-width:1199px)').matches)$('.law-main')?.scrollIntoView({behavior:'smooth',block:'start'});
+    $(`[data-law-compare="${CSS.escape(c.right)}"]`)?.focus({preventScroll:true})});
   clickOn('law-show','[data-law-show]',lawShow=>{state.statuteShow=lawShow.dataset.lawShow;renderContent()});
   clickOn('member-more','[data-member-more]',memberMore=>{const role=memberMore.dataset.memberMore;state.memberShow[role]=(state.memberShow[role]||30)+30;renderContent()});
   clickOn('copy-page-ai','#copy-page-ai',copyPage=>copyPageForAi(copyPage));

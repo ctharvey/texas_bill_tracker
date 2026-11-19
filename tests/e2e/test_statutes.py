@@ -19,7 +19,8 @@ def open_section(device):
 
 
 def pick_texts(page):
-    return [page.locator(f"[data-law-side={s}]").evaluate("e=>e.options[e.selectedIndex].text") for s in ("left", "right")]
+    """The left and right column headings of the comparison (left: the picker; right: the bill picked in the bar)."""
+    return page.locator(".law-compare .law-head .law-cell").all_inner_texts()
 
 
 def test_drawer_lists_the_sections_the_bill_changes(device):
@@ -62,7 +63,7 @@ def test_section_page_groups_bills_with_identical_wording(device):
     # Every version of this section offers a comparison; each row names the bill's current stage.
     expect(page.locator("[data-law-compare]")).to_have_count(4)
     expect(versions.first.locator(".law-status").first).to_have_text("Filed")
-    expect(page.locator(".today-group h3").first).to_contain_text("Bills that amend this section")
+    expect(page.locator(".law-bills h3")).to_contain_text("Bills")
 
 
 def test_side_by_side_defaults_to_current_law_against_a_version(device):
@@ -79,7 +80,7 @@ def test_side_by_side_defaults_to_current_law_against_a_version(device):
 def test_compare_button_puts_that_version_on_the_right(device):
     page = open_section(device)
     page.locator("[data-law-compare]").nth(1).click()
-    expect(page.locator("[data-law-side=right]")).to_have_value("HB246")
+    expect(page.locator('[data-law-compare="HB246"]')).to_have_attribute("aria-pressed", "true")
     expect(page.locator("[data-law-side=left]")).to_have_value("law")
     assert pick_texts(page)[1].startswith("HB 246 · amended")
 
@@ -95,10 +96,10 @@ def test_bill_against_bill_compare(device):
     assert pick_texts(page)[1].startswith("HB 246")
     legend = page.locator(".law-legend")
     expect(legend).to_contain_text("parts differ")
-    expect(legend).not_to_contain_text("Pick two different versions")
-    # Same bill on both sides asks for two different versions.
-    page.locator("[data-law-side=right]").select_option(label=other)
-    expect(legend).to_contain_text("Pick two different versions")
+    expect(legend).not_to_contain_text("Pick a different version")
+    # Picking the left's bill in the bar asks for a different left.
+    page.locator('[data-law-compare="SB253"]').click()
+    expect(legend).to_contain_text("Pick a different version for the left")
 
 
 def test_phone_column_toggle(device, viewport):

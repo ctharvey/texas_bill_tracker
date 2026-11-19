@@ -255,17 +255,35 @@ a.bill-number:hover{text-decoration:underline}
 .law-more summary{cursor:pointer;color:var(--teal);font-size:var(--fs-sm);margin-top:8px}
 .law-intro p{margin:0}
 .statute-hint{margin-bottom:12px}
+.law-layout{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:20px;align-items:start}
+.law-main{min-width:0}
+.law-bills{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto;margin:20px 0;padding:12px;border:1px solid var(--line);border-radius:calc(8px*var(--rs));background:var(--paper)}
+.law-bills h3{margin:0;font-size:var(--fs-md)}
+.law-bills h3 span{color:var(--muted);font-weight:500}
+.law-bills .near-hint{margin:2px 0 10px}
 .law-versions{list-style:none;margin:0;padding:0;display:grid;gap:8px}
-.law-version{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center;border:1px solid var(--line);border-radius:calc(8px*var(--rs));padding:10px 12px;background:var(--white)}
-.law-version>div{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
-.law-version small{grid-column:1;color:var(--muted)}
-.law-version button{grid-column:2;grid-row:1/span 2}
+.law-version{position:relative;display:grid;gap:3px;border:1px solid var(--line);border-radius:calc(8px*var(--rs));padding:9px 11px;background:var(--white)}
+.law-version:hover{border-color:color-mix(in srgb,var(--teal) 45%,var(--line))}
+.law-version.active{border-color:var(--teal);box-shadow:inset 3px 0 0 var(--teal)}
+.law-pick-bills{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline}
+.law-pick-bills a{position:relative;z-index:1}
+.law-pick-head{font-size:var(--fs-sm);line-height:1.35}
+.law-pick-btn{all:unset;font-size:var(--fs-xs);color:var(--muted);line-height:1.45;cursor:pointer}
+.law-pick-btn::after{content:"";position:absolute;inset:0;border-radius:inherit}
+.law-pick-btn:focus-visible{outline:none}
+.law-pick-btn:focus-visible::after{outline:2px solid var(--accent);outline-offset:2px}
+.law-caption{font-size:var(--fs-xs);color:var(--ink);line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .law-broad{background:var(--paper)}
+@media(max-width:1199px){
+  .law-layout{grid-template-columns:minmax(0,1fr)}
+  .law-bills{order:-1;position:static;max-height:none;margin:16px 0 0}
+  .law-bills .law-versions{grid-auto-flow:column;grid-auto-columns:minmax(220px,1fr);overflow-x:auto;padding-bottom:4px}
+}
 .law-status{font-size:var(--fs-xs);color:var(--muted)}
 .law-same-text{color:var(--muted)}
 .law-compare-wrap{margin:20px 0}
 .law-compare-wrap h3{margin:0 0 8px;font-size:var(--fs-md)}
-.law-picks{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.law-picks{display:grid;grid-template-columns:minmax(0,440px);gap:10px}
 .law-pick{display:grid;gap:4px;font-size:var(--fs-xs);color:var(--muted);min-width:0}
 .law-pick select{font:inherit;font-size:var(--fs-sm);color:var(--ink);padding:7px 8px;border:1px solid var(--line);border-radius:calc(6px*var(--rs));background:var(--white);min-width:0;width:100%}
 .law-legend{font-size:var(--fs-xs);color:var(--muted);line-height:1.7;margin:12px 0}
@@ -292,8 +310,6 @@ mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;
   .law-cell{border-left:0}
   .law-cell::before{content:attr(data-name);display:block;font-size:var(--fs-xs);font-style:normal;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px}
   .law-compare[data-show="left"] .law-cell:nth-child(3),.law-compare[data-show="right"] .law-cell:nth-child(2){display:none}
-  .law-version{grid-template-columns:1fr}
-  .law-version button{grid-column:1;grid-row:auto;justify-self:start;margin-top:6px}
 }
 .topbar-prefs{display:flex;align-items:center;gap:6px}.theme-pick{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 2px 0 9px;border:1px solid var(--line);border-radius:999px;background:var(--surface);cursor:pointer}.theme-pick:hover,.mode-toggle:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}.theme-dot{position:relative;width:10px;height:10px;padding:0;border:0;border-radius:50%;background:#f5b517;box-shadow:0 0 0 1px #8a650033;flex:none;cursor:pointer;transition:transform .15s}.theme-dot::after{content:"";position:absolute;inset:-7px}.theme-dot:hover{transform:scale(1.3)}.theme-dot:active{transform:scale(.85)}.theme-dot:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.theme-pick select{font:inherit;font-size:var(--fs-xs);font-weight:600;color:var(--ink);background:transparent;border:0;padding:0 2px;cursor:pointer}.mode-toggle{width:28px;height:28px;display:grid;place-items:center;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--ink);font-size:15px;line-height:1}
 
