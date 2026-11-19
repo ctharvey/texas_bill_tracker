@@ -258,7 +258,9 @@ a.bill-number:hover{text-decoration:underline}
 .law-limits{margin-top:6px;font-size:var(--fs-xs)}.law-limits summary{cursor:pointer;color:var(--teal)}.law-limits p{margin-top:4px}
 .statute-hint{margin-bottom:12px}
 .law-layout{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:20px;align-items:start}
-.law-main{min-width:0}
+.law-main{min-width:0;grid-column:1;grid-row:1}.law-layout>.law-bills{grid-column:2;grid-row:1}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.law-title-same{display:none}
 .law-bills{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto;margin:20px 0;padding:12px;border:1px solid var(--line);border-radius:calc(8px*var(--rs));background:var(--paper)}
 .law-bills h3{margin:0;font-size:var(--fs-md)}
 .law-bills h3 span{color:var(--muted);font-weight:500}
@@ -278,7 +280,8 @@ a.bill-number:hover{text-decoration:underline}
 .law-broad{background:var(--paper)}
 @media(max-width:1199px){
   .law-layout{grid-template-columns:minmax(0,1fr)}
-  .law-bills{order:-1;position:static;max-height:none;margin:16px 0 0}
+  .law-main,.law-layout>.law-bills{grid-column:auto;grid-row:auto}
+  .law-bills{position:static;max-height:none;margin:16px 0 0}
   .law-bills .law-versions{grid-auto-flow:column;grid-auto-columns:minmax(220px,1fr);overflow-x:auto;padding-bottom:4px}
 }
 .law-status{font-size:var(--fs-xs);color:var(--muted)}
@@ -308,6 +311,7 @@ mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;
   .law-legend-long{display:none}.law-legend-short{display:inline}.law-legend{margin:8px 0}
   /* The section head carries the title, so the page heading is kept for screen readers only (law text sooner). */
   .law-bills .near-hint{display:none}.law-bills .law-caption{-webkit-line-clamp:2}.law-main .law-compare-wrap{margin-top:12px}.law-bills .law-versions{grid-auto-columns:minmax(270px,1fr)}
+  .law-title-same{display:block;font:var(--head-weight) 21px var(--font-head);letter-spacing:-.045em;margin:0}
   .page-heading.law-page{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;margin:0}
   .law-toggle{display:flex}
   .law-row{grid-template-columns:minmax(0,1fr)}

@@ -187,6 +187,22 @@ export function compareLaw(left, right) {
     });
 }
 
+// The history notes after each section in the Legislative Council's files ("Acts 2005, ...", "Amended by:").
+const SOURCE_NOTE = /^(?:Acts \d{4},|Amended by:|(?:Added|Amended|Redesignated|Renumbered|Transferred|Reenacted)(?: and \w+)? (?:by|from) |Subsecs?\. \S+(?: .{0,60})? (?:added|amended) by )/;
+// One section of a chapter file in live/law (Markdown, "## Sec. N. HEADING. text" blocks) -> units like lawUnits,
+// or null when the file has no such section. The first block wins when the file carries several versions.
+export function lawCopyUnits(markdown, number) {
+    const want = new RegExp(`^(?:Sec|Art)\\. ${number.replace(/\./g, '\\.')}\\.\\s`);
+    const block = String(markdown).split(/^## /m).slice(1).find(b => want.test(b));
+    if (!block) return null;
+    const paragraphs = block.split(/\n\s*\n/).map(p => p.replace(/\s+/g, ' ').trim()).filter(p => p && !SOURCE_NOTE.test(p))
+        .map(p => p.replace(/[\\<]/g, '\\$&'));  // Plain text: a "<" or "\" is never bill markup.
+    // Some files end a heading line without its period ("Art. 37.071. PROCEDURE IN CAPITAL CASE"); bills quote it with one.
+    if (paragraphs[0] && /^(?:Sec|Art)\. \S+\.\s+[^a-z]+[^.\s]$/.test(paragraphs[0])) paragraphs[0] += '.';
+    const units = lawUnits(paragraphs, 'current');
+    return units.length ? units : null;
+}
+
 // Current law as the bills quote it: for each subsection, the first amending entry that quotes it (whole-section
 // quotes first). Returns {units, sources: [bill ids], partial}.
 export function currentLaw(entries) {

@@ -331,7 +331,7 @@ function registerViews(){
   registerView('today',{heading:['Today at the Lege.','Bills with a recorded action that day, by type of action. Dates follow Texas time.'],render:()=>todayMarkup({todayRow})});
   registerView('local',{heading:['Near you.','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],render:()=>nearMarkup({followButton})});
   registerView('member',{heading:['One legislator.','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],render:memberMarkup});
-  registerView('statute',{heading:['One section of law.','The bills that would amend, add or repeal this section of Texas law, with their wording side by side.'],render:statuteMarkup});
+  registerView('statute',{heading:['One section of law.','A section of Texas law and the bills in the 90th Legislature that would change it.'],render:statuteMarkup});
   registerView('bill',{heading:['One bill.','Its summary, text, changes to law, people, agencies and sources.'],render:()=>'<article class="bill-page" id="bill-page" aria-label="Bill details"></article>',after:fillBillPage});
   registerView('agencies',{heading:['Follow the agencies.','Explore where legislation might land across Texas government.'],render:agenciesMarkup});
   registerView('review',{heading:['Full-text review.','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:reviewMarkup});
@@ -405,7 +405,9 @@ function registerClicks(){
     renderContent();
     // Where the bill bar sits above the text (narrow screens), bring the text into view; beside it, it already is.
     if(matchMedia('(max-width:1199px)').matches)$('.law-main')?.scrollIntoView({behavior:'smooth',block:'start'});
-    $(`[data-law-compare="${CSS.escape(c.right)}"]`)?.focus({preventScroll:true})});
+    $(`[data-law-compare="${CSS.escape(c.right)}"]`)?.focus({preventScroll:true});
+    // Focus stays on the card, so say what the text now shows.
+    const shown=$('.law-main h3')?.textContent,sr=$('#sr-status');if(sr&&shown)sr.textContent=`Showing ${shown}`});
   clickOn('law-show','[data-law-show]',lawShow=>{state.statuteShow=lawShow.dataset.lawShow;renderContent()});
   clickOn('member-more','[data-member-more]',memberMore=>{const role=memberMore.dataset.memberMore;state.memberShow[role]=(state.memberShow[role]||30)+30;renderContent()});
   clickOn('copy-page-ai','#copy-page-ai',copyPage=>copyPageForAi(copyPage));
