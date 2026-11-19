@@ -9,6 +9,9 @@ TBA_E2E_VIEWPORTS=desktop|phone runs every test at that one size, =all at both; 
 
 Fast check per move commit (the full matrix runs in CI):
   TBA_E2E=1 python -m pytest -q tests/e2e/test_smoke.py tests/e2e/test_stored_data.py tests/e2e/test_sync.py       tests/e2e/test_<moved feature>.py
+
+Locally use at most `-n 3`: each xdist worker keeps its own Chrome, and `-n 8` used up a 32 GB desktop's free RAM. Outside
+CI the run stops itself when free RAM falls under TBA_E2E_MIN_FREE_GB (default 6).
 """
 
 import inspect
@@ -40,6 +43,37 @@ def pytest_generate_tests(metafunc):
     else:
         sizes = ["desktop"]
     metafunc.parametrize("viewport", sizes, indirect=True)
+
+
+def _free_gb():
+    """Available RAM in GB, or None when it cannot be read (no psutil and no /proc/meminfo)."""
+    try:
+        import psutil
+        return psutil.virtual_memory().available / 2**30
+    except ImportError:
+        pass
+    try:
+        with open("/proc/meminfo", encoding="ascii") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / 2**20
+    except OSError:
+        pass
+    return None
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+    # Local only: a desktop run that eats the free RAM leaves the machine unresponsive. CI runners are disposable.
+    if os.environ.get("CI") == "true":
+        return
+    floor = float(os.environ.get("TBA_E2E_MIN_FREE_GB", "6"))
+    free = _free_gb()
+    if free is not None and free < floor:
+        # Stop the way -x does (pytest.exit inside an xdist worker is an INTERNALERROR); this test errors with the reason.
+        message = f"E2E stopped: {free:.1f} GB RAM free, under TBA_E2E_MIN_FREE_GB={floor:g}. Use a lower -n."
+        item.session.shouldstop = message
+        pytest.fail(message, pytrace=False)
 
 if os.environ.get("TBA_E2E") == "1":
     from playwright.sync_api import sync_playwright
