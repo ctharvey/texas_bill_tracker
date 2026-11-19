@@ -11,6 +11,7 @@ import {toast, $} from '../../core/dom.js';
 import {memberByCode} from '../../geo.js';
 import {memberTitle} from '../members/names.js';
 import {filteredBills} from '../explorer/model.js';
+import {isLawFollowQuery, lawFollowOf, lawFollowSearch} from '../statutes/model.js';
 import {todayDay, agencyName, areaName} from '../../core/labels.js';
 import {latestActivityDay} from '../../taxonomy.js';
 import {confirmJoin} from './join.js';
@@ -72,6 +73,15 @@ export function saveCurrentSearch(){
   if(state.searches.some(s=>JSON.stringify(s.filters)===JSON.stringify(filters))){toast(`Already saved as “${state.searches.find(s=>JSON.stringify(s.filters)===JSON.stringify(filters)).name}”`);return}
   changeSearch('save-search',{id:newSearchId(),name,filters,seen:todayDay()});
   renderOverview();toast(`Saved “${name}” · find it under Following`);
+}
+// "Follow this law": a saved search for the section key; following again unfollows (deletes that search).
+export function toggleLawFollow(key,label){
+  if(!isLawFollowQuery(key))return;
+  const have=lawFollowOf(state.searches,key);
+  if(have){changeSearch('delete-search',have.id);renderOverview();renderContent();toast(`Unfollowed ${label}`);return}
+  if(state.searches.length>=MAX_SEARCHES){toast(`You can follow or save up to ${MAX_SEARCHES} searches`);return}
+  changeSearch('save-search',lawFollowSearch(key,label,newSearchId(),todayDay()));
+  renderOverview();renderContent();toast(`Following ${label} · new bills and actions show on the home page and under Following`);
 }
 const FOLLOW_VIEWS=new Set(['following','member','local']);
 export function refreshWatch(){renderOverview();if(state.view==='home')refreshHome();else if(state.view==='all'||state.view==='watchlist'||FOLLOW_VIEWS.has(state.view))renderContent()}

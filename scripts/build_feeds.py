@@ -1020,6 +1020,7 @@ def _current_law(law, code: str, number: str) -> tuple[str, str, str] | None:
 def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str] | None, site: str = SITE) -> str:
     code, number = key.split(" ")
     url, target = f"{site}law/{code}/{number}", f"{site}#statute?law={code}&sec={number}"
+    feed = f"{site}live/feeds/law/{code}-{number}.xml"
     heading = (current[0] if current else "") or (f"Sec. {number}. {entry['h']}." if entry.get("h") else "")
     name = re.sub(r"^(?:Sec|Art)\.\s+\S+\.\s*", "", heading).rstrip(".").strip()
     label = f"{code_name} {'Art. ' if code == 'CR' else chr(0xa7)}{number}"  # As the app's statuteLabel.
@@ -1059,6 +1060,7 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
         links.append(f'<li><a href="{a(site + current[2])}">This chapter as it stands now, Markdown copy of the '
                      f"Texas Legislative Council's statute files</a></li>")
     links.append(f'<li><a href="{a(official)}">Official text on statutes.capitol.texas.gov</a></li>')
+    links.append(f'<li><a href="{a(feed)}">RSS feed of actions on these bills</a></li>')
     body += ["<h2>Links</h2>", "<ul>\n" + "\n".join(links) + "\n</ul>",
              "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
     return f"""<!doctype html>
@@ -1070,6 +1072,7 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
 <title>{escape(title)} · Texas Bill Atlas</title>
 <link rel="canonical" href="{a(url)}">
 <link rel="icon" href="/favicon.ico">
+<link rel="alternate" type="application/rss+xml" title="{a(label)}" href="{a(feed)}">
 {tags}
 <script>if(!{_CRAWLER_JS}.test(navigator.userAgent))location.replace({json.dumps(target)})</script>
 </head>
@@ -1078,6 +1081,59 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
 </body>
 </html>
 """
+
+
+LAW_LIMITS = ("Bills are matched to sections automatically from their text and can be missed: changes to a whole "
+              "chapter at once, renumbering and unusual wording. No item here does not mean no bill changes this "
+              "section.")
+_LAW_FEED_NAME = re.compile(r"([A-Z]{2})-(\d+[A-Z]?(?:\.\d+[A-Z]?)+)\.xml")
+
+
+def law_feed(key: str, bills: list[tuple[dict, str]], site: str = SITE, reviews: dict | None = None) -> str:
+    """Every action on the bills that change one law section, newest first, capped like a member feed."""
+    reviews = reviews or {}
+    code, number = key.split(" ")
+    label = f"{CODE_NAME.get(code, code)} {'Art. ' if code == 'CR' else chr(0xa7)}{number}"
+    official = (f"https://statutes.capitol.texas.gov/?tab=1&code={code}&chapter={code}.{number.split('.')[0]}"
+                f"&artSec={number}")
+    items = []
+    for bill, kind in bills:
+        verb = LAW_KIND_WORDS.get(kind, "changes")
+        for item in all_items(bill, reviews.get(bill["id"])):
+            items.append({**item, "caption": f"{bill_number(bill['id'])} {verb} {label}. {item['caption']}"})
+    items.sort(key=lambda i: i["date"] or "", reverse=True)
+    return render_rss(f"{label} · Texas Bill Atlas", f"{site}law/{code}/{number}",
+                      f"Actions on bills in the 90th Legislature that would change {label}. {LAW_LIMITS} "
+                      f"Official text: {official} Unofficial; confirm on Texas Legislature Online.",
+                      items[:MEMBER_FEED_ITEMS], site)
+
+
+def write_law_feeds(snapshot: dict, index: dict, out_dir: Path, site: str = SITE,
+                    reviews: dict | None = None) -> tuple[int, int]:
+    """live/feeds/law/<CODE>-<section>.xml per section in the statute index. A feed whose section no bill changes now
+    is rewritten empty, never removed, so a followed feed link keeps working."""
+    by_id = {b["id"]: b for b in snapshot.get("bills") or []
+             if isinstance(b, dict) and BILL_ID.fullmatch(str(b.get("id", "")))}
+    feeds: dict[str, list] = {}
+    for key, entry in (index.get("sections") or {}).items():
+        if not STATUTE_KEY.fullmatch(key) or key[:2] not in CODE_NAME or not isinstance(entry, dict):
+            continue  # Never build a file name from an unexpected key.
+        feeds[key] = [(by_id[b], k) for b, k in (x for x in entry.get("b", []) if isinstance(x, list) and len(x) == 2)
+                      if b in by_id]
+    if not feeds:
+        return 0, 0  # An empty or missing index never empties every feed.
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for path in out_dir.iterdir():
+        found = _LAW_FEED_NAME.fullmatch(path.name)
+        if found and found.group(1) in CODE_NAME:
+            feeds.setdefault(f"{found.group(1)} {found.group(2)}", [])
+    written = unchanged = 0
+    for key, bills in feeds.items():
+        if write_if_changed(out_dir / f"{key.replace(' ', '-')}.xml", law_feed(key, bills, site, reviews)):
+            written += 1
+        else:
+            unchanged += 1
+    return written, unchanged
 
 
 def write_law_pages(index: dict, out_dir: Path, site: str = SITE, law_dir: Path | None = None) -> tuple[int, int, int]:
@@ -1186,6 +1242,7 @@ def main() -> int:
     if law_keys:
         write_law_pages(statute_index, (args.share or args.snapshot.parent / "share") / "law", args.site,
                         args.snapshot.parent / "law")
+        write_law_feeds(snapshot, statute_index, args.out / "law", args.site, reviews)
     write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml", sitemap(snapshot, args.site, law_keys))
     from atlas.feeds.brackets import default_census, write_brackets
     status = write_brackets(snapshot, text_dir, args.census or default_census(), args.brackets or args.snapshot.parent / "brackets")

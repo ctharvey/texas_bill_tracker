@@ -85,6 +85,41 @@ class LawPageTests(unittest.TestCase):
         page = (self.out / "CR" / "42.12.html").read_text("utf-8")
         self.assertIn("Art. 42.12: COMMUNITY SUPERVISION", page)
 
+    def test_page_links_its_feed(self):
+        build_feeds.write_law_pages(INDEX, self.out, law_dir=self.law)
+        page = (self.out / "GV" / "403.606.html").read_text("utf-8")
+        self.assertIn('<link rel="alternate" type="application/rss+xml" title="Government Code §403.606" '
+                      'href="https://billatlas.org/live/feeds/law/GV-403.606.xml">', page)
+
+    def test_law_feeds_list_actions_and_keep_followed_links_working(self):
+        snapshot = {"bills": [
+            {"id": "HB1094", "caption": "Relating to contracts.", "actions": ["Filed", "Referred to State Affairs"],
+             "action_dates": ["2026-11-10", "2026-11-12"]},
+            {"id": "SB12", "caption": "Relating to boycotts.", "actions": ["Filed"], "action_dates": ["2026-11-11"]},
+            {"id": "HB7", "caption": "Relating to rules.", "actions": []}]}
+        feeds = self.root / "feeds" / "law"
+        self.assertEqual(build_feeds.write_law_feeds(snapshot, INDEX, feeds), (3, 0))
+        self.assertEqual(sorted(p.name for p in feeds.iterdir()), ["GV-2271.002.xml", "GV-403.606.xml", "GV-9999.001.xml"])
+        root = ET.fromstring((feeds / "GV-2271.002.xml").read_text("utf-8"))
+        self.assertEqual(root.findtext("channel/link"), "https://billatlas.org/law/GV/2271.002")
+        self.assertIn("can be missed", root.findtext("channel/description"))
+        self.assertIn("artSec=2271.002", root.findtext("channel/description"))
+        captions = [i.findtext("description") for i in root.findall("channel/item")]
+        self.assertTrue(captions and all(c.startswith(("HB 1094 repeals", "SB 12 amends")) for c in captions), captions)
+        dates = [i.findtext("pubDate") for i in root.findall("channel/item")]
+        self.assertEqual(len(dates), len(captions))
+        self.assertEqual(build_feeds.write_law_feeds(snapshot, INDEX, feeds), (0, 3))
+        # A section no bill changes any more keeps an empty feed, so a follower's link still works.
+        smaller = {"sections": {"GV 403.606": INDEX["sections"]["GV 403.606"]}}
+        build_feeds.write_law_feeds(snapshot, smaller, feeds)
+        empty = ET.fromstring((feeds / "GV-9999.001.xml").read_text("utf-8"))
+        self.assertEqual(empty.findall("channel/item"), [])
+        self.assertEqual(empty.findtext("channel/link"), "https://billatlas.org/law/GV/9999.001")
+        # An empty index writes nothing.
+        before = {p.name: p.read_text("utf-8") for p in feeds.iterdir()}
+        self.assertEqual(build_feeds.write_law_feeds(snapshot, {"sections": {}}, feeds), (0, 0))
+        self.assertEqual(before, {p.name: p.read_text("utf-8") for p in feeds.iterdir()})
+
     def test_sitemap_lists_law_addresses(self):
         text = build_feeds.sitemap({"bills": [{"id": "HB1"}]}, law_keys=list(INDEX["sections"]))
         ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}

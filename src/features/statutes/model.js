@@ -4,6 +4,16 @@ import {parseParagraph} from '../billtext/model.js';
 
 export const STATUTE_KEY = /^([A-Z]{2}) (\d+[A-Z]?(?:\.\d+[A-Z]?)+)$/;
 export const STATUTE_KINDS = {m: 'amends', n: 'adds a new section', r: 'repeals'};
+
+// Following a law section is a saved search whose only filter is the section key as the query ({query: "PE 46.06"}),
+// so it syncs, exports and counts new actions like any saved search. A query that is exactly a key matches only the
+// bills the index lists for that section, never free text: "pe" alone is in almost every bill's text.
+export const isLawFollowQuery = query => typeof query === 'string' && STATUTE_KEY.test(query);
+export const lawFollowOf = (searches, key) => (searches || []).find(s => s?.filters?.query === key
+    && Object.keys(s.filters).length === 1) || null;
+export const lawFollowSearch = (key, name, id, seen) => ({id, name: String(name).slice(0, 80), filters: {query: key}, seen});
+// Bills a section-key query selects: those the index lists for that section (none when no bill changes it yet).
+export const lawFollowBills = (index, key) => (index?.sections?.[key]?.b || []).map(p => p[0]);
 const isMap = o => o && typeof o === 'object' && !Array.isArray(o);
 
 export const statuteFile = key => STATUTE_KEY.test(key) && key.length <= 20 ? `${key.replace(' ', '-')}.json` : null;

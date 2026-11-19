@@ -5,8 +5,8 @@ import {$, esc} from '../../core/dom.js';
 import {timeoutSignal, httpError} from '../../core/net.js';
 import {buildHash} from '../../prefs.js';
 import {lastActionInfo, openLinkHtml} from '../../taxonomy.js';
-import {STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, compareLaw, currentLaw, groupStatuteEntries} from './model.js';
-import {renderContent, renderResults} from '../../core/router.js';
+import {STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, compareLaw, currentLaw, groupStatuteEntries, lawFollowOf} from './model.js';
+import {renderContent, renderResults, refreshHome} from '../../core/router.js';
 import {billHref} from '../../core/links.js';
 
 // ---- Statutes: which sections of Texas law each bill changes, and the versions side by side ----
@@ -26,6 +26,7 @@ export function loadStatutes(){
     // Views drawn before it arrived: section search results, saved-search counts, the statute page, the open drawer.
     if(state.view==='all'||state.view==='watchlist')renderResults();
     else if(state.view==='following'||state.view==='statute')renderContent();
+    else if(state.view==='home')refreshHome();  // A followed law's new bills count only once the index is here.
     if(state.openBill)fillDrawerStatutes(state.openBill);
   })());
 }
@@ -109,6 +110,17 @@ function lawCompareMarkup(options){
     <div class="law-compare" data-show="${show}"><div class="law-row law-head"><div class="law-label"></div><div class="law-cell">${esc(left.label)}</div><div class="law-cell">${esc(right.label)}</div></div>${body}</div></section>`;
 }
 
+// Same limits the law share page and feed state (scripts/build_feeds.py LAW_LIMITS).
+const LAW_LIMITS='Bills are matched to sections automatically from their text and can be missed: changes to a whole chapter at once, renumbering and unusual wording. No bill listed here does not mean no bill changes this section.';
+export const lawFeedHref=key=>`./live/feeds/law/${encodeURIComponent(key.replace(' ','-'))}.xml`;
+// Follow (a saved search for the section) and, once a bill changes it, the section's RSS feed.
+function lawToolsMarkup(key,label,hasFeed){
+  const on=!!lawFollowOf(state.searches,key);
+  const button=`<button class="${on?'outline-button following':'primary-button'} follow-button" data-follow-law="${esc(key)}" data-follow-label="${esc(label)}" aria-pressed="${on}">${on?'✓ Following':'+ Follow this law'}</button>`;
+  const feed=hasFeed?`<a class="outline-button" href="${esc(lawFeedHref(key))}" target="_blank" rel="noopener noreferrer">RSS feed</a>`:'';
+  return `<div class="tools-row law-tools">${button}${feed}</div>`;
+}
+
 export function statuteMarkup(){
   const key=state.statuteKey;
   const head=(title,sub='90th Legislature · every bill that changes it')=>`<div class="section-head"><div><div class="section-overline">TEXAS LAW</div><h2>${title}</h2></div><span class="subtitle">${sub}</span></div>`;
@@ -116,9 +128,10 @@ export function statuteMarkup(){
   if(!state.statutes)return state.statutesFailed?`${head(esc(key))}<div class="info-callout callout-warn">The list of laws each bill changes is not available right now. Try again later.</div>`:`${head(esc(key))}<p class="near-hint">Loading…</p>`;
   const label=statuteLabel(key,state.statutes.codes),info=state.statutes.sections[key];
   const official=`<a class="text-link" href="${esc(officialStatuteUrl(key))}" target="_blank" rel="noopener noreferrer">Current law on statutes.capitol.texas.gov ↗</a>`;
-  if(!info)return `${head(esc(label))}<div class="info-callout">No bill in this snapshot changes ${esc(label)}. ${official}</div>`;
+  const tools=lawToolsMarkup(key,label,!!info);
+  if(!info)return `${head(esc(label))}${tools}<div class="info-callout">No bill in this snapshot changes ${esc(label)}. Follow it to hear when one does. ${official}</div><p class="tools-note">${LAW_LIMITS}</p>`;
   const doc=statuteDoc(key);
-  const title=head(info.h?esc(titleCase(info.h)):esc(label));
+  const title=head(info.h?esc(titleCase(info.h)):esc(label))+tools;
   if(doc==='loading')return `${title}<p class="near-hint">Loading the bills' versions…</p>`;
   if(doc==='error')return `${title}<div class="info-callout callout-warn">The versions of this section could not be loaded. ${official}</div>`;
   if(state.statuteCompare?.key!==key)state.statuteCompare={key,left:null,right:null};
@@ -133,7 +146,7 @@ export function statuteMarkup(){
     return `<li class="law-version${g.broad?' law-broad':''}"><div>${bills}</div><small>${esc(notes.join(' · '))}</small>${compare}</li>`;
   };
   const block=(kind,heading,intro)=>{const list=groups.filter(g=>g.kind===kind);return list.length?`<section class="today-group"><h3>${heading} <span>${list.reduce((n,g)=>n+g.entries.length,0)}</span></h3>${intro?`<p class="near-hint">${intro}</p>`:''}<ul class="law-versions">${list.map(row).join('')}</ul></section>`:''};
-  return `${title}<div class="info-callout law-intro"><p>Each bill quotes the wording it would change, so current law below is as those bills quote it. It can trail the official text if a later law changed it. ${official}</p></div>
+  return `${title}<div class="info-callout law-intro"><p>Each bill quotes the wording it would change, so current law below is as those bills quote it. It can trail the official text if a later law changed it. ${official}</p><p>${LAW_LIMITS}</p></div>
     ${lawCompareMarkup(options)}
     ${block('amend','Bills that amend this section','')}
     ${block('add','Bills that add a new section with this number','Each of these adds a section numbered '+esc(key.split(' ')[1])+'. Bills drafted separately can pick the same next number for unrelated subjects, so check the wording.')}

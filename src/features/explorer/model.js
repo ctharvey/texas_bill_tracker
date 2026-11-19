@@ -1,7 +1,7 @@
 // The explorer's matching: each bill's search text, why a result matched, and the filtered, sorted list for the
 // explorer's own filters or a saved search's. No DOM.
 import {state} from '../../core/state.js';
-import {statuteKeysFor, parseStatuteQuery} from '../statutes/model.js';
+import {statuteKeysFor, parseStatuteQuery, isLawFollowQuery, lawFollowBills} from '../statutes/model.js';
 import {authorshipParty, searchTerms, partyFilterMatches, assessHearing, lastActionInfo, textMatches, newestFirst, authorInfluence} from '../../taxonomy.js';
 import {searchFields, searchText, matchReasons} from '../search/model.js';
 import {agencyName, realAgencies} from '../../core/labels.js';
@@ -38,7 +38,9 @@ export function filteredBills(f=state){
   const shared=own&&state.sharedList?new Set(state.sharedList):null;
   const {q,compact}=searchTerms(f.query||'');
   // A section number ("48.160", "Penal Code 46.06") also finds the bills that change that section.
-  const lawBills=new Set(lawKeysFor(f.query).flatMap(k=>state.statutes.sections[k].b.map(p=>p[0])));
+  // A followed section ("PE 46.06", exactly a key) is only the bills the index lists for it, never text matches.
+  const followed=isLawFollowQuery(f.query);
+  const lawBills=new Set(followed?lawFollowBills(state.statutes,f.query):lawKeysFor(f.query).flatMap(k=>state.statutes.sections[k].b.map(p=>p[0])));
   let list=state.bills.filter(b=>{
     if(shared&&!shared.has(b.id))return false;
     if(own&&state.view==='watchlist'&&!state.watch.has(b.id))return false;
@@ -53,6 +55,7 @@ export function filteredBills(f=state){
     if(f.action&&lastActionInfo(b).label!==f.action)return false;
     if(f.stage){const st=(b.status||'').toLowerCase();const outlook=assessHearing(b).label.toLowerCase();if(!st.includes(f.stage.toLowerCase())&&outlook!==f.stage.toLowerCase())return false}
     if(lawBills.has(b.id))return true;
+    if(followed)return false;
     return !q||b.id.toLowerCase().includes(compact)||textMatches(billSearchText(b),q);
   });
   const byNumber=(a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true});

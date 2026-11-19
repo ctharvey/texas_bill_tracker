@@ -51,7 +51,9 @@ Saved data lives in `localStorage` (`src/core/storage.js`) and leaves the browse
 person creates. The optional Near you address lookup sends the typed address to the US Census geocoder.
 
 - Watchlist `tx-bill-atlas-watch-90r`, followed legislators `tx-bill-atlas-follow-90r` (at most 200), saved searches
-  `tx-bill-atlas-searches-90r` (at most 20), preferences and last filters `tx-bill-atlas-prefs-v1`.
+  `tx-bill-atlas-searches-90r` (at most 20), preferences and last filters `tx-bill-atlas-prefs-v1`. A followed law
+  section is a saved search whose only filter is the section key as the query (`{query: "PE 46.06"}`); a query that
+  is exactly a key matches only the bills the statute index lists for that section, never free text.
 - Near you `texas-bill-atlas-near-you-v1`: district numbers, county and how they were found. Coordinates and
   addresses are never stored.
 - Export file `texas-bill-atlas-profile-v1`: `{lists, follows, searches, theme}`. Import also reads older

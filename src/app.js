@@ -10,7 +10,7 @@ import {followingMarkup} from './features/searches/view.js';
 import {handleSaveClick, importWatchlist} from './features/watchlist/actions.js';
 import {MOVE_FROM, renderMoveBanner, startMove, receiveArrivingMove, movePreviousKey} from './features/move/flow.js';
 import {cardVersions, fillBillPage} from './features/bill/page.js';
-import {listStore, sync, toggleFollow, changeSearch, saveCurrentSearch, changeWatch, setupSync, openSyncLink} from './features/sync/lists.js';
+import {listStore, sync, toggleFollow, changeSearch, saveCurrentSearch, toggleLawFollow, changeWatch, setupSync, openSyncLink} from './features/sync/lists.js';
 import {exportCsv} from './features/explorer/csv.js';
 import {importFile} from './features/explorer/import.js';
 import {options} from './features/explorer/controls.js';
@@ -388,6 +388,7 @@ function registerClicks(){
   clickOn('near-more','[data-near-more]',nearMore=>{state.nearShow={...state.nearShow,[nearMore.dataset.nearMore]:Infinity};renderContent()});
   clickOn('follow','[data-follow]',follow=>toggleFollow(follow.dataset.follow));
   clickOn('save-search','#save-search',()=>saveCurrentSearch());
+  clickOn('follow-law','[data-follow-law]',b=>toggleLawFollow(b.dataset.followLaw,b.dataset.followLabel||b.dataset.followLaw));
   // Opening a saved search marks it seen today; the link itself navigates to the explorer with its filters.
   clickOn('search-open','[data-search-open]',openSearch=>{const s=state.searches.find(x=>x.id===openSearch.dataset.searchOpen);
     if(s&&s.seen!==todayDay())changeSearch('save-search',{...s,seen:todayDay()})});

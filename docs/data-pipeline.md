@@ -44,7 +44,10 @@ between files without reinstalling units. A push that changes a job's code or in
 
 `build_feeds.py` then builds from the snapshot, Luna's tags and the roster:
 
-- RSS feeds: `live/feeds/<ID>.xml` per bill and `live/feeds/members/<CODE>.xml` per legislator (newest 200 items).
+- RSS feeds: `live/feeds/<ID>.xml` per bill, `live/feeds/members/<CODE>.xml` per legislator and
+  `live/feeds/law/<CODE>-<section>.xml` per law section a bill changes (every action on those bills, newest 200 items,
+  with the matching limits and the official link). A law feed whose section no bill changes any more is rewritten
+  empty, never removed, so a followed link keeps working.
 - Share pages `live/share/<ID>.html`, served at `/bill/<ID>` to every visitor (people are sent on to the app), with the
   official record, a `text/markdown` alternate link to the agent edition, schema.org `Legislation` data and the first 3,000 characters of text. Rewritten pages are submitted to
   IndexNow (`--no-indexnow` turns this off).
