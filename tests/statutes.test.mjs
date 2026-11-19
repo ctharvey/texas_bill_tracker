@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {STATUTE_KEY, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, statutesByBill, parseStatuteQuery,
-  statuteKeysFor, lawParagraph, lawUnits, wordDiff, compareLaw, currentLaw, groupStatuteEntries} from '../src/review.js';
+  statuteKeysFor, lawParagraph, lawUnits, wordDiff, compareLaw, currentLaw, groupStatuteEntries} from '../src/features/statutes/model.js';
 import {parseHash, buildHash} from '../src/prefs.js';
 
 const CODES = {ED: 'Education Code', PE: 'Penal Code', CR: 'Code of Criminal Procedure', HS: 'Health and Safety Code'};
