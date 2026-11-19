@@ -12,6 +12,7 @@ import {followingMarkup} from './features/searches/view.js';
 import {sharedBanner, watchTools} from './features/watchlist/view.js';
 import {confirmJoin} from './features/sync/join.js';
 import {exportCsv, parseCsv} from './features/explorer/csv.js';
+import {options, AGENCY_SORT_KEY, agencyOptionsMarkup, agencySortButtons} from './features/explorer/controls.js';
 import {recentChanges, changeText} from './features/review/updates.js';
 import {AREAS, AREA_GROUPS, AREA_BY_ID, billAreas, inArea, areaCounts, topAgencies, subjectLabels} from './features/areas/model.js';
 import {statuteLabel, parseStatuteQuery, statuteKeysFor} from './features/statutes/model.js';
@@ -717,27 +718,6 @@ function registerViews(){
   setFallbackView('data');
 }
 
-function options(values,selected,placeholder){return `<option value="">${esc(placeholder)}</option>`+values.map(v=>`<option value="${esc(v)}" ${v===selected?'selected':''}>${esc(v)}</option>`).join('')}
-
-// The agency dropdown's sort, A-Z or most bills first; remembered in this browser only.
-const AGENCY_SORT_KEY='tx-bill-atlas-agency-sort';
-function agencySortMode(){
-  if(!state.agencySort){try{state.agencySort=localStorage.getItem(AGENCY_SORT_KEY)==='count'?'count':'name'}catch{state.agencySort='name'}}
-  return state.agencySort;
-}
-function agencyOptionsMarkup(){
-  const agencyCounts=new Map();
-  for(const bill of state.bills)for(const agency of bill.agencies)agencyCounts.set(agency.id,(agencyCounts.get(agency.id)||0)+1);
-  const {withBills,withoutBills}=groupAgencyIds(unique([...AGENCIES.map(a=>a.id),...Object.keys(state.luna?.agencies||{})]),agencyName,agencyCounts,agencySortMode());
-  const option=(id,i)=>`<div id="agency-option-${i+1}" role="option" class="agency-option" data-agency-option="${esc(id)}" data-agency-label="${esc(agencyName(id))}" aria-selected="${state.agency===id}"><span>${esc(agencyName(id))}</span><span class="agency-option-count">${agencyCounts.get(id)||0}</span></div>`;
-  const emptyGroup=withoutBills.length?`<div role="group" aria-labelledby="agency-group-empty" data-agency-group><div class="agency-group-label" id="agency-group-empty" role="presentation">No bills in this snapshot</div>${withoutBills.map((id,i)=>option(id,withBills.length+i)).join('')}</div>`:'';
-  return `<div id="agency-option-0" role="option" class="agency-option" data-agency-option="" data-agency-label="All affected agencies" aria-selected="${!state.agency}"><span>All affected agencies</span></div>${withBills.map(option).join('')}${emptyGroup}<p class="agency-no-results" id="agency-no-results" hidden>No matching agencies</p>`;
-}
-function agencySortButtons(){
-  const mode=agencySortMode();
-  return [['name','A–Z'],['count','Most bills']].map(([value,label])=>`<button type="button" data-agency-sort="${value}" aria-pressed="${mode===value}">${label}</button>`).join('');
-}
-
 const SEARCH_EXAMPLES=[...SEARCH_FIELDS.filter(f=>f.example).map(f=>f.example),'"minimum wage"'];
 // ---- Filters (D6) ----
 const MORE_FILTERS=['agency','party','outlook','action','onlyWatch'];
@@ -1193,7 +1173,7 @@ function setAgencySort(mode){
   try{localStorage.setItem(AGENCY_SORT_KEY,state.agencySort)}catch{}
   const input=$('#filter-agency'),popup=$('#agency-options');
   if(!input||!popup)return;
-  popup.innerHTML=agencyOptionsMarkup();
+  popup.innerHTML=agencyOptionsMarkup(agencyName);
   document.querySelectorAll('[data-agency-sort]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.agencySort===state.agencySort)));
   showAgencyChoices(input.value);
 }
