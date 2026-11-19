@@ -16,6 +16,7 @@ import {cardVersions, fillBillPage} from './features/bill/page.js';
 import {confirmJoin} from './features/sync/join.js';
 import {listStore, sync, changeFollow, toggleFollow, changeSearch, searchCounts, saveCurrentSearch, refreshWatch, onSynced, changeWatch, setupSync, openSyncLink, pullSync} from './features/sync/lists.js';
 import {exportCsv, parseCsv} from './features/explorer/csv.js';
+import {importFile} from './features/explorer/import.js';
 import {options, AGENCY_SORT_KEY, agencyOptionsMarkup, agencySortButtons} from './features/explorer/controls.js';
 import {lawKeysFor, reasonFor, filteredBills} from './features/explorer/model.js';
 import {SEARCH_EXAMPLES, clearFilter, explorerMarkup, headlineLine, relatedBlock, drawResults, PREVIEW_WIDE, preview, showPreview, closePreview, stepPreview, sameText} from './features/explorer/view.js';
@@ -669,24 +670,6 @@ function handleChange(e){
   if(e.target.id==='sort-order'){state.sort=Object.keys(SORTS).find(k=>SORTS[k]===e.target.value)||'newest';state.visibleCount=30;renderResults();return}
   if(e.target.id==='import-file'&&e.target.files?.length)importFile(e.target.files[0]);
   if(e.target.id==='import-watch-file'&&e.target.files?.length){importWatchlist(e.target.files[0]);e.target.value=''}
-}
-
-async function importFile(file){
-  try{
-    if(file.size>15*1024*1024)throw Error('Select a file smaller than 15 MB');
-    const contents=await file.text();const data=file.name.toLowerCase().endsWith('.csv')?parseCsv(contents):JSON.parse(contents);
-    const rows=Array.isArray(data)?data:data.bills;
-    if(!Array.isArray(rows))throw Error('Expected an array of bills or an object with a bills array');
-    const profiles=!Array.isArray(data)&&data.author_profiles&&typeof data.author_profiles==='object'?data.author_profiles:null;
-    const valid=rows.filter(r=>r&&typeof r==='object').map(raw=>normalized(raw,profiles)).filter(Boolean).map(b=>attachMembers(b,state.roster));
-    if(!valid.length)throw Error('No valid Texas bill numbers found');
-    const previous={bills:state.bills,meta:state.meta,topic:state.topic,area:state.area,agency:state.agency,chamber:state.chamber,party:state.party,stage:state.stage,action:state.action,outlook:state.outlook,query:state.query,visibleCount:state.visibleCount,view:state.view};
-    try{
-      state.bills=valid;state.meta={session:'90R',data_mode:'local import',source_file:file.name,generated_at:new Date().toISOString(),coverage_note:`Local file: ${file.name}. Imported rows are visible only during this session.`};
-      switchFilters('all');Object.assign(state,{topic:'',area:'',agency:'',chamber:'',party:'',stage:'',action:'',outlook:'',query:'',visibleCount:30});setView('all');
-    }catch(renderError){Object.assign(state,previous);setView(previous.view);throw renderError}
-    goTo('all');toast(`Imported ${valid.length} bills`);
-  }catch(err){toast(`Import failed: ${err.message}`)}
 }
 
 init();
