@@ -12,6 +12,10 @@ Fast check per move commit (the full matrix runs in CI):
 
 Locally use at most `-n 3`: each xdist worker keeps its own Chrome, and `-n 8` used up a 32 GB desktop's free RAM. Outside
 CI the run stops itself when free RAM falls under TBA_E2E_MIN_FREE_GB (default 6).
+
+Local check (about 470 runs): TBA_E2E=1 TBA_E2E_QUICK=1 python -m pytest -q -n 2 tests/e2e
+  Bundle mode only, except the smoke and CSP modules in both modes (they check that the page's code loads either way).
+Full matrix off the desktop: python tests/e2e/run_remote.py <commit> (ubuntu-server, Playwright's Docker image).
 """
 
 import inspect
@@ -43,6 +47,22 @@ def pytest_generate_tests(metafunc):
     else:
         sizes = ["desktop"]
     metafunc.parametrize("viewport", sizes, indirect=True)
+
+
+# Modules that still run in both serving modes under TBA_E2E_QUICK=1.
+QUICK_BOTH_MODES = {"test_smoke.py", "test_csp.py"}
+
+
+def pytest_collection_modifyitems(config, items):
+    if os.environ.get("TBA_E2E_QUICK") != "1":
+        return
+    keep, drop = [], []
+    for item in items:
+        mode = getattr(item, "callspec", None) and item.callspec.params.get("site")
+        (drop if mode == "src" and item.path.name not in QUICK_BOTH_MODES else keep).append(item)
+    if drop:
+        config.hook.pytest_deselected(items=drop)
+        items[:] = keep
 
 
 def _free_gb():
