@@ -11,7 +11,7 @@ class El {
 }
 globalThis.document = {createElement: tag => new El(tag)};
 
-const {validChanges, renderChanges, witnessSummary, renderHearing, validFiscal, renderFiscal} = await import('../src/review.js');
+const {validChanges, renderChanges, witnessSummary, renderHearing, validFiscal, renderFiscal} = await import('../src/features/stages/render.js');
 
 const index = {bill_id: 'HB1', versions: [{code: 'I', name: 'Introduced', sha256: 'aaa'}, {code: 'E', name: 'Engrossed', sha256: 'bbb'}]};
 const changes = {format: 'texas-bill-luna-changes-v1', bill_id: 'HB1', from_version: 'I', to_version: 'E', text_sha256: 'bbb',

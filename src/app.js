@@ -4,10 +4,11 @@ import {topicHue, topicStyle, plainTitle, daysUntil} from './features/home/rows.
 import {runState, passRows, passJobs, lookup, RUN_LIMIT_MINUTES} from './features/review/model.js';
 import {recentChanges, updateEntries, changeText} from './features/review/updates.js';
 import {AREAS, AREA_GROUPS, AREA_BY_ID, billAreas, inArea, areaCounts, topAgencies, subjectLabels} from './features/areas/model.js';
-import {reviewModel, renderReview, validChanges, renderChanges, renderHearing, validFiscal, renderFiscal,
+import {reviewModel, renderReview,
   STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
 import {fillDrawerBrackets} from './features/brackets/view.js';
+import {stageFiles, stageSections} from './features/stages/view.js';
 import {exportMarkup} from './features/export/view.js';
 import {methodMarkup} from './features/pages/method.js';
 import {savingMarkup} from './features/pages/saving.js';
@@ -20,7 +21,7 @@ import {setupThemePicker, setupModePicker, setTheme, savedTheme, applyTheme, app
 import {TUMBLEWEED, noticeSearch, setupEasterEggs} from './features/easter/view.js';
 import {state} from './core/state.js';
 import {$, esc, toast} from './core/dom.js';
-import {timeoutSignal, loadShardedMap, httpError, discard} from './core/net.js';
+import {timeoutSignal, loadShardedMap, httpError} from './core/net.js';
 import {registerView, setFallbackView, viewHeading, renderView} from './core/router.js';
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
 import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, visitKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
@@ -1676,35 +1677,6 @@ function memberItem({name,member}){
   // The name opens the member's page here; the official record stays one click away.
   const who=member?.code?`<a class="text-link" href="${esc(memberHref(member.code))}">${esc(label)}</a>`:`<strong>${esc(label)}</strong>`;
   return `<li><span class="party-dot party-${letter}" aria-hidden="true"></span>${who} ${tenurePill(member)} <small>${esc(memberSummary(member))}</small>${official?` <a class="text-link member-official" href="${esc(official)}" target="_blank" rel="noopener noreferrer" aria-label="Official record for ${esc(label)}">official ↗</a>`:''}</li>`;
-}
-
-// The open bill's stage files; only the redraw after Luna loads (reuse) may share them, every opening asks again.
-const stageFiles={id:null,files:null,reuse:false};
-function stageSections(b){
-  const holder=document.createElement('div');
-  if(!/^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)\d{1,5}$/.test(b.id))return holder;
-  const getJson=async url=>{try{const r=await fetch(url,{cache:'no-cache',signal:timeoutSignal(20000)});return r.ok?await r.json():discard(r)}catch{return null}};
-  const show=node=>{if(node&&state.openBill===b.id&&holder.isConnected!==false)holder.append(node)};
-  if(!(stageFiles.reuse&&stageFiles.id===b.id&&stageFiles.files)){
-    stageFiles.id=b.id;
-    stageFiles.files=Promise.all([
-      getJson(`./live/text/${b.id}/index.json`),getJson(`./live/luna/changes/${b.id}.json`),
-      getJson(`./live/history/${b.id}/witnesses-H.json`),getJson(`./live/history/${b.id}/witnesses-S.json`),
-      getJson(`./live/luna/fiscal/${b.id}.json`),getJson(`./live/luna/highlights/${b.id}.json`)]);
-  }
-  const files=stageFiles.files;
-  (async()=>{
-    const [index,changes,witH,witS,fiscal,highlights]=await files;
-    if(state.openBill!==b.id)return;
-    try{if(changes&&validChanges(changes,b.id,index))show(renderChanges(changes,index))}catch(e){console.warn('Changes hidden',e.message)}
-    try{show(renderHearing([witH,witS]))}catch(e){console.warn('Hearing hidden',e.message)}
-    try{
-      // Current review = the tags entry's text_version plus the highlights file made on that same version (it carries the sha).
-      const current=b.luna&&highlights&&highlights.text_version===b.luna.text_version?{text_version:b.luna.text_version,text_sha256:highlights.text_sha256}:null;
-      if(fiscal&&validFiscal(fiscal,b.id,current))show(renderFiscal(fiscal,b.id));
-    }catch(e){console.warn('Fiscal check hidden',e.message)}
-  })();
-  return holder;
 }
 
 // The bill page's section groups, in page order; the header's section menu jumps to each.
