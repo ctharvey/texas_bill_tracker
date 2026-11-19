@@ -19,7 +19,7 @@ only what it can verify. It runs as `texas-bill-review.service` under its own ac
   (a result, then a verified summary, then more verified claims); otherwise the earlier review stays. The debt is kept
   in `queue.json` (`first_pass_retry`, bound to the text's hash) and the bill stays on the retry list until it is paid
   or the cap is reached. Version updates and companion reuses are not retried this way.
-- **Current law** (`--law-context`, off in production for now): a first pass of a text not reviewed before also gets
+- **Current law** (`--law-context`, on in production since 2026-11-19): a first pass of a text not reviewed before also gets
   the current law it changes, from `live/law` (`law_context.py`). That is the heading of every chapter the bill
   repeals, amends, adds to or names (`build_feeds.bill_chapters`; a repealed chapter also lists its section
   headings), then the current text of each section it amends or repeals and of the sections of each repealed
@@ -57,7 +57,7 @@ amended chapter defines it).
 ## Production
 
 The unit runs `--execute --input markdown --stages --suggest-topics --audit-sample --related-bills --workers 6
---order reverse --restart-on-update --no-spending-cap` (see `scripts/texas-bill-review.service` for the full line).
+--order reverse --restart-on-update --law-context --no-spending-cap` (see `scripts/texas-bill-review.service` for the full line).
 
 - Each run lasts up to `--max-minutes` (55). The timer starts the next run two minutes after one ends. A run that
   spent nothing and changed nothing makes the next start wait up to 30 minutes for new data or code; delete
