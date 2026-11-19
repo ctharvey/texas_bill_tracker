@@ -35,7 +35,7 @@ import {setupThemePicker, setupModePicker, setTheme, savedTheme, applyTheme, app
 import {TUMBLEWEED, noticeSearch, setupEasterEggs} from './features/easter/view.js';
 import {state, runtime} from './core/state.js';
 import {shortDate, dateText, stampText, unique, safeHref} from './core/format.js';
-import {billHref, memberHref} from './core/links.js';
+import {billHref, memberHref, siteBase} from './core/links.js';
 import {$, esc, toast} from './core/dom.js';
 import {copyText, download} from './core/copy.js';
 import {SORTS, agencyName, areaName, realAgencies, todayDay} from './core/labels.js';
@@ -173,8 +173,6 @@ async function init(){
 }
 
 // ---- Saving choices without accounts: URL state, remembered filters, files and private sync links ----
-// The site root, whatever page is open: a bill page's path is /bill/<ID>.
-const siteBase=()=>`${location.origin}/`;
 // Every view but a bill page lives at /#view. A plain hash change on /bill/<ID> would stay under that path, so it
 // moves to / instead and is handled like any other hash change.
 let lastPath=location.pathname;
