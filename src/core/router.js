@@ -15,3 +15,7 @@ export function renderView(name, el){
   el.innerHTML=view.render();
   view.after?.();
 }
+// The app's full redraw of the current view, for features that redraw after async work. app.js sets it before boot.
+let redraw = () => {};
+export function setRenderContent(fn){redraw=fn}
+export const renderContent = () => redraw();

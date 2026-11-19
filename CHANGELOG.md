@@ -2,7 +2,7 @@
 
 ## 2026-11-18
 - A failed data fetch now releases its request at once: an unread 404 body (Luna shard indexes, `updates.json`) kept each request open until its 20 s timeout. E2E page opens drop from about 21 s to under 1 s.
-- Feature folders 4.3: static pages and dialogs, AI copy, bill text, the drawer stages, the private review file, statutes, the review progress page, companions and Today moved into `src/features/` (no behavior change).
+- Feature folders 4.3: static pages and dialogs, AI copy, bill text, the drawer stages, the private review file, statutes, the review progress page, companions, Today and Near you moved into `src/features/` (no behavior change).
 - Data files stay at the Cloudflare edge until they change: each data run purges only the files it added, rewrote or deleted (by modification time and size against `live/purge-state.json`), a failed purge is retried with the next run, and the daily check flags a purge pending over 2 hours. The edge TTL on those paths goes from 1 hour to 30 days.
 - `/bill/<ID>` is one cached page for every visitor: Cloudflare serves the share page (people are sent on to the app), agents pick the Markdown record from its `rel="alternate"` link, and `Accept: text/markdown` is redirected to it. Before, every `/bill/<ID>` request reached the server.
 - Following names which legislator and role each bill comes from again (lost in the compact rows); nightly E2E selectors follow the Nov 17 row redesign.
