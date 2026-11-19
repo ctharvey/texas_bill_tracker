@@ -13,7 +13,7 @@ test('a "__proto__" sort is dropped from the address, filters and saved searches
 });
 
 test('valid sorts are kept unchanged', () => {
-  const sorts = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8').match(/const SORTS=\{([^}]*)\}/)[1];
+  const sorts = readFileSync(new URL('../src/core/labels.js', import.meta.url), 'utf8').match(/const SORTS=\{([^}]*)\}/)[1];
   const names = [...sorts.matchAll(/(\w+):'/g)].map(m => m[1]);
   assert.ok(names.length >= 8);
   for (const name of names) {

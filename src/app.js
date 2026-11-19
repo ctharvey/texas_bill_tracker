@@ -35,6 +35,7 @@ import {shortDate, dateText, stampText, unique, safeHref} from './core/format.js
 import {billHref, memberHref} from './core/links.js';
 import {$, esc, toast} from './core/dom.js';
 import {copyText, download} from './core/copy.js';
+import {SORTS, agencyName, areaName, realAgencies, todayDay} from './core/labels.js';
 import {timeoutSignal, loadShardedMap, httpError} from './core/net.js';
 import {registerView, setFallbackView, viewHeading, renderView, setRenderContent} from './core/router.js';
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
@@ -53,9 +54,6 @@ import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, member
 import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, snapshotAgeHours, normalizeBill, companionGroups, sortAgencyIds, groupAgencyIds, searchTerms, textMatches, newestFirst, cardClickOpens, openLinkHtml, chicagoDate, activityOn, highestNumberFirst, latestActivityDay, topicCounts, groupByActionType, companionLabel} from './taxonomy.js';
 
 setRenderContent(renderContent);  // features redraw through core/router.js's renderContent
-const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last action',actionstage:'Last action stage',number:'Bill number',agencies:'Most agencies',hearing:'Hearing progress',influence:'Author influence'};
-const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
-const areaName = id => AREA_BY_ID.get(id)?.name||id;
 loadSaved();
 // The dashboard visit before this one: read, and today stamped, the first time the dashboard is drawn in this page
 // load, so other pages never add the key. null on a first visit or without storage.
@@ -65,8 +63,6 @@ function previousVisit(){
   return visit.prev;
 }
 
-
-const realAgencies = b => b.agencies.filter(a=>a.id!==SCOPE_AGENCY_ID);
 
 const normalized=normalizeBill;
 
@@ -320,7 +316,6 @@ function changeSearch(op,item){
   sync.record(op,id,onSynced,op==='save-search'?item:undefined);
   renderMoveBanner();
 }
-const todayDay=()=>chicagoDate(new Date());
 // Bills matching a saved search now, and those with a dated action after the day it was last opened.
 function searchCounts(s){
   const list=filteredBills({...FILTER_DEFAULTS,...s.filters}),today=todayDay();
