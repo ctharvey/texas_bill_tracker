@@ -66,6 +66,8 @@ export function changeSearch(op,item){
 // day), since a late text or a new version can add it without a newer dated action. Same day counts: the index can
 // gain the bill after the follow was opened that day.
 export function searchCounts(s){
+  // A followed law's bills come from the statute index: until it is here (or when it failed) the count is unknown, not 0.
+  if(isLawFollowQuery(s.filters?.query)&&!state.statutes)return {total:null,fresh:0};
   const list=filteredBills({...FILTER_DEFAULTS,...s.filters}),today=todayDay();
   const law=isLawFollowQuery(s.filters?.query)?s.filters.query:null;
   const fresh=s.seen?list.filter(b=>(latestActivityDay([b],today)||'')>s.seen||(law&&lawFirstSeen(state.statutes,law,b.id)>=s.seen)).length:0;
@@ -84,6 +86,8 @@ export function saveCurrentSearch(){
 // devices can each have followed it).
 export function toggleLawFollow(key,label){
   if(!isLawFollowQuery(key))return;
+  // From storage, not this tab's copy: a follow another tab just saved is removed too (and never followed twice).
+  state.searches=readSearches(listStore,searchesKey);
   const have=lawFollowsOf(state.searches,key);
   if(have.length){for(const s of have)changeSearch('delete-search',s.id);renderOverview();renderContent();
     toast(`Unfollowed ${label}${have.length>1?` (removed ${have.length} saved searches for it)`:''}`);return}

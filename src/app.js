@@ -368,6 +368,9 @@ function registerClicks(){
     if(el.hasAttribute('data-previous-link'))copyText(siteBase()+'#watchlist?sync='+el.dataset.previousLink,'Edit link');
     if(el.id==='move-previous'&&movePreviousKey())copyText(siteBase()+'#watchlist?sync='+movePreviousKey(),'Edit link');
   });
+  // A feed link copies its address for a feed reader (a browser shows the raw XML); a modified click still opens it.
+  clickOn('feed','a[data-feed]',(a,e)=>{if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button)return;e.preventDefault();
+    navigator.clipboard.writeText(a.href).then(()=>toast('Feed address copied. Paste it into Outlook or a feed reader such as Feedly or Inoreader.'),()=>toast(`Copy this feed address into a feed reader: ${a.href}`))});
   clickOn('nav','[data-view]',(nav,e)=>{if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button)return;e.preventDefault();goTo(nav.dataset.view);setView(nav.dataset.view)});  // modified clicks open a new tab
   clickOn('open-bill','[data-open]',(open,e)=>{
     // A modified or non-primary click on a link keeps the browser's own behavior (new tab, new window).

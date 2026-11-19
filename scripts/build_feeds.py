@@ -1138,7 +1138,11 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     listed = ", ".join(f"{bill_number(b)} ({LAW_KIND_WORDS.get(k, 'changes')})" for b, k in bills[:6])
     more = f" and {len(bills) - 6} more" if len(bills) > 6 else ""
     count = f"{len(bills)} bill{'s' if len(bills) != 1 else ''} in the 90th Legislature would change this section"
-    description = clip(f"{count}: {listed}{more}. See each bill's wording next to today's law.", SHARE_DESCRIPTION_MAX)
+    # Only bills add it and current law has no such section: a proposed new section, nothing to compare against.
+    proposed = bool(bills) and all(k == "n" for _, k in bills) and not current
+    what = ("A proposed new section, not in current law yet: read each bill's version." if proposed
+            else "See each bill's wording next to today's law.")
+    description = clip(f"{count}: {listed}{more}. {what}", SHARE_DESCRIPTION_MAX)
     image = f"{site}{SITE_CARD}"
     a = lambda value: escape(value, {'"': "&quot;"})
     meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
@@ -1151,7 +1155,8 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     items = "\n".join(f'<li><a href="{a(f"{site}bill/{b}")}">{escape(bill_number(b))}</a> '
                       f'{LAW_KIND_WORDS.get(k, "changes")} this section</li>' for b, k in bills)
     body = [f"<h1>{escape(label)}{': ' + escape(name) if name else ''}</h1>",
-            f'<p><a href="{a(target)}">Open {escape(label)} in Texas Bill Atlas</a> to compare each bill\'s wording.</p>',
+            f'<p><a href="{a(target)}">Open {escape(label)} in Texas Bill Atlas</a> '
+            + ("to read each proposal.</p>" if proposed else "to compare each bill's wording with current law.</p>"),
             f"<h2>{escape(count[0].upper() + count[1:])}</h2>", f"<ul>\n{items}\n</ul>",
             "<p>Bills are matched to sections automatically from their text and can be missed, for example when a bill "
             "changes a whole chapter at once or renumbers sections. No bill listed here does not mean no bill changes "

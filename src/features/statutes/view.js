@@ -122,7 +122,7 @@ function lawWords(words,cls){
 function lawCompareMarkup(options,right){
   const c=state.statuteCompare;
   const left=options.find(o=>o.id===c.left)||options[0];
-  const select=`<label class="law-pick"><span>Left</span><select data-law-side="left">${options.map(o=>`<option value="${esc(o.id)}" ${o===left?'selected':''}>${esc(o.label)}</option>`).join('')}</select></label>`;
+  const select=`<label class="law-pick"><span>Compare against</span><select data-law-side="left">${options.map(o=>`<option value="${esc(o.id)}" ${o===left?'selected':''}>${esc(o.label)}</option>`).join('')}</select></label>`;
   const rows=left===right?[]:compareLaw({name:left.name,units:left.units,partial:left.partial},{name:right.name,units:right.units,partial:right.partial});
   const label=l=>l==='head'?'Heading':l===''?'Text':`(${l})`;
   // A part one side leaves alone (a partial quote) is unchanged, not different.
@@ -153,7 +153,7 @@ function lawToolsMarkup(key,label,hasFeed){
   if(!isLawFollowQuery(key))return '';  // Only codes the parser tracks can ever gain bills.
   const on=!!lawFollowOf(state.searches,key);
   const button=`<button class="${on?'outline-button following':'primary-button'} follow-button" data-follow-law="${esc(key)}" data-follow-label="${esc(label)}" aria-pressed="${on}">${on?'✓ Following':'+ Follow this law'}</button>`;
-  const feed=hasFeed?`<a class="outline-button" href="${esc(lawFeedHref(key))}" target="_blank" rel="noopener noreferrer">RSS feed</a>`:'';
+  const feed=hasFeed?`<a class="outline-button" data-feed href="${esc(lawFeedHref(key))}" target="_blank" rel="noopener noreferrer">RSS feed</a>`:'';
   return `<div class="tools-row law-tools">${button}${feed}</div>`;
 }
 
@@ -168,7 +168,7 @@ export function statuteMarkup(){
   const label=statuteLabel(key,state.statutes.codes),info=state.statutes.sections[key];
   const official=`<a class="text-link" href="${esc(officialStatuteUrl(key))}" target="_blank" rel="noopener noreferrer">Current law on statutes.capitol.texas.gov ↗</a>`;
   const tools=lawToolsMarkup(key,label,!!info);
-  if(!info)return `${head(esc(label),'90th Legislature · no bill changes it yet')}${tools}<div class="info-callout">No bill in this snapshot changes ${esc(label)}. Follow it to hear when one does. ${official}</div><p class="tools-note">${LAW_LIMITS}</p>`;
+  if(!info)return `${head(esc(label),'90th Legislature · no bill changes it yet')}${tools}<div class="info-callout">No bill in this snapshot changes ${esc(label)}.${tools?' Follow it to hear when one does.':''} ${official}</div><p class="tools-note">${LAW_LIMITS}</p>`;
   const doc=statuteDoc(key);
   const loadingTitle=head(info.h?esc(titleCase(info.h)):esc(label))+tools;
   if(doc==='loading')return `${loadingTitle}<p class="near-hint">Loading the bills' versions…</p>`;
@@ -215,7 +215,7 @@ export function statuteMarkup(){
   const oneHead=info.h&&new Set(groups.map(g=>unitHeading(g.units)).filter(Boolean)).size<=1;
   const title=proposed?head(oneHead?esc(titleCase(info.h)):esc(label),'Proposed new section · not in current law yet')+tools:loadingTitle;
   const limits=`<details class="law-limits"><summary>How bills are matched</summary><p>${LAW_LIMITS}</p></details>`;
-  const intro=proposed?`<div class="info-callout law-intro"><p>${count===1?'One bill proposes':`${count} bills propose`} a section with this number${groups.length>1?'. Bills drafted separately can reuse a number for unrelated subjects, so each is shown on its own':''}.</p>${limits}</div>`
+  const intro=proposed?`<div class="info-callout law-intro"><p>${count===1?'One bill proposes':`${count} bills propose`} a section with this number${groups.length>1?'. Bills drafted separately can reuse a number for unrelated subjects, so each is shown on its own':''}.${isLawFollowQuery(key)?' Following it follows every bill that uses this section number.':''}</p>${limits}</div>`
     :law?`<div class="info-callout law-intro"><details class="law-limits"><summary>About this comparison</summary><p>Current law is on the left, ${lawSource}; it can trail the official text if a later law changed it. ${official}</p><p>${LAW_LIMITS}</p></details></div>`
     :`<div class="info-callout law-intro"><p>Each bill quotes the wording it would change. ${official}</p>${limits}</div>`;
   return `${title}${intro}<div class="law-layout">${bar}<div class="law-main">${main}</div></div>`;

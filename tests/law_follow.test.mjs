@@ -44,9 +44,9 @@ test('a followed section with no bills shows new once a bill amending it appears
   assert.deepEqual(searchCounts(follow), {total: 1, fresh: 1});
   // Opened today: nothing new until the next action.
   assert.deepEqual(searchCounts({...follow, seen: '2026-11-10'}), {total: 1, fresh: 0});
-  // Before the index loads a follow counts nothing (the home page redraws when it arrives).
+  // Before the index loads the count is unknown, not 0, and nothing is new (the pages redraw when it arrives).
   state.statutes = null;
-  assert.deepEqual(searchCounts(follow), {total: 0, fresh: 0});
+  assert.deepEqual(searchCounts(follow), {total: null, fresh: 0});
 });
 
 test('the statute page offers Follow, the home page redraws when the index arrives, and clicks are ordered', () => {
@@ -136,4 +136,22 @@ test('an exact section query tells the reader while the index loads, if it faile
   assert.match(view, /Loading the bills that change/);
   assert.match(view, /none yet/);
   assert.match(view, /statutesFailed/);
+});
+
+test('unfollowing removes a copy another tab saved since this tab last read the list', async () => {
+  const {toggleLawFollow, listStore} = await import('../src/features/sync/lists.js');
+  const {searchesKey} = await import('../src/core/storage.js');
+  const realDocument = globalThis.document;
+  globalThis.document = {querySelector: () => null, querySelectorAll: () => []};  // No page: toasts and redraws find nothing.
+  try {
+    const mine = lawFollowSearch('PE 46.06', 'Penal Code § 46.06', 'aaaaaaaa11', '2026-11-19');
+    const theirs = lawFollowSearch('PE 46.06', 'Penal Code § 46.06', 'bbbbbbbb22', '2026-11-19');
+    listStore.setItem(searchesKey, JSON.stringify([mine, theirs]));  // The other tab wrote its copy too.
+    state.searches = [mine];  // This tab has not seen it yet.
+    try { toggleLawFollow('PE 46.06', 'Penal Code § 46.06'); } catch (error) { if (!/toast|classList|textContent/.test(String(error))) throw error; }
+    assert.deepEqual(JSON.parse(listStore.getItem(searchesKey)), []);
+    assert.deepEqual(state.searches, []);
+  } finally {
+    globalThis.document = realDocument;
+  }
 });

@@ -50,7 +50,7 @@ export function memberMarkup(){
   const sections=ROLES.map(([,role])=>[role,groups[role]]).filter(([,rows])=>rows.length)
     .map(([role,rows])=>`<section class="today-group"><h3>${role} <span>${rows.length}</span></h3>${memberList(role,rows)}</section>`).join('');
   const roleNote=m.chamber==='house'?'Representatives author and coauthor House bills and sponsor Senate bills that reach the House.':'Senators author and coauthor Senate bills and sponsor House bills that reach the Senate.';
-  return `<div class="info-callout member-profile"><div><small>${where}</small><strong>${esc(memberSummary(m))}</strong>${tenureTag(m)?`<p>${tenurePill(m)} ${esc(tenureTag(m).detail)}</p>`:''}${countyLine}${links?`<p>${links}</p>`:''}</div><div class="tools-row">${followButton(m)}<a class="outline-button" href="${esc(memberFeedHref(m.code))}" target="_blank" rel="noopener noreferrer">RSS feed</a></div></div>
+  return `<div class="info-callout member-profile"><div><small>${where}</small><strong>${esc(memberSummary(m))}</strong>${tenureTag(m)?`<p>${tenurePill(m)} ${esc(tenureTag(m).detail)}</p>`:''}${countyLine}${links?`<p>${links}</p>`:''}</div><div class="tools-row">${followButton(m)}<a class="outline-button" data-feed href="${esc(memberFeedHref(m.code))}" target="_blank" rel="noopener noreferrer">RSS feed</a></div></div>
     <p class="near-hint">${total?`${total} ${total===1?'bill':'bills'} in this snapshot. `:''}${roleNote} Sponsors and cosponsors are listed once a bill crosses chambers, so early in the session most bills show authors only.</p>
     ${sections||'<p class="review-empty">No bills by this member in this snapshot yet.</p>'}`;
 }

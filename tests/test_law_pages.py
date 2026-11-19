@@ -61,6 +61,12 @@ class LawPageTests(unittest.TestCase):
         self.assertIn("adds this section", page)
         self.assertNotIn("../x", page)
         self.assertIn("1 bill in the 90th Legislature", page)
+        # Nothing to compare a proposed section against: the page and its preview say so.
+        self.assertIn("A proposed new section, not in current law yet", page)
+        self.assertIn("to read each proposal.", page)
+        self.assertNotIn("next to today's law", page)
+        amended = (self.out / "GV" / "403.606.html").read_text("utf-8")
+        self.assertIn("to compare each bill's wording with current law.", amended)
 
     def test_without_a_law_copy_pages_use_the_index_heading(self):
         build_feeds.write_law_pages(INDEX, self.out, law_dir=self.root / "missing")
