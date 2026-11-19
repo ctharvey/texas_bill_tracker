@@ -68,7 +68,7 @@ export function setAgencySort(mode){
   try{localStorage.setItem(AGENCY_SORT_KEY,state.agencySort)}catch{}
   const input=$('#filter-agency'),popup=$('#agency-options');
   if(!input||!popup)return;
-  popup.innerHTML=agencyOptionsMarkup(agencyName);
+  popup.innerHTML=agencyOptionsMarkup();
   document.querySelectorAll('[data-agency-sort]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.agencySort===state.agencySort)));
   showAgencyChoices(input.value);
 }

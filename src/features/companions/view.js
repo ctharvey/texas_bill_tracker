@@ -1,9 +1,11 @@
 // Companion bills in the app: the cached index, the agency-through-a-companion lists, the group watch button and the
-// bill page's companion section. app.js passes the member and date helpers the section uses.
+// bill page's companion section.
 import {state} from '../../core/state.js';
 import {esc} from '../../core/dom.js';
 import {lastActionInfo} from '../../taxonomy.js';
 import {companionIndex, agencyViaCompanion} from './model.js';
+import {memberNameHtml, rosterMember} from '../members/names.js';
+import {shortDate} from '../../core/format.js';
 
 export const companionCache={bills:null,index:new Map()};
 export function companionsOf(id){
@@ -27,7 +29,7 @@ export function groupWatchButton(ids){
   return `<button class="companion-watch${all?' on':''}" data-watch-group="${esc(ids.join(','))}" aria-pressed="${all}" title="${all?'Remove these companion bills from your watchlist':'Add every bill in this companion group to your watchlist'}">${label}</button>`;
 }
 
-export function companionBlock(b,{memberNameHtml,rosterMember,shortDate}){
+export function companionBlock(b){
   const list=companionsOf(b.id);
   if(!list.length)return '';
   const byId=new Map(state.bills.map(x=>[x.id,x]));

@@ -1,5 +1,5 @@
 // Member page (#member?code=A1234): one legislator, their district and their bills by role. Reuses Near you's district
-// tables and rows; app.js passes the follow button and feed link.
+// tables and rows.
 import {state} from '../../core/state.js';
 import {NEAR_FILES, nearRow} from '../near/view.js';
 import {timeoutSignal, httpError} from '../../core/net.js';
@@ -9,6 +9,7 @@ import {esc} from '../../core/dom.js';
 import {safeHref} from '../../core/format.js';
 import {tenurePill} from './names.js';
 import {renderContent} from '../../core/router.js';
+import {followButton, memberFeedHref} from '../follows/view.js';
 
 // Only the district tables (about 240 KB), not the maps; reused when Near you already loaded everything.
 let tablesLoading=null;
@@ -32,7 +33,7 @@ function memberList(role,rows){
   const limit=state.memberShow?.[role]||30;
   return `${rows.slice(0,limit).map(nearRow).join('')}${rows.length>limit?`<button class="outline-button" data-member-more="${esc(role)}">Show 30 more · showing ${limit} of ${rows.length}</button>`:''}`;
 }
-export function memberMarkup({followButton,memberFeedHref}){
+export function memberMarkup(){
   const head=title=>`<div class="section-head"><div><div class="section-overline">MEMBER</div><h2>${title}</h2></div><span class="subtitle">90th Legislature</span></div>`;
   if(!state.roster)return `${head('Member roster unavailable')}<div class="info-callout callout-warn">The member roster could not be loaded, so member pages are not available right now. Try again later.</div>`;
   const m=memberByCode(state.roster,state.memberCode);

@@ -1,9 +1,9 @@
 // Explorer filter controls: select options, and the affected-agency dropdown's options and A-Z / most-bills sort.
-// app.js passes agencyName to the dropdown.
 import {esc} from '../../core/dom.js';
 import {state} from '../../core/state.js';
 import {groupAgencyIds, AGENCIES} from '../../taxonomy.js';
 import {unique} from '../../core/format.js';
+import {agencyName} from '../../core/labels.js';
 
 export function options(values,selected,placeholder){return `<option value="">${esc(placeholder)}</option>`+values.map(v=>`<option value="${esc(v)}" ${v===selected?'selected':''}>${esc(v)}</option>`).join('')}
 
@@ -13,7 +13,7 @@ function agencySortMode(){
   if(!state.agencySort){try{state.agencySort=localStorage.getItem(AGENCY_SORT_KEY)==='count'?'count':'name'}catch{state.agencySort='name'}}
   return state.agencySort;
 }
-export function agencyOptionsMarkup(agencyName){
+export function agencyOptionsMarkup(){
   const agencyCounts=new Map();
   for(const bill of state.bills)for(const agency of bill.agencies)agencyCounts.set(agency.id,(agencyCounts.get(agency.id)||0)+1);
   const {withBills,withoutBills}=groupAgencyIds(unique([...AGENCIES.map(a=>a.id),...Object.keys(state.luna?.agencies||{})]),agencyName,agencyCounts,agencySortMode());

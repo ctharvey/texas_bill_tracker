@@ -153,7 +153,7 @@ async function init(){
   setupEasterEggs();
   setupSync(syncKey);
   booted();if(!arrivingMove)renderMoveBanner();
-  if(state.bills.length)loadStatutes({renderContent,renderResults});
+  if(state.bills.length)loadStatutes();
   if(lunaReady){const snapshot=state.bills;lunaReady.then(({luna,base})=>applyLuna(luna,base,snapshot))}
   // Keep the progress view current while it is open; other views never refetch.
   setInterval(async()=>{
@@ -165,7 +165,7 @@ async function init(){
       renderOverview();renderContent();
       document.querySelectorAll('.review-group').forEach((d,i)=>{if(i<open.length)d.open=open[i]});
       const again=$('#review-lookup');
-      if(again&&typed){again.value=typed;$('#review-lookup-result').innerHTML=reviewLookupHtml(typed,{dateText})}
+      if(again&&typed){again.value=typed;$('#review-lookup-result').innerHTML=reviewLookupHtml(typed)}
       if(again&&focused){again.focus();if(caret!==null)again.setSelectionRange(caret,caret)}
     }
   },60000);
@@ -343,16 +343,16 @@ function renderContent(){keepFocus(()=>renderView(state.view,$('#dynamic-content
 // Each view's heading and content. Features take theirs over as they move into src/features/.
 function registerViews(){
   registerView('home',{heading:['This session, at a glance.','What changed on your bills, what moved today, upcoming hearings and Luna’s newest reviews.'],render:homeMarkup});
-  registerView('all',{heading:['See what’s moving.','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:()=>explorerMarkup({sync,syncAvailable:runtime.syncAvailable,listStore}),after:renderResults});
-  registerView('watchlist',{heading:['Your watchlist.','Bills you starred on this device, with a clear view of their movement.'],render:()=>explorerMarkup({sync,syncAvailable:runtime.syncAvailable,listStore}),after:renderResults});
-  registerView('following',{heading:['Following.','Legislators you follow on this device, and every bill they file or sign onto.'],render:()=>followingMarkup({searchCounts,agencyName,areaName,SORTS})});
-  registerView('today',{heading:['Today at the Lege.','Bills with a recorded action that day, by type of action. Dates follow Texas time.'],render:()=>todayMarkup({dateText,todayRow})});
+  registerView('all',{heading:['See what’s moving.','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:explorerMarkup,after:renderResults});
+  registerView('watchlist',{heading:['Your watchlist.','Bills you starred on this device, with a clear view of their movement.'],render:explorerMarkup,after:renderResults});
+  registerView('following',{heading:['Following.','Legislators you follow on this device, and every bill they file or sign onto.'],render:followingMarkup});
+  registerView('today',{heading:['Today at the Lege.','Bills with a recorded action that day, by type of action. Dates follow Texas time.'],render:()=>todayMarkup({todayRow})});
   registerView('local',{heading:['Near you.','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],render:()=>nearMarkup({followButton})});
-  registerView('member',{heading:['One legislator.','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],render:()=>memberMarkup({followButton,memberFeedHref})});
-  registerView('statute',{heading:['One section of law.','The bills that would amend, add or repeal this section of Texas law, with their wording side by side.'],render:()=>statuteMarkup({renderContent,billHref})});
+  registerView('member',{heading:['One legislator.','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],render:memberMarkup});
+  registerView('statute',{heading:['One section of law.','The bills that would amend, add or repeal this section of Texas law, with their wording side by side.'],render:statuteMarkup});
   registerView('bill',{heading:['One bill.','Its summary, text, changes to law, people, agencies and sources.'],render:()=>'<article class="bill-page" id="bill-page" aria-label="Bill details"></article>',after:fillBillPage});
   registerView('agencies',{heading:['Follow the agencies.','Explore where legislation might land across Texas government.'],render:agenciesMarkup});
-  registerView('review',{heading:['Full-text review.','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:()=>reviewMarkup({stampText,dateText,changeCounts,changeRows,todayRow})});
+  registerView('review',{heading:['Full-text review.','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:reviewMarkup});
   registerView('method',{heading:['How the atlas works.','Signals and uncertainty are displayed separately from verified legislative actions.'],render:methodMarkup});
   registerView('saving',{heading:['Save your work.','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],render:()=>savingMarkup({linked:sync.linked,syncAvailable:runtime.syncAvailable})});
   registerView('export',{heading:['Export your saved info.','Everything this browser has saved, in one file you can keep or import on another device.'],render:()=>exportMarkup({watch:state.watch,follows:state.follow,searches:state.searches,theme:savedTheme(),memberName:code=>{const m=memberByCode(state.roster,code);return m?memberTitle(m):null},synced:Boolean(sync.linked?.editKey),kept:STORAGE_OK?heldCount(listStore):0,previous:STORAGE_OK?previousLinks(listStore):[]})});
@@ -422,7 +422,7 @@ function registerClicks(){
     renderContent();$('.law-compare-wrap')?.scrollIntoView({behavior:'smooth',block:'start'})});
   clickOn('law-show','[data-law-show]',lawShow=>{state.statuteShow=lawShow.dataset.lawShow;renderContent()});
   clickOn('member-more','[data-member-more]',memberMore=>{const role=memberMore.dataset.memberMore;state.memberShow[role]=(state.memberShow[role]||30)+30;renderContent()});
-  clickOn('copy-page-ai','#copy-page-ai',copyPage=>copyPageForAi(copyPage,{memberTitle,todayData:()=>todayData({dateText}),agencyName,companionsOf,agencyVia,filteredBills,nearData,memberData}));
+  clickOn('copy-page-ai','#copy-page-ai',copyPage=>copyPageForAi(copyPage));
   clickOn('today-topic','[data-today-topic]',todayTopic=>{state.todayTopic=todayTopic.dataset.todayTopic;state.todayLimit=100;renderContent()});
   clickOn('today-more','#today-more',()=>{state.todayLimit+=100;renderContent()});
   clickOn('today-topics-toggle','#today-topics-toggle',()=>{state.todayAllTopics=!state.todayAllTopics;renderContent()});
@@ -444,7 +444,7 @@ function registerClicks(){
   clickOn('watch-filter','#watch-filter',()=>{state.onlyWatch=!state.onlyWatch;state.visibleCount=30;renderContent()});
   clickOn('companion-filter','#companion-filter',()=>{state.companion=!state.companion;state.visibleCount=30;renderContent()});
   clickOn('load-more','#load-more',()=>{state.visibleCount+=30;renderResults()});
-  clickOn('export-csv','#export-csv',()=>exportCsv(filteredBills));
+  clickOn('export-csv','#export-csv',()=>exportCsv());
   clickOn('import-trigger','#import-trigger',()=>$('#import-file').click());
   clickOn('nav-more','#nav-more',()=>setNavOpen(!$('.sidebar').classList.contains('nav-open')));
   clickOn('bill-back','#bill-back',()=>leaveBillPage());
@@ -468,7 +468,7 @@ const CARD_CONTROLS='a,button,input,select,textarea,label,summary,[data-topic],[
 
 function handleInput(e){
   if(e.target.id==='agency-find'){filterAgencyCards(e.target.value);return}
-  if(e.target.id==='review-lookup'){$('#review-lookup-result').innerHTML=reviewLookupHtml(e.target.value,{dateText});return}
+  if(e.target.id==='review-lookup'){$('#review-lookup-result').innerHTML=reviewLookupHtml(e.target.value);return}
   if(e.target.id==='bill-search'){state.query=e.target.value.slice(0,200);state.visibleCount=30;renderResults()}
   if(e.target.id==='filter-agency'){
     if(state.agency){state.agency='';state.visibleCount=30;renderResults()}

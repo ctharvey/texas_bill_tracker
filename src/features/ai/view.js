@@ -1,9 +1,15 @@
-// "Copy for AI" on a bill and "Copy page for AI" in the top bar. The page helpers they use still live in app.js
-// and arrive as the second argument.
+// "Copy for AI" on a bill and "Copy page for AI" in the top bar.
 import {state} from '../../core/state.js';
 import {$, toast} from '../../core/dom.js';
 import {memberByCode} from '../../geo.js';
 import {aiPrompt, pageAiText} from './model.js';
+import {memberTitle} from '../members/names.js';
+import {todayData} from '../today/view.js';
+import {agencyName} from '../../core/labels.js';
+import {companionsOf, agencyVia} from '../companions/view.js';
+import {filteredBills} from '../explorer/model.js';
+import {nearData} from '../near/view.js';
+import {memberData} from '../members/view.js';
 
 async function copyToClipboard(text){
   try{await navigator.clipboard.writeText(text);return true}catch{}
@@ -13,7 +19,7 @@ async function copyToClipboard(text){
   }catch{return false}
 }
 // Top-bar button: the open bill, or the list/page on screen, as text for an AI assistant.
-export async function copyPageForAi(button,{memberTitle,todayData,agencyName,companionsOf,agencyVia,filteredBills,nearData,memberData}){
+export async function copyPageForAi(button){
   const bill=state.openBill?state.bills.find(x=>x.id===state.openBill):null;
   const member=state.view==='member'?memberByCode(state.roster,state.memberCode):null;
   const labels={home:'Home',all:'Bill explorer',watchlist:'Watchlist',following:'Following',today:'Today',local:'Near you',member:member?`Bills by ${memberTitle(member)}`:'Member'};

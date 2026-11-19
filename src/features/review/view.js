@@ -1,11 +1,13 @@
 // The review progress page (#review): the live run, each pass's backlog, recent reviews and updates, and the one-bill
-// lookup. app.js passes its formatters and row renderers in, and keeps the refresh timer.
+// lookup. app.js keeps the refresh timer.
 import {state} from '../../core/state.js';
 import {esc} from '../../core/dom.js';
 import {auditLine, reviewProgress, reviewSummary} from '../../taxonomy.js';
 import {newestReviewed} from '../home/model.js';
 import {runState, passRows, passJobs, lookup, RUN_LIMIT_MINUTES} from './model.js';
 import {updateEntries} from './updates.js';
+import {stampText, dateText} from '../../core/format.js';
+import {changeCounts, changeRows, todayRow} from '../home/view.js';
 
 const clockText=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/Chicago'})+' CT';
 export function reviewParts(){
@@ -13,7 +15,7 @@ export function reviewParts(){
   return {ids,status,tagged,summary:reviewSummary(reviewProgress(ids,status,Object.keys(tagged))),run:runState(status,Date.now())};
 }
 // One bill's state, for the lookup box: a chip that opens the bill, and what is happening to it.
-export function reviewLookupHtml(text,{dateText}){
+export function reviewLookupHtml(text){
   const {ids,summary,tagged}=reviewParts(),found=lookup(text,summary,ids);
   if(!found)return String(text||'').trim()?'<span class="review-lookup-hint">Type a bill number, such as HB 474 or SJR 9.</span>':'';
   if(found.state==='unknown')return `<span class="review-lookup-hint">${esc(found.id)}: ${esc(found.label)}.</span>`;
@@ -27,7 +29,7 @@ function updatesSection({stampText,changeCounts,changeRows}){
   if(!entries.length)return '';
   return `<section class="review-updates" aria-labelledby="review-updates-title"><h3 id="review-updates-title">What changed</h3>${entries.map((u,i)=>`<details class="review-update"${i?'':' open'}><summary><strong>${esc(stampText(u.at))}</strong> · ${u.bills.length.toLocaleString()} ${u.bills.length===1?'bill':'bills'}${changeCounts(u.counts)}</summary>${changeRows(u.bills,50)}</details>`).join('')}</section>`;
 }
-export function reviewMarkup({stampText,dateText,changeCounts,changeRows,todayRow}){
+export function reviewMarkup(){
   const {ids,status,tagged,summary:s,run}=reviewParts();
   const total=ids.length||1,pct=n=>Math.round(n/total*1000)/10;
   const line=run.kind==='unavailable'?'Live worker status is unavailable, so bills with published Luna tags are counted as reviewed.'

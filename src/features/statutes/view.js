@@ -1,18 +1,20 @@
 // Statutes in the app: the index and section files, the bill page's "Laws this bill changes" list, the section page
-// with its side-by-side comparison, and the explorer's section-search hint. Rerenders come from app.js as parameters.
+// with its side-by-side comparison, and the explorer's section-search hint. Redraws go through core/router.js.
 import {state} from '../../core/state.js';
 import {$, esc} from '../../core/dom.js';
 import {timeoutSignal, httpError} from '../../core/net.js';
 import {buildHash} from '../../prefs.js';
 import {lastActionInfo, openLinkHtml} from '../../taxonomy.js';
 import {STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, compareLaw, currentLaw, groupStatuteEntries} from './model.js';
+import {renderContent, renderResults} from '../../core/router.js';
+import {billHref} from '../../core/links.js';
 
 // ---- Statutes: which sections of Texas law each bill changes, and the versions side by side ----
 // The index (live/statutes/index.json) is optional; without it the drawer list, statute pages and section search hide.
 const BROAD_BILL=25;  // A bill changing more sections than this is "broad"; its versions sort after focused bills.
 let statutesLoad=null,statuteBills=new Map();
 const statuteDocs=new Map();  // key -> section document, 'loading' or 'error'
-export function loadStatutes({renderContent,renderResults}){
+export function loadStatutes(){
   return statutesLoad||(statutesLoad=(async()=>{
     try{
       const r=await fetch('./live/statutes/index.json',{cache:'no-cache',signal:timeoutSignal(15000)});
@@ -27,7 +29,7 @@ export function loadStatutes({renderContent,renderResults}){
     if(state.openBill)fillDrawerStatutes(state.openBill);
   })());
 }
-function statuteDoc(key,renderContent){
+function statuteDoc(key){
   const have=statuteDocs.get(key);
   if(have)return have;
   const file=statuteFile(key);
@@ -107,7 +109,7 @@ function lawCompareMarkup(options){
     <div class="law-compare" data-show="${show}"><div class="law-row law-head"><div class="law-label"></div><div class="law-cell">${esc(left.label)}</div><div class="law-cell">${esc(right.label)}</div></div>${body}</div></section>`;
 }
 
-export function statuteMarkup({renderContent,billHref}){
+export function statuteMarkup(){
   const key=state.statuteKey;
   const head=(title,sub='90th Legislature · every bill that changes it')=>`<div class="section-head"><div><div class="section-overline">TEXAS LAW</div><h2>${title}</h2></div><span class="subtitle">${sub}</span></div>`;
   if(!key)return `${head('Section not found')}<div class="info-callout callout-warn">This address does not name a section of Texas law. Open one from a bill's "Laws this bill changes" list, or search the explorer for a section number such as 48.160.</div>`;
@@ -115,7 +117,7 @@ export function statuteMarkup({renderContent,billHref}){
   const label=statuteLabel(key,state.statutes.codes),info=state.statutes.sections[key];
   const official=`<a class="text-link" href="${esc(officialStatuteUrl(key))}" target="_blank" rel="noopener noreferrer">Current law on statutes.capitol.texas.gov ↗</a>`;
   if(!info)return `${head(esc(label))}<div class="info-callout">No bill in this snapshot changes ${esc(label)}. ${official}</div>`;
-  const doc=statuteDoc(key,renderContent);
+  const doc=statuteDoc(key);
   const title=head(info.h?esc(titleCase(info.h)):esc(label));
   if(doc==='loading')return `${title}<p class="near-hint">Loading the bills' versions…</p>`;
   if(doc==='error')return `${title}<div class="info-callout callout-warn">The versions of this section could not be loaded. ${official}</div>`;

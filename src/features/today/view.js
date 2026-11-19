@@ -1,15 +1,16 @@
 // The Today view (#today): the day's bills by action type with a topic filter. todayData is shared with the home
-// dashboard and "Copy page for AI"; app.js passes dateText and its row renderer.
+// dashboard and "Copy page for AI". The row renderer is a parameter: home/view.js, which draws it, imports this file.
 import {chicagoDate, highestNumberFirst, activityOn, latestActivityDay, topicCounts, groupByActionType} from '../../taxonomy.js';
 import {state} from '../../core/state.js';
 import {esc} from '../../core/dom.js';
 import {topicHue} from '../home/rows.js';
+import {dateText} from '../../core/format.js';
 
 // Remove this line once the Legislature is in session and the view has real floor and hearing content.
 const TODAY_INTERIM_NOTE='The 90th Legislature convenes in January 2027; floor calendars and hearings will appear here then.';
 
 // The Today view's day and rows, shared by its markup and "Copy page for AI".
-export function todayData({dateText}){
+export function todayData(){
   const today=chicagoDate(new Date());
   let day=today,rows=highestNumberFirst(activityOn(state.bills,day)),note='';
   if(!rows.length){
@@ -23,8 +24,8 @@ export function todayData({dateText}){
   return {today,day,rows,note,counts,shown};
 }
 
-export function todayMarkup({dateText,todayRow}){
-  const {today,day,rows,note,counts,shown}=todayData({dateText});
+export function todayMarkup({todayRow}){
+  const {today,day,rows,note,counts,shown}=todayData();
   // Every topic is reachable: the 12 largest show first, the rest behind "+N more"; a selected topic always shows.
   const TOP=12,listed=state.todayAllTopics?counts:counts.filter((c,i)=>i<TOP||c.topic===state.todayTopic);
   const dot=topic=>topicHue(topic)===null?'':`<i class="topic-dot" style="--topic-h:${topicHue(topic)}"></i>`;
