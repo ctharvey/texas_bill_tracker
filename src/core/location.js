@@ -1,6 +1,6 @@
 // The address and remembered filters: reading /#view?... and /bill/<ID> into state, each view's own filters, opening
 // and leaving a bill page, and writing the address and the explorer's remembered filters back. setView is a router hook.
-import {cleanFilters, FILTER_DEFAULTS, pickFilters, parseLocation, buildHash, buildUrl, sameFilters} from '../prefs.js';
+import {cleanFilters, FILTER_DEFAULTS, pickFilters, parseLocation, buildHash, buildUrl, lawPath, sameFilters} from '../prefs.js';
 import {SORTS} from './labels.js';
 import {state, runtime} from './state.js';
 import {$} from './dom.js';
@@ -8,7 +8,7 @@ import {sync} from '../features/sync/lists.js';
 import {readJson, prefsKey, writeJson} from './storage.js';
 import {setView} from './router.js';
 
-// Every view but a bill page lives at /#view. A plain hash change on /bill/<ID> would stay under that path, so it
+// Every view but a bill or law page lives at /#view. A plain hash change on /bill/<ID> would stay under that path, so it
 // moves to / instead and is handled like any other hash change.
 export let lastPath=location.pathname;
 export function goTo(hash){
@@ -108,7 +108,8 @@ export function persistState(push=false){
   if(location.pathname+location.hash!==url)try{if(push){history.pushState(null,'',url);pushed=true}else history.replaceState(null,'',url)}catch{}
   lastPath=location.pathname;
   const canonical=document.querySelector('link[rel="canonical"]');
-  if(canonical)canonical.href=state.view==='bill'&&state.openBill?`https://billatlas.org/bill/${state.openBill}`:'https://billatlas.org/';
+  const law=state.view==='statute'?lawPath(state.statuteKey):null;
+  if(canonical)canonical.href=state.view==='bill'&&state.openBill?`https://billatlas.org/bill/${state.openBill}`:law?`https://billatlas.org${law}`:'https://billatlas.org/';
   if(state.view==='all'&&filtersFor==='all'&&!state.sharedList&&!(readJson(prefsKey)?.filters&&sameFilters(readJson(prefsKey).filters,state)))writeJson(prefsKey,{...keptPrefs(),filters:pickFilters(state)});
   return pushed;
 }

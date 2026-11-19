@@ -56,7 +56,8 @@ person creates. The optional Near you address lookup sends the typed address to 
   addresses are never stored.
 - Export file `texas-bill-atlas-profile-v1`: `{lists, follows, searches, theme}`. Import also reads older
   `texas-bill-atlas-watchlist-v1` files and plain lists of bill numbers.
-- Addresses: views and filters live in the hash (`#all?chamber=Senate`); a bill is `/bill/<ID>`; a share link
+- Addresses: views and filters live in the hash (`#all?chamber=Senate`); a bill is `/bill/<ID>`; a law section is
+  `/law/<CODE>/<section>` (old `#statute?law=PE&sec=46.06` links still open it and are rewritten); a share link
   (`#all?list=HB5,SB12`) opens a read-only list.
 
 ## Sync links

@@ -89,11 +89,21 @@ export function buildHash(view, filters, {list = null, bill = null, sync = null,
 // A bill page's address is the path /bill/<ID>; a shared list or view-only sync key it was opened from rides in the
 // fragment (/bill/HB5#list=HB5,SB2&sync=...). Every other view is /#view?... as before.
 const BILL_PATH = /^\/bill\/([A-Za-z]{2,3}\d{1,5})\/?$/;
+// A law section's address is /law/<CODE>/<section> (/law/PE/46.06); old /#statute?law=PE&sec=46.06 links still work.
+const LAW_PATH = /^\/law\/([A-Za-z]{2})\/(\d+[A-Za-z]?(?:\.\d+[A-Za-z]?)+)\/?$/;
 
 export function parseLocation(pathname, hash) {
-  const match = BILL_PATH.exec(String(pathname || ''));
-  if (!match) return parseHash(hash);
+  const path = String(pathname || '');
   const extra = String(hash || '').replace(/^#\??/, '');
+  const law = LAW_PATH.exec(path);
+  if (law) {
+    // The path wins over any law/sec in the fragment, as a bill path's id does.
+    const kept = extra.split('&').filter(part => part && !/^(?:law|sec)=/.test(part)).join('&');
+    const p = parseHash(`#statute?law=${law[1].toUpperCase()}&sec=${law[2].toUpperCase()}${kept ? `&${kept}` : ''}`);
+    return p.statute ? p : parseHash('#all');
+  }
+  const match = BILL_PATH.exec(path);
+  if (!match) return parseHash(hash);
   const p = parseHash(`#bill?id=${encodeURIComponent(match[1])}${extra ? `&${extra}` : ''}`);
   return p.bill ? p : parseHash('#all');
 }
@@ -106,7 +116,18 @@ export function shareUrl(origin, id, version) {
   return `${origin}/bill/${id}${v ? `?c=${v}` : ''}`;
 }
 
+// The address of a law section's page, or null for anything that is not a statute key.
+export function lawPath(statute) {
+  const [law, sec] = String(statute || '').split(' ');
+  return LAW_CODE.test(law || '') && LAW_SECTION.test(sec || '') && sec.length <= 16 ? `/law/${law}/${sec}` : null;
+}
+
 export function buildUrl(view, filters, options = {}) {
+  const law = view === 'statute' ? lawPath(options.statute) : null;
+  if (law) {
+    const extra = buildHash('statute', filters, {...options, statute: null}).replace(/^#statute\??/, '');
+    return `${law}${extra ? `#${extra}` : ''}`;
+  }
   if (view !== 'bill' || !isBillId(options.bill)) return `/${buildHash(view, filters, options)}`;
   const extra = buildHash('bill', {}, {...options, bill: null}).replace(/^#bill\??/, '');
   return `/bill/${options.bill}${extra ? `#${extra}` : ''}`;

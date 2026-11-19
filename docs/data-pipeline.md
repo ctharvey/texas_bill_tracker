@@ -48,7 +48,11 @@ between files without reinstalling units. A push that changes a job's code or in
 - Share pages `live/share/<ID>.html`, served at `/bill/<ID>` to every visitor (people are sent on to the app), with the
   official record, a `text/markdown` alternate link to the agent edition, schema.org `Legislation` data and the first 3,000 characters of text. Rewritten pages are submitted to
   IndexNow (`--no-indexnow` turns this off).
-- `live/sitemap.xml`; the API docs from `scripts/api/` (`api-catalog.json`, `openapi.json`, `auth.md`).
+- Law pages `live/share/law/<CODE>/<section>.html`, one per section in `live/statutes/` (about 3,900), served at
+  `/law/<CODE>/<section>` to crawlers and AI agents by the gateway (people get the app): the bills that change the
+  section, its current text from `live/law` (up to 3,000 characters; new sections have none) and the official link.
+  Pages for sections no bill changes any more are removed. Written quietly after the statute index.
+- `live/sitemap.xml` (home, every `/bill/<ID>` and every `/law/<CODE>/<section>`); the API docs from `scripts/api/` (`api-catalog.json`, `openapi.json`, `auth.md`).
 - Share-card inputs `live/og/cards.json`, and bill art `live/og/art/<ID>.jpg` with `art.json`.
 - Statutes: `live/statutes/` lists the law sections each bill amends, adds or repeals, with the quoted wording.
 - Population limits: `live/brackets/` lists each population test and the places that meet it under the 2020 Census

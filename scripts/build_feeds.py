@@ -218,8 +218,9 @@ def write_feeds(snapshot: dict, out_dir: Path, site: str = SITE, reviews: dict |
     return written, unchanged
 
 
-def sitemap(snapshot: dict, site: str = SITE) -> str:
-    """The home page and every bill's address (/bill/<ID>), each dated by its last action. robots.txt points here."""
+def sitemap(snapshot: dict, site: str = SITE, law_keys=()) -> str:
+    """The home page, every bill's address (/bill/<ID>), each dated by its last action, and every law section a bill
+    changes (/law/<CODE>/<section>). robots.txt points here."""
     rows = [f"  <url><loc>{escape(site)}</loc></url>"]
     for bill in snapshot.get("bills") or []:
         if not isinstance(bill, dict) or not BILL_ID.fullmatch(str(bill.get("id", ""))):
@@ -227,6 +228,9 @@ def sitemap(snapshot: dict, site: str = SITE) -> str:
         day = str(bill.get("last_action_date") or "")[:10]
         lastmod = f"<lastmod>{day}</lastmod>" if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) else ""
         rows.append(f"  <url><loc>{escape(site)}bill/{bill['id']}</loc>{lastmod}</url>")
+    for key in sorted(k for k in law_keys if STATUTE_KEY.fullmatch(k) and k[:2] in CODE_NAME):
+        code, number = key.split(" ")
+        rows.append(f"  <url><loc>{escape(site)}law/{code}/{number}</loc></url>")
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
             + "\n".join(rows) + "\n</urlset>\n")
 
@@ -992,6 +996,126 @@ def write_statutes(snapshot: dict, text_dir: Path, out_dir: Path) -> tuple[int, 
     return written, unchanged, removed
 
 
+# Law pages: live/share/law/<CODE>/<section>.html for every section a bill changes, served at /law/<CODE>/<section>
+# by the gateway to search and link-preview crawlers (people get the app, which reads the path). Same rules as bill
+# share pages: plain HTML, its own canonical address, the site card, and people sent on to the app.
+LAW_KIND_WORDS = {"m": "amends", "n": "adds", "r": "repeals"}
+LAW_TEXT_MAX = 3000  # Characters of the section's current text on its page; the rest is a link to our chapter copy.
+_LAW_PAGE_NAME = re.compile(r"\d+[A-Z]?(?:\.\d+[A-Z]?)+\.html")
+
+
+def _current_law(law, code: str, number: str) -> tuple[str, str, str] | None:
+    """(heading line, text, chapter copy URL path) of a section in our copy of current law, or None."""
+    if law is None:
+        return None
+    found = law.section_chapter(code, number)
+    if not found:
+        return None
+    chapter, entry = found
+    text = law.section_texts(code, chapter).get(number) or ""
+    heading = next((s[1] for s in entry.get("sections", []) if s[0] == number), "")
+    return heading, text, f"live/law/{code}/{chapter}.md"
+
+
+def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str] | None, site: str = SITE) -> str:
+    code, number = key.split(" ")
+    url, target = f"{site}law/{code}/{number}", f"{site}#statute?law={code}&sec={number}"
+    heading = (current[0] if current else "") or (f"Sec. {number}. {entry['h']}." if entry.get("h") else "")
+    name = re.sub(r"^(?:Sec|Art)\.\s+\S+\.\s*", "", heading).rstrip(".").strip()
+    label = f"{code_name} {'Art. ' if code == 'CR' else chr(0xa7)}{number}"  # As the app's statuteLabel.
+    title = clip(f"{label}: {name}" if name else label, SHARE_TITLE_MAX)
+    bills = [b for b in entry.get("b", []) if isinstance(b, list) and len(b) == 2 and BILL_ID.fullmatch(str(b[0]))]
+    listed = ", ".join(f"{bill_number(b)} ({LAW_KIND_WORDS.get(k, 'changes')})" for b, k in bills[:6])
+    more = f" and {len(bills) - 6} more" if len(bills) > 6 else ""
+    count = f"{len(bills)} bill{'s' if len(bills) != 1 else ''} in the 90th Legislature would change this section"
+    description = clip(f"{count}: {listed}{more}. See each bill's wording next to today's law.", SHARE_DESCRIPTION_MAX)
+    image = f"{site}{SITE_CARD}"
+    a = lambda value: escape(value, {'"': "&quot;"})
+    meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
+            ("property", "og:title", title), ("property", "og:description", description), ("property", "og:url", url),
+            ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
+            ("property", "og:image:alt", "Texas Bill Atlas"), ("name", "twitter:card", "summary_large_image"),
+            ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
+            ("name", "twitter:image:alt", "Texas Bill Atlas"), ("name", "description", description)]
+    tags = "\n".join(f'<meta {kind}="{n}" content="{a(value)}">' for kind, n, value in meta)
+    items = "\n".join(f'<li><a href="{a(f"{site}bill/{b}")}">{escape(bill_number(b))}</a> '
+                      f'{LAW_KIND_WORDS.get(k, "changes")} this section</li>' for b, k in bills)
+    body = [f"<h1>{escape(label)}{': ' + escape(name) if name else ''}</h1>",
+            f'<p><a href="{a(target)}">Open {escape(label)} in Texas Bill Atlas</a> to compare each bill\'s wording.</p>',
+            f"<h2>{escape(count[0].upper() + count[1:])}</h2>", f"<ul>\n{items}\n</ul>",
+            "<p>Bills are matched to sections automatically from their text and can be missed, for example when a bill "
+            "changes a whole chapter at once or renumbers sections. No bill listed here does not mean no bill changes "
+            "this section.</p>"]
+    # As the app's officialStatuteUrl (checked for every code the index uses).
+    official = (f"https://statutes.capitol.texas.gov/?tab=1&code={code}&chapter={code}.{number.split('.')[0]}"
+                f"&artSec={number}")
+    links = []
+    if current and current[1]:
+        shown, cut = current[1][:LAW_TEXT_MAX], len(current[1]) > LAW_TEXT_MAX
+        paragraphs = "\n".join(f"<p>{escape(p.strip())}</p>" for p in shown.split("\n") if p.strip())
+        body += ["<h2>Current law</h2>", paragraphs]
+        if cut:
+            body.append(f'<p>The section continues: <a href="{a(site + current[2])}">whole chapter</a>.</p>')
+        links.append(f'<li><a href="{a(site + current[2])}">This chapter as it stands now, Markdown copy of the '
+                     f"Texas Legislative Council's statute files</a></li>")
+    links.append(f'<li><a href="{a(official)}">Official text on statutes.capitol.texas.gov</a></li>')
+    body += ["<h2>Links</h2>", "<ul>\n" + "\n".join(links) + "\n</ul>",
+             "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#112136">
+<title>{escape(title)} · Texas Bill Atlas</title>
+<link rel="canonical" href="{a(url)}">
+<link rel="icon" href="/favicon.ico">
+{tags}
+<script>if(!{_CRAWLER_JS}.test(navigator.userAgent))location.replace({json.dumps(target)})</script>
+</head>
+<body>
+{chr(10).join(body)}
+</body>
+</html>
+"""
+
+
+def write_law_pages(index: dict, out_dir: Path, site: str = SITE, law_dir: Path | None = None) -> tuple[int, int, int]:
+    """One page per section in the statute index (live/share/law/<CODE>/<section>.html), rewritten only when it
+    changes; pages for sections no bill changes now are removed. Current text comes from live/law when present."""
+    law = None
+    if law_dir is not None and (law_dir / "index.json").is_file():
+        from law_context import LawCopy  # Imported here: law_context reads this module's statute parser.
+        law = LawCopy(law_dir)
+    sections = index.get("sections") or {}
+    written = unchanged = removed = 0
+    keep: dict[str, set[str]] = {}
+    for key, entry in sections.items():
+        if not STATUTE_KEY.fullmatch(key) or key[:2] not in CODE_NAME:
+            continue  # Never build a file name from an unexpected key.
+        code, number = key.split(" ")
+        keep.setdefault(code, set()).add(f"{number}.html")
+        folder = out_dir / code
+        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            current = _current_law(law, code, number)
+        except (OSError, ValueError, KeyError):
+            current = None
+        if write_if_changed(folder / f"{number}.html", law_page(key, entry, CODE_NAME[code], current, site)):
+            written += 1
+        else:
+            unchanged += 1
+    if keep and out_dir.is_dir():  # An empty index never empties the folder.
+        for folder in out_dir.iterdir():
+            if not (folder.is_dir() and re.fullmatch(r"[A-Z]{2}", folder.name)):
+                continue
+            for path in folder.iterdir():
+                if _LAW_PAGE_NAME.fullmatch(path.name) and path.name not in keep.get(folder.name, set()):
+                    path.unlink(missing_ok=True)
+                    removed += 1
+    return written, unchanged, removed
+
+
 # Population brackets live in atlas/feeds/brackets/. They are imported on first use, because that package reads the
 # statute helpers above; every bracket name stays reachable here (build_feeds.bill_brackets and so on).
 def __getattr__(name: str):
@@ -1046,13 +1170,23 @@ def main() -> int:
     print(f"Share pages: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
     if not args.no_indexnow and args.site == SITE and args.snapshot == LIVE_SNAPSHOT:
         print(f"IndexNow: {submit_indexnow(changed, args.site)}", flush=True)
-    write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml", sitemap(snapshot, args.site))  # Quiet: golden stdout.
     write_api_docs(args.snapshot.parent)
     roster = load_roster(args.members or args.snapshot.parent / "members.json")
     written, unchanged = write_member_feeds(snapshot, roster, args.out / "members", args.site, reviews)
     print(f"Member feeds: {written} written, {unchanged} unchanged", flush=True)
-    written, unchanged, removed = write_statutes(snapshot, text_dir, args.statutes or args.snapshot.parent / "statutes")
+    statutes_dir = args.statutes or args.snapshot.parent / "statutes"
+    written, unchanged, removed = write_statutes(snapshot, text_dir, statutes_dir)
     print(f"Statute sections: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
+    # Quiet from here to the brackets (golden stdout): law pages, then the sitemap that lists them.
+    try:
+        statute_index = json.loads((statutes_dir / "index.json").read_text("utf-8"))
+    except (OSError, ValueError):
+        statute_index = {}
+    law_keys = list((statute_index.get("sections") or {}) if isinstance(statute_index, dict) else {})
+    if law_keys:
+        write_law_pages(statute_index, (args.share or args.snapshot.parent / "share") / "law", args.site,
+                        args.snapshot.parent / "law")
+    write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml", sitemap(snapshot, args.site, law_keys))
     from atlas.feeds.brackets import default_census, write_brackets
     status = write_brackets(snapshot, text_dir, args.census or default_census(), args.brackets or args.snapshot.parent / "brackets")
     print(f"Population brackets: {status}", flush=True)
