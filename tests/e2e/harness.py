@@ -101,6 +101,11 @@ class Site:
         site = self
 
         class Handler(SimpleHTTPRequestHandler):
+            # Keep-alive. Under HTTP/1.0 each of a page's ~42 requests was a new loopback connection; a full run left
+            # 20,000+ sockets in TIME_WAIT and Windows refused new ones (net::ERR_NO_BUFFER_SPACE), so a module failed
+            # to load and the app never started. Every response here sends Content-Length.
+            protocol_version = "HTTP/1.1"
+
             def log_message(self, *args):
                 pass
 
@@ -113,6 +118,7 @@ class Site:
                 if path.startswith("/api/sync"):
                     site.api.dispatch(self, method)
                 elif method != "GET":
+                    self.close_connection = True  # The request body is left unread; never reuse this connection.
                     self.send_error(405)
                 elif path.startswith("/live/"):
                     self.serve_live(path[len("/live/"):])

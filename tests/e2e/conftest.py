@@ -101,11 +101,20 @@ if os.environ.get("TBA_E2E") == "1":
             page.on("pageerror", lambda e: self.errors.append(f"pageerror: {e}"))
             page.on("console", lambda m: m.type == "error" and not m.text.startswith(IGNORED_CONSOLE)
                     and self.errors.append(f"console.error: {m.text}"))
+            page.on("requestfailed", self._code_failed)
             return page
+
+        def _code_failed(self, request):
+            # The page's own code failing to load leaves the app unstarted, and Chrome reports it only as an ignored
+            # "Failed to load resource" console line; name the file instead of waiting out a 20 s selector timeout.
+            if request.url.startswith(self.site.base + ("src/", "assets/")[self.site.mode == "bundle"]):
+                self.errors.append(f"requestfailed: {request.url} {request.failure}")
 
         def open(self, hash_="#all", page=None):
             page = page or self.page
             page.goto(self.site.base + hash_, wait_until="networkidle")
+            failed = [e for e in self.errors if e.startswith("requestfailed: ")]
+            assert not failed, "the page's own code failed to load:\n" + "\n".join(failed)
             page.wait_for_selector("#dynamic-content *", state="attached", timeout=20000)
             return page
 
