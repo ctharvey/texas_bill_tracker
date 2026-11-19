@@ -131,12 +131,17 @@ function lawCompareMarkup(options,right,leftId=state.statuteCompare.left){
   // data-name labels each cell when the columns stack on a phone.
   const cell=(words,note,cls,name)=>words?`<div class="law-cell" data-name="${esc(name)}">${lawWords(words,cls)}</div>`:`<div class="law-cell law-missing" data-name="${esc(name)}">${esc(note)}</div>`;
   const body=rows.map(r=>`<div class="law-row${r.same?' law-same':''}"><div class="law-label">${esc(label(r.label))}${r.same?' · same':''}</div>${cell(r.left,r.leftNote,'law-out',left.name)}${cell(r.right,r.rightNote,'law-in',right.name)}</div>`).join('');
-  const show=state.statuteShow||'both';
+  // With no current law there is one column worth showing, so no column toggle.
+  const show=left.none?'both':state.statuteShow||'both';
+  const first=n=>esc(n.split(/ = | and /)[0]);
+  // No current law to compare with: everything on the right is new.
+  const legend=left.none?`<span class="law-legend-long">This section is not in current law yet, so <mark class="law-in">all of ${first(right.name)}'s wording is new</mark>.</span><span class="law-legend-short"><mark class="law-in">All new</mark>: not in current law yet.</span>`
+    :`<span class="law-legend-long"><mark class="law-out">Highlighted on the left</mark> is wording only the left has; <mark class="law-in">highlighted on the right</mark> is wording only the right has.</span><span class="law-legend-short"><mark class="law-out">Only in ${first(left.name)}</mark> <mark class="law-in">Only in ${first(right.name)}</mark></span> ${left===right?'Pick a different version for the left.':`${changed} of ${rows.length} ${rows.length===1?'part differs':'parts differ'}.`}`;
   return `<section class="law-compare-wrap"><h3>${left.id==='law'?'Current law':esc(left.name)} → ${esc(right.name)}</h3>
     ${options.length>2?`<div class="law-picks">${select}</div>`:''}
-    <p class="law-legend"><span class="law-legend-long"><mark class="law-out">Highlighted on the left</mark> is wording only the left has; <mark class="law-in">highlighted on the right</mark> is wording only the right has.</span><span class="law-legend-short"><mark class="law-out">Only in ${esc(left.name.split(/ = | and /)[0])}</mark> <mark class="law-in">Only in ${esc(right.name.split(/ = | and /)[0])}</mark></span> ${left===right?'Pick a different version for the left.':`${changed} of ${rows.length} ${rows.length===1?'part differs':'parts differ'}.`}${rows.some(r=>r.approximate)?' Some parts are too long to compare word by word and are marked whole.':''}</p>
-    <div class="law-toggle" role="group" aria-label="Columns to show">${[['both','Both'],['left','Left'],['right','Right']].map(([v,t])=>`<button type="button" class="outline-button${show===v?' active':''}" data-law-show="${v}" aria-pressed="${show===v}">${t}</button>`).join('')}</div>
-    <div class="law-compare" data-show="${show}"><div class="law-row law-head"><div class="law-label"></div><div class="law-cell">${esc(left.label)}</div><div class="law-cell">${esc(right.label)}</div></div>${body}</div></section>`;
+    <p class="law-legend">${legend}${rows.some(r=>r.approximate)?' Some parts are too long to compare word by word and are marked whole.':''}</p>
+    ${left.none?'':`<div class="law-toggle" role="group" aria-label="Columns to show">${[['both','Both'],['left','Left'],['right','Right']].map(([v,t])=>`<button type="button" class="outline-button${show===v?' active':''}" data-law-show="${v}" aria-pressed="${show===v}">${t}</button>`).join('')}</div>`}
+    <div class="law-compare${left.none?' law-none':''}" data-show="${show}"><div class="law-row law-head"><div class="law-label"></div><div class="law-cell">${esc(left.label)}</div><div class="law-cell">${esc(right.label)}</div></div>${body}</div></section>`;
 }
 // One version on its own: a proposed new section, or an amendment with no current law to set it against.
 function lawSingleMarkup(title,units,note=''){
@@ -186,14 +191,14 @@ export function statuteMarkup(){
   const proposed=!law&&groups.every(g=>g.kind==='add');
   // A heading only when every proposal shares it (an index from older code can carry one bill's heading for all).
   const oneHead=info.h&&new Set(groups.map(g=>unitHeading(g.units)).filter(Boolean)).size<=1;
-  // Proposals on one subject (one heading) in several wordings are compared with each other: the wording most bills
-  // share on the left, the one picked on the right. Unrelated proposals that share a number are shown one at a time.
+  // A proposed section is laid out like an amended one: current law (none) on the left, all of the bill's wording new
+  // on the right. Another version can be picked for the left to set two proposals side by side.
   const versions=groups.filter(g=>g.kind==='add'&&g.units.length);
-  const compareProposals=proposed&&oneHead&&versions.length>1;
-  const largest=compareProposals?versions.reduce((a,g)=>g.entries.length>a.entries.length?g:a):null;
-  // The bar's pick, else (proposals compared) the first other wording, else the first focused amendment, else the
-  // first version with wording.
-  const chosen=groups.find(g=>gid(g)===state.statuteCompare.right)||(compareProposals?versions.find(g=>g!==largest):null)
+  const sides=proposed?[{id:'law',name:'current law',label:'Current law: no such section yet',units:[],partial:false,none:true},...options]:options;
+  const largest=proposed&&versions.length?versions.reduce((a,g)=>g.entries.length>a.entries.length?g:a):null;
+  // The bar's pick, else (proposed) the wording most bills share, else the first focused amendment, else the first
+  // version with wording.
+  const chosen=groups.find(g=>gid(g)===state.statuteCompare.right)||largest
     ||groups.find(g=>g.kind==='amend'&&!g.broad&&g.units.length)||groups.find(g=>g.kind!=='repeal'&&g.units.length)||groups[0];
   const count=groups.reduce((n,g)=>n+g.entries.length,0);
   const version=g=>g.entries[0].version_name||g.entries[0].version;
@@ -203,13 +208,13 @@ export function statuteMarkup(){
   else if(chosen&&!chosen.units.length)main=`<div class="info-callout">The wording of ${esc(names(chosen))} for this section could not be read. Open the bill to see its text.</div>`;
   else if(chosen?.kind==='amend'&&law)main=lawCompareMarkup(options,options.find(o=>o.id===gid(chosen)));
   else if(chosen?.kind==='amend'&&!law&&copy==='loading')main=`<p class="near-hint">Loading current law…</p>`;
-  else if(compareProposals&&chosen.kind==='add'&&chosen.units.length){
-    // The left is the reader's pick when it is another version, else the most shared wording (or the next one).
-    const c=state.statuteCompare,other=chosen===largest?versions.find(g=>g!==largest):largest;
-    main=lawCompareMarkup(options,options.find(o=>o.id===gid(chosen)),options.some(o=>o.id===c.left&&o.id!==gid(chosen))?c.left:gid(other));
+  else if(proposed&&chosen?.kind==='add'){
+    // The left is the reader's pick when it is another version, else current law (none).
+    const left=state.statuteCompare.left;
+    main=lawCompareMarkup(sides,sides.find(o=>o.id===gid(chosen)),sides.some(o=>o.id===left&&o.id!==gid(chosen))?left:'law');
   }
   else if(chosen)main=lawSingleMarkup(`${names(chosen)} · ${chosen.kind==='add'?'proposed new section':'amended'} · ${version(chosen)}`,chosen.units,
-    chosen.kind==='add'?(proposed?'':'This bill adds a different section with the same number; it does not change the current section.')
+    chosen.kind==='add'?'This bill adds a different section with the same number; it does not change the current section.'
       :`The bills do not quote the current wording, so there is nothing to set this against. ${official}`);
   const card=g=>{
     const e=g.entries[0],on=g===chosen,own=g.kind==='add'?unitHeading(g.units):'',heading=own&&!(oneHead&&own===titleCase(info.h))?own:'';  // Not again when it is the page title.
@@ -230,9 +235,9 @@ export function statuteMarkup(){
   const title=proposed?head(oneHead?esc(titleCase(info.h)):esc(label),'Proposed new section · not in current law yet')+tools:loadingTitle;
   const limits=`<details class="law-limits"><summary>How bills are matched</summary><p>${LAW_LIMITS}</p></details>`;
   const say=count===1?'One bill proposes a section with this number'
-    :compareProposals?`${count} bills propose this new section in ${versions.length} versions`
-    :proposed&&oneHead&&groups.length===1?`${count} bills propose this new section in the same words`
-    :`${count} bills propose a section with this number${groups.length>1?'. Bills drafted separately can reuse a number for unrelated subjects, so each is shown on its own':''}`;
+    :oneHead&&versions.length>1?`${count} bills propose this new section in ${versions.length} versions`
+    :oneHead&&groups.length===1?`${count} bills propose this new section in the same words`
+    :`${count} bills propose a section with this number${groups.length>1?'. Bills drafted separately can reuse a number for unrelated subjects':''}`;
   const intro=proposed?`<div class="info-callout law-intro"><p>${say}.${isLawFollowQuery(key)?' Following it follows every bill that uses this section number.':''}</p>${limits}</div>`
     :law?`<div class="info-callout law-intro"><details class="law-limits"><summary>About this comparison</summary><p>Current law is on the left, ${lawSource}; it can trail the official text if a later law changed it. ${official}</p><p>${LAW_LIMITS}</p></details></div>`
     :`<div class="info-callout law-intro"><p>Each bill quotes the wording it would change. ${official}</p>${limits}</div>`;

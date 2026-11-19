@@ -322,6 +322,8 @@ mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;
   .law-cell{border-left:0}
   .law-cell::before{content:attr(data-name);display:block;font-size:var(--fs-xs);font-style:normal;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px}
   .law-compare[data-show="left"] .law-cell:nth-child(3),.law-compare[data-show="right"] .law-cell:nth-child(2){display:none}
+  /* No current law: the legend says so, so the empty left cells are not stacked above each part. */
+  .law-compare.law-none .law-missing,.law-compare.law-none .law-cell::before,.law-compare.law-none .law-label{display:none}
 }
 .topbar-prefs{display:flex;align-items:center;gap:6px}.theme-pick{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 2px 0 9px;border:1px solid var(--line);border-radius:999px;background:var(--surface);cursor:pointer}.theme-pick:hover,.mode-toggle:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}.theme-dot{position:relative;width:10px;height:10px;padding:0;border:0;border-radius:50%;background:#f5b517;box-shadow:0 0 0 1px #8a650033;flex:none;cursor:pointer;transition:transform .15s}.theme-dot::after{content:"";position:absolute;inset:-7px}.theme-dot:hover{transform:scale(1.3)}.theme-dot:active{transform:scale(.85)}.theme-dot:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.theme-pick select{font:inherit;font-size:var(--fs-xs);font-weight:600;color:var(--ink);background:transparent;border:0;padding:0 2px;cursor:pointer}.mode-toggle{width:28px;height:28px;display:grid;place-items:center;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--ink);font-size:15px;line-height:1}
 

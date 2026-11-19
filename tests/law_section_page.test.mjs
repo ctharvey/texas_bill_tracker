@@ -29,7 +29,7 @@ async function page(key, doc, chapter = null) {
 const main = html => html.slice(html.indexOf('<div class="law-main">'));
 const bar = html => html.slice(html.indexOf('<aside'), html.indexOf('</aside>'));
 
-test('a proposed new section shows one bill at a time, never a comparison of unrelated texts', async () => {
+test('a proposed new section sets "no current law" against the bill picked in the bar, all of its wording new', async () => {
   const key = 'TN 545.4575';
   state.bills = [bill('HB487', 'Relating to automated motor vehicles.'), bill('HB1250', 'Relating to automated vehicle reports.')];
   state.statutes = index({[key]: {h: 'EMERGENCY RESPONSE PROCEDURES', b: [['HB487', 'n'], ['HB1250', 'n']]}},
@@ -43,18 +43,29 @@ test('a proposed new section shows one bill at a time, never a comparison of unr
   // Two proposals: the title is the number, not one bill's heading; it repeats the page's h1, so it is not a second heading.
   assert.match(html, /<div class="law-title-same" aria-hidden="true">Transportation Code § 545\.4575<\/div>/);
   assert.doesNotMatch(html, /<h2>/);
-  assert.doesNotMatch(html, /class="law-compare"/);
   assert.doesNotMatch(html, /statutes\.capitol\.texas\.gov/, 'no link to current law that does not exist');
   assert.match(bar(html), /Emergency Response Procedures[\s\S]*Collision Data Reporting Requirement/);
   assert.match(bar(html), /data-law-compare="HB487" aria-pressed="true"/);
-  assert.match(main(html), /Geofence message/);
+  // Laid out like an amended section: current law (none) on the left, the bill's wording all new on the right.
+  assert.match(main(html), /<h3>Current law → HB 487<\/h3>/);
+  assert.match(main(html), /Current law: no such section yet/);
+  assert.match(main(html), /Not in current law/);
+  assert.match(main(html), /all of HB 487's wording is new/);
+  assert.match(main(html), /class="law-in">Geofence<\/mark>/);
+  assert.match(main(html), /class="law-compare law-none"/);
+  assert.doesNotMatch(main(html), /data-law-show/, 'one column worth showing: no column toggle');
   assert.doesNotMatch(main(html), /Collision report/);
   // Picking the other bill in the bar shows its version instead.
   state.statuteCompare.right = 'HB1250';
   html = draw();
   assert.match(bar(html), /data-law-compare="HB1250" aria-pressed="true"/);
-  assert.match(main(html), /Collision report/);
-  assert.doesNotMatch(main(html), /Geofence message/);
+  assert.match(main(html), /<h3>Current law → HB 1250<\/h3>/);
+  assert.match(main(html), /Collision/);
+  assert.doesNotMatch(main(html), /Geofence/);
+  // Two bills only when the reader picks the other one for the left.
+  state.statuteCompare.left = 'HB487';
+  html = draw();
+  assert.match(main(html), /<h3>HB 487 → HB 1250<\/h3>/);
 });
 
 test('an amended section sets current law on the left against the bill picked in the bar', async () => {
@@ -120,7 +131,7 @@ test('a section no bill changes says so, and its title is not read twice', () =>
   assert.doesNotMatch(html, /every bill that changes it|<h2>/);
 });
 
-test('proposals on one subject in several wordings are compared, the most shared wording first', async () => {
+test('proposals on one subject in several wordings: the most shared wording against no current law, two versions on request', async () => {
   const key = 'HR 32.351';
   const ids = ['HB101', 'HB102', 'HB138', 'HB141', 'SB31'];
   state.bills = [...ids, 'HB363'].map(id => bill(id, 'Relating to Medicaid expansion.'));
@@ -135,14 +146,17 @@ test('proposals on one subject in several wordings are compared, the most shared
   let html = draw();
   assert.match(html, /6 bills propose this new section in 2 versions/);
   assert.doesNotMatch(html, /unrelated subjects/);
-  assert.match(main(html), /<h3>HB 101 and 4 other bills → HB 363<\/h3>/);
-  assert.match(main(html), /class="law-in">may<\/mark>/, 'the sentence only HB 363 has is marked');
+  assert.match(main(html), /<h3>Current law → HB 101 and 4 other bills<\/h3>/);
+  assert.match(main(html), /<option value="law" selected>/);
+  assert.match(bar(html), /data-law-compare="HB101" aria-pressed="true"/);
   // The page title is the shared heading, so no card repeats it; the long group folds its bills.
   assert.doesNotMatch(bar(html), /law-pick-head/);
   assert.match(bar(html), /<summary>and 2 more<\/summary>/);
   assert.match(bar(html), /aria-label="Show HB 101 and 4 other bills"/);
-  // Picking the shared wording sets it against the other one.
-  state.statuteCompare.right = 'HB101';
+  // Picking the other wording for the left sets the two versions side by side.
+  state.statuteCompare.left = 'HB363';
   html = draw();
   assert.match(main(html), /<h3>HB 363 → HB 101 and 4 other bills<\/h3>/);
+  assert.match(main(html), /class="law-out">may<\/mark>/, 'the sentence only HB 363 has is marked');
+  assert.match(main(html), /1 of 2 parts differ/);
 });
