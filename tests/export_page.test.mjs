@@ -4,7 +4,8 @@ import {readFileSync} from 'node:fs';
 import {parseHash, buildHash, VIEWS, profileFile, parseProfileFile} from '../src/prefs.js';
 import {exportMarkup} from '../src/features/export/view.js';
 
-const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+const app = ['../src/app.js', '../src/features/watchlist/actions.js']
+  .map(p => readFileSync(new URL(p, import.meta.url), 'utf8')).join('\n');
 const saved = {watch: new Set(['HB5', 'SJR9']), follows: ['A2010', 'A9999'],
   searches: [{id: 'abcd1234', name: 'Water <b>', filters: {query: 'water'}, seen: '2026-11-10'}], theme: 'bluebonnet'};
 
