@@ -30,6 +30,7 @@ import {state} from './core/state.js';
 import {shortDate, dateText, stampText, unique, safeHref} from './core/format.js';
 import {billHref, memberHref} from './core/links.js';
 import {$, esc, toast} from './core/dom.js';
+import {copyText, download} from './core/copy.js';
 import {timeoutSignal, loadShardedMap, httpError} from './core/net.js';
 import {registerView, setFallbackView, viewHeading, renderView, setRenderContent} from './core/router.js';
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
@@ -516,14 +517,6 @@ function layoutBillArt(){
 const HERO_WIDE=typeof matchMedia==='function'?matchMedia(HERO_MEDIA):{matches:false,addEventListener(){}};
 let billArtFrame=0;
 if(typeof addEventListener==='function')addEventListener('resize',()=>{cancelAnimationFrame(billArtFrame);billArtFrame=requestAnimationFrame(layoutBillArt)});
-
-async function copyText(text,label){
-  try{await navigator.clipboard.writeText(text);toast(`${label} copied`)}catch{toast(`Copy failed. ${label}: ${text}`)}
-}
-
-function download(name,text,type){
-  const u=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
-}
 
 function sharedBanner(){
   if(!state.sharedList)return '';
