@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-19
+- Feature folders, last pass: the address and remembered filters (`src/core/location.js`), the move from the old address, the explorer's file import, the home dashboard and the agencies page left `app.js`, and features import their helpers instead of taking them as parameters. `app.js` is 470 lines: imports, boot, view registration, page chrome and event wiring (no behavior change).
+- "Copy page for AI" works on the Following page again (two imports were lost when AI copy moved into `src/features/ai/`).
+
 ## 2026-11-18
 - A failed data fetch now releases its request at once: an unread 404 body (Luna shard indexes, `updates.json`) kept each request open until its 20 s timeout. E2E page opens drop from about 21 s to under 1 s.
 - Feature folders 4.3: static pages and dialogs, AI copy, bill text, the drawer stages, the private review file, statutes, the review progress page, companions, Today, Near you, member pages, follows, saved searches, the watchlist tools and save buttons, saved lists and sync, the explorer (filters, results, preview, CSV) and the bill page moved into `src/features/`, with shared helpers, runtime values and redraw hooks in `src/core/` (no behavior change).
@@ -72,8 +76,3 @@
 - Review worker: Markdown input, `--workers N`, flex transport, Flex capacity waits instead of ending the run.
 - Live data moves to `texas-bill-data.timer` writing `live/bills.json`; assets are content-hashed and cached for a year.
 - First-visit disclaimer and a privacy policy in the footer.
-
-## 2026-11-09
-- Hourly official FTP refresh (minute 17), with separate author, coauthor, sponsor and cosponsor lists.
-- Private hourly Luna review worker on the VPS with a $1/day ceiling and verified, highlighted evidence in bill details.
-- Pull-based production deployer with atomic snapshot publishing.
