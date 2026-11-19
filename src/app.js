@@ -30,14 +30,14 @@ import {billTextSection} from './features/billtext/view.js';
 import {aiChatLinks, agentUrl} from './features/ai/model.js';
 import {setupThemePicker, setupModePicker, setTheme, savedTheme, applyTheme, applyMode} from './features/theme/view.js';
 import {TUMBLEWEED, noticeSearch, setupEasterEggs} from './features/easter/view.js';
-import {state} from './core/state.js';
+import {state, runtime} from './core/state.js';
 import {shortDate, dateText, stampText, unique, safeHref} from './core/format.js';
 import {billHref, memberHref} from './core/links.js';
 import {$, esc, toast} from './core/dom.js';
 import {copyText, download} from './core/copy.js';
 import {SORTS, agencyName, areaName, realAgencies, todayDay} from './core/labels.js';
 import {timeoutSignal, loadShardedMap, httpError} from './core/net.js';
-import {registerView, setFallbackView, viewHeading, renderView, setRenderContent} from './core/router.js';
+import {registerView, setFallbackView, viewHeading, renderView, setRenderContent, setExplorerHooks} from './core/router.js';
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
 import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, visitKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
@@ -54,6 +54,7 @@ import {NEAR_KEY, placeFromPoint, cleanNear, countyDistricts, countiesOf, member
 import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, relatedFor, auditLine, attachMembers, authorshipParty, PARTY_FILTERS, partyFilterMatches, NO_HEARING, memberSummary, tenureTag, lastActionInfo, LAST_ACTION_TYPES, reviewProgress, reviewSummary, POLICY_AREAS, assessHearing, authorInfluence, officialUrl, snapshotAgeHours, normalizeBill, companionGroups, sortAgencyIds, groupAgencyIds, searchTerms, textMatches, newestFirst, cardClickOpens, openLinkHtml, chicagoDate, activityOn, highestNumberFirst, latestActivityDay, topicCounts, groupByActionType, companionLabel} from './taxonomy.js';
 
 setRenderContent(renderContent);  // features redraw through core/router.js's renderContent
+setExplorerHooks({renderResults,persistState});
 loadSaved();
 // The dashboard visit before this one: read, and today stamped, the first time the dashboard is drawn in this page
 // load, so other pages never add the key. null on a first visit or without storage.
@@ -240,7 +241,7 @@ function applyLocation(initial){
   if(p.hasFilters)applyFilters(p.filters);
   else if(p.list)applyFilters({});  // A share link shows its whole list, even in a tab with filters set.
   else if(initial&&!legacy&&!p.sync){
-    restoredFilters=readJson(prefsKey)?.filters||null;
+    runtime.restoredFilters=readJson(prefsKey)?.filters||null;
     // Remembered filters are the explorer's; a Watchlist opened directly starts unfiltered.
     if(p.view==='watchlist'){viewFilters.all=readJson(prefsKey)?.filters||{};applyFilters({})}
     else applyFilters(readJson(prefsKey)?.filters);
@@ -726,12 +727,10 @@ function activeFilters(){
     ['stage',state.stage&&`Stage: ${state.stage}`],['agency',state.agency&&`Agency: ${agencyName(state.agency)}`],['party',state.party&&`Party: ${state.party}`],
     ['outlook',state.outlook&&`Hearing: ${state.outlook}`],['action',state.action&&`Last action: ${state.action}`],['companion',state.companion&&'Has companion'],['onlyWatch',state.onlyWatch&&'Watched only']].filter(([,label])=>label);
 }
-// The explorer's filters as restored from the last visit; the chips say so until any of them changes.
-let restoredFilters=null;
 function activeFiltersMarkup(){
   const set=activeFilters();
   if(!set.length)return '';
-  const restored=state.view==='all'&&restoredFilters&&sameFilters(restoredFilters,state);
+  const restored=state.view==='all'&&runtime.restoredFilters&&sameFilters(runtime.restoredFilters,state);
   return `${restored?'<span class="restored-note">Filters from your last visit:</span>':''}${set.map(([key,label])=>`<button type="button" class="filter-chip" data-clear-filter="${key}" aria-label="Remove filter: ${esc(label)}">${esc(label)} <span aria-hidden="true">×</span></button>`).join('')}<button type="button" class="text-button" id="clear-filters">Clear all</button>`;
 }
 // What to try when nothing matches: drop the filters, or search every bill for the same words.

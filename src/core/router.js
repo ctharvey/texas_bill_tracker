@@ -19,3 +19,8 @@ export function renderView(name, el){
 let redraw = () => {};
 export function setRenderContent(fn){redraw=fn}
 export const renderContent = () => redraw();
+// The explorer's results redraw (keeping focus) and the address and remembered-filters save; app.js sets both before boot.
+let redrawResults = () => {}, persist = () => false;
+export function setExplorerHooks({renderResults, persistState}){redrawResults=renderResults;persist=persistState}
+export const renderResults = () => redrawResults();
+export const persistState = push => persist(push);
