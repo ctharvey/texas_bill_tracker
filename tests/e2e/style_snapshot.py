@@ -146,7 +146,32 @@ QUIET_JS = """([quiet, limit]) => new Promise(resolve => {
   const cap = setTimeout(() => done(false), limit);
 })"""
 
-SET_THEME_JS ="""([mode, palette]) => { const d = document.documentElement; d.dataset.mode = mode;
+# Which style rules match an element on this page, ignoring hover, focus and pseudo-elements. A rule that matches in no
+# state is not measured by the snapshot, so a move of it is unproven (compare lists them). Keyed by its @media/@supports
+# context and selector, which a move between files keeps.
+COVERAGE_JS = r"""() => {
+  const out = {};
+  const strip = s => s.replace(/::?(before|after|marker|placeholder|selection|backdrop|first-line|first-letter|-webkit-[\w-]+|-moz-[\w-]+)/g, '')
+    .replace(/:(hover|focus-visible|focus-within|focus|active|visited)/g, '');
+  const walk = (rules, context) => {
+    for (const r of rules) {
+      if (r instanceof CSSStyleRule) {
+        const key = context + r.selectorText;
+        let hit = false;
+        try { hit = !!document.querySelector(strip(r.selectorText) || '*'); } catch { hit = false; }
+        out[key] = out[key] || hit;
+        if (r.cssRules && r.cssRules.length) walk(r.cssRules, key + ' ');
+      } else if (r.cssRules) {
+        const head = r.conditionText !== undefined ? `@${r.constructor.name.replace(/^CSS|Rule$/g, '').toLowerCase()} ${r.conditionText} ` : '';
+        walk(r.cssRules, context + head);
+      }
+    }
+  };
+  for (const sheet of document.styleSheets) { try { walk(sheet.cssRules, ''); } catch { /* cross-origin (fonts) */ } }
+  return out;
+}"""
+
+SET_THEME_JS = """([mode, palette]) => { const d = document.documentElement; d.dataset.mode = mode;
   if (palette === 'atlas') delete d.dataset.palette; else d.dataset.palette = palette; }"""
 
 
@@ -195,6 +220,7 @@ class _Worker:
             page.wait_for_load_state("networkidle")
             if not page.evaluate(QUIET_JS, [750, 15000]):
                 errors.append("the DOM never went quiet for 750 ms within 15 s")
+            coverage = page.evaluate(COVERAGE_JS)
             themes = {}
             keys = props = None
             for mode in MODES_SHOWN:
@@ -207,9 +233,9 @@ class _Worker:
                         gone, new = sorted(set(keys) - set(snap["keys"]))[:3], sorted(set(snap["keys"]) - set(keys))[:3]
                         errors.append(f"the DOM changed between themes ({mode}/{palette}): gone {gone}, new {new}")
                     themes[f"{mode}/{palette}"] = snap["values"]
-            return {"keys": keys, "props": props, "themes": themes, "errors": errors}
+            return {"keys": keys, "props": props, "themes": themes, "coverage": coverage, "errors": errors}
         except Exception as error:  # Report it with the state; one broken state must not hide the others.
-            return {"keys": [], "props": None, "themes": {}, "errors": errors + [f"{type(error).__name__}: {error}"]}
+            return {"keys": [], "props": None, "themes": {}, "coverage": {}, "errors": errors + [f"{type(error).__name__}: {error}"]}
         finally:
             context.close()
 
@@ -244,6 +270,15 @@ def summary(snap):
     styles = sum(len(v["keys"]) * len(v["themes"]) for v in states.values())
     errors = [f"{k}: {e}" for k, v in sorted(states.items()) for e in v["errors"]]
     return f"{len(states)} page states, {styles} element styles, digest {digest(snap)}", errors
+
+
+def unmatched(snap):
+    """(rules matched in some state, all rules, sorted rules that matched in none)."""
+    seen = {}
+    for state in snap["states"].values():
+        for rule, hit in state.get("coverage", {}).items():
+            seen[rule] = seen.get(rule, False) or hit
+    return sum(seen.values()), len(seen), sorted(r for r, hit in seen.items() if not hit)
 
 
 def save(path, snap):
@@ -346,6 +381,12 @@ def main():
     if failed:
         print("NOT COMPARABLE: a snapshot reported errors (above); its states may be incomplete.")
         return 2
+    hit, total, missed = unmatched(b)
+    if total:
+        print(f"Coverage (B): {hit} of {total} style rules match an element in some state. Not measured, so a move of"
+              f" these is unproven ({len(missed)}):")
+        for rule in missed[:300]:
+            print("    " + rule[:200])
     diffs = differences(a, b)
     if not diffs:
         print("IDENTICAL: every computed style matches.")
