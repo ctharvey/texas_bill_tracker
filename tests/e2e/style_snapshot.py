@@ -95,9 +95,16 @@ STATES = {
 # In the page: finish running transitions and animations, then each element's computed style under one theme.
 # Paths are tag and child index from <html>, so both commits' (identical) DOMs line up element by element.
 SNAPSHOT_JS = r"""
-({detail}) => {
-  for (const a of document.getAnimations()) { try { a.finish(); } catch { a.cancel(); } }
-  const props = Array.from(getComputedStyle(document.documentElement));
+async ({detail}) => {
+  // Finished animations fire animationend a frame later, and decorations such as the warbler sky remove themselves
+  // then; measure after that so every theme sees the same DOM.
+  const frame = () => new Promise(r => requestAnimationFrame(() => r()));
+  for (let i = 0; i < 3; i++) {
+    for (const a of document.getAnimations()) { try { a.finish(); } catch { a.cancel(); } }
+    await frame(); await frame();
+  }
+  // Standard properties in the browser's fixed order; custom properties (--x) by name, since their order varies.
+  const props = Array.from(getComputedStyle(document.documentElement)).filter(n => !n.startsWith('--'));
   const h = s => { let a = 0xdeadbeef, b = 0x41c6ce57;
     for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 2654435761); b = Math.imul(b ^ c, 1597334677); }
     a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909);
@@ -108,7 +115,10 @@ SNAPSHOT_JS = r"""
     p = pathOf(el.parentElement) + '>' + el.tagName.toLowerCase() + ':' + Array.prototype.indexOf.call(el.parentElement.children, el);
     paths.set(el, p); return p; };
   const keys = [], values = [];
-  const add = (key, style) => { const v = props.map(n => style.getPropertyValue(n)); keys.push(key); values.push(detail ? v : h(v.join('\u0001'))); };
+  const add = (key, style) => {
+    const names = props.concat(Array.from(style).filter(n => n.startsWith('--')).sort());
+    const pairs = names.map(n => n + ':' + style.getPropertyValue(n));
+    keys.push(key); values.push(detail ? pairs : h(pairs.join('\u0001'))); };
   for (const el of document.querySelectorAll('html, body, body *')) {
     const p = pathOf(el);
     add(p, getComputedStyle(el));
@@ -119,7 +129,7 @@ SNAPSHOT_JS = r"""
     if (el.tagName === 'LI' || el.tagName === 'SUMMARY') add(p + '::marker', getComputedStyle(el, '::marker'));
     if (el.hasAttribute('placeholder')) add(p + '::placeholder', getComputedStyle(el, '::placeholder'));
   }
-  return {props: h(props.join(',')), propNames: detail ? props : null, keys, values};
+  return {props: h(props.join(',')), keys, values};
 }
 """
 
@@ -168,19 +178,19 @@ class _Worker:
                 setup(page)
             page.wait_for_load_state("networkidle")
             themes = {}
-            keys = props = prop_names = None
+            keys = props = None
             for mode in MODES_SHOWN:
                 for palette in PALETTES:
                     page.evaluate(SET_THEME_JS, [mode, palette])
                     snap = page.evaluate(SNAPSHOT_JS, {"detail": detail})
                     if keys is None:
-                        keys, props, prop_names = snap["keys"], snap["props"], snap["propNames"]
+                        keys, props = snap["keys"], snap["props"]
                     elif snap["keys"] != keys:
                         errors.append(f"the DOM changed between themes ({mode}/{palette})")
                     themes[f"{mode}/{palette}"] = snap["values"]
-            return {"keys": keys, "props": props, "propNames": prop_names, "themes": themes, "errors": errors}
+            return {"keys": keys, "props": props, "themes": themes, "errors": errors}
         except Exception as error:  # Report it with the state; one broken state must not hide the others.
-            return {"keys": [], "props": None, "propNames": None, "themes": {}, "errors": errors + [f"{type(error).__name__}: {error}"]}
+            return {"keys": [], "props": None, "themes": {}, "errors": errors + [f"{type(error).__name__}: {error}"]}
         finally:
             context.close()
 
@@ -266,14 +276,14 @@ def _detail(tree, mode, state):
 
 def explain(trees, mode, state, diffs):
     a, b = (_detail(t, mode, state) for t in trees)
-    names = a["propNames"]
     index_a, index_b = {k: i for i, k in enumerate(a["keys"])}, {k: i for i, k in enumerate(b["keys"])}
     shown = 0
     for theme, key, why in diffs:
         if why != "style differs":
             continue
         va, vb = a["themes"][theme][index_a[key]], b["themes"][theme][index_b[key]]
-        changed = [f"{n}: {p!r} -> {q!r}" for n, p, q in zip(names, va, vb) if p != q]
+        pa, pb = (dict(pair.split(":", 1) for pair in v) for v in (va, vb))
+        changed = [f"{n}: {pa.get(n)!r} -> {pb.get(n)!r}" for n in sorted(set(pa) | set(pb)) if pa.get(n) != pb.get(n)]
         print(f"    {theme} {key}\n      " + "\n      ".join(changed[:12]))
         shown += 1
         if shown == 8:
