@@ -133,7 +133,18 @@ async ({detail}) => {
 }
 """
 
-SET_THEME_JS = """([mode, palette]) => { const d = document.documentElement; d.dataset.mode = mode;
+# Resolves once the DOM has had no mutation for `quiet` ms (late redraws: a sync reply, a deferred section), or after
+# `limit` ms with false.
+QUIET_JS = """([quiet, limit]) => new Promise(resolve => {
+  let timer; const start = performance.now();
+  const done = ok => { observer.disconnect(); clearTimeout(timer); clearTimeout(cap); resolve(ok); };
+  const observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(() => done(true), quiet); });
+  observer.observe(document.documentElement, {subtree: true, childList: true, attributes: true, characterData: true});
+  timer = setTimeout(() => done(true), quiet);
+  const cap = setTimeout(() => done(false), limit);
+})"""
+
+SET_THEME_JS ="""([mode, palette]) => { const d = document.documentElement; d.dataset.mode = mode;
   if (palette === 'atlas') delete d.dataset.palette; else d.dataset.palette = palette; }"""
 
 
@@ -177,6 +188,8 @@ class _Worker:
             if setup:
                 setup(page)
             page.wait_for_load_state("networkidle")
+            if not page.evaluate(QUIET_JS, [750, 15000]):
+                errors.append("the DOM never went quiet for 750 ms within 15 s")
             themes = {}
             keys = props = None
             for mode in MODES_SHOWN:
@@ -186,7 +199,8 @@ class _Worker:
                     if keys is None:
                         keys, props = snap["keys"], snap["props"]
                     elif snap["keys"] != keys:
-                        errors.append(f"the DOM changed between themes ({mode}/{palette})")
+                        gone, new = sorted(set(keys) - set(snap["keys"]))[:3], sorted(set(snap["keys"]) - set(keys))[:3]
+                        errors.append(f"the DOM changed between themes ({mode}/{palette}): gone {gone}, new {new}")
                     themes[f"{mode}/{palette}"] = snap["values"]
             return {"keys": keys, "props": props, "themes": themes, "errors": errors}
         except Exception as error:  # Report it with the state; one broken state must not hide the others.
@@ -319,9 +333,14 @@ def main():
         return 1 if errors else 0
 
     a, b = load(opts.a), load(opts.b)
+    failed = False
     for name, s in (("A", a), ("B", b)):
         line, errors = summary(s)
         print(f"{name}: {line}" + (f", {len(errors)} errors" if errors else ""))
+        failed = failed or bool(errors)
+    if failed:
+        print("NOT COMPARABLE: a snapshot reported errors (above); its states may be incomplete.")
+        return 2
     diffs = differences(a, b)
     if not diffs:
         print("IDENTICAL: every computed style matches.")
