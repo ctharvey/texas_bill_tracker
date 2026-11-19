@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-11-19
+- The hourly data run survives the Legislature's FTP answering out of step (`200 Type set to I.`, 5 of 6 failed runs in the past week) or dropping the connection: it reconnects and reads the listing or file again, up to 3 times per run. Each run writes `live/sync-status.json`, and `daily_check.py` judges the job by its last successful run, so quiet hours with no new bills no longer fail the sweep; a bill posted since the last run, or agent search waiting for its rebuild, now warns instead of failing.
+- Computed-style parity check for CSS moves (`tests/e2e/style_snapshot.py`, `run_style_parity.py`).
 - Feature folders, last pass: the address and remembered filters (`src/core/location.js`), the move from the old address, the explorer's file import, the home dashboard and the agencies page left `app.js`, and features import their helpers instead of taking them as parameters. `app.js` is 470 lines: imports, boot, view registration, page chrome and event wiring (no behavior change).
 - "Copy page for AI" works on the Following page again (two imports were lost when AI copy moved into `src/features/ai/`).
 

@@ -29,8 +29,12 @@ FTP_HOUSE = "ftp://ftp.legis.state.tx.us/bills/90R/billhistory/house_bills/"
 REPO = "ctharvey/texas_bill_tracker"
 UA = "texas-bill-atlas-daily-check/1"
 
-# Hours before a feed counts as stale: bills refresh hourly (:17), Luna's status as it works, members daily (09:47).
-MAX_AGE_HOURS = {"bills": 3, "members": 30, "luna": 12}
+# Hours before a feed counts as stale: Luna's status as it works, members daily (09:47). Bill data is judged by
+# data_verdict instead: the data job runs hourly (:17) but bills.json's generated_at moves only on a change.
+MAX_AGE_HOURS = {"members": 30, "luna": 12}
+SYNC_HEARTBEAT_HOURS = 6  # sync_ftp.HEARTBEAT: generated_at is refreshed at least this often while runs succeed
+RUN_MAX_AGE_HOURS = 2.5   # last successful data run: one missed hourly run passes, two do not
+AGENT_MAX_LAG_HOURS = 2   # the agent edition rebuilds hourly (:50) and after data runs
 CI_MAX_AGE_HOURS = 30  # The nightly run is at 08:00 UTC.
 # The edge keeps data-run files 30 days and only purge_cache.py makes changes visible; a purge failing this long
 # means visitors see old data.
@@ -60,6 +64,52 @@ def freshness(name, stamp, now, limit):
     if hours is None:
         return False, f"{name}: no readable timestamp ({stamp!r})"
     return hours <= limit, f"{name}: {hours:.1f} h old (limit {limit} h)"
+
+
+def data_verdict(generated_at, status, now):
+    """(ok, detail) for the bill data. generated_at moves only when the data changes or every SYNC_HEARTBEAT_HOURS, so
+    a quiet Legislature leaves it hours old while every run succeeds; the run itself is judged by
+    live/sync-status.json's checked_at (written by each run that published). One missed hourly run passes; a run that
+    published with failures warns. Without a status file yet, only the heartbeat bound applies."""
+    data_limit = SYNC_HEARTBEAT_HOURS + RUN_MAX_AGE_HOURS
+    data_ok, data_detail = freshness("data", generated_at, now, data_limit)
+    if not isinstance(status, dict) or status.get("format") != "texas-bill-sync-status-v1":
+        return data_ok, f"{data_detail}; no run status yet"
+    run_ok, run_detail = freshness("last run", status.get("checked_at"), now, RUN_MAX_AGE_HOURS)
+    detail = f"{run_detail}, {data_detail}"
+    if not (run_ok and data_ok):
+        return False, detail
+    problems = list(status.get("failures") or [])
+    if status.get("incomplete") and not any(p.startswith("incomplete read") for p in problems):
+        problems.append("incomplete read")
+    return (None, f"{detail}; last run reported: {'; '.join(problems)}") if problems else (True, detail)
+
+
+def parity_verdict(official, ours, posted, now):
+    """(ok, detail) for the newest House bill on the FTP against the snapshot. A bill posted within RUN_MAX_AGE_HOURS
+    may simply be waiting for the next hourly run: that warns. Older than that, the runs missed it."""
+    detail = f"official FTP HB {official}, Atlas HB {ours}"
+    if official is None or ours is None:
+        return False, detail
+    if ours >= official:
+        return True, detail
+    hours = age_hours(posted.isoformat() if posted else None, now)
+    if hours is not None and hours <= RUN_MAX_AGE_HOURS:
+        return None, f"{detail}; HB {official} posted {hours:.1f} h ago, waiting for the next data run"
+    return False, detail + (f"; HB {official} posted {hours:.1f} h ago" if hours is not None else "")
+
+
+def agent_verdict(data_as_of, generated_at, now):
+    """(ok, detail) for the agent edition's search data against the current snapshot. It rebuilds after data runs,
+    so it may trail new data by up to AGENT_MAX_LAG_HOURS (warn); built from older data past that fails."""
+    built, ours = parse_time(data_as_of), parse_time(generated_at)
+    if built is None or ours is None:
+        return False, f"search data built from {data_as_of!r}, snapshot {generated_at!r}"
+    if built >= ours:
+        return True, "search data matches the current snapshot"
+    lag = age_hours(generated_at, now)
+    detail = f"search data built from data {(ours - built).total_seconds() / 3600:.1f} h older than the snapshot"
+    return (None, detail + ", rebuild pending") if lag is not None and lag <= AGENT_MAX_LAG_HOURS else (False, detail)
 
 
 def purge_verdict(state, now):
@@ -309,8 +359,16 @@ def run_checks(include_ci=True, sample=8):
         status, data = get_json(SITES[0] + "live/bills.json")
         snapshot.update(data)
         n = len(data.get("bills") or [])
-        ok, detail = freshness("bills.json", data.get("generated_at"), now, MAX_AGE_HOURS["bills"])
-        return ok and n > 0 and data.get("data_mode") == "official-ftp", f"{detail}, {n} bills, mode {data.get('data_mode')}"
+        try:
+            status = get_json(SITES[0] + "live/sync-status.json")[1]
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                raise
+            status = None  # Not written before the first run of a sync_ftp.py that writes it.
+        ok, detail = data_verdict(data.get("generated_at"), status, now)
+        if n == 0 or data.get("data_mode") != "official-ftp":
+            ok = False
+        return ok, f"{detail}, {n} bills, mode {data.get('data_mode')}"
     check("bill data fresh", bills)
     def purge_state():
         try:
@@ -323,13 +381,14 @@ def run_checks(include_ci=True, sample=8):
 
     def ftp_parity():
         folders = [n for n in ftp_names(FTP_HOUSE) if n.startswith("HB")]
-        highest = None
+        highest = posted = None
         for folder in sorted(folders, reverse=True):  # Newest range first; empty future ranges list nothing.
-            highest = highest_bill(ftp_names(FTP_HOUSE + folder + "/"))
+            lines = get(FTP_HOUSE + folder + "/", timeout=60)[2].decode("latin-1").splitlines()
+            highest = highest_bill([line.split(None, 3)[-1] for line in lines if line.strip()])
             if highest:
+                posted = next((ftp_time(l) for l in lines if highest_bill([l.split(None, 3)[-1]]) == highest), None)
                 break
-        ours = snapshot_highest(snapshot.get("bills") or [])
-        return ours is not None and highest is not None and ours >= highest, f"official FTP HB {highest}, Atlas HB {ours}"
+        return parity_verdict(highest, snapshot_highest(snapshot.get("bills") or []), posted, now)
     check("bill data matches the Legislature's FTP", ftp_parity)
 
     def members():
@@ -357,8 +416,9 @@ def run_checks(include_ci=True, sample=8):
                 return False, f"{path}: HTTP {status}"
         status, data = get_json(AGENT + "search.json?q=teacher")
         n = data.get("total")
-        fresh, detail = freshness("search data", data.get("data_as_of"), now, MAX_AGE_HOURS["bills"] + 1)
-        return status == 200 and bool(n) and fresh, f"index, sitemap, robots OK; search 'teacher': {n} results; {detail}"
+        fresh, detail = agent_verdict(data.get("data_as_of"), snapshot.get("generated_at"), now)
+        ok = fresh if status == 200 and n else False
+        return ok, f"index, sitemap, robots OK; search 'teacher': {n} results; {detail}"
     check("agent edition and search", agent)
 
     spot_check_bills(check, snapshot, sample, now)
