@@ -272,7 +272,7 @@ def bill_order(bill_id: str) -> tuple[str, int]:
 def group_companions(results: list) -> list:
     """Move companion bills that are both in the results next to each other, at the first one's position.
 
-    Mirrors companionGroups in src/taxonomy.js; record companions already run in both directions."""
+    Mirrors companionGroups in src/features/companions/model.js; record companions already run in both directions."""
     pos = {x[2]["id"]: i for i, x in enumerate(results)}
     placed, out = set(), []
     for x in results:
