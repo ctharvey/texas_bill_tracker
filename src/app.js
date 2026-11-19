@@ -7,6 +7,7 @@ import {todayData, todayMarkup} from './features/today/view.js';
 import {memberTitle, rosterMember, influencePill, tenurePill, memberNameHtml, authorMember, authorHtml, filerHtml} from './features/members/names.js';
 import {NEAR_FILES, saveNear, nearLocate, nearAddress, nearData, nearRow, nearMarkup} from './features/near/view.js';
 import {memberData, memberMarkup} from './features/members/view.js';
+import {followButton, memberFeedHref, followedMarkup} from './features/follows/view.js';
 import {recentChanges, changeText} from './features/review/updates.js';
 import {AREAS, AREA_GROUPS, AREA_BY_ID, billAreas, inArea, areaCounts, topAgencies, subjectLabels} from './features/areas/model.js';
 import {statuteLabel, parseStatuteQuery, statuteKeysFor} from './features/statutes/model.js';
@@ -307,9 +308,6 @@ function toggleFollow(code){
   toast(`${on?'Unfollowed':'Following'} ${m?memberTitle(m):code}${on||state.view==='following'?'':' · their bills are under Following'}`);
   renderOverview();renderContent();
 }
-const followButton=m=>{if(!m?.code)return '';const on=state.follow.includes(m.code);
-  return `<button class="${on?'outline-button following':'primary-button'} follow-button" data-follow="${esc(m.code)}" aria-pressed="${on}">${on?'✓ Following':'+ Follow'}</button>`};
-const memberFeedHref=code=>`./live/feeds/members/${encodeURIComponent(code)}.xml`;
 // op: 'save-search' (search object) or 'delete-search' (id).
 function changeSearch(op,item){
   const id=op==='save-search'?item.id:item;
@@ -352,14 +350,6 @@ function savedSearchesMarkup(){
 // Following: saved searches and followed legislators; later also named watchlists.
 function followingMarkup(){
   return `<div class="section-head"><div><div class="section-overline">FOLLOWING</div><h2>Your searches and legislators</h2></div><span class="subtitle">Saved in this browser, files and sync links</span></div>${savedSearchesMarkup()}${followedMarkup()}`;
-}
-function followedMarkup(){
-  if(!state.follow.length)return `<section class="followed-section"><h3>Followed legislators</h3><p class="tools-note">Follow a legislator from their member page or from <a class="text-link" href="#local" data-view="local">Near you</a> to see every bill they file or sign onto here.</p></section>`;
-  if(!state.roster)return `<section class="followed-section"><h3>Followed legislators</h3><p class="tools-note">The member roster could not be loaded, so followed legislators' bills are not shown right now.</p></section>`;
-  const members=state.follow.map(code=>memberByCode(state.roster,code)).filter(Boolean);
-  const rows=followedBills(state.bills,state.roster,state.follow,newestFirst),limit=state.followShow||30;
-  const chips=members.map(m=>`<span class="followed-member">${memberNameHtml(m,memberTitle(m))} <a class="text-link" href="${esc(memberFeedHref(m.code))}" target="_blank" rel="noopener noreferrer" title="RSS feed of this legislator's bills">RSS</a> <button class="text-button" data-follow="${esc(m.code)}" aria-label="Unfollow ${esc(memberTitle(m))}">Unfollow</button></span>`).join('');
-  return `<section class="followed-section"><h3>Followed legislators <span>${members.length}</span></h3><div class="followed-members">${chips}</div><p class="tools-note">Saved in this browser, in exported files and with your sync link; never in share or view-only links. Newest bills first.</p>${rows.length?`${rows.slice(0,limit).map(r=>nearRow(r,{showWho:true})).join('')}${rows.length>limit?`<button class="outline-button" id="follow-more">Show 30 more · showing ${limit} of ${rows.length}</button>`:''}`:'<p class="review-empty">No bills by the legislators you follow in this snapshot yet.</p>'}</section>`;
 }
 const FOLLOW_VIEWS=new Set(['following','member','local']);
 function refreshWatch(){renderOverview();if(state.view==='home')refreshHome();else if(state.view==='all'||state.view==='watchlist'||FOLLOW_VIEWS.has(state.view))renderContent()}
