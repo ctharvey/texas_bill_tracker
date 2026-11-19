@@ -94,6 +94,7 @@ def carry_previous_assets(current: Path, staging: Path, digest: str) -> None:
 # refresh_jobs.sh starts that job once, in this order. A prefix ending in '/' matches a whole folder.
 JOB_INPUTS = {
     'members': ('scripts/sync_members.py', 'data/members_elect_2026.json'),
+    'law': ('scripts/sync_law.py',),
     'data': ('scripts/sync_ftp.py', 'scripts/build_feeds.py', 'scripts/api/', 'scripts/atlas/', 'scripts/og_art/',
              'scripts/og_art_alt.json', 'data/census/'),
     'agent': ('scripts/build_agent.mjs', 'src/taxonomy.js', 'src/prefs.js', 'src/geo.js', 'data/geo/districts.json'),

@@ -1,0 +1,10 @@
+[Unit]
+Description=Copy current Texas law weekly (only codes whose official file changed are downloaded)
+
+[Timer]
+OnCalendar=Sun *-*-* 08:23:00
+RandomizedDelaySec=600
+Persistent=true
+
+[Install]
+WantedBy=timers.target

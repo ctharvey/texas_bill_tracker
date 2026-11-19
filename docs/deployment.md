@@ -15,7 +15,7 @@ and sync keys live in browser storage tied to the address they were saved under.
   symlink. The ten newest releases (plus the live one) are kept. A failed fetch or check leaves the last release up.
 - **Server jobs**: after a publish, the deployer leaves a marker in `/var/lib/texas-bill-atlas/refresh` for each job
   whose code or inputs changed (`JOB_INPUTS`). `texas-bill-refresh.path` starts `refresh_jobs.sh`, which reruns
-  members, data, agent and share cards in that order. The review unit is never started this way. By hand:
+  members, law, data, agent and share cards in that order. The review unit is never started this way. By hand:
   `sudo -u texas-bill-atlas touch /var/lib/texas-bill-atlas/refresh/{data,agent,og}`.
 - **Units and the deployer itself** are installed by hand as root and do not update on push. The deployer runs from
   `/usr/local/lib/texas-bill-atlas/deploy_static.py`: reinstall it *before* pushing a deployer change, or the new
@@ -34,6 +34,7 @@ install -m 644 scripts/texas-bill-*.service scripts/texas-bill-*.timer scripts/t
 systemctl daemon-reload
 systemctl enable --now texas-bill-atlas.timer texas-bill-refresh.path
 systemctl enable --now texas-bill-data.timer texas-bill-members.timer texas-bill-og.timer texas-bill-agent.timer
+systemctl enable --now texas-bill-law.timer
 ```
 
 Before enabling the jobs:

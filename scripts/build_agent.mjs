@@ -59,6 +59,98 @@ export function loadTexts(textDir, ids) {
   return texts;
 }
 
+// Current law (sync_law.py writes live/law/<CODE>/<chapter>.md and indexes) for each section a bill changes (the
+// statute index build_feeds.py writes). id -> [{code, code_name, section, action, heading, url, official, text}], or
+// null when either folder is absent, so the page then leaves the section out.
+export const LAW_INLINE_MAX = 4000;      // characters per section copied into the page
+export const LAW_PAGE_MAX = 20000;       // characters of current law per bill page; the rest are links
+const LAW_CODE = /^[A-Z][A-Z0-9]$/;
+const LAW_SECTION = /^[0-9A-Za-z][0-9A-Za-z.()\-]{0,40}$/;
+const LAW_CHAPTER = /^[0-9a-z]+(?:\.[0-9a-z]+)*$/;
+const LAW_ACTION = {m: 'amended', n: 'added (new section)', a: 'added (new section)', r: 'repealed'};
+
+export function loadLaw(liveDir, ids) {
+  let statutes, law;
+  try {
+    statutes = JSON.parse(readFileSync(join(liveDir, 'statutes', 'index.json'), 'utf8'));
+    law = JSON.parse(readFileSync(join(liveDir, 'law', 'index.json'), 'utf8'));
+  } catch { return null; }
+  if (statutes?.format !== 'texas-bill-statutes-v1' || law?.format !== 'texas-bill-law-v1' || !law.codes) return null;
+  const wanted = new Set(ids), perBill = new Map(), needed = new Map(); // chapter file -> Set(section)
+  const chapterOf = new Map(); // code -> Map(section -> {chapter, file, sha256})
+  const codeIndex = code => {
+    if (chapterOf.has(code)) return chapterOf.get(code);
+    let index = null;
+    try { index = JSON.parse(readFileSync(join(liveDir, 'law', code, 'index.json'), 'utf8')); } catch { /* no copy */ }
+    const sections = new Map();
+    for (const [chapter, entry] of Object.entries(index?.format === 'texas-bill-law-v1' ? index.chapters || {} : {})) {
+      if (!LAW_CHAPTER.test(chapter) || entry?.file !== `${code}/${chapter}.md`) continue;
+      for (const [section, heading] of entry.sections || []) {
+        if (!sections.has(section)) sections.set(section, {chapter, file: entry.file, sha256: entry.sha256, heading});
+      }
+    }
+    chapterOf.set(code, sections);
+    return sections;
+  };
+  for (const [key, entry] of Object.entries(statutes.sections || {})) {
+    const [code, section] = key.split(' ');
+    if (!LAW_CODE.test(code || '') || !LAW_SECTION.test(section || '')) continue;
+    for (const [id, action] of entry?.b || []) {
+      if (!wanted.has(id)) continue;
+      const found = action === 'n' || action === 'a' ? null : codeIndex(code).get(section);
+      const item = {code, code_name: law.codes[code]?.name || code, section, action: LAW_ACTION[action] || String(action),
+        heading: found?.heading || null, url: found ? `${SITE}live/law/${found.file}` : null,
+        official: found ? `https://statutes.capitol.texas.gov/Docs/${code}/htm/${code}.${found.chapter}.htm` : null,
+        copy_sha256: SHA256.test(found?.sha256 || '') ? found.sha256 : null,
+        copied_at: law.codes[code]?.copied_at || null, text: null, file: found?.file || null};
+      if (!perBill.has(id)) perBill.set(id, []);
+      perBill.get(id).push(item);
+      if (found) {
+        if (!needed.has(found.file)) needed.set(found.file, new Set());
+        needed.get(found.file).add(section);
+      }
+    }
+  }
+  // Each needed chapter file is read once; only the cited sections' text is kept.
+  const texts = new Map();
+  for (const [file, sections] of needed) {
+    let body;
+    try { body = readFileSync(join(liveDir, 'law', ...file.split('/')), 'utf8'); } catch { continue; }
+    for (const part of body.split('\n## ').slice(1)) {
+      const match = /^(?:Sec|Art)\.\s+([0-9A-Za-z][0-9A-Za-z.()\-]*?)\.(?:\s|$)/.exec(part);
+      if (match && sections.has(match[1]) && !texts.has(`${file} ${match[1]}`)) texts.set(`${file} ${match[1]}`, part.trim());
+    }
+  }
+  for (const items of perBill.values()) {
+    let budget = LAW_PAGE_MAX;
+    items.sort((a, b) => `${a.code} ${a.section}`.localeCompare(`${b.code} ${b.section}`, 'en', {numeric: true}));
+    for (const item of items) {
+      const text = item.file ? texts.get(`${item.file} ${item.section}`) : null;
+      if (text && text.length <= LAW_INLINE_MAX && text.length <= budget) { item.text = text; budget -= text.length; }
+      delete item.file;
+    }
+  }
+  return perBill;
+}
+
+function lawSection(items) {
+  if (items === undefined) return '';
+  if (!items?.length) return '';
+  const fence = '````';
+  return `\n### Current law this bill changes
+
+Each section as it stands now, from this site's copy of the Texas Legislative Council's statute files (wording unchanged); the official page is the authority. Sections are matched automatically from the bill text and can be missed, for example when a bill changes a whole chapter at once.
+
+${items.map(i => [`- ${cell(i.code_name)} §${cell(i.section)} (${i.action})${i.heading ? `: ${cell(i.heading)}` : ''}`,
+  i.url ? `  - This copy (whole chapter): ${i.url}${i.copied_at ? `, copied ${i.copied_at}` : ''}${i.copy_sha256 ? `, SHA-256 of the Markdown ${i.copy_sha256}` : ''}` : '',
+  i.official ? `  - Official: ${i.official}` : '',
+  !i.url && i.action.startsWith('added') ? '  - New section: no current text.' : '',
+  !i.url && !i.action.startsWith('added') ? '  - Not found in this site\'s copy of current law.' : '',
+  i.text ? `\n${fence}markdown\n${i.text}\n${fence}\n` : '',
+].filter(Boolean).join('\n')).join('\n')}
+`;
+}
+
 export const slug = text => String(text).toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '').slice(0, 80) || 'unnamed';
 const cell = value => String(value ?? '').replace(/\r?\n/g, ' ').replace(/\|/g, '\\|').trim();
@@ -150,7 +242,7 @@ ${fence}` : `The latest version (${cell(latest.name)}) is ${text.chars.toLocaleS
 `;
 }
 
-function billMarkdown(b, coverage, reviewState = '', queueNote = '', text = undefined, copiedAt = '') {
+function billMarkdown(b, coverage, reviewState = '', queueNote = '', text = undefined, copiedAt = '', law = undefined) {
   const r = billRecord(b), last = r.last_action, pending = !r.full_text_review;
   if (text) r.links.full_text = text.versions.at(-1).url;
   // Say whether an empty field is a finding or data we do not have yet.
@@ -199,7 +291,7 @@ Source: Texas Legislative Council bill files (ftp.legis.state.tx.us), copied unc
 ### Caption
 
 ${cell(r.caption) || '_No caption available._'}
-${textSection(r, text)}
+${textSection(r, text)}${lawSection(law)}
 ### Authors and sponsors
 
 Authors and coauthors serve in the originating chamber; sponsors and cosponsors in the other chamber. Authorship does not indicate a vote or caucus position.
@@ -336,7 +428,7 @@ function districtPages({bills, roster, tables, geo, put, files, indexes, asOf}) 
   indexes.push(['Bills by legislative district', 'districts/index.md', rows.length]);
 }
 
-export function buildPages({snapshot, tags = null, extras = null, roster = null, status = null, minBills = 1000, districts = null, geo = null, texts = null}) {
+export function buildPages({snapshot, tags = null, extras = null, roster = null, status = null, minBills = 1000, districts = null, geo = null, texts = null, law = null}) {
   const bills = loadBills({snapshot, tags, extras, roster, minBills});
   const files = new Map();
   const put = (path, text) => files.set(path, text);
@@ -384,8 +476,10 @@ export function buildPages({snapshot, tags = null, extras = null, roster = null,
   }));
   for (const b of bills) {
     const text = texts ? texts.get(b.id) || null : undefined, record = records.get(b.id);
-    put(`bills/${b.id}.md`, billMarkdown(b, coverage, reviewState.get(b.id), queueNote.get(b.id), text, dataDate));
-    const json = text ? {...record, links: {full_text: text.versions.at(-1).url, ...record.links}, text_versions: text.versions} : record;
+    const current = law ? law.get(b.id) || [] : undefined;
+    put(`bills/${b.id}.md`, billMarkdown(b, coverage, reviewState.get(b.id), queueNote.get(b.id), text, dataDate, current));
+    let json = text ? {...record, links: {full_text: text.versions.at(-1).url, ...record.links}, text_versions: text.versions} : record;
+    if (current?.length) json = {...json, current_law: current};
     put(`bills/${b.id}.json`, JSON.stringify(json, null, 1) + '\n');
   }
 
@@ -729,12 +823,14 @@ async function main(argv) {
   // live/text sits beside bills.json, so the installed unit needs no new flag; --text overrides it.
   const snapshot = readJson(args.snapshot);
   const texts = loadTexts(args.text || join(dirname(args.snapshot), 'text'), (snapshot.bills || []).map(b => String(b?.id || '')).filter(Boolean));
+  // live/statutes and live/law sit beside bills.json too: the agent unit needs no new flag or mount.
+  const law = loadLaw(dirname(args.snapshot), (snapshot.bills || []).map(b => String(b?.id || '')).filter(Boolean));
   // extras.json sits beside tags.json in live/luna; finding it there needs no change to the installed unit's flags.
   const extrasPath = args.extras || (args.tags ? join(dirname(args.tags), 'extras.json') : null);
   const files = buildPages({snapshot, tags: args.tags ? readJson(args.tags, true) : null,
     extras: extrasPath ? readJson(extrasPath, true) : null,
     roster: args.members ? readJson(args.members, true) : null, status: args.status ? readJson(args.status, true) : null,
-    districts, geo, texts});
+    districts, geo, texts, law});
   mkdirSync(args.out, {recursive: true, mode: 0o755});
   const result = writePages(args.out, files);
   console.log(`Agent pages: ${files.size} total, ${result.written} written, ${result.unchanged} unchanged, ${result.removed} removed`);

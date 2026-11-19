@@ -6,7 +6,7 @@ set -u
 dir=${TBA_REFRESH_DIR:-/var/lib/texas-bill-atlas/refresh}  # Override for tests only.
 [ -d "$dir" ] && [ ! -L "$dir" ] || exit 0
 status=0
-for job in members data agent og; do
+for job in members law data agent og; do
     [ -e "$dir/$job" ] || [ -L "$dir/$job" ] || continue
     rm -f "$dir/$job"  # Before starting: a marker written during the run triggers one more run afterwards.
     unit="texas-bill-$job.service"

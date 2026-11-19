@@ -11,6 +11,7 @@ the bundled `data/bills.json` (accepted only as an official-FTP snapshot of at l
 | `texas-bill-og` | hourly at :40 | `build_og.mjs` in a network-less container | `live/og/<ID>.png`, `rendered.json` |
 | `texas-bill-agent` | hourly at :50 | `build_agent.mjs` in a network-less container | `live/agent/` (agent.billatlas.org) |
 | `texas-bill-members` | daily at 09:47 | `sync_members.py` | `live/members.json` |
+| `texas-bill-law` | weekly, Sunday 08:23 | `sync_law.py` | `live/law/` (current law) |
 
 Each unit takes the whole `scripts/` folder from one `main` commit of the deployer's repository, so code can move
 between files without reinstalling units. A push that changes a job's code or inputs reruns that job (see
@@ -68,6 +69,17 @@ state file it purges every prefix.
   Legislative Reference Library for party, district and service. Authors match by exact chamber and display name.
   Members-elect without an LRL record take party and district from `data/members_elect_2026.json`; delete it once
   LRL lists the 90th Legislature.
+- **Current law**: `sync_law.py` copies the Texas Constitution and every code from the Legislative Council's own
+  per-code downloads (zipped HTML listed in statutes.capitol.texas.gov's `assets/StatuteCodeDownloads.json`, served
+  from tcss.legis.texas.gov; about 42 MB for all 31). Each chapter becomes `live/law/<CODE>/<chapter>.md` (wording
+  unchanged, one `## Sec.` or `## Art.` line per section); `live/law/<CODE>/index.json` lists each chapter's file,
+  SHA-256 and section headings, and `live/law/index.json` the codes, their zip's ETag, Last-Modified and SHA-256, and
+  chapter headings. One file per chapter keeps it to about 5,000 files and 140 MB (one per section would be 123,000
+  files and over 500 MB in 4 KB blocks); no zip or HTML is kept. A refresh asks for each zip with its ETag, so only
+  changed codes are downloaded, rewrites only chapters whose text changed and deletes chapters that left a code. A code
+  that suddenly loses half its chapters is refused and keeps its old copy; stray files in the official zips
+  (`cr.17 - Copy.htm`) are skipped and listed. Agent bill pages show the current text of each section the bill amends
+  or repeals (from `live/statutes/`), inlined up to 4,000 characters.
 - **Share cards**: `build_og.mjs` (layout in `og_card.mjs`) draws a 1200x630 card per bill with satori and resvg,
   only where `cards.json` shows a new version. A bill with art in `scripts/og_art/<ID>.jpg` gets a poster card. npm
   packages are installed on the VPS once per lockfile with `sudo sh scripts/install_og_deps.sh`; the unit refuses to
