@@ -1,7 +1,7 @@
 // Companion bills in the app: the cached index, the agency-through-a-companion lists, the group watch button and the
 // bill page's companion section. app.js passes the member and date helpers the section uses.
 import {state} from '../../core/state.js';
-import {$, esc} from '../../core/dom.js';
+import {esc} from '../../core/dom.js';
 import {lastActionInfo} from '../../taxonomy.js';
 import {companionIndex, agencyViaCompanion} from './model.js';
 

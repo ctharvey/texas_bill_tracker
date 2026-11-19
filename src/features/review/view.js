@@ -1,7 +1,7 @@
 // The review progress page (#review): the live run, each pass's backlog, recent reviews and updates, and the one-bill
 // lookup. app.js passes its formatters and row renderers in, and keeps the refresh timer.
 import {state} from '../../core/state.js';
-import {$, esc} from '../../core/dom.js';
+import {esc} from '../../core/dom.js';
 import {auditLine, reviewProgress, reviewSummary} from '../../taxonomy.js';
 import {newestReviewed} from '../home/model.js';
 import {runState, passRows, passJobs, lookup, RUN_LIMIT_MINUTES} from './model.js';

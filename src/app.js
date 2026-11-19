@@ -3,6 +3,7 @@ import {nextVisit, changedSince, newestReviewed} from './features/home/model.js'
 import {topicHue, topicStyle, plainTitle, daysUntil} from './features/home/rows.js';
 import {reviewParts, reviewLookupHtml, reviewMarkup} from './features/review/view.js';
 import {companionCache, companionsOf, relationText, agencyVia, groupWatchButton, companionBlock} from './features/companions/view.js';
+import {todayData, todayMarkup} from './features/today/view.js';
 import {recentChanges, changeText} from './features/review/updates.js';
 import {AREAS, AREA_GROUPS, AREA_BY_ID, billAreas, inArea, areaCounts, topAgencies, subjectLabels} from './features/areas/model.js';
 import {statuteLabel, parseStatuteQuery, statuteKeysFor} from './features/statutes/model.js';
@@ -797,7 +798,7 @@ function registerViews(){
   registerView('all',{heading:['See what’s moving.','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:explorerMarkup,after:renderResults});
   registerView('watchlist',{heading:['Your watchlist.','Bills you starred on this device, with a clear view of their movement.'],render:explorerMarkup,after:renderResults});
   registerView('following',{heading:['Following.','Legislators you follow on this device, and every bill they file or sign onto.'],render:followingMarkup});
-  registerView('today',{heading:['Today at the Lege.','Bills with a recorded action that day, by type of action. Dates follow Texas time.'],render:todayMarkup});
+  registerView('today',{heading:['Today at the Lege.','Bills with a recorded action that day, by type of action. Dates follow Texas time.'],render:()=>todayMarkup({dateText,todayRow})});
   registerView('local',{heading:['Near you.','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],render:nearMarkup});
   registerView('member',{heading:['One legislator.','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],render:memberMarkup});
   registerView('statute',{heading:['One section of law.','The bills that would amend, add or repeal this section of Texas law, with their wording side by side.'],render:()=>statuteMarkup({renderContent,billHref})});
@@ -1110,7 +1111,7 @@ function homeCards(){
     :`${changed.length?changed.slice(0,HOME_ROWS).map(datedRow).join(''):`<p class="tools-note">No new actions on your ${mine.length.toLocaleString()} ${mine.length===1?'bill':'bills'}${prev?` since ${esc(dateText(prev))}`:''}.</p>`}${changed.length>HOME_ROWS?`<p class="tools-note">And ${(changed.length-HOME_ROWS).toLocaleString()} more on your <a class="text-link" href="#watchlist" data-view="watchlist">watchlist</a> and under <a class="text-link" href="#following" data-view="following">Following</a>.</p>`:''}${searchList}`;
   const yoursTitle=prev?`Since your last visit, ${esc(shortDate(prev))}`:'Latest on your bills';
   // The latest day with activity, as on the Today page (unfiltered by its topic chips).
-  const {day,rows}=todayData();
+  const {day,rows}=todayData({dateText});
   const types=groupByActionType(rows);
   const counts=types.length>1?`<p class="home-counts">${types.map(g=>`<span><strong>${g.rows.length.toLocaleString()}</strong> ${esc(g.label.toLowerCase())}</span>`).join('')}</p>`:'';
   const dayShown=rows.slice(0,HOME_ROWS+1),dayIds=new Set(dayShown.map(r=>r.bill.id));
@@ -1155,45 +1156,6 @@ function changeRows(rows,limit){
   const byId=new Map(state.bills.map(b=>[b.id,b]));
   const shown=rows.filter(r=>byId.has(r.id));
   return `<div class="today-list">${shown.slice(0,limit).map(r=>todayRow({bill:byId.get(r.id),actions:r.changes.map(changeText)})).join('')}</div>${shown.length>limit?`<p class="tools-note">And ${(shown.length-limit).toLocaleString()} more.</p>`:''}`;
-}
-
-// Remove this line once the Legislature is in session and the view has real floor and hearing content.
-const TODAY_INTERIM_NOTE='The 90th Legislature convenes in January 2027; floor calendars and hearings will appear here then.';
-
-// The Today view's day and rows, shared by its markup and "Copy page for AI".
-function todayData(){
-  const today=chicagoDate(new Date());
-  let day=today,rows=highestNumberFirst(activityOn(state.bills,day)),note='';
-  if(!rows.length){
-    const last=latestActivityDay(state.bills,today);
-    if(last){day=last;rows=highestNumberFirst(activityOn(state.bills,day))}
-    note=`No recorded activity today${last?`; showing ${esc(dateText(last))}`:''}.`;
-  }
-  const counts=topicCounts(rows.map(r=>r.bill));
-  if(state.todayTopic&&!counts.some(c=>c.topic===state.todayTopic))state.todayTopic='';
-  const shown=state.todayTopic?rows.filter(r=>r.bill.topics.includes(state.todayTopic)):rows;
-  return {today,day,rows,note,counts,shown};
-}
-
-function todayMarkup(){
-  const {today,day,rows,note,counts,shown}=todayData();
-  // Every topic is reachable: the 12 largest show first, the rest behind "+N more"; a selected topic always shows.
-  const TOP=12,listed=state.todayAllTopics?counts:counts.filter((c,i)=>i<TOP||c.topic===state.todayTopic);
-  const dot=topic=>topicHue(topic)===null?'':`<i class="topic-dot" style="--topic-h:${topicHue(topic)}"></i>`;
-  const chip=(topic,label)=>`<button class="topic-chip ${state.todayTopic===topic?'selected':''}" data-today-topic="${esc(topic)}" aria-pressed="${state.todayTopic===topic}">${dot(topic)}${label}</button>`;
-  // The day's topic mix as one bar. Mouse users can click a segment; the chips below are the accessible control.
-  const barTotal=counts.reduce((n,c)=>n+c.count,0);
-  const bar=counts.length>1?`<div class="topic-bar" aria-hidden="true">${counts.map(c=>`<button type="button" tabindex="-1" class="topic-seg${state.todayTopic===c.topic?' selected':''}" data-today-topic="${esc(c.topic)}" style="--topic-h:${topicHue(c.topic)??220};flex:${c.count} 1 0" title="${esc(c.topic)} · ${c.count}"><span>${c.count/barTotal>=.09?`${esc(c.topic)} · ${c.count}`:''}</span></button>`).join('')}</div>`:'';
-  const chips=`<div class="today-topics" role="group" aria-label="Filter this day's bills by topic">${chip('',`All · ${rows.length}`)}${listed.map(c=>chip(c.topic,`${esc(c.topic)} · ${c.count}`)).join('')}${counts.length>TOP?`<button class="text-button" id="today-topics-toggle">${state.todayAllTopics?'Show fewer':`+${counts.length-listed.length} more topics`}</button>`:''}</div>`;
-  let budget=state.todayLimit;
-  const sections=groupByActionType(shown).map(g=>{
-    const part=g.rows.slice(0,Math.max(0,budget));budget-=part.length;
-    return part.length?`<section class="today-group"><h3>${esc(g.label)} <span>${g.rows.length}</span></h3>${part.map(r=>todayRow(r,{by:true})).join('')}</section>`:'';
-  }).join('');
-  return `<div class="section-head"><div><div class="section-overline">${day===today?'TODAY':'MOST RECENT ACTIVITY'}</div><h2>${esc(dateText(day))}</h2></div><span class="subtitle">${shown.length} ${shown.length===1?'bill':'bills'} with recorded action</span></div>
-    <div class="info-callout today-note">${note?`<p>${note}</p>`:''}<p>${esc(TODAY_INTERIM_NOTE)}</p></div>
-    ${rows.length?bar+chips:''}${sections||'<div class="empty-state"><h3>No activity to show</h3><p>Nothing is recorded for this day yet.</p></div>'}
-    ${shown.length>state.todayLimit?`<button class="outline-button" id="today-more">Show 100 more · showing ${state.todayLimit} of ${shown.length}</button>`:''}`;
 }
 
 // `by`: also name who filed the bill (the Today page; member pages and Near you already say whose bills they are).
@@ -1614,7 +1576,7 @@ function registerClicks(){
     renderContent();$('.law-compare-wrap')?.scrollIntoView({behavior:'smooth',block:'start'})});
   clickOn('law-show','[data-law-show]',lawShow=>{state.statuteShow=lawShow.dataset.lawShow;renderContent()});
   clickOn('member-more','[data-member-more]',memberMore=>{const role=memberMore.dataset.memberMore;state.memberShow[role]=(state.memberShow[role]||30)+30;renderContent()});
-  clickOn('copy-page-ai','#copy-page-ai',copyPage=>copyPageForAi(copyPage,{memberTitle,todayData,agencyName,companionsOf,agencyVia,filteredBills,nearData,memberData}));
+  clickOn('copy-page-ai','#copy-page-ai',copyPage=>copyPageForAi(copyPage,{memberTitle,todayData:()=>todayData({dateText}),agencyName,companionsOf,agencyVia,filteredBills,nearData,memberData}));
   clickOn('today-topic','[data-today-topic]',todayTopic=>{state.todayTopic=todayTopic.dataset.todayTopic;state.todayLimit=100;renderContent()});
   clickOn('today-more','#today-more',()=>{state.todayLimit+=100;renderContent()});
   clickOn('today-topics-toggle','#today-topics-toggle',()=>{state.todayAllTopics=!state.todayAllTopics;renderContent()});
