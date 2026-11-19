@@ -973,12 +973,65 @@ def build_statutes(snapshot: dict, text_dir: Path) -> tuple[dict, dict[str, dict
     return index, files
 
 
+def snapshot_day(snapshot: dict) -> str | None:
+    """The Chicago day the snapshot was generated (its generated_at), so reruns of one snapshot agree."""
+    try:
+        stamp = dt.datetime.fromisoformat(str(snapshot.get("generated_at") or "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if stamp.tzinfo is None:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        zone = ZoneInfo("America/Chicago")
+    except Exception:  # No tz database (some Windows Pythons): standard time is close enough for a day.
+        zone = dt.timezone(dt.timedelta(hours=-6))
+    return stamp.astimezone(zone).date().isoformat()
+
+
+_DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def stamp_first_seen(index: dict, previous: dict | None, day: str | None) -> None:
+    """Records the day each bill started changing each section, so a follow can show a bill as new even when its
+    latest dated action is older (a late text, a new version, a parser change). sections[key]["f"] = {bill: day}
+    holds only pairs first seen after index["first_seen_from"]; pairs present then count as old. Carried forward
+    from the previous index; a pair that leaves and comes back gets the day it came back."""
+    if not _DAY.fullmatch(day or ""):
+        return
+    prev_sections = previous.get("sections") if isinstance(previous, dict) else None
+    baseline = previous.get("first_seen_from") if isinstance(previous, dict) else None
+    if not isinstance(prev_sections, dict) or not _DAY.fullmatch(str(baseline or "")):
+        index["first_seen_from"] = day  # First run with this field: everything already indexed is old.
+        return
+    index["first_seen_from"] = baseline
+    for key, entry in index["sections"].items():
+        old = prev_sections.get(key) if isinstance(prev_sections.get(key), dict) else {}
+        had = {p[0] for p in old.get("b") or [] if isinstance(p, list) and p}
+        old_days = old.get("f") if isinstance(old.get("f"), dict) else {}
+        days = {}
+        for bill, _kind in entry["b"]:
+            if bill not in had:
+                days[bill] = day
+            elif _DAY.fullmatch(str(old_days.get(bill) or "")):
+                days[bill] = old_days[bill]
+        if days:
+            entry["f"] = days
+
+
 def write_statutes(snapshot: dict, text_dir: Path, out_dir: Path) -> tuple[int, int, int]:
     """Writes out_dir/index.json and out_dir/sections/<CODE>-<section>.json; removes sections no bill touches now.
     Returns (written, unchanged, removed). Does nothing without a text directory."""
     if not text_dir.is_dir():
         return 0, 0, 0
     index, files = build_statutes(snapshot, text_dir)
+    try:
+        previous = json.loads((out_dir / "index.json").read_text("utf-8"))
+    except (OSError, ValueError):
+        previous = None
+    if isinstance(previous, dict) and previous.get("format") != STATUTE_FORMAT:
+        previous = None
+    stamp_first_seen(index, previous, snapshot_day(snapshot))
     sections_dir = out_dir / "sections"
     sections_dir.mkdir(parents=True, exist_ok=True)
     written = unchanged = removed = 0
@@ -1023,9 +1076,9 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     feed = f"{site}live/feeds/law/{code}-{number}.xml"
     heading = (current[0] if current else "") or (f"Sec. {number}. {entry['h']}." if entry.get("h") else "")
     name = re.sub(r"^(?:Sec|Art)\.\s+\S+\.\s*", "", heading).rstrip(".").strip()
-    label = f"{code_name} {'Art. ' if code == 'CR' else chr(0xa7)}{number}"  # As the app's statuteLabel.
+    label = law_label(code, number, code_name)
     title = clip(f"{label}: {name}" if name else label, SHARE_TITLE_MAX)
-    bills = [b for b in entry.get("b", []) if isinstance(b, list) and len(b) == 2 and BILL_ID.fullmatch(str(b[0]))]
+    bills = [b for b in entry.get("b") or [] if isinstance(b, list) and len(b) == 2 and BILL_ID.fullmatch(str(b[0]))]
     listed = ", ".join(f"{bill_number(b)} ({LAW_KIND_WORDS.get(k, 'changes')})" for b, k in bills[:6])
     more = f" and {len(bills) - 6} more" if len(bills) > 6 else ""
     count = f"{len(bills)} bill{'s' if len(bills) != 1 else ''} in the 90th Legislature would change this section"
@@ -1089,16 +1142,30 @@ LAW_LIMITS = ("Bills are matched to sections automatically from their text and c
 _LAW_FEED_NAME = re.compile(r"([A-Z]{2})-(\d+[A-Z]?(?:\.\d+[A-Z]?)+)\.xml")
 
 
-def law_feed(key: str, bills: list[tuple[dict, str]], site: str = SITE, reviews: dict | None = None) -> str:
-    """Every action on the bills that change one law section, newest first, capped like a member feed."""
-    reviews = reviews or {}
+def law_label(code: str, number: str, code_name: str | None = None) -> str:
+    """"Penal Code § 46.06", or "Code of Criminal Procedure Art. 42.12", as the app's statuteLabel."""
+    return f"{code_name or CODE_NAME.get(code, code)} {'Art.' if code == 'CR' else chr(0xa7)} {number}"
+
+
+def law_feed(key: str, bills: list[tuple[dict, str]], site: str = SITE, reviews: dict | None = None,
+             since: dict | None = None) -> str:
+    """Every action on the bills that change one law section, newest first, capped like a member feed. A bill that
+    started changing the section after the index began recording it (since = {bill: day}) also gets a dated
+    "Now amends ..." item, so the change itself is news even when the bill's own actions are older."""
+    reviews, since = reviews or {}, since or {}
     code, number = key.split(" ")
-    label = f"{CODE_NAME.get(code, code)} {'Art. ' if code == 'CR' else chr(0xa7)}{number}"
+    label = law_label(code, number)
     official = (f"https://statutes.capitol.texas.gov/?tab=1&code={code}&chapter={code}.{number.split('.')[0]}"
                 f"&artSec={number}")
     items = []
     for bill, kind in bills:
         verb = LAW_KIND_WORDS.get(kind, "changes")
+        caption = bill.get("caption") or bill.get("title") or ""
+        day = since.get(bill["id"])
+        if isinstance(day, str) and _DAY.fullmatch(day):
+            items.append({"bill": bill["id"], "text": f"Now {verb} {label}", "date": day,
+                          "guid": f"{bill['id']}-law-{code}-{number}-{day}",
+                          "caption": f"{bill_number(bill['id'])} {verb} {label}. {caption}"})
         for item in all_items(bill, reviews.get(bill["id"])):
             items.append({**item, "caption": f"{bill_number(bill['id'])} {verb} {label}. {item['caption']}"})
     items.sort(key=lambda i: i["date"] or "", reverse=True)
@@ -1114,22 +1181,24 @@ def write_law_feeds(snapshot: dict, index: dict, out_dir: Path, site: str = SITE
     is rewritten empty, never removed, so a followed feed link keeps working."""
     by_id = {b["id"]: b for b in snapshot.get("bills") or []
              if isinstance(b, dict) and BILL_ID.fullmatch(str(b.get("id", "")))}
-    feeds: dict[str, list] = {}
+    feeds: dict[str, tuple[list, dict]] = {}
     for key, entry in (index.get("sections") or {}).items():
         if not STATUTE_KEY.fullmatch(key) or key[:2] not in CODE_NAME or not isinstance(entry, dict):
             continue  # Never build a file name from an unexpected key.
-        feeds[key] = [(by_id[b], k) for b, k in (x for x in entry.get("b", []) if isinstance(x, list) and len(x) == 2)
-                      if b in by_id]
+        pairs = entry.get("b") if isinstance(entry.get("b"), list) else []
+        since = entry.get("f") if isinstance(entry.get("f"), dict) else {}
+        feeds[key] = ([(by_id[x[0]], x[1]) for x in pairs
+                       if isinstance(x, list) and len(x) == 2 and isinstance(x[0], str) and x[0] in by_id], since)
     if not feeds:
         return 0, 0  # An empty or missing index never empties every feed.
     out_dir.mkdir(parents=True, exist_ok=True)
     for path in out_dir.iterdir():
         found = _LAW_FEED_NAME.fullmatch(path.name)
         if found and found.group(1) in CODE_NAME:
-            feeds.setdefault(f"{found.group(1)} {found.group(2)}", [])
+            feeds.setdefault(f"{found.group(1)} {found.group(2)}", ([], {}))
     written = unchanged = 0
-    for key, bills in feeds.items():
-        if write_if_changed(out_dir / f"{key.replace(' ', '-')}.xml", law_feed(key, bills, site, reviews)):
+    for key, (bills, since) in feeds.items():
+        if write_if_changed(out_dir / f"{key.replace(' ', '-')}.xml", law_feed(key, bills, site, reviews, since)):
             written += 1
         else:
             unchanged += 1
@@ -1147,7 +1216,7 @@ def write_law_pages(index: dict, out_dir: Path, site: str = SITE, law_dir: Path 
     written = unchanged = removed = 0
     keep: dict[str, set[str]] = {}
     for key, entry in sections.items():
-        if not STATUTE_KEY.fullmatch(key) or key[:2] not in CODE_NAME:
+        if not STATUTE_KEY.fullmatch(key) or key[:2] not in CODE_NAME or not isinstance(entry, dict):
             continue  # Never build a file name from an unexpected key.
         code, number = key.split(" ")
         keep.setdefault(code, set()).add(f"{number}.html")

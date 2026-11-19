@@ -5,7 +5,7 @@ import {$, esc} from '../../core/dom.js';
 import {timeoutSignal, httpError} from '../../core/net.js';
 import {buildHash} from '../../prefs.js';
 import {lastActionInfo, openLinkHtml} from '../../taxonomy.js';
-import {STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, compareLaw, currentLaw, groupStatuteEntries, lawFollowOf} from './model.js';
+import {STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, compareLaw, currentLaw, groupStatuteEntries, lawFollowOf, isLawFollowQuery} from './model.js';
 import {renderContent, renderResults, refreshHome} from '../../core/router.js';
 import {billHref} from '../../core/links.js';
 
@@ -115,6 +115,7 @@ const LAW_LIMITS='Bills are matched to sections automatically from their text an
 export const lawFeedHref=key=>`./live/feeds/law/${encodeURIComponent(key.replace(' ','-'))}.xml`;
 // Follow (a saved search for the section) and, once a bill changes it, the section's RSS feed.
 function lawToolsMarkup(key,label,hasFeed){
+  if(!isLawFollowQuery(key))return '';  // Only codes the parser tracks can ever gain bills.
   const on=!!lawFollowOf(state.searches,key);
   const button=`<button class="${on?'outline-button following':'primary-button'} follow-button" data-follow-law="${esc(key)}" data-follow-label="${esc(label)}" aria-pressed="${on}">${on?'✓ Following':'+ Follow this law'}</button>`;
   const feed=hasFeed?`<a class="outline-button" href="${esc(lawFeedHref(key))}" target="_blank" rel="noopener noreferrer">RSS feed</a>`:'';
@@ -125,7 +126,8 @@ export function statuteMarkup(){
   const key=state.statuteKey;
   const head=(title,sub='90th Legislature · every bill that changes it')=>`<div class="section-head"><div><div class="section-overline">TEXAS LAW</div><h2>${title}</h2></div><span class="subtitle">${sub}</span></div>`;
   if(!key)return `${head('Section not found')}<div class="info-callout callout-warn">This address does not name a section of Texas law. Open one from a bill's "Laws this bill changes" list, or search the explorer for a section number such as 48.160.</div>`;
-  if(!state.statutes)return state.statutesFailed?`${head(esc(key))}<div class="info-callout callout-warn">The list of laws each bill changes is not available right now. Try again later.</div>`:`${head(esc(key))}<p class="near-hint">Loading…</p>`;
+  // Following needs only the key, so the button is there while the index loads and when it failed.
+  if(!state.statutes){const label=statuteLabel(key);return state.statutesFailed?`${head(esc(label))}${lawToolsMarkup(key,label,false)}<div class="info-callout callout-warn">The list of laws each bill changes is not available right now. Try again later.</div>`:`${head(esc(label))}${lawToolsMarkup(key,label,false)}<p class="near-hint">Loading…</p>`}
   const label=statuteLabel(key,state.statutes.codes),info=state.statutes.sections[key];
   const official=`<a class="text-link" href="${esc(officialStatuteUrl(key))}" target="_blank" rel="noopener noreferrer">Current law on statutes.capitol.texas.gov ↗</a>`;
   const tools=lawToolsMarkup(key,label,!!info);
@@ -154,7 +156,12 @@ export function statuteMarkup(){
 }
 
 // Explorer: a search for a section number lists the bills that change it; this links to their comparison.
-export function statuteHintMarkup(keys){
+export function statuteHintMarkup(keys,query=''){
+  // Exactly a section key ("PE 46.06", what a law follow saves): only that section's bills, never text matches.
+  if(isLawFollowQuery(query)){
+    if(!state.statutes)return `<div class="info-callout${state.statutesFailed?' callout-warn':''} statute-hint">${state.statutesFailed?`The list of laws each bill changes is not available right now, so the bills that change ${esc(query)} cannot be shown. Try again later.`:`Loading the bills that change ${esc(query)}…`}</div>`;
+    return `<div class="info-callout statute-hint">Showing only bills that change ${statuteLink(query)}${state.statutes.sections[query]?'. Open it to compare their versions side by side.':': none yet.'}</div>`;
+  }
   if(!keys.length)return '';
   return `<div class="info-callout statute-hint">Bills that change ${keys.map(statuteLink).join(', ')} are included. Open ${keys.length===1?'it':'one'} to compare their versions side by side.</div>`;
 }

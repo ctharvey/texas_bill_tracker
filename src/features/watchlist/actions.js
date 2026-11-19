@@ -5,6 +5,7 @@ import {copyText, download} from '../../core/copy.js';
 import {siteBase} from '../../core/links.js';
 import {buildHash, profileFile, parseProfileFile, MAX_SEARCHES} from '../../prefs.js';
 import {state} from '../../core/state.js';
+import {isLawFollowQuery, lawFollowsOf} from '../statutes/model.js';
 import {savedTheme, setTheme} from '../theme/view.js';
 import {toast, $} from '../../core/dom.js';
 import {readWatch, readFollows, readSearches} from '../../core/lists.js';
@@ -36,7 +37,11 @@ export async function importWatchlist(file){
     const {bills,follows,searches,theme}=parseProfileFile(await file.text()),before=state.watch.size,followed=state.follow.length;
     if(theme){const id=setTheme(theme);if(sync.linked?.mode==='edit')sync.record('theme',id)}  // Like the bills below, a linked device syncs it.
     changeWatch('add',bills);changeFollow('follow',follows);
-    const known=new Set(state.searches.map(s=>s.id)),added=searches.filter(s=>!known.has(s.id)).slice(0,Math.max(0,MAX_SEARCHES-state.searches.length));
+    // A law already followed here is skipped, so importing another device's file does not follow it twice.
+    const lawOf=s=>isLawFollowQuery(s.filters?.query)&&lawFollowsOf([s],s.filters.query).length?s.filters.query:null;
+    const known=new Set(state.searches.map(s=>s.id)),laws=new Set(state.searches.map(lawOf).filter(Boolean));
+    const added=searches.filter(s=>{if(known.has(s.id))return false;const law=lawOf(s);
+      if(law){if(laws.has(law))return false;laws.add(law)}return true}).slice(0,Math.max(0,MAX_SEARCHES-state.searches.length));
     for(const s of added)changeSearch('save-search',s);
     refreshWatch();
     toast(`Added ${state.watch.size-before} of ${bills.length} bills${follows.length?`, ${state.follow.length-followed} of ${follows.length} legislators`:''}${searches.length?`, ${added.length} of ${searches.length} saved searches`:''}`);

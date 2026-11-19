@@ -134,7 +134,7 @@ export function drawResults(){
     const names=g.map(b=>b.number).join(' + ');
     return `<div class="companion-group" role="group" aria-label="${esc(`${names}: companion bills`)}"><div class="companion-group-head"><span><span aria-hidden="true">⇄</span> Companion bills · ${esc(names)}${relations.length?` · ${esc(relations.join(', '))}`:''}</span>${groupWatchButton(g.map(b=>b.id))}</div>${g.map(card).join('')}</div>`};
   noticeSearch(state.query);
-  $('#bill-list').innerHTML=statuteHintMarkup(state.sharedList?[]:lawKeysFor(state.query))+(list.length?shown.map(g=>g.length>1?groupMarkup(g):card(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'&&!state.watch.size?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p>${emptyNextSteps()}${state.view==='watchlist'?'':TUMBLEWEED}</div>`);
+  $('#bill-list').innerHTML=statuteHintMarkup(state.sharedList?[]:lawKeysFor(state.query),state.sharedList?'':state.query)+(list.length?shown.map(g=>g.length>1?groupMarkup(g):card(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'&&!state.watch.size?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p>${emptyNextSteps()}${state.view==='watchlist'?'':TUMBLEWEED}</div>`);
   $('#results-bottom').innerHTML=`${list.length>shownCount?`<button class="outline-button" id="load-more">Load 30 more · showing ${shownCount} of ${list.length}</button><div style="height:12px"></div>`:''}${esc(state.meta?.coverage_note||'Check the official record for authoritative status.')}`;
   persistState();
   syncPreview();

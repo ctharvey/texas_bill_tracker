@@ -33,7 +33,7 @@ class LawPageTests(unittest.TestCase):
         build_feeds.write_law_pages(INDEX, self.out, law_dir=self.law)
         page = (self.out / "GV" / "403.606.html").read_text("utf-8")
         self.assertIn('<link rel="canonical" href="https://billatlas.org/law/GV/403.606">', page)
-        self.assertIn("<title>Government Code §403.606: CERTAIN PERSONS INELIGIBLE · Texas Bill Atlas</title>", page)
+        self.assertIn("<title>Government Code § 403.606: CERTAIN PERSONS INELIGIBLE · Texas Bill Atlas</title>", page)
         self.assertIn('content="https://billatlas.org/social-card.png"', page)
         self.assertIn('<a href="https://billatlas.org/bill/HB1094">HB 1094</a> amends this section', page)
         self.assertIn("<h2>Current law</h2>", page)
@@ -63,7 +63,7 @@ class LawPageTests(unittest.TestCase):
     def test_without_a_law_copy_pages_use_the_index_heading(self):
         build_feeds.write_law_pages(INDEX, self.out, law_dir=self.root / "missing")
         page = (self.out / "GV" / "403.606.html").read_text("utf-8")
-        self.assertIn("Government Code §403.606: CERTAIN PERSONS INELIGIBLE", page)
+        self.assertIn("Government Code § 403.606: CERTAIN PERSONS INELIGIBLE", page)
         self.assertNotIn("<h2>Current law</h2>", page)
 
     def test_rewrites_only_changes_removes_stale_pages_and_ignores_bad_keys(self):
@@ -88,7 +88,7 @@ class LawPageTests(unittest.TestCase):
     def test_page_links_its_feed(self):
         build_feeds.write_law_pages(INDEX, self.out, law_dir=self.law)
         page = (self.out / "GV" / "403.606.html").read_text("utf-8")
-        self.assertIn('<link rel="alternate" type="application/rss+xml" title="Government Code §403.606" '
+        self.assertIn('<link rel="alternate" type="application/rss+xml" title="Government Code § 403.606" '
                       'href="https://billatlas.org/live/feeds/law/GV-403.606.xml">', page)
 
     def test_law_feeds_list_actions_and_keep_followed_links_working(self):
@@ -119,6 +119,54 @@ class LawPageTests(unittest.TestCase):
         before = {p.name: p.read_text("utf-8") for p in feeds.iterdir()}
         self.assertEqual(build_feeds.write_law_feeds(snapshot, {"sections": {}}, feeds), (0, 0))
         self.assertEqual(before, {p.name: p.read_text("utf-8") for p in feeds.iterdir()})
+
+    def test_first_seen_days_start_at_a_baseline_carry_forward_and_reset_when_a_pair_returns(self):
+        sections = lambda **kw: {"sections": {k.replace("_", " ").replace("x", "."): {"h": "H", "b": v} for k, v in kw.items()}}
+        first = sections(PE_46x06=[["HB1", "m"]])
+        build_feeds.stamp_first_seen(first, None, "2026-11-10")
+        self.assertEqual(first["first_seen_from"], "2026-11-10")
+        self.assertNotIn("f", first["sections"]["PE 46.06"])  # Indexed before the field existed: old.
+        second = sections(PE_46x06=[["HB1", "m"], ["HB2", "a"]], PE_46x07=[["HB3", "n"]])
+        build_feeds.stamp_first_seen(second, first, "2026-11-12")
+        self.assertEqual(second["first_seen_from"], "2026-11-10")
+        self.assertEqual(second["sections"]["PE 46.06"]["f"], {"HB2": "2026-11-12"})
+        self.assertEqual(second["sections"]["PE 46.07"]["f"], {"HB3": "2026-11-12"})
+        # A later run keeps the first day; HB2 leaves, then comes back with a new day.
+        third = sections(PE_46x06=[["HB1", "m"]], PE_46x07=[["HB3", "n"]])
+        build_feeds.stamp_first_seen(third, second, "2026-11-13")
+        self.assertNotIn("f", third["sections"]["PE 46.06"])
+        self.assertEqual(third["sections"]["PE 46.07"]["f"], {"HB3": "2026-11-12"})
+        fourth = sections(PE_46x06=[["HB1", "m"], ["HB2", "m"]])
+        build_feeds.stamp_first_seen(fourth, third, "2026-11-14")
+        self.assertEqual(fourth["sections"]["PE 46.06"]["f"], {"HB2": "2026-11-14"})
+        # No usable day: nothing stamped. A bad previous day is dropped, not copied.
+        none = sections(PE_46x06=[["HB1", "m"]])
+        build_feeds.stamp_first_seen(none, fourth, None)
+        self.assertNotIn("first_seen_from", none)
+        bad_prev = {"first_seen_from": "2026-11-10", "sections": {"PE 46.06": {"b": [["HB1", "m"]], "f": {"HB1": "x"}}}}
+        fifth = sections(PE_46x06=[["HB1", "m"]])
+        build_feeds.stamp_first_seen(fifth, bad_prev, "2026-11-15")
+        self.assertNotIn("f", fifth["sections"]["PE 46.06"])
+
+    def test_snapshot_day_is_the_chicago_day_of_generated_at(self):
+        self.assertEqual(build_feeds.snapshot_day({"generated_at": "2026-11-20T03:00:00Z"}), "2026-11-19")
+        self.assertEqual(build_feeds.snapshot_day({"generated_at": "2026-11-20T18:00:00+00:00"}), "2026-11-20")
+        for bad in ({}, {"generated_at": "soon"}, {"generated_at": "2026-11-20T03:00:00"}):
+            self.assertIsNone(build_feeds.snapshot_day(bad), bad)
+
+    def test_law_feed_announces_a_bill_that_starts_changing_the_section(self):
+        snapshot = {"bills": [{"id": "HB1094", "caption": "Relating to contracts.", "actions": ["Filed"],
+                               "action_dates": ["2026-03-01"]}]}
+        index = {"sections": {"GV 403.606": {"h": "H", "b": [["HB1094", "m"]], "f": {"HB1094": "2026-11-19", "x": 1}},
+                              "GV 1.1": {"h": "H", "b": None}, "GV 1.2": "junk"}}
+        feeds = self.root / "feeds" / "law"
+        build_feeds.write_law_feeds(snapshot, index, feeds)
+        items = ET.fromstring((feeds / "GV-403.606.xml").read_text("utf-8")).findall("channel/item")
+        self.assertEqual(items[0].findtext("title"), "HB1094: Now amends Government Code § 403.606")
+        self.assertIn("HB1094-law-GV-403.606-2026-11-19", items[0].findtext("guid"))
+        self.assertEqual(len(items), 2)
+        self.assertEqual(ET.fromstring((feeds / "GV-1.1.xml").read_text("utf-8")).findall("channel/item"), [])
+        build_feeds.write_law_pages(index, self.out)  # Malformed entries never stop the pages either.
 
     def test_sitemap_lists_law_addresses(self):
         text = build_feeds.sitemap({"bills": [{"id": "HB1"}]}, law_keys=list(INDEX["sections"]))

@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {cleanSearches, applySearchOps, profileFile, parseProfileFile, searchFitsSync} from '../src/prefs.js';
-import {isLawFollowQuery, lawFollowOf, lawFollowSearch, lawFollowBills} from '../src/features/statutes/model.js';
+import {isLawFollowQuery, lawFollowOf, lawFollowsOf, lawFollowSearch, lawFollowBills, lawFirstSeen, LAW_CODES, LAW_CODE_NAMES, statuteLabel} from '../src/features/statutes/model.js';
 import {state} from '../src/core/state.js';
 import {searchCounts} from '../src/features/sync/lists.js';
 import {CLICK_ORDER} from '../src/core/dispatch.js';
 
-const bill = (id, caption, day) => ({id, number: id.replace(/^([A-Z]+)/, '$1 '), caption, title: caption, topics: [], agencies: [],
+const bill = (id, caption, day) => ({id, number: id.replace(/^([A-Z]+)/, '$1 '), caption, title: caption, topics: [], agencies: [], authors: [], impacts: [],
   chamber: id.startsWith('H') ? 'House' : 'Senate', status: 'Filed', actions: ['Filed'], action_dates: [day], last_action_date: day});
 const index = sections => ({format: 'texas-bill-statutes-v1', codes: {PE: 'Penal Code'}, sections, bills: {}});
 
@@ -58,4 +58,70 @@ test('the statute page offers Follow, the home page redraws when the index arriv
   assert.match(app, /clickOn\('follow-law','\[data-follow-law\]'/);
   assert.ok(CLICK_ORDER.indexOf('follow-law') > CLICK_ORDER.indexOf('save-search'));
   assert.ok(CLICK_ORDER.indexOf('follow-law') < CLICK_ORDER.indexOf('card'));
+});
+
+test('a bill that starts changing a followed law counts as new from its first-seen day, the same day included', () => {
+  const follow = lawFollowSearch('PE 46.06', 'Penal Code § 46.06', 'abcdefgh12', '2026-11-19');
+  // HB9's last action is old; a late text added the section today (counterexample F1: no newer dated action).
+  state.bills = [bill('HB9', 'Relating to weapons.', '2026-03-01'), bill('HB10', 'Relating to weapons.', '2026-03-01')];
+  state.statutes = index({'PE 46.06': {h: 'X', b: [['HB9', 'm'], ['HB10', 'm']], f: {HB9: '2026-11-19'}}});
+  assert.equal(lawFirstSeen(state.statutes, 'PE 46.06', 'HB9'), '2026-11-19');
+  assert.equal(lawFirstSeen(state.statutes, 'PE 46.06', 'HB10'), '');
+  assert.deepEqual(searchCounts(follow), {total: 2, fresh: 1});
+  // Indexed later than the day it was opened: still new.
+  state.statutes.sections['PE 46.06'].f = {HB9: '2026-11-21'};
+  assert.deepEqual(searchCounts(follow), {total: 2, fresh: 1});
+  // Indexed before it was opened: not new.
+  state.statutes.sections['PE 46.06'].f = {HB9: '2026-11-18'};
+  assert.deepEqual(searchCounts(follow), {total: 2, fresh: 0});
+  // A malformed day is ignored; an ordinary search never uses first-seen days.
+  state.statutes.sections['PE 46.06'].f = {HB9: 'soon', HB10: '2026-11-20'};
+  assert.equal(lawFirstSeen(state.statutes, 'PE 46.06', 'HB9'), '');
+  assert.deepEqual(searchCounts({...follow, filters: {query: 'weapons'}}), {total: 2, fresh: 0});
+});
+
+test('only section keys of known codes are follows, so a search like "PM 2.5" stays a text search', () => {
+  assert.equal(LAW_CODES.size, 27);
+  for (const q of ['PM 2.5', 'CO 2.0', 'HB 1.5']) assert.ok(!isLawFollowQuery(q), q);
+  const smog = bill('SB4', 'Relating to PM 2.5 emissions.', '2026-11-10');
+  state.bills = [smog];
+  state.statutes = index({});
+  assert.deepEqual(searchCounts({id: 'a', name: 'PM 2.5', filters: {query: 'PM 2.5'}, seen: '2026-11-01'}), {total: 1, fresh: 1});
+});
+
+test('the code names match the build script, and an unknown code still labels', () => {
+  const py = readFileSync(new URL('../scripts/build_feeds.py', import.meta.url), 'utf8');
+  const block = /CODE_ABBR = \{([\s\S]*?)\n\}/.exec(py);
+  assert.ok(block, 'CODE_ABBR in build_feeds.py');
+  const pyNames = Object.fromEntries([...block[1].matchAll(/"([^"]+)":\s*"([A-Z]{2})"/g)].map(m => [m[2], m[1]]));
+  assert.deepEqual(pyNames, LAW_CODE_NAMES);
+  assert.equal(statuteLabel('PE 46.06'), 'Penal Code § 46.06');
+  assert.equal(statuteLabel('CR 42.12'), 'Code of Criminal Procedure Art. 42.12');
+});
+
+test('unfollowing removes every copy of a law follow; an import skips laws already followed', () => {
+  const a = lawFollowSearch('PE 46.06', 'Penal Code § 46.06', 'aaaaaaaaaa', '2026-11-19');
+  const b = lawFollowSearch('PE 46.06', 'Penal Code § 46.06', 'bbbbbbbbbb', '2026-11-18');
+  const narrowed = {id: 'cccccccccc', name: 'x', filters: {query: 'PE 46.06', topic: 'Guns'}, seen: '2026-11-18'};
+  assert.deepEqual(lawFollowsOf([a, narrowed, b], 'PE 46.06'), [a, b]);
+  const lists = readFileSync(new URL('../src/features/sync/lists.js', import.meta.url), 'utf8');
+  assert.match(lists, /const have=lawFollowsOf\(state\.searches,key\);\s*if\(have\.length\)\{for\(const s of have\)changeSearch\('delete-search',s\.id\)/);
+  // The save is checked: another tab can fill the last slot first.
+  assert.match(lists, /state\.searches\.some\(x=>x\.id===s\.id\)/);
+  const actions = readFileSync(new URL('../src/features/watchlist/actions.js', import.meta.url), 'utf8');
+  assert.match(actions, /if\(law\)\{if\(laws\.has\(law\)\)return false;laws\.add\(law\)\}/);
+});
+
+test('the statute page redraws after a sync pull or another tab, and its Follow button keeps focus', () => {
+  const lists = readFileSync(new URL('../src/features/sync/lists.js', import.meta.url), 'utf8');
+  assert.match(lists, /const FOLLOW_VIEWS=new Set\(\[[^\]]*'statute'[^\]]*\]\)/);
+  const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  assert.match(app, /const FOCUS_KEYS=\[[^\]]*'data-follow-law'[^\]]*\]/);
+});
+
+test('an exact section query tells the reader while the index loads, if it failed, and when no bill changes it', () => {
+  const view = readFileSync(new URL('../src/features/statutes/view.js', import.meta.url), 'utf8');
+  assert.match(view, /Loading the bills that change/);
+  assert.match(view, /none yet/);
+  assert.match(view, /statutesFailed/);
 });

@@ -8,9 +8,28 @@ export const STATUTE_KINDS = {m: 'amends', n: 'adds a new section', r: 'repeals'
 // Following a law section is a saved search whose only filter is the section key as the query ({query: "PE 46.06"}),
 // so it syncs, exports and counts new actions like any saved search. A query that is exactly a key matches only the
 // bills the index lists for that section, never free text: "pe" alone is in almost every bill's text.
-export const isLawFollowQuery = query => typeof query === 'string' && STATUTE_KEY.test(query);
-export const lawFollowOf = (searches, key) => (searches || []).find(s => s?.filters?.query === key
-    && Object.keys(s.filters).length === 1) || null;
+// The codes the statute parser tracks (scripts/build_feeds.py CODE_ABBR; tests/test_law_pages.py keeps them equal),
+// so "PM 2.5" or "CO 2.0" stays a text search.
+export const LAW_CODE_NAMES = {AG: 'Agriculture Code', AL: 'Alcoholic Beverage Code', BC: 'Business and Commerce Code',
+    BO: 'Business Organizations Code', CP: 'Civil Practice and Remedies Code', CR: 'Code of Criminal Procedure',
+    ED: 'Education Code', EL: 'Election Code', ES: 'Estates Code', FA: 'Family Code', FI: 'Finance Code',
+    GV: 'Government Code', HR: 'Human Resources Code', HS: 'Health and Safety Code', IN: 'Insurance Code',
+    LA: 'Labor Code', LG: 'Local Government Code', NR: 'Natural Resources Code', OC: 'Occupations Code',
+    PE: 'Penal Code', PR: 'Property Code', PW: 'Parks and Wildlife Code', SD: 'Special District Local Laws Code',
+    TN: 'Transportation Code', TX: 'Tax Code', UT: 'Utilities Code', WA: 'Water Code'};
+export const LAW_CODES = new Set(Object.keys(LAW_CODE_NAMES));
+export const isLawFollowQuery = query => typeof query === 'string' && STATUTE_KEY.test(query)
+    && LAW_CODES.has(query.slice(0, 2)) && query.length <= 20;
+// Every saved search that is this section's follow: two devices can each follow it and sync keeps both (ids differ),
+// and a search saved from the explorer as exactly the key is the same search. Unfollowing removes them all.
+export const lawFollowsOf = (searches, key) => (searches || []).filter(s => s?.filters?.query === key
+    && Object.keys(s.filters).length === 1);
+export const lawFollowOf = (searches, key) => lawFollowsOf(searches, key)[0] || null;
+// The day a bill started changing a section, when that was after the index began recording it (else '').
+export const lawFirstSeen = (index, key, id) => {
+    const day = index?.sections?.[key]?.f?.[id];
+    return typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : '';
+};
 export const lawFollowSearch = (key, name, id, seen) => ({id, name: String(name).slice(0, 80), filters: {query: key}, seen});
 // Bills a section-key query selects: those the index lists for that section (none when no bill changes it yet).
 export const lawFollowBills = (index, key) => (index?.sections?.[key]?.b || []).map(p => p[0]);
@@ -20,7 +39,7 @@ export const statuteFile = key => STATUTE_KEY.test(key) && key.length <= 20 ? `$
 export function statuteLabel(key, codes) {
     const m = STATUTE_KEY.exec(key || '');
     if (!m) return String(key || '');
-    return `${codes?.[m[1]] || m[1]} ${m[1] === 'CR' ? 'Art.' : '§'} ${m[2]}`;
+    return `${codes?.[m[1]] || LAW_CODE_NAMES[m[1]] || m[1]} ${m[1] === 'CR' ? 'Art.' : '§'} ${m[2]}`;
 }
 // Checked against statutes.capitol.texas.gov for every code the index uses.
 export function officialStatuteUrl(key) {

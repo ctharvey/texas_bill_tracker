@@ -33,7 +33,7 @@ CSV import accepts columns such as `id`, `title`, `caption`, `author`, `status`,
 | `members.json` | `texas-bill-members-v1` | members job |
 | `history/<BILL>/history.json`, `documents.json`, `witnesses-<H\|S>.json` | `texas-bill-history-v1`, `-documents-v1`, `-witnesses-v1` | data run |
 | `text/<BILL>/<code>.md`, `index.json` | Markdown, one paragraph per line, `### SECTION n.` headings, `<ins>`/`<del>` | data run |
-| `statutes/index.json`, `statutes/sections/` | `texas-bill-statutes-v1` (kinds: `m` amends, `n` adds, `r` repeals) | data run |
+| `statutes/index.json`, `statutes/sections/` | `texas-bill-statutes-v1` (kinds: `m` amends, `n` adds, `r` repeals; `sections[key].f` = `{bill: day}` for pairs first seen after `first_seen_from`, the Chicago day of the snapshot's `generated_at`, carried forward from the previous index) | data run |
 | `brackets/index.json` | `texas-bill-brackets-v1` | data run |
 | `feeds/`, `share/`, `sitemap.xml`, `og/cards.json` | RSS, HTML, sitemap, card inputs | data run |
 | `luna/tags.json`, `luna/highlights/<BILL>.json`, `luna/status.json` | `texas-bill-luna-tags-v1`, `-highlights-v1`, `-status-v1` | review worker |
@@ -53,7 +53,10 @@ person creates. The optional Near you address lookup sends the typed address to 
 - Watchlist `tx-bill-atlas-watch-90r`, followed legislators `tx-bill-atlas-follow-90r` (at most 200), saved searches
   `tx-bill-atlas-searches-90r` (at most 20), preferences and last filters `tx-bill-atlas-prefs-v1`. A followed law
   section is a saved search whose only filter is the section key as the query (`{query: "PE 46.06"}`); a query that
-  is exactly a key matches only the bills the statute index lists for that section, never free text.
+  is exactly a key of one of the 27 indexed codes matches only the bills the statute index lists for that section,
+  never free text (so "PM 2.5" stays a text search). A follow counts a bill as new when it has a dated action after
+  the day the follow was last opened, or when the index's first-seen day for that bill and section is on or after
+  it. Unfollowing removes every saved search for the key; an import skips a law already followed.
 - Near you `texas-bill-atlas-near-you-v1`: district numbers, county and how they were found. Coordinates and
   addresses are never stored.
 - Export file `texas-bill-atlas-profile-v1`: `{lists, follows, searches, theme}`. Import also reads older

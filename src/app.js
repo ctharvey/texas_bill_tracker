@@ -306,7 +306,7 @@ function renderOverview(){
 }
 
 // A redraw replaces the control that had focus; this finds its replacement so keyboard users keep their place.
-const FOCUS_KEYS=['data-watch','data-topic','data-today-topic','data-open','data-clear-filter','data-watch-group','data-bill-jump'];
+const FOCUS_KEYS=['data-watch','data-topic','data-today-topic','data-open','data-clear-filter','data-watch-group','data-bill-jump','data-follow-law'];
 function focusKey(){
   const el=document.activeElement;
   if(!el||el===document.body||el.id==='page-title')return null;

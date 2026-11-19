@@ -7,8 +7,10 @@ import {shortDate} from '../../core/format.js';
 import {followedMarkup} from '../follows/view.js';
 import {SORTS, agencyName, areaName} from '../../core/labels.js';
 import {searchCounts} from '../sync/lists.js';
+import {isLawFollowQuery, statuteLabel} from '../statutes/model.js';
 
 function searchSummary(f){
+  if(isLawFollowQuery(f.query)&&Object.keys(f).length===1)return `Following ${statuteLabel(f.query)}: bills that change it`;
   const parts=[f.query&&`Search “${f.query}”`,f.area&&`Area: ${areaName(f.area)}`,f.topic&&`Topic: ${f.topic}`,f.agency&&`Agency: ${agencyName(f.agency)}`,f.chamber,f.party&&`Party: ${f.party} authors`,f.stage&&`Stage: ${f.stage}`,
     f.outlook&&`Hearing: ${f.outlook}`,f.action&&`Last action: ${f.action}`,f.companion&&'Has a companion bill',f.onlyWatch&&'Watched bills only',f.sort&&f.sort!=='newest'&&`Sorted by ${SORTS[f.sort]||f.sort}`].filter(Boolean);
   return parts.join(' · ')||'All bills';
@@ -22,7 +24,7 @@ function savedSearchesMarkup(){
       :`<a class="text-link saved-search-name" href="${esc(buildHash('all',s.filters))}" data-search-open="${esc(s.id)}">${esc(s.name)}</a>`;
     return `<div class="saved-search">${name}<p>${esc(searchSummary(s.filters))}</p><p class="saved-search-counts"><strong>${total.toLocaleString()}</strong> ${total===1?'bill':'bills'}${fresh?` · <span class="saved-search-new">${fresh.toLocaleString()} with new actions</span>`:''}${s.seen?` · opened ${esc(shortDate(s.seen))}`:''}</p><div class="tools-row">${state.renamingSearch===s.id?'':`<button class="text-button" data-search-rename="${esc(s.id)}">Rename</button>`}<button class="text-button danger" data-search-delete="${esc(s.id)}">Delete</button></div></div>`;
   }).join('');
-  return `<section class="followed-section"><h3>Saved searches <span>${state.searches.length}</span></h3><p class="tools-note">“New actions” counts bills with an action dated after the day you last opened the search.</p><div class="saved-searches">${rows}</div></section>`;
+  return `<section class="followed-section"><h3>Saved searches <span>${state.searches.length}</span></h3><p class="tools-note">“New actions” counts bills with an action dated after the day you last opened the search; for a followed law, also bills that started changing it since that day.</p><div class="saved-searches">${rows}</div></section>`;
 }
 // Following: saved searches and followed legislators; later also named watchlists.
 export function followingMarkup(){

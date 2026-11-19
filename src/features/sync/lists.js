@@ -11,7 +11,7 @@ import {toast, $} from '../../core/dom.js';
 import {memberByCode} from '../../geo.js';
 import {memberTitle} from '../members/names.js';
 import {filteredBills} from '../explorer/model.js';
-import {isLawFollowQuery, lawFollowOf, lawFollowSearch} from '../statutes/model.js';
+import {isLawFollowQuery, lawFollowsOf, lawFollowSearch, lawFirstSeen} from '../statutes/model.js';
 import {todayDay, agencyName, areaName} from '../../core/labels.js';
 import {latestActivityDay} from '../../taxonomy.js';
 import {confirmJoin} from './join.js';
@@ -60,9 +60,13 @@ export function changeSearch(op,item){
   renderMoveBanner();
 }
 // Bills matching a saved search now, and those with a dated action after the day it was last opened.
+// A followed law also counts a bill as new from the day it started changing the section (the index's first-seen
+// day), since a late text or a new version can add it without a newer dated action. Same day counts: the index can
+// gain the bill after the follow was opened that day.
 export function searchCounts(s){
   const list=filteredBills({...FILTER_DEFAULTS,...s.filters}),today=todayDay();
-  const fresh=s.seen?list.filter(b=>(latestActivityDay([b],today)||'')>s.seen).length:0;
+  const law=isLawFollowQuery(s.filters?.query)?s.filters.query:null;
+  const fresh=s.seen?list.filter(b=>(latestActivityDay([b],today)||'')>s.seen||(law&&lawFirstSeen(state.statutes,law,b.id)>=s.seen)).length:0;
   return {total:list.length,fresh};
 }
 export function saveCurrentSearch(){
@@ -74,16 +78,22 @@ export function saveCurrentSearch(){
   changeSearch('save-search',{id:newSearchId(),name,filters,seen:todayDay()});
   renderOverview();toast(`Saved “${name}” · find it under Following`);
 }
-// "Follow this law": a saved search for the section key; following again unfollows (deletes that search).
+// "Follow this law": a saved search for the section key; following again unfollows, removing every copy (two
+// devices can each have followed it).
 export function toggleLawFollow(key,label){
   if(!isLawFollowQuery(key))return;
-  const have=lawFollowOf(state.searches,key);
-  if(have){changeSearch('delete-search',have.id);renderOverview();renderContent();toast(`Unfollowed ${label}`);return}
+  const have=lawFollowsOf(state.searches,key);
+  if(have.length){for(const s of have)changeSearch('delete-search',s.id);renderOverview();renderContent();
+    toast(`Unfollowed ${label}${have.length>1?` (removed ${have.length} saved searches for it)`:''}`);return}
   if(state.searches.length>=MAX_SEARCHES){toast(`You can follow or save up to ${MAX_SEARCHES} searches`);return}
-  changeSearch('save-search',lawFollowSearch(key,label,newSearchId(),todayDay()));
-  renderOverview();renderContent();toast(`Following ${label} · new bills and actions show on the home page and under Following`);
+  const s=lawFollowSearch(key,label,newSearchId(),todayDay());
+  changeSearch('save-search',s);
+  renderOverview();renderContent();
+  // Another tab may have filled the last slot meanwhile; the list store keeps at most MAX_SEARCHES.
+  toast(state.searches.some(x=>x.id===s.id)?`Following ${label} · new bills and actions show on the home page and under Following`:`Could not follow ${label}: you already have ${MAX_SEARCHES} saved searches`);
 }
-const FOLLOW_VIEWS=new Set(['following','member','local']);
+// The statute page shows a Follow button, so it redraws after a sync pull or another tab's save like these pages.
+const FOLLOW_VIEWS=new Set(['following','member','local','statute']);
 export function refreshWatch(){renderOverview();if(state.view==='home')refreshHome();else if(state.view==='all'||state.view==='watchlist'||FOLLOW_VIEWS.has(state.view))renderContent()}
 // After a debounced write: the client has already adopted the link's copy (adoptSynced); show it.
 export const onSynced=(watch,error)=>{if(error){toast(`Sync: ${error.message}`);return}renderOverview();
