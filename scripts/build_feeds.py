@@ -963,9 +963,46 @@ def section_headings(entries: list[dict]) -> tuple[str, dict[str, str]]:
     return heading, {bill: h for bill, h in adds.items() if h and h != heading}
 
 
-def build_statutes(snapshot: dict, text_dir: Path) -> tuple[dict, dict[str, dict]]:
-    """(index, {file name: section document}) from every bill's latest text version."""
+CHAPTER_KEY = re.compile(r"[A-Z]{2} \d+[A-Z]?")
+_CHAPTER_PREFIX = re.compile(r"^(?:CHAPTER|ARTICLE|SUBCHAPTER)\s+[0-9A-Za-z.\-]+?\.\s+", re.I)
+CHAPTER_KIND = {"repeal": "r", "amend": "m", "add": "n"}  # "cited" chapters are never indexed.
+
+
+def chapter_title(heading: str) -> str:
+    """"CHAPTER 46. WEAPONS" -> "WEAPONS": the law copy's chapter heading without its number and trailing period."""
+    return _CHAPTER_PREFIX.sub("", str(heading or "").strip()).strip().rstrip(".").strip()
+
+
+def _open_law(law_dir: Path | None):
+    """The law copy at law_dir, or None when it is absent or unreadable."""
+    if law_dir is None or not (law_dir / "index.json").is_file():
+        return None
+    try:
+        from law_context import LawCopy  # Imported here: law_context reads this module's statute parser.
+        return LawCopy(law_dir)
+    except (OSError, ValueError, ImportError):
+        return None
+
+
+def _law_chapter_title(law, code: str, chapter: str) -> str:
+    if law is None:
+        return ""
+    try:
+        found = law.chapter(code, chapter)
+    except (OSError, ValueError, KeyError, AttributeError):
+        return ""
+    return chapter_title(found[1].get("heading") or "") if found else ""
+
+
+def _bill_order(bill_id: str) -> tuple:
+    return (bill_id[:2] != "HB", int(re.sub(r"\D", "", bill_id) or 0), bill_id)
+
+
+def build_statutes(snapshot: dict, text_dir: Path, law_dir: Path | None = None) -> tuple[dict, dict[str, dict]]:
+    """(index, {file name: section document}) from every bill's latest text version. `chapters` lists the whole
+    chapters bills repeal, amend or add ("cited" ones are left out); `h` comes from the law copy at law_dir."""
     by_key: dict[str, list[dict]] = {}
+    by_chapter: dict[str, dict[str, str]] = {}
     bills_meta: dict[str, dict] = {}
     for bill in snapshot.get("bills") or []:
         bill_id = str(bill.get("id", "")) if isinstance(bill, dict) else ""
@@ -977,11 +1014,19 @@ def build_statutes(snapshot: dict, text_dir: Path) -> tuple[dict, dict[str, dict
         version, markdown = found
         sections, unparsed = bill_statutes(markdown)
         bills_meta[bill_id] = {"v": version["code"], "n": len(sections), "u": unparsed}
+        for chapter_key, chapter_kind in bill_chapters(markdown).items():
+            if chapter_kind in CHAPTER_KIND and CHAPTER_KEY.fullmatch(chapter_key) and chapter_key[:2] in CODE_NAME:
+                by_chapter.setdefault(chapter_key, {})[bill_id] = CHAPTER_KIND[chapter_kind]
         for key, entry in sections.items():
             by_key.setdefault(key, []).append({"bill": bill_id, "version": version["code"],
                                                "version_name": str(version.get("name") or version["code"]), **entry})
     index = {"format": STATUTE_FORMAT, "codes": {abbr: CODE_NAME[abbr] for abbr in sorted({k[:2] for k in by_key})},
              "sections": {}, "bills": dict(sorted(bills_meta.items()))}
+    law = _open_law(law_dir) if by_chapter else None
+    index["chapters"] = {
+        key: {"h": _law_chapter_title(law, key[:2], key[3:]),
+              "b": [[bill, kind] for bill, kind in sorted(by_chapter[key].items(), key=lambda p: _bill_order(p[0]))]}
+        for key in sorted(by_chapter)}
     files = {}
     for key in sorted(by_key):
         entries = sorted(by_key[key], key=lambda e: (e["bill"][:2] != "HB", int(re.sub(r"\D", "", e["bill"]) or 0), e["bill"]))
@@ -1042,18 +1087,27 @@ def merge_first_seen(history: dict | None, index: dict, day: str) -> dict:
         known = pairs.setdefault(key, {})
         for bill, _kind in entry["b"]:
             known.setdefault(bill, None if history is None else day)
-    return {"format": FIRST_SEEN_FORMAT, "from": history["from"] if history else day,
+    # Chapter pairs (keys have no dot, so they never meet a section key) join the same history. A history written
+    # before chapters were indexed gets them as its baseline for them (null), so deploying this does not flood.
+    chapters_from = (history or {}).get("chapters_from") or day
+    stamp = day if (history or {}).get("chapters_from") else None
+    for key, entry in (index.get("chapters") or {}).items():
+        known = pairs.setdefault(key, {})
+        for bill, _kind in entry["b"]:
+            known.setdefault(bill, stamp)
+    return {"format": FIRST_SEEN_FORMAT, "from": history["from"] if history else day, "chapters_from": chapters_from,
             "pairs": {key: dict(sorted(bills.items())) for key, bills in sorted(pairs.items())}}
 
 
 def project_first_seen(index: dict, history: dict) -> None:
-    """index.sections[key].f = {bill: day} for the index's pairs first seen after the baseline."""
+    """index.sections[key].f (and chapters[key].f) = {bill: day} for the index's pairs first seen after the baseline."""
     index["first_seen_from"] = history["from"]
-    for key, entry in index["sections"].items():
-        known = history["pairs"].get(key, {})
-        days = {bill: known[bill] for bill, _kind in entry["b"] if isinstance(known.get(bill), str)}
-        if days:
-            entry["f"] = days
+    for group in ("sections", "chapters"):
+        for key, entry in (index.get(group) or {}).items():
+            known = history["pairs"].get(key, {})
+            days = {bill: known[bill] for bill, _kind in entry["b"] if isinstance(known.get(bill), str)}
+            if days:
+                entry["f"] = days
 
 
 def _index_has_sections(path: Path) -> bool:
@@ -1064,13 +1118,14 @@ def _index_has_sections(path: Path) -> bool:
     return isinstance(sections, dict) and bool(sections)
 
 
-def write_statutes(snapshot: dict, text_dir: Path, out_dir: Path, today: str | None = None) -> tuple[int, int, int]:
+def write_statutes(snapshot: dict, text_dir: Path, out_dir: Path, today: str | None = None,
+                   law_dir: Path | None = None) -> tuple[int, int, int]:
     """Writes out_dir/index.json and out_dir/sections/<CODE>-<section>.json; removes sections no bill touches now.
     Returns (written, unchanged, removed). Does nothing without a text directory, and keeps the previous index when
     this run found no section at all (an unreadable text folder). `today` is this run's day (tests pin it)."""
     if not text_dir.is_dir():
         return 0, 0, 0
-    index, files = build_statutes(snapshot, text_dir)
+    index, files = build_statutes(snapshot, text_dir, law_dir)
     if not index["sections"] and _index_has_sections(out_dir / "index.json"):
         print("Statute index: this run found no sections; keeping the previous index", file=sys.stderr, flush=True)
         return 0, 0, 0
@@ -1302,6 +1357,227 @@ def write_law_pages(index: dict, out_dir: Path, site: str = SITE, law_dir: Path 
     return written, unchanged, removed
 
 
+# Chapter feeds and share pages. A chapter has bills when the index lists it (whole-chapter changes) or lists any
+# section in it (the number before the first dot). Pages are not in the sitemap: the gateway serves /law/<CODE>/<section>
+# only, so /law/PE/46 would 404 on reload; the app address is #chapter?law=PE&ch=46.
+_LAW_CHAPTER_FEED_NAME = re.compile(r"([A-Z]{2})-(\d+[A-Z]?)\.xml")
+_LAW_CHAPTER_PAGE_NAME = re.compile(r"\d+[A-Z]?\.html")
+_SMALL_WORDS = {"of", "and", "the", "for", "to", "in", "by", "or", "a", "an", "on", "with", "under", "from", "as", "at"}
+
+
+def title_case(heading: str) -> str:
+    """"WEAPONS" -> "Weapons", "OFFENSES AGAINST THE PERSON" -> "Offenses Against the Person"."""
+    words = re.sub(r"\s+", " ", heading or "").strip().split(" ")
+    return " ".join(w.lower() if i and w.lower() in _SMALL_WORDS else re.sub(r"[A-Za-z]+", lambda m: m.group(0).capitalize(), w)
+                    for i, w in enumerate(words) if w)
+
+
+def chapter_of(key: str) -> str:
+    code, number = key.split(" ")
+    return f"{code} {number.split('.')[0].upper()}"
+
+
+def _valid_pairs(entry: dict) -> list[tuple[str, str]]:
+    pairs = entry.get("b") if isinstance(entry.get("b"), list) else []
+    return [(x[0], x[1]) for x in pairs if isinstance(x, list) and len(x) == 2 and isinstance(x[0], str)
+            and BILL_ID.fullmatch(x[0]) and isinstance(x[1], str)]
+
+
+def chapter_groups(index: dict) -> dict[str, dict]:
+    """{"PE 46": {"h", "whole": [(bill, kind)], "since": {bill: day}, "sections": {"PE 46.06": ([(bill, kind)], {bill: day}, heading)}}}
+    for every chapter with a whole-chapter entry or a section in the index. Unexpected keys are skipped."""
+    groups: dict[str, dict] = {}
+
+    def group(key: str) -> dict:
+        return groups.setdefault(key, {"h": "", "whole": [], "since": {}, "sections": {}})
+
+    for key, entry in (index.get("chapters") or {}).items():
+        if not (isinstance(key, str) and CHAPTER_KEY.fullmatch(key) and key[:2] in CODE_NAME and isinstance(entry, dict)):
+            continue
+        g = group(key)
+        g["h"] = entry["h"] if isinstance(entry.get("h"), str) else ""
+        g["whole"] = _valid_pairs(entry)
+        g["since"] = {b: d for b, d in (entry.get("f") if isinstance(entry.get("f"), dict) else {}).items()
+                      if isinstance(d, str)}
+    for key, entry in (index.get("sections") or {}).items():
+        if not (isinstance(key, str) and STATUTE_KEY.fullmatch(key) and key[:2] in CODE_NAME and isinstance(entry, dict)):
+            continue
+        since = {b: d for b, d in (entry.get("f") if isinstance(entry.get("f"), dict) else {}).items() if isinstance(d, str)}
+        group(chapter_of(key))["sections"][key] = (_valid_pairs(entry), since,
+                                                   entry["h"] if isinstance(entry.get("h"), str) else "")
+    return groups
+
+
+def chapter_label(code: str, chapter: str, heading: str = "") -> str:
+    """"Penal Code chapter 46 (Weapons)"."""
+    return f"{CODE_NAME.get(code, code)} chapter {chapter}" + (f" ({title_case(heading)})" if heading else "")
+
+
+def _chapter_heading(g: dict, law, code: str, chapter: str) -> str:
+    return g["h"] or _law_chapter_title(law, code, chapter)
+
+
+def _section_short(code: str, number: str) -> str:
+    return f"{'Art.' if code == 'CR' else chr(0xa7)} {number}"
+
+
+def chapter_feed(key: str, g: dict, by_id: dict[str, dict], heading: str = "", site: str = SITE,
+                 reviews: dict | None = None) -> str:
+    """Every action on the bills that change a whole chapter or any section in it, newest first. Each bill's actions
+    appear once; a "Now amends § 46.06" / "Now repeals the whole chapter" item is added for each pair first seen
+    after the index began recording (its date from the pair's first-seen day)."""
+    reviews = reviews or {}
+    code, chapter = key.split(" ")
+    label = chapter_label(code, chapter, heading)
+    items, subjects = [], {}
+    pairs = [(b, k, None, g["since"].get(b)) for b, k in g["whole"] if b in by_id]
+    for skey, (spairs, since, _h) in sorted(g["sections"].items()):
+        pairs += [(b, k, skey.split(" ")[1], since.get(b)) for b, k in spairs if b in by_id]
+    for bill_id, kind, number, day in pairs:
+        verb = LAW_KIND_WORDS.get(kind, "changes")
+        what = "the whole chapter" if number is None else _section_short(code, number)
+        subjects.setdefault(bill_id, []).append(f"{verb} {label if number is None else law_label(code, number)}")
+        if isinstance(day, str) and _DAY.fullmatch(day):
+            guid = f"{bill_id}-law-{code}-{chapter if number is None else number}-{day}"
+            items.append({"bill": bill_id, "text": f"Now {verb} {what}", "date": day, "guid": guid,
+                          "caption": f"{bill_number(bill_id)} {verb} {label if number is None else law_label(code, number)}. "
+                                     f"{by_id[bill_id].get('caption') or by_id[bill_id].get('title') or ''}"})
+    for bill_id, parts in subjects.items():
+        shown = " and ".join(parts[:3]) + (f" and {len(parts) - 3} more" if len(parts) > 3 else "")
+        for item in all_items(by_id[bill_id], reviews.get(bill_id)):
+            items.append({**item, "caption": f"{bill_number(bill_id)} {shown}. {item['caption']}"})
+    items.sort(key=lambda i: i["date"] or "", reverse=True)
+    official = f"https://statutes.capitol.texas.gov/?tab=1&code={code}&chapter={code}.{chapter}"
+    return render_rss(f"{label} · Texas Bill Atlas", f"{site}#chapter?law={code}&ch={chapter}",
+                      f"Actions on bills in the 90th Legislature that would change {label}, as a whole or in any of its "
+                      f"sections. {LAW_LIMITS.replace('this section', 'this chapter')} Official text: {official} "
+                      f"Unofficial; confirm on Texas Legislature Online.", items[:MEMBER_FEED_ITEMS], site)
+
+
+def write_law_chapter_feeds(snapshot: dict, index: dict, out_dir: Path, site: str = SITE, reviews: dict | None = None,
+                            law_dir: Path | None = None) -> tuple[int, int]:
+    """live/feeds/law/<CODE>-<chapter>.xml per chapter with a bill. A chapter that loses its bills is rewritten empty,
+    never removed. An index with no chapters writes nothing."""
+    groups = chapter_groups(index)
+    if not groups:
+        return 0, 0
+    by_id = {b["id"]: b for b in snapshot.get("bills") or []
+             if isinstance(b, dict) and BILL_ID.fullmatch(str(b.get("id", "")))}
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for path in out_dir.iterdir():
+        found = _LAW_CHAPTER_FEED_NAME.fullmatch(path.name)
+        if found and found.group(1) in CODE_NAME:
+            groups.setdefault(f"{found.group(1)} {found.group(2)}", {"h": "", "whole": [], "since": {}, "sections": {}})
+    law = _open_law(law_dir)
+    written = unchanged = 0
+    for key, g in groups.items():
+        code, chapter = key.split(" ")
+        text = chapter_feed(key, g, by_id, _chapter_heading(g, law, code, chapter), site, reviews)
+        if write_if_changed(out_dir / f"{code}-{chapter}.xml", text):
+            written += 1
+        else:
+            unchanged += 1
+    return written, unchanged
+
+
+def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE) -> str:
+    code, chapter = key.split(" ")
+    code_name = CODE_NAME[code]
+    url = target = f"{site}#chapter?law={code}&ch={chapter}"
+    feed = f"{site}live/feeds/law/{code}-{chapter}.xml"
+    name = title_case(heading)
+    label = f"{code_name} Chapter {chapter}"
+    title = clip(f"{label}: {name}" if name else label, SHARE_TITLE_MAX)
+    whole = g["whole"]
+    sections = {k: v for k, v in sorted(g["sections"].items()) if v[0]}
+    bill_ids = sorted({b for b, _ in whole} | {b for pairs, _s, _h in sections.values() for b, _ in pairs},
+                      key=_bill_order)
+    count = (f"{len(bill_ids)} bill{'s' if len(bill_ids) != 1 else ''} in the 90th Legislature would change something "
+             f"in this chapter")
+    description = clip(f"{count}. Follow it in Texas Bill Atlas to see when another bill does.", SHARE_DESCRIPTION_MAX)
+    image = f"{site}{SITE_CARD}"
+    a = lambda value: escape(value, {'"': "&quot;"})
+    meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
+            ("property", "og:title", title), ("property", "og:description", description), ("property", "og:url", url),
+            ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
+            ("property", "og:image:alt", "Texas Bill Atlas"), ("name", "twitter:card", "summary_large_image"),
+            ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
+            ("name", "twitter:image:alt", "Texas Bill Atlas"), ("name", "description", description)]
+    tags = "\n".join(f'<meta {kind}="{n}" content="{a(value)}">' for kind, n, value in meta)
+    body = [f"<h1>{escape(label)}{': ' + escape(name) if name else ''}</h1>",
+            f'<p><a href="{a(target)}">Open {escape(label)} in Texas Bill Atlas</a> to follow it: anything a bill '
+            f"changes in this chapter shows up as new.</p>",
+            f"<h2>{escape(count[0].upper() + count[1:])}</h2>"]
+    if whole:
+        body += ["<h3>Bills that change the whole chapter</h3>", "<ul>\n" + "\n".join(
+            f'<li><a href="{a(f"{site}bill/{b}")}">{escape(bill_number(b))}</a> {LAW_KIND_WORDS.get(k, "changes")} '
+            f"the whole chapter</li>" for b, k in whole) + "\n</ul>"]
+    if sections:
+        rows = []
+        for skey, (pairs, _since, shead) in sections.items():
+            number = skey.split(" ")[1]
+            who = ", ".join(f'<a href="{a(f"{site}bill/{b}")}">{escape(bill_number(b))}</a> '
+                            f'({LAW_KIND_WORDS.get(k, "changes")})' for b, k in pairs)
+            rows.append(f'<li><a href="{a(f"{site}law/{code}/{number}")}">{escape(_section_short(code, number))}</a>'
+                        f"{': ' + escape(shead) if shead else ''}: {who}</li>")
+        body += ["<h3>Sections bills change</h3>", "<ul>\n" + "\n".join(rows) + "\n</ul>"]
+    body += ["<p>Bills are matched to sections automatically from their text and can be missed, for example when a bill "
+             "renumbers sections or uses unusual wording. No bill listed here does not mean no bill changes this "
+             "chapter.</p>"]
+    official = f"https://statutes.capitol.texas.gov/?tab=1&code={code}&chapter={code}.{chapter}"
+    body += ["<h2>Links</h2>", "<ul>\n" + "\n".join([
+        f'<li><a href="{a(official)}">Official text on statutes.capitol.texas.gov</a></li>',
+        f'<li><a href="{a(feed)}">RSS feed of actions on these bills</a></li>']) + "\n</ul>",
+        "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#112136">
+<title>{escape(title)} · Texas Bill Atlas</title>
+<link rel="canonical" href="{a(url)}">
+<link rel="icon" href="/favicon.ico">
+<link rel="alternate" type="application/rss+xml" title="{a(label)}" href="{a(feed)}">
+{tags}
+<script>if(!{_CRAWLER_JS}.test(navigator.userAgent))location.replace({json.dumps(target)})</script>
+</head>
+<body>
+{chr(10).join(body)}
+</body>
+</html>
+"""
+
+
+def write_law_chapter_pages(index: dict, out_dir: Path, site: str = SITE,
+                            law_dir: Path | None = None) -> tuple[int, int, int]:
+    """live/share/law/<CODE>/<chapter>.html per chapter with a bill, rewritten only when it changes; pages of chapters
+    with none now are removed (section pages in the same folders are never touched). An index with no chapters
+    removes nothing."""
+    groups = chapter_groups(index)
+    law = _open_law(law_dir)
+    written = unchanged = removed = 0
+    keep: dict[str, set[str]] = {}
+    for key, g in groups.items():
+        code, chapter = key.split(" ")
+        keep.setdefault(code, set()).add(f"{chapter}.html")
+        folder = out_dir / code
+        folder.mkdir(parents=True, exist_ok=True)
+        if write_if_changed(folder / f"{chapter}.html", law_chapter_page(key, g, _chapter_heading(g, law, code, chapter), site)):
+            written += 1
+        else:
+            unchanged += 1
+    if keep and out_dir.is_dir():
+        for folder in out_dir.iterdir():
+            if not (folder.is_dir() and re.fullmatch(r"[A-Z]{2}", folder.name)):
+                continue
+            for path in folder.iterdir():
+                if _LAW_CHAPTER_PAGE_NAME.fullmatch(path.name) and path.name not in keep.get(folder.name, set()):
+                    path.unlink(missing_ok=True)
+                    removed += 1
+    return written, unchanged, removed
+
+
 # Population brackets live in atlas/feeds/brackets/. They are imported on first use, because that package reads the
 # statute helpers above; every bracket name stays reachable here (build_feeds.bill_brackets and so on).
 def __getattr__(name: str):
@@ -1363,7 +1639,7 @@ def main() -> int:
     written, unchanged = write_member_feeds(snapshot, roster, args.out / "members", args.site, reviews)
     print(f"Member feeds: {written} written, {unchanged} unchanged", flush=True)
     statutes_dir = args.statutes or args.snapshot.parent / "statutes"
-    written, unchanged, removed = write_statutes(snapshot, text_dir, statutes_dir, args.today)
+    written, unchanged, removed = write_statutes(snapshot, text_dir, statutes_dir, args.today, args.snapshot.parent / "law")
     print(f"Statute sections: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
     # Quiet from here to the brackets (golden stdout): law pages, then the sitemap that lists them.
     try:
@@ -1375,6 +1651,10 @@ def main() -> int:
         write_law_pages(statute_index, (args.share or args.snapshot.parent / "share") / "law", args.site,
                         args.snapshot.parent / "law")
         write_law_feeds(snapshot, statute_index, args.out / "law", args.site, reviews)
+    if law_keys or (isinstance(statute_index, dict) and statute_index.get("chapters")):
+        write_law_chapter_pages(statute_index, (args.share or args.snapshot.parent / "share") / "law", args.site,
+                                args.snapshot.parent / "law")
+        write_law_chapter_feeds(snapshot, statute_index, args.out / "law", args.site, reviews, args.snapshot.parent / "law")
     write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml", sitemap(snapshot, args.site, law_keys))
     from atlas.feeds.brackets import default_census, write_brackets
     status = write_brackets(snapshot, text_dir, args.census or default_census(), args.brackets or args.snapshot.parent / "brackets")

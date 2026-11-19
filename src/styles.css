@@ -296,6 +296,8 @@ a.bill-number:hover{text-decoration:underline}
 mark.law-out{background:var(--red-soft);color:#7d2f25;text-decoration:line-through;text-decoration-color:rgba(179,90,78,.55);border-radius:calc(2px*var(--rs))}
 mark.law-in{background:var(--teal-soft);color:#05504e;text-decoration:underline;text-decoration-color:rgba(8,125,122,.55);border-radius:calc(2px*var(--rs))}
 .law-legend mark{text-decoration:none;padding:1px 4px}
+.law-chapter-part{margin:18px 0}.law-chapter-part h3 span{color:var(--muted);font-weight:500;margin-left:4px}.law-chapter-part li>div{margin-top:2px}
+.law-heading-hint p{margin:0 0 6px}.law-heading-hint .law-list{margin:0}
 .law-toggle{display:none;gap:6px;margin:0 0 8px}
 .law-toggle .active{background:var(--navy);color:var(--nav-ink);border-color:var(--navy)}
 .law-compare{border:1px solid var(--line);border-radius:calc(8px*var(--rs));overflow:hidden;background:var(--white)}

@@ -13,6 +13,7 @@ const current = (name, value) => Object.hasOwn(RENAMED, name) && Object.hasOwn(R
 export const VIEWS = ['home', 'all', 'watchlist', 'following', 'today', 'local', 'member', 'statute', 'bill', 'agencies', 'review', 'method', 'saving', 'export', 'data'];
 const LAW_CODE = /^[A-Z]{2}$/;
 const LAW_SECTION = /^\d+[A-Z]?(?:\.\d+[A-Z]?)+$/;  // The statute index's section numbers (build_feeds.SECTION_NUM).
+const LAW_CHAPTER = /^\d+[A-Z]?$/;  // A chapter: a section number before its first dot ("46", "12A").
 export const MAX_LIST = 500;
 const BILL_ID = /^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9]\d{0,4}$/;
 const SYNC_KEY = /^[A-Za-z0-9_-]{22}$/;
@@ -59,11 +60,14 @@ export function parseHash(hash) {
   const sync = params.get('sync') || '';
   const member = String(params.get('code') || '').trim().toUpperCase();
   const law = String(params.get('law') || '').toUpperCase(), sec = String(params.get('sec') || '').toUpperCase();
+  const ch = String(params.get('ch') || '').toUpperCase();
+  // A whole chapter (`#chapter?law=PE&ch=46`) is the statute view with a chapter key ("PE 46").
+  const chapter = view === 'chapter' && LAW_CODE.test(law) && LAW_CHAPTER.test(ch) && ch.length <= 8 ? `${law} ${ch}` : null;
   // A bare address is the dashboard; an unknown view (or `#?query=` and the like) is the explorer.
-  return {view: raw === '' ? 'home' : VIEWS.includes(view) ? view : 'all', filters, hasFilters: Object.keys(filters).length > 0,
+  return {view: raw === '' ? 'home' : view === 'chapter' ? 'statute' : VIEWS.includes(view) ? view : 'all', filters, hasFilters: Object.keys(filters).length > 0,
     list: list && list.length ? list : null, bill: isBillId(bill) ? bill : null, sync: SYNC_KEY.test(sync) ? sync : null,
     member: view === 'member' && MEMBER_CODE.test(member) ? member : null,
-    statute: view === 'statute' && LAW_CODE.test(law) && LAW_SECTION.test(sec) && sec.length <= 16 ? `${law} ${sec}` : null};
+    statute: chapter || (view === 'statute' && LAW_CODE.test(law) && LAW_SECTION.test(sec) && sec.length <= 16 ? `${law} ${sec}` : null)};
 }
 
 // `sync` is only ever a view-only key; edit keys are never written into the address bar.
@@ -79,11 +83,13 @@ export function buildHash(view, filters, {list = null, bill = null, sync = null,
   if (view === 'bill' && isBillId(bill)) parts.push(`id=${bill}`);
   if (view === 'member' && MEMBER_CODE.test(member || '')) parts.push(`code=${member}`);
   const [law, sec] = String(statute || '').split(' ');
-  if (view === 'statute' && LAW_CODE.test(law || '') && LAW_SECTION.test(sec || '')) parts.push(`law=${law}`, `sec=${sec}`);
+  const chapter = view === 'statute' && LAW_CODE.test(law || '') && LAW_CHAPTER.test(sec || '') && sec.length <= 8;
+  if (chapter) parts.push(`law=${law}`, `ch=${sec}`);
+  else if (view === 'statute' && LAW_CODE.test(law || '') && LAW_SECTION.test(sec || '')) parts.push(`law=${law}`, `sec=${sec}`);
   if (list?.length) parts.push(`list=${list.join(',')}`);
   if (bill && view !== 'bill') parts.push(`bill=${bill}`);
   if (sync && SYNC_KEY.test(sync)) parts.push(`sync=${sync}`);
-  return `#${VIEWS.includes(view) ? view : 'all'}${parts.length ? `?${parts.join('&')}` : ''}`;
+  return `#${chapter ? 'chapter' : VIEWS.includes(view) ? view : 'all'}${parts.length ? `?${parts.join('&')}` : ''}`;
 }
 
 // A bill page's address is the path /bill/<ID>; a shared list or view-only sync key it was opened from rides in the

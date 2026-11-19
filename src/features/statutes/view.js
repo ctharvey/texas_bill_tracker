@@ -5,7 +5,8 @@ import {$, esc} from '../../core/dom.js';
 import {timeoutSignal, httpError} from '../../core/net.js';
 import {buildHash} from '../../prefs.js';
 import {lastActionInfo, openLinkHtml} from '../../taxonomy.js';
-import {STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, compareLaw, currentLaw, lawCopyUnits, STATUTE_KEY, groupStatuteEntries, lawFollowOf, isLawFollowQuery} from './model.js';
+import {STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, compareLaw, currentLaw, lawCopyUnits, STATUTE_KEY, groupStatuteEntries, lawFollowOf, isLawFollowQuery,
+  CHAPTER_KEY, isChapterKey, chapterOf, lawEntries, lawChapterOutline, lawSearchTerms, lawSearchPrefix, lawSearchMatches} from './model.js';
 import {renderContent, renderResults, refreshHome} from '../../core/router.js';
 import {billHref} from '../../core/links.js';
 
@@ -76,6 +77,59 @@ function lawCopy(key){
     if(state.view==='statute'&&state.statuteKey===key)renderContent();
   })();
   return 'loading';
+}
+// A chapter's outline from the law copy: {heading, sections, url}, 'loading' or 'missing'.
+const lawChapters=new Map();
+function lawChapter(key){
+  const have=lawChapters.get(key);
+  if(have)return have;
+  const m=CHAPTER_KEY.exec(key);
+  if(!m)return 'missing';
+  lawChapters.set(key,'loading');
+  (async()=>{
+    let out='missing';
+    for(const c of new Set([m[2],m[2].toLowerCase()])){
+      try{
+        const url=`./live/law/${m[1]}/${encodeURIComponent(c)}.md`;
+        const r=await fetch(url,{signal:timeoutSignal(15000)});
+        if(!r.ok)continue;
+        const outline=lawChapterOutline(await r.text());
+        if(!outline.sections.length)continue;
+        out={...outline,url};
+        break;
+      }catch(error){console.warn('Current law unavailable',key,error.message)}
+    }
+    lawChapters.set(key,out);
+    if(state.view==='statute'&&state.statuteKey===key)renderContent();
+  })();
+  return 'loading';
+}
+// Heading search: the prefix counts (live/law/search/index.json) once, then one prefix file per search.
+let searchManifest=null;
+const searchShards=new Map();  // prefix -> entries, 'loading' or 'error'
+function redrawSearch(){if(state.view==='all'||state.view==='watchlist')renderResults()}
+async function fetchJson(url){const r=await fetch(url,{signal:timeoutSignal(15000)});if(!r.ok)throw httpError(r);return r.json()}
+// Laws whose heading has every search word: [[key, heading]], 'loading', or null (no usable words, or unavailable).
+function lawSearch(terms){
+  if(!terms.length)return null;
+  if(!searchManifest){
+    searchManifest='loading';
+    fetchJson('./live/law/search/index.json').then(m=>{searchManifest=m?.format==='texas-bill-law-search-v1'?m:'error'})
+      .catch(error=>{searchManifest='error';console.warn('Law search unavailable',error.message)}).finally(redrawSearch);
+  }
+  if(searchManifest==='loading')return 'loading';
+  if(searchManifest==='error')return null;
+  const prefix=lawSearchPrefix(searchManifest,terms);
+  if(!prefix)return [];
+  const shard=searchShards.get(prefix);
+  if(!shard){
+    searchShards.set(prefix,'loading');
+    fetchJson(`./live/law/search/${prefix}.json`).then(e=>searchShards.set(prefix,Array.isArray(e)?e:'error'))
+      .catch(error=>{searchShards.set(prefix,'error');console.warn('Law search unavailable',error.message)}).finally(redrawSearch);
+    return 'loading';
+  }
+  if(shard==='loading')return 'loading';
+  return shard==='error'?null:lawSearchMatches(shard,terms);
 }
 const statuteHref=key=>buildHash('statute',{},{statute:key});
 const billNumber=id=>state.bills.find(b=>b.id===id)?.number||id;
@@ -158,9 +212,39 @@ export const lawFeedHref=key=>`./live/feeds/law/${encodeURIComponent(key.replace
 function lawToolsMarkup(key,label,hasFeed){
   if(!isLawFollowQuery(key))return '';  // Only codes the parser tracks can ever gain bills.
   const on=!!lawFollowOf(state.searches,key);
-  const button=`<button class="${on?'outline-button following':'primary-button'} follow-button" data-follow-law="${esc(key)}" data-follow-label="${esc(label)}" aria-pressed="${on}">${on?'✓ Following':'+ Follow this law'}</button>`;
+  const button=`<button class="${on?'outline-button following':'primary-button'} follow-button" data-follow-law="${esc(key)}" data-follow-label="${esc(label)}" aria-pressed="${on}">${on?'✓ Following':isChapterKey(key)?'+ Follow this chapter':'+ Follow this law'}</button>`;
   const feed=hasFeed?`<a class="outline-button" data-feed href="${esc(lawFeedHref(key))}" target="_blank" rel="noopener noreferrer">RSS feed</a>`:'';
-  return `<div class="tools-row law-tools">${button}${feed}</div>`;
+  // A section links its whole chapter, which can be followed as one.
+  const ch=chapterOf(key);
+  const chapter=ch&&isChapterKey(ch)?`<a class="outline-button" href="${esc(statuteHref(ch))}">Chapter ${esc(ch.split(' ')[1])}</a>`:'';
+  return `<div class="tools-row law-tools">${button}${feed}${chapter}</div>`;
+}
+
+const CHAPTER_KINDS={r:'repeals the whole chapter',m:'amends the whole chapter',n:'adds this chapter'};
+// A whole chapter: the bills that change the chapter at once, the sections bills change, and every section in it.
+function chapterMarkup(key,label,head,official){
+  const whole=state.statutes.chapters?.[key],outline=lawChapter(key);
+  const sections=Object.keys(state.statutes.sections).filter(k=>chapterOf(k)===key).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const bills=new Set(lawEntries(state.statutes,key).flatMap(s=>(s.b||[]).map(p=>p[0])));
+  const sign=key.startsWith('CR ')?'Art.':'§';
+  const heading=whole?.h||(typeof outline==='object'?outline.heading:'');
+  const billLink=id=>{const b=state.bills.find(x=>x.id===id);return b?openLinkHtml(b.id,billHref(b.id),'bill-number',b.number):esc(id)};
+  const status=id=>{const b=state.bills.find(x=>x.id===id);return b?` <span class="law-status">${esc(lastActionInfo(b).label)}</span>`:''};
+  const wholeRows=(whole?.b||[]).filter(p=>Array.isArray(p)&&CHAPTER_KINDS[p[1]]).map(([id,kind])=>`<li>${billLink(id)} <small>· ${esc(CHAPTER_KINDS[kind])}</small>${status(id)}</li>`).join('');
+  // A bill quoting only some subsections gives the index no heading; the law copy has every section's.
+  const copied=new Map(typeof outline==='object'?outline.sections:[]);
+  const sectionRows=sections.map(k=>{const s=state.statutes.sections[k],h=s.h||copied.get(k.split(' ')[1])||'';
+    const kinds=(s.b||[]).filter(Array.isArray).map(([id,kind])=>`${billLink(id)} <small>${esc(STATUTE_KINDS[kind]||'')}</small>`).join(', ');
+    return `<li>${statuteLink(k)}${h?` <span class="law-heading">${esc(titleCase(h))}</span>`:''}<div>${kinds}</div></li>`}).join('');
+  const all=typeof outline==='object'?`<details class="law-more"><summary>All ${outline.sections.length} sections in this chapter</summary><ul class="law-list">${outline.sections.map(([n,h])=>
+      `<li><a class="text-link" href="${esc(statuteHref(`${key.split(' ')[0]} ${n}`))}">${sign} ${esc(n)}</a> <span class="law-heading">${esc(titleCase(h))}</span></li>`).join('')}</ul></details>`
+    :outline==='loading'?'<p class="near-hint">Loading the chapter\'s sections…</p>':'';
+  const count=bills.size;
+  return `${head(heading?esc(titleCase(heading)):esc(label),`${esc(label)} · ${count?`${count} ${count===1?'bill changes':'bills change'} something in it`:'no bill changes it yet'}`)}${lawToolsMarkup(key,label,count>0)}
+    <div class="info-callout law-intro"><p>Following this chapter counts any bill that changes a section in it or the whole chapter at once. ${official}</p><details class="law-limits"><summary>How bills are matched</summary><p>${LAW_LIMITS}</p></details></div>
+    ${wholeRows?`<section class="law-chapter-part"><h3>Bills that change the whole chapter</h3><ul class="law-list">${wholeRows}</ul></section>`:''}
+    ${sectionRows?`<section class="law-chapter-part"><h3>Sections bills change <span>${sections.length}</span></h3><ul class="law-list">${sectionRows}</ul></section>`:count?'':`<p class="near-hint">No bill in this snapshot changes anything in ${esc(label)}.</p>`}
+    ${all}`;
 }
 
 export function statuteMarkup(){
@@ -174,7 +258,16 @@ export function statuteMarkup(){
   const label=statuteLabel(key,state.statutes.codes),info=state.statutes.sections[key];
   const official=`<a class="text-link" href="${esc(officialStatuteUrl(key))}" target="_blank" rel="noopener noreferrer">Current law on statutes.capitol.texas.gov ↗</a>`;
   const tools=lawToolsMarkup(key,label,!!info);
-  if(!info)return `${head(esc(label),'90th Legislature · no bill changes it yet')}${tools}<div class="info-callout">No bill in this snapshot changes ${esc(label)}.${tools?' Follow it to hear when one does.':''} ${official}</div><p class="tools-note">${LAW_LIMITS}</p>`;
+  if(isChapterKey(key))return chapterMarkup(key,label,head,official);
+  if(!info){
+    // No bill changes it: the section as it stands, from the site's copy of the statutes.
+    const copy=lawCopy(key);
+    const text=typeof copy==='object'?lawSingleMarkup(`Current law${copy.asOf?` as of ${copy.asOf}`:''}`,copy.units,
+      `From the Legislative Council's statute files (<a class="text-link" href="${esc(copy.url)}" target="_blank" rel="noopener noreferrer">this chapter</a>); it can trail the official text if a later law changed it.`)
+      :copy==='loading'?'<p class="near-hint">Loading current law…</p>':'';
+    const title=typeof copy==='object'&&unitHeading(copy.units)?esc(unitHeading(copy.units)):esc(label);
+    return `${head(title,'90th Legislature · no bill changes it yet')}${tools}<div class="info-callout">No bill in this snapshot changes ${esc(label)}.${tools?' Follow it to hear when one does.':''} ${official}</div>${text}<p class="tools-note">${LAW_LIMITS}</p>`;
+  }
   const doc=statuteDoc(key);
   const loadingTitle=head(info.h?esc(titleCase(info.h)):esc(label))+tools;
   if(doc==='loading')return `${loadingTitle}<p class="near-hint">Loading the bills' versions…</p>`;
@@ -251,8 +344,18 @@ export function statuteHintMarkup(keys,query=''){
   // Exactly a section key ("PE 46.06", what a law follow saves): only that section's bills, never text matches.
   if(isLawFollowQuery(query)){
     if(!state.statutes)return `<div class="info-callout${state.statutesFailed?' callout-warn':''} statute-hint">${state.statutesFailed?`The list of laws each bill changes is not available right now, so the bills that change ${esc(query)} cannot be shown. Try again later.`:`Loading the bills that change ${esc(query)}…`}</div>`;
+    if(isChapterKey(query))return `<div class="info-callout statute-hint">Showing only bills that change something in ${statuteLink(query)}${lawEntries(state.statutes,query).length?'. Open it to see which sections.':': none yet.'}</div>`;
     return `<div class="info-callout statute-hint">Showing only bills that change ${statuteLink(query)}${state.statutes.sections[query]?`. ${openHint(query)}`:': none yet.'}</div>`;
   }
-  if(!keys.length)return '';
-  return `<div class="info-callout statute-hint">Bills that change ${keys.map(statuteLink).join(', ')} are included. ${keys.length===1?openHint(keys[0]):'Open one to see what its bills change.'}</div>`;
+  if(keys.length)return `<div class="info-callout statute-hint">Bills that change ${keys.map(statuteLink).join(', ')} are included. ${keys.length===1?openHint(keys[0]):'Open one to see what its bills change.'}</div>`;
+  return lawHeadingHint(query);
+}
+// Laws whose heading has the search words ("unlawful carrying" -> Penal Code § 46.02), shown above the bills.
+const HEADING_SHOWN=5,HEADING_MAX=40;
+function lawHeadingHint(query){
+  const found=lawSearch(lawSearchTerms(query));
+  if(!Array.isArray(found)||!found.length)return '';
+  const item=([k,h])=>`<li>${statuteLink(k)} <span class="law-heading">${esc(titleCase(h))}</span>${state.statutes?.sections?.[k]?' <small>· bills change it</small>':''}</li>`;
+  const shown=found.slice(0,HEADING_SHOWN),rest=found.slice(HEADING_SHOWN,HEADING_MAX);
+  return `<div class="info-callout statute-hint law-heading-hint"><p>Texas law with “${esc(lawSearchTerms(query).join(' '))}” in its heading:</p><ul class="law-list">${shown.map(item).join('')}</ul>${rest.length?`<details class="law-more"><summary>${found.length>HEADING_MAX?`${HEADING_MAX-HEADING_SHOWN} more of ${found.length-HEADING_SHOWN}`:`${rest.length} more`}</summary><ul class="law-list">${rest.map(item).join('')}</ul></details>`:''}</div>`;
 }

@@ -7,10 +7,10 @@ import {shortDate} from '../../core/format.js';
 import {followedMarkup} from '../follows/view.js';
 import {SORTS, agencyName, areaName} from '../../core/labels.js';
 import {searchCounts} from '../sync/lists.js';
-import {isLawFollowQuery, statuteLabel} from '../statutes/model.js';
+import {isLawFollowQuery, isChapterKey, statuteLabel} from '../statutes/model.js';
 
 function searchSummary(f){
-  if(isLawFollowQuery(f.query)&&Object.keys(f).length===1)return `Following ${statuteLabel(f.query)}: bills that change it`;
+  if(isLawFollowQuery(f.query)&&Object.keys(f).length===1)return `Following ${statuteLabel(f.query)}: bills that change ${isChapterKey(f.query)?'anything in it':'it'}`;
   const parts=[f.query&&`Search “${f.query}”`,f.area&&`Area: ${areaName(f.area)}`,f.topic&&`Topic: ${f.topic}`,f.agency&&`Agency: ${agencyName(f.agency)}`,f.chamber,f.party&&`Party: ${f.party} authors`,f.stage&&`Stage: ${f.stage}`,
     f.outlook&&`Hearing: ${f.outlook}`,f.action&&`Last action: ${f.action}`,f.companion&&'Has a companion bill',f.onlyWatch&&'Watched bills only',f.sort&&f.sort!=='newest'&&`Sorted by ${SORTS[f.sort]||f.sort}`].filter(Boolean);
   return parts.join(' · ')||'All bills';

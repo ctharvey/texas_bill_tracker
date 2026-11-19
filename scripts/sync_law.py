@@ -214,6 +214,79 @@ def load_json(path: Path):
         return None
 
 
+# Heading search: live/law/search/<prefix>.json = [[key, heading]], one file per 3-letter word prefix, for every section
+# and chapter of the tracked codes (the 27 in build_feeds.CODE_ABBR; a test keeps the two lists equal), plus
+# search/index.json = {format, generated_at, prefixes: {prefix: count}}. Built from the published code indexes.
+SEARCH_FORMAT = 'texas-bill-law-search-v1'
+SEARCH_CODES = ('AG', 'AL', 'BC', 'BO', 'CP', 'CR', 'ED', 'EL', 'ES', 'FA', 'FI', 'GV', 'HS', 'HR', 'IN', 'LA', 'LG', 'NR',
+                'OC', 'PW', 'PE', 'PR', 'SD', 'TX', 'TN', 'UT', 'WA')
+SEARCH_STOP = frozenset('of and the for to in by or a an on with under from as at certain other'.split())
+SEARCH_WORD = re.compile(r'[a-z0-9]+')
+SEARCH_FILE = re.compile(r'^[a-z0-9]{3}\.json$')
+CHAPTER_PREFIX = re.compile(r'^(?:CHAPTER|ARTICLE|SUBCHAPTER)\s+[0-9A-Za-z.\-]+?\.\s+', re.I)
+SECTION_PREFIX = re.compile(r'^(?:Sec|Art)\.\s+[0-9A-Za-z][0-9A-Za-z.\-()]*?\.(?:\s+|$)')
+
+
+def search_prefixes(heading: str) -> set[str]:
+    return {w[:3] for w in SEARCH_WORD.findall(heading.lower()) if len(w) >= 3 and w not in SEARCH_STOP}
+
+
+def search_entries(out: Path) -> list[list[str]]:
+    """[key, heading] for every section and chapter in the tracked codes' published indexes."""
+    entries = []
+    for code in SEARCH_CODES:
+        index = load_json(out / code / 'index.json')
+        if not isinstance(index, dict) or not isinstance(index.get('chapters'), dict):
+            continue
+        for chapter, item in index['chapters'].items():
+            if not isinstance(item, dict):
+                continue
+            title = CHAPTER_PREFIX.sub('', str(item.get('heading') or '').strip()).strip().rstrip('.').strip()
+            if title:
+                entries.append([f'{code} {chapter.upper()}', title])
+            for section in item.get('sections') or []:
+                if isinstance(section, list) and len(section) == 2 and isinstance(section[0], str):
+                    name = SECTION_PREFIX.sub('', str(section[1]).strip()).strip().rstrip('.').strip()
+                    if name:
+                        entries.append([f'{code} {section[0].upper()}', name])
+    return entries
+
+
+def write_search(out: Path, now: dt.datetime | None = None) -> dict:
+    """Rebuild out/search from the code indexes: a shard is written only when its bytes change, shards whose prefix
+    vanished are removed, and an empty build (no code index readable) changes nothing."""
+    entries = search_entries(out)
+    if not entries:
+        return {'entries': 0, 'shards': 0, 'written': 0, 'removed': 0}
+    shards: dict[str, list[list[str]]] = {}
+    for entry in sorted(entries):
+        for prefix in search_prefixes(entry[1]):
+            shards.setdefault(prefix, []).append(entry)
+    folder = out / 'search'
+    written = removed = 0
+    for prefix, items in shards.items():
+        data = (json.dumps(items, ensure_ascii=False, separators=(',', ':')) + '\n').encode()
+        path = folder / f'{prefix}.json'
+        try:
+            same = path.read_bytes() == data
+        except OSError:
+            same = False
+        if not same:
+            atomic_write(path, data)
+            written += 1
+    if folder.is_dir():
+        for path in folder.iterdir():
+            if SEARCH_FILE.match(path.name) and path.stem not in shards:
+                path.unlink(missing_ok=True)
+                removed += 1
+    prefixes = {prefix: len(items) for prefix, items in sorted(shards.items())}
+    previous = load_json(folder / 'index.json')
+    if written or removed or not isinstance(previous, dict) or previous.get('prefixes') != prefixes:
+        now = now or dt.datetime.now(dt.timezone.utc)
+        atomic_json(folder / 'index.json', {'format': SEARCH_FORMAT, 'generated_at': now.isoformat(), 'prefixes': prefixes})
+    return {'entries': len(entries), 'shards': len(shards), 'written': written, 'removed': removed}
+
+
 def run(out: Path, source: Source, *, force: bool = False, now: dt.datetime | None = None,
         log=print) -> tuple[dict, list[str]]:
     """One refresh. Returns (top index, failures). A failed code keeps its previous files and index entry."""
@@ -255,6 +328,15 @@ def run(out: Path, source: Source, *, force: bool = False, now: dt.datetime | No
     top = {'format': FORMAT, 'generated_at': now.isoformat(), 'source': LIST_URL, 'codes': result,
            'failures': failures}
     atomic_json(top_path, top)
+    try:
+        counts = write_search(out, now)
+        log(f'Search: {counts["entries"]} entries, {counts["shards"]} shards, {counts["written"]} written, '
+            f'{counts["removed"]} removed')
+    except Exception as error:  # noqa: BLE001 - the copy is published; the shards are rebuilt by the next run
+        failures.append(f'search: {type(error).__name__}: {str(error)[:160]}')
+        log('FAILED', failures[-1])
+        top['failures'] = failures
+        atomic_json(top_path, top)
     return top, failures
 
 
@@ -262,7 +344,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('--out', type=Path, required=True, help='live/law folder')
     parser.add_argument('--force', action='store_true', help='download every code even if unchanged')
+    parser.add_argument('--search-only', action='store_true',
+                        help='rebuild live/law/search from the published code indexes; download nothing')
     args = parser.parse_args()
+    if args.search_only:
+        result = write_search(args.out)
+        print(f'Law search: {result["entries"]} entries, {result["shards"]} shards, {result["written"]} written, '
+              f'{result["removed"]} removed')
+        return 0
     top, failures = run(args.out, Source(), force=args.force)
     total = sum(c.get('sections', 0) for c in top['codes'].values())
     print(f'Law copy: {len(top["codes"])} codes, {total} sections, {len(failures)} failures')

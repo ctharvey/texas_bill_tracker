@@ -18,31 +18,53 @@ export const LAW_CODE_NAMES = {AG: 'Agriculture Code', AL: 'Alcoholic Beverage C
     PE: 'Penal Code', PR: 'Property Code', PW: 'Parks and Wildlife Code', SD: 'Special District Local Laws Code',
     TN: 'Transportation Code', TX: 'Tax Code', UT: 'Utilities Code', WA: 'Water Code'};
 export const LAW_CODES = new Set(Object.keys(LAW_CODE_NAMES));
-export const isLawFollowQuery = query => typeof query === 'string' && STATUTE_KEY.test(query)
-    && LAW_CODES.has(query.slice(0, 2)) && query.length <= 20;
+// A chapter is "<CODE> <chapter>" ("PE 46", "ED 12A"); a section's chapter is its number before the first dot.
+export const CHAPTER_KEY = /^([A-Z]{2}) (\d+[A-Z]?)$/;
+export const isChapterKey = key => typeof key === 'string' && CHAPTER_KEY.test(key) && LAW_CODES.has(key.slice(0, 2)) && key.length <= 12;
+export const chapterOf = key => {
+    const m = STATUTE_KEY.exec(key || '');
+    return m ? `${m[1]} ${m[2].split('.')[0]}` : null;
+};
+// A follow is a section or a whole chapter; a chapter follow counts a change to anything in it.
+export const isLawFollowQuery = query => typeof query === 'string' && (STATUTE_KEY.test(query) && LAW_CODES.has(query.slice(0, 2))
+    && query.length <= 20 || isChapterKey(query));
 // Every saved search that is this section's follow: two devices can each follow it and sync keeps both (ids differ),
 // and a search saved from the explorer as exactly the key is the same search. Unfollowing removes them all.
 export const lawFollowsOf = (searches, key) => (searches || []).filter(s => s?.filters?.query === key
     && Object.keys(s.filters).length === 1);
 export const lawFollowOf = (searches, key) => lawFollowsOf(searches, key)[0] || null;
-// The day a bill started changing a section, when that was after the index began recording it (else '').
-export const lawFirstSeen = (index, key, id) => {
-    const day = index?.sections?.[key]?.f?.[id];
-    return typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : '';
-};
-export const lawFollowSearch = (key, name, id, seen) => ({id, name: String(name).slice(0, 80), filters: {query: key}, seen});
-// Bills a section-key query selects: those the index lists for that section (none when no bill changes it yet).
-export const lawFollowBills = (index, key) => (index?.sections?.[key]?.b || []).map(p => p[0]);
 const isMap = o => o && typeof o === 'object' && !Array.isArray(o);
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+// The index entries a key covers: the section itself, or for a chapter its whole-chapter entry (index.chapters,
+// bills changing the chapter at once) and every section in it.
+export function lawEntries(index, key) {
+    if (!isChapterKey(key)) return index?.sections?.[key] ? [index.sections[key]] : [];
+    const out = isMap(index?.chapters?.[key]) ? [index.chapters[key]] : [];
+    for (const [k, s] of Object.entries(index?.sections || {})) if (chapterOf(k) === key) out.push(s);
+    return out;
+}
+// The day a bill started changing a section, when that was after the index began recording it (else ''). For a
+// chapter, the latest such day across the chapter: a bill that starts changing another part of it is news again.
+export const lawFirstSeen = (index, key, id) => lawEntries(index, key).map(s => s?.f?.[id])
+    .filter(day => typeof day === 'string' && DAY.test(day)).sort().pop() || '';
+export const lawFollowSearch = (key, name, id, seen) => ({id, name: String(name).slice(0, 80), filters: {query: key}, seen});
+// Bills a law-key query selects: those the index lists for that section, or for anything in that chapter (none when
+// no bill changes it yet).
+export const lawFollowBills = (index, key) => [...new Set(lawEntries(index, key)
+    .flatMap(s => Array.isArray(s?.b) ? s.b.filter(Array.isArray).map(p => p[0]) : []))];
 
 export const statuteFile = key => STATUTE_KEY.test(key) && key.length <= 20 ? `${key.replace(' ', '-')}.json` : null;
 export function statuteLabel(key, codes) {
+    const c = isChapterKey(key) ? CHAPTER_KEY.exec(key) : null;
+    if (c) return `${codes?.[c[1]] || LAW_CODE_NAMES[c[1]]} chapter ${c[2]}`;
     const m = STATUTE_KEY.exec(key || '');
     if (!m) return String(key || '');
     return `${codes?.[m[1]] || LAW_CODE_NAMES[m[1]] || m[1]} ${m[1] === 'CR' ? 'Art.' : '§'} ${m[2]}`;
 }
 // Checked against statutes.capitol.texas.gov for every code the index uses.
 export function officialStatuteUrl(key) {
+    const c = isChapterKey(key) ? CHAPTER_KEY.exec(key) : null;
+    if (c) return `https://statutes.capitol.texas.gov/?tab=1&code=${c[1]}&chapter=${c[1]}.${c[2]}`;
     const m = STATUTE_KEY.exec(key || '');
     if (!m) return '';
     return `https://statutes.capitol.texas.gov/?tab=1&code=${m[1]}&chapter=${m[1]}.${m[2].split('.')[0]}&artSec=${m[2]}`;
@@ -201,6 +223,38 @@ export function lawCopyUnits(markdown, number) {
     if (paragraphs[0] && /^(?:Sec|Art)\. \S+\.\s+[^a-z]+[^.\s]$/.test(paragraphs[0])) paragraphs[0] += '.';
     const units = lawUnits(paragraphs, 'current');
     return units.length ? units : null;
+}
+
+// A chapter file of the law copy -> {heading, sections: [[number, heading]]}: "# Penal Code, CHAPTER 46. WEAPONS" and
+// one "## Sec. 46.02. UNLAWFUL CARRYING WEAPONS." block per section.
+export function lawChapterOutline(markdown) {
+    const text = String(markdown);
+    const title = /^# [^\n]*?CHAPTER \S+?\.?\s+([^\n]+)$/m.exec(text);
+    const sections = [];
+    // A heading is upper case and can run into the text on the same line ("DEFINITIONS. In this chapter:").
+    const headingOf = line => (/^([^a-z]+)\.(?:\s|$)/.exec(line)?.[1] ?? line).replace(/\.$/, '').trim();
+    for (const m of text.matchAll(/^## (?:Sec|Art)\. (\S+?)\.\s+([^\n]*)$/gm)) sections.push([m[1], headingOf(m[2])]);
+    return {heading: title ? title[1].replace(/\.$/, '').trim() : '', sections};
+}
+
+// ---- Law heading search (live/law/search, written by scripts/sync_law.py): one file per 3-letter word prefix ----
+const SEARCH_STOP = new Set('of and the for to in by or a an on with under from as at certain other'.split(' '));
+// The words a heading search uses: 3 letters or more, not a stop word, at most 6.
+export const lawSearchTerms = query => [...new Set(String(query || '').toLowerCase().match(/[a-z0-9]+/g) || [])]
+    .filter(w => w.length >= 3 && !SEARCH_STOP.has(w)).slice(0, 6);
+// The prefix file to load: the term whose prefix has the fewest headings (null when one has none: nothing can match).
+export function lawSearchPrefix(manifest, terms) {
+    const counts = terms.map(t => [t.slice(0, 3), Number(manifest?.prefixes?.[t.slice(0, 3)]) || 0]);
+    if (!counts.length || counts.some(([, n]) => !n)) return null;
+    return counts.sort((a, b) => a[1] - b[1])[0][0];
+}
+// Headings in which every term starts a word, chapters first, then in code order.
+export function lawSearchMatches(entries, terms) {
+    const words = terms.map(t => new RegExp(`(?:^|[^a-z0-9])${t.replace(/[^a-z0-9]/g, '')}`));
+    const out = (Array.isArray(entries) ? entries : []).filter(e => Array.isArray(e) && typeof e[0] === 'string'
+        && (STATUTE_KEY.test(e[0]) || isChapterKey(e[0])) && LAW_CODES.has(e[0].slice(0, 2)) && typeof e[1] === 'string'
+        && words.every(w => w.test(e[1].toLowerCase())));
+    return out.sort((a, b) => Number(!isChapterKey(a[0])) - Number(!isChapterKey(b[0])) || a[0].localeCompare(b[0], undefined, {numeric: true}));
 }
 
 // Current law as the bills quote it: for each subsection, the first amending entry that quotes it (whole-section
