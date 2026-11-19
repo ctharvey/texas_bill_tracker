@@ -1411,24 +1411,77 @@ def plan_fetches(listing: dict[str, dict | None], prior_bills: dict[str, dict], 
     return [(klass, path) for klass, _, path in order], len(current) - min(share, len(current))
 
 
+# The Legislature's FTP server sometimes answers out of step: ftplib then raises error_reply on a stray earlier reply
+# ("200 Type set to I."), and every later command on that control connection is suspect. A dropped connection
+# (EOFError, OSError) fails every later transfer the same way. Both are recovered by a new connection; error_perm
+# (550, no such file) is about the file, not the connection, and is not retried.
+CONNECTION_ERRORS = (ftplib.error_reply, ftplib.error_temp, ftplib.error_proto, EOFError, OSError)
+MAX_RECONNECTS = 3
+
+
 def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000, histories: dict | None = None,
                 state: dict | None = None, max_histories: int | None = None,
-                deadline: float | None = None) -> tuple[dict, dict]:
+                deadline: float | None = None, reconnect=None) -> tuple[dict, dict]:
     """Read bill-history XML into a snapshot merged over prior.
 
     state=None reads every file (the original full read). With a state dict ({'paths': ...}, see load_state) only
     new, changed and re-check files are read, at most max_histories of them and none after the time.monotonic()
     deadline; the rest wait for the next run. Fetched entries go to state['pending'] for commit_state.
+
+    reconnect, when given, returns a new logged-in connection. After a connection error the listing, or the one file,
+    is tried again on a new connection, at most MAX_RECONNECTS times per run. Connections it opens are closed here.
     """
     incremental = state is not None
-    if incremental:
+    opened: list = []
+    reconnects = 0
+
+    def fresh_connection() -> bool:
+        nonlocal conn, reconnects
+        if reconnect is None or reconnects >= MAX_RECONNECTS:
+            return False
+        reconnects += 1
         try:
-            listing: dict[str, dict | None] = dict(list_xml(conn))
-        except ListingFormatError as exc:
-            print(f"LIST not understood, reading without fingerprints: {exc}", file=sys.stderr)
-            listing = {path: None for path in enumerate_xml(conn)}
-    else:
-        listing = {path: None for path in enumerate_xml(conn)}
+            new = reconnect()
+        except CONNECTION_ERRORS as exc:  # Keep the old one: a closed ftplib connection fails with AttributeError.
+            print(f"FTP reconnect failed: {exc}", file=sys.stderr)
+            return False
+        try:
+            conn.close()
+        except Exception:  # The old connection is being abandoned; nothing on it matters now.
+            pass
+        conn = new
+        opened.append(conn)
+        return True
+
+    def read_listing() -> dict[str, dict | None]:
+        if incremental:
+            try:
+                return dict(list_xml(conn))
+            except ListingFormatError as exc:
+                print(f"LIST not understood, reading without fingerprints: {exc}", file=sys.stderr)
+        return {path: None for path in enumerate_xml(conn)}
+
+    try:
+        return _synchronize(lambda: conn, fresh_connection, read_listing, prior, max_files, histories, state,
+                            max_histories, deadline, lambda: reconnects)
+    finally:
+        for extra in opened:
+            try:
+                extra.close()
+            except Exception:
+                pass
+
+
+def _synchronize(current, fresh_connection, read_listing, prior, max_files, histories, state, max_histories,
+                 deadline, reconnect_count) -> tuple[dict, dict]:
+    incremental = state is not None
+    try:
+        listing = read_listing()
+    except CONNECTION_ERRORS as exc:
+        if not fresh_connection():
+            raise
+        print(f"FTP listing failed ({exc}); reconnected and listing again", file=sys.stderr)
+        listing = read_listing()
     paths = list(listing)
     if not paths:
         raise RuntimeError("The 90R bulk FTP bill-history listing is empty or unavailable")
@@ -1452,8 +1505,14 @@ def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000, histories
             break
         attempted += 1
         try:
-            raw = ftp_bytes(conn, path)
-        except (ftplib.error_perm, ftplib.error_temp, EOFError, OSError) as exc:
+            try:
+                raw = ftp_bytes(current(), path)
+            except CONNECTION_ERRORS as exc:
+                if not fresh_connection():
+                    raise
+                print(f"FTP error on {path} ({exc}); reconnected and reading it again", file=sys.stderr)
+                raw = ftp_bytes(current(), path)
+        except (ftplib.error_perm, *CONNECTION_ERRORS) as exc:
             errors.append(f"{path}: {exc}")  # No pending entry: the file is read again next run.
             continue
         bill = parse_bill_xml(raw, path)
@@ -1508,11 +1567,40 @@ def synchronize(conn: ftplib.FTP, prior: dict, max_files: int = 25000, histories
     if incomplete and prior.get('generated_at'):
         snapshot['generated_at'] = prior['generated_at']
     stats = {'listed':len(paths),'parsed':len(parsed),'combined':len(merged),'transfer_errors':len(errors),
-             'incomplete':incomplete}
+             'incomplete':incomplete,'reconnects':reconnect_count()}
     if incremental:
         stats.update({'mode': 'incremental', 'fetched': attempted, 'unchanged': skipped, 'deferred': deferred,
                       'recheck_drift': drift, 'fingerprinted': any(listing.values())})
     return snapshot, stats
+
+
+def connect() -> ftplib.FTP:
+    conn = ftplib.FTP(HOST, timeout=55)
+    try:
+        conn.login('anonymous', 'legislative-research@example.invalid')
+    except BaseException:
+        conn.close()
+        raise
+    return conn
+
+
+# Written after every run that published a snapshot, beside bills.json. bills.json's generated_at moves only when the
+# data changes (or every HEARTBEAT), so it cannot tell a quiet Legislature from a stopped job; checked_at can.
+# Kept outside purge_cache.PREFIXES: rewriting it every hour must not purge the edge.
+STATUS_NAME = 'sync-status.json'
+STATUS_FORMAT = 'texas-bill-sync-status-v1'
+
+
+def write_status(path: Path, snapshot: dict, stats: dict, failures: list[str], now: dt.datetime | None = None) -> None:
+    now = now or dt.datetime.now(dt.timezone.utc)
+    status = {'format': STATUS_FORMAT, 'checked_at': now.astimezone(dt.timezone.utc).isoformat().replace('+00:00', 'Z'),
+              'generated_at': snapshot.get('generated_at'), 'heartbeat_hours': HEARTBEAT.total_seconds() / 3600,
+              'listed': stats.get('listed'), 'transfer_errors': stats.get('transfer_errors'),
+              'reconnects': stats.get('reconnects', 0), 'incomplete': bool(stats.get('incomplete')),
+              'failures': list(failures)}
+    temp = path.with_suffix('.json.tmp')
+    temp.write_text(json.dumps(status, indent=2) + '\n', encoding='utf-8')
+    os.replace(temp, path)
 
 
 def main() -> int:
@@ -1544,7 +1632,8 @@ def main() -> int:
         histories={}
         snapshot,stats=synchronize(conn,prior,args.max_files,histories,state,
                                    None if args.full else args.max_histories,
-                                   None if args.full else time.monotonic()+args.history_minutes*60)
+                                   None if args.full else time.monotonic()+args.history_minutes*60,
+                                   connect)
     temp=args.out.with_suffix('.json.tmp')
     temp.write_text(json.dumps(snapshot,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     os.replace(temp,args.out)
@@ -1589,6 +1678,11 @@ def main() -> int:
     except Exception as exc:  # Documents and witness lists are secondary; never fail a written snapshot.
         print(f"DOCUMENT SYNC FAILED, snapshot unaffected: {exc}",file=sys.stderr)
         failures.append(f"documents: {exc}")
+    try:
+        write_status(args.out.with_name(STATUS_NAME),snapshot,stats,failures)
+    except OSError as exc:  # daily_check.py then reports the last run as old; the data itself is published.
+        print(f"STATUS WRITE FAILED: {exc}",file=sys.stderr)
+        failures.append(f"status: {exc}")
     if args.failures_file is not None:
         args.failures_file.write_text(''.join(f"{line}\n" for line in failures),encoding='utf-8')
     return 0

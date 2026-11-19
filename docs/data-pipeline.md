@@ -23,6 +23,13 @@ between files without reinstalling units. A push that changes a job's code or in
 - **Snapshot**: `live/bills.json`, replaced atomically only when at least a third of the files read parse. When
   nothing changed it keeps `generated_at` until it is six hours old, then writes a heartbeat; an eight-hour-old
   snapshot therefore means the job has stopped.
+- **Run status**: every run that publishes a snapshot writes `live/sync-status.json` (`checked_at`, the snapshot's
+  `generated_at`, transfer errors, reconnects, the run's failures). `daily_check.py` judges the job by `checked_at`
+  (one missed hourly run passes, two fail), so a quiet Legislature no longer reads as stale. It is outside the purged
+  paths, so rewriting it every hour purges nothing.
+- **Connection errors**: TLC's server sometimes answers out of step (`200 Type set to I.`) or drops the connection.
+  The listing, or the one file, is read again on a new connection, at most 3 times per run; `error_perm` (550) is
+  about the file and is not retried.
 - **Incremental reads**: it LISTs each folder and reads only new or changed history files, plus 1/24 of the rest as
   a daily re-check, at most `--max-histories` (3000) or `--history-minutes` (20) per run. `--full` reads everything.
   Fingerprints are in `live/ftp-history-state.json`.
