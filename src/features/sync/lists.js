@@ -56,6 +56,8 @@ export function toggleFollow(code){
 export function changeSearch(op,item){
   const id=op==='save-search'?item.id:item;
   state.searches=changeSearchList(listStore,searchesKey,op,item);
+  // A save the list had no room for (another tab filled the last slot) is not sent to the sync link either.
+  if(op==='save-search'&&!state.searches.some(s=>s.id===id))return;
   sync.record(op,id,onSynced,op==='save-search'?item:undefined);
   renderMoveBanner();
 }

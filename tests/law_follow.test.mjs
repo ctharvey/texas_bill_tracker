@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {cleanSearches, applySearchOps, profileFile, parseProfileFile, searchFitsSync} from '../src/prefs.js';
 import {isLawFollowQuery, lawFollowOf, lawFollowsOf, lawFollowSearch, lawFollowBills, lawFirstSeen, LAW_CODES, LAW_CODE_NAMES, statuteLabel} from '../src/features/statutes/model.js';
 import {state} from '../src/core/state.js';
-import {searchCounts} from '../src/features/sync/lists.js';
+import {searchCounts, changeSearch} from '../src/features/sync/lists.js';
 import {CLICK_ORDER} from '../src/core/dispatch.js';
 
 const bill = (id, caption, day) => ({id, number: id.replace(/^([A-Z]+)/, '$1 '), caption, title: caption, topics: [], agencies: [], authors: [], impacts: [],
@@ -110,6 +110,18 @@ test('unfollowing removes every copy of a law follow; an import skips laws alrea
   assert.match(lists, /state\.searches\.some\(x=>x\.id===s\.id\)/);
   const actions = readFileSync(new URL('../src/features/watchlist/actions.js', import.meta.url), 'utf8');
   assert.match(actions, /if\(law\)\{if\(laws\.has\(law\)\)return false;laws\.add\(law\)\}/);
+});
+
+test('a save the list has no room for is not kept or sent to the sync link', () => {
+  state.searches = [];
+  for (let i = 0; i < 20; i++) changeSearch('save-search', {id: `s${String(i).padStart(9, '0')}`, name: `n${i}`, filters: {query: `q${i}`}, seen: null});
+  assert.equal(state.searches.length, 20);
+  const extra = lawFollowSearch('PE 46.06', 'Penal Code § 46.06', 'zzzzzzzzzz', '2026-11-19');
+  changeSearch('save-search', extra);
+  assert.ok(!state.searches.some(s => s.id === extra.id));
+  const lists = readFileSync(new URL('../src/features/sync/lists.js', import.meta.url), 'utf8');
+  assert.match(lists, /if\(op==='save-search'&&!state\.searches\.some\(s=>s\.id===id\)\)return;\s*\n\s*sync\.record\(/);
+  for (const s of [...state.searches]) changeSearch('delete-search', s.id);
 });
 
 test('the statute page redraws after a sync pull or another tab, and its Follow button keeps focus', () => {

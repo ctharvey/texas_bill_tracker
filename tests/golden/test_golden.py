@@ -73,7 +73,8 @@ def run(*cmd):
 
 def test_build_feeds_outputs(live, tmp_path):
     out = run(sys.executable, "scripts/build_feeds.py", "--snapshot", str(live / "bills.json"), "--out",
-              str(tmp_path / "feeds"), "--statutes", str(tmp_path / "statutes"), "--brackets", str(tmp_path / "brackets"),
+              str(tmp_path / "feeds"), "--statutes", str(tmp_path / "statutes"), "--today", "2026-11-19",
+              "--brackets", str(tmp_path / "brackets"),
               "--census", str(REPO / "data" / "census" / "tx_population_2020.json"))
     golden("build_feeds", {"stdout": out.splitlines(), "feeds": manifest(tmp_path / "feeds"),
                            "statutes": manifest(tmp_path / "statutes"), "brackets": manifest(tmp_path / "brackets")})

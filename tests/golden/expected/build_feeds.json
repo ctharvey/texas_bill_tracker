@@ -1611,7 +1611,8 @@
   "members/A5105.xml": "2e03d70a94fd63e4d3b989627ad0f87baca23c3bac32783d6ebc2d353b75ece9"
  },
  "statutes": {
-  "index.json": "9fcd06928c87f44269404764b1a3bea3c5cdd22fda356f494120ccccd1f5e8b6",
+  "first-seen.json": "22ba22cea289c820bbae405c9f07bc637bb9453864e6e9a8e4ab2f2fc00c9840",
+  "index.json": "c038db63a08aa4fe15bc11340bc986ee5db170572148285b7a29a8a3ce35aced",
   "sections/GV-475.0001.json": "9c3e5ae353a2ba783685b668afd0265512402c2e14c1ac93e89921f754f9f05b",
   "sections/GV-475.0051.json": "6b747095951c77ee3bebca686b6072323c32bb108bb9eed935777c8df0fa4295",
   "sections/GV-475.0054.json": "690b225681ee0eff978b3db774a7b2aed88955b63693d3cb345aef381346e3fb",

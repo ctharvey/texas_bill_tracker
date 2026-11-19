@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 import tempfile
 from xml.sax.saxutils import escape
 
@@ -973,65 +974,98 @@ def build_statutes(snapshot: dict, text_dir: Path) -> tuple[dict, dict[str, dict
     return index, files
 
 
-def snapshot_day(snapshot: dict) -> str | None:
-    """The Chicago day the snapshot was generated (its generated_at), so reruns of one snapshot agree."""
-    try:
-        stamp = dt.datetime.fromisoformat(str(snapshot.get("generated_at") or "").replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if stamp.tzinfo is None:
-        return None
+def chicago_today(now: dt.datetime | None = None) -> str:
+    """This run's day in Chicago (the site's day)."""
+    now = now or dt.datetime.now(dt.timezone.utc)
     try:
         from zoneinfo import ZoneInfo
         zone = ZoneInfo("America/Chicago")
     except Exception:  # No tz database (some Windows Pythons): standard time is close enough for a day.
         zone = dt.timezone(dt.timedelta(hours=-6))
-    return stamp.astimezone(zone).date().isoformat()
+    return now.astimezone(zone).date().isoformat()
 
 
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
+FIRST_SEEN_FORMAT = "texas-bill-statutes-first-seen-v1"
+FIRST_SEEN_FILE = "first-seen.json"
 
 
-def stamp_first_seen(index: dict, previous: dict | None, day: str | None) -> None:
-    """Records the day each bill started changing each section, so a follow can show a bill as new even when its
-    latest dated action is older (a late text, a new version, a parser change). sections[key]["f"] = {bill: day}
-    holds only pairs first seen after index["first_seen_from"]; pairs present then count as old. Carried forward
-    from the previous index; a pair that leaves and comes back gets the day it came back."""
-    if not _DAY.fullmatch(day or ""):
-        return
-    prev_sections = previous.get("sections") if isinstance(previous, dict) else None
-    baseline = previous.get("first_seen_from") if isinstance(previous, dict) else None
-    if not isinstance(prev_sections, dict) or not _DAY.fullmatch(str(baseline or "")):
-        index["first_seen_from"] = day  # First run with this field: everything already indexed is old.
-        return
-    index["first_seen_from"] = baseline
+# First-seen history: the day this job first indexed each bill as changing each section, kept in its own file that
+# only grows. It is never rebuilt from the published index, so a bad run (no texts, a partial read, older code after a
+# rollback) cannot erase it, and a pair that leaves and returns keeps its first day.
+# {"format", "from": baseline day, "pairs": {key: {bill: day, or null when already indexed at the baseline}}}
+def load_first_seen(path: Path) -> dict | None:
+    """None when the file is absent; raises ValueError when it is present but not a valid history."""
+    try:
+        data = json.loads(path.read_text("utf-8"))
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise ValueError(str(error)) from error
+    if not (isinstance(data, dict) and data.get("format") == FIRST_SEEN_FORMAT
+            and _DAY.fullmatch(str(data.get("from") or "")) and isinstance(data.get("pairs"), dict)):
+        raise ValueError("not a first-seen history")
+    for key, bills in data["pairs"].items():
+        if not (isinstance(bills, dict) and all(isinstance(b, str) and (d is None or (isinstance(d, str) and _DAY.fullmatch(d)))
+                                                 for b, d in bills.items())):
+            raise ValueError(f"bad entry for {key!r}")
+    return data
+
+
+def merge_first_seen(history: dict | None, index: dict, day: str) -> dict:
+    """The history plus every pair in the index it lacks, stamped `day`; nothing is ever removed or re-dated.
+    Without a history the index's pairs are the baseline (null: present before first-seen days existed)."""
+    pairs = {key: dict(bills) for key, bills in (history or {}).get("pairs", {}).items()}
     for key, entry in index["sections"].items():
-        old = prev_sections.get(key) if isinstance(prev_sections.get(key), dict) else {}
-        had = {p[0] for p in old.get("b") or [] if isinstance(p, list) and p}
-        old_days = old.get("f") if isinstance(old.get("f"), dict) else {}
-        days = {}
+        known = pairs.setdefault(key, {})
         for bill, _kind in entry["b"]:
-            if bill not in had:
-                days[bill] = day
-            elif _DAY.fullmatch(str(old_days.get(bill) or "")):
-                days[bill] = old_days[bill]
+            known.setdefault(bill, None if history is None else day)
+    return {"format": FIRST_SEEN_FORMAT, "from": history["from"] if history else day,
+            "pairs": {key: dict(sorted(bills.items())) for key, bills in sorted(pairs.items())}}
+
+
+def project_first_seen(index: dict, history: dict) -> None:
+    """index.sections[key].f = {bill: day} for the index's pairs first seen after the baseline."""
+    index["first_seen_from"] = history["from"]
+    for key, entry in index["sections"].items():
+        known = history["pairs"].get(key, {})
+        days = {bill: known[bill] for bill, _kind in entry["b"] if isinstance(known.get(bill), str)}
         if days:
             entry["f"] = days
 
 
-def write_statutes(snapshot: dict, text_dir: Path, out_dir: Path) -> tuple[int, int, int]:
+def _index_has_sections(path: Path) -> bool:
+    try:
+        sections = json.loads(path.read_text("utf-8")).get("sections")
+    except (OSError, ValueError, AttributeError):
+        return False
+    return isinstance(sections, dict) and bool(sections)
+
+
+def write_statutes(snapshot: dict, text_dir: Path, out_dir: Path, today: str | None = None) -> tuple[int, int, int]:
     """Writes out_dir/index.json and out_dir/sections/<CODE>-<section>.json; removes sections no bill touches now.
-    Returns (written, unchanged, removed). Does nothing without a text directory."""
+    Returns (written, unchanged, removed). Does nothing without a text directory, and keeps the previous index when
+    this run found no section at all (an unreadable text folder). `today` is this run's day (tests pin it)."""
     if not text_dir.is_dir():
         return 0, 0, 0
     index, files = build_statutes(snapshot, text_dir)
+    if not index["sections"] and _index_has_sections(out_dir / "index.json"):
+        print("Statute index: this run found no sections; keeping the previous index", file=sys.stderr, flush=True)
+        return 0, 0, 0
+    out_dir.mkdir(parents=True, exist_ok=True)
+    day = today or chicago_today()
     try:
-        previous = json.loads((out_dir / "index.json").read_text("utf-8"))
-    except (OSError, ValueError):
-        previous = None
-    if isinstance(previous, dict) and previous.get("format") != STATUTE_FORMAT:
-        previous = None
-    stamp_first_seen(index, previous, snapshot_day(snapshot))
+        history = load_first_seen(out_dir / FIRST_SEEN_FILE)
+    except ValueError as error:
+        # Never start over on top of a history we cannot read: that would mark every later pair old, or re-date them.
+        print(f"Statute first-seen history unreadable ({error}); first-seen days not updated", file=sys.stderr, flush=True)
+    else:
+        if index["sections"] and _DAY.fullmatch(day):  # An empty index never becomes the baseline.
+            history = merge_first_seen(history, index, day)
+            # Before the index, so the index never names a day the history lacks.
+            write_if_changed(out_dir / FIRST_SEEN_FILE, json.dumps(history, ensure_ascii=False, separators=(",", ":")) + "\n")
+        if history is not None:  # Without a usable day the days already recorded still show.
+            project_first_seen(index, history)
     sections_dir = out_dir / "sections"
     sections_dir.mkdir(parents=True, exist_ok=True)
     written = unchanged = removed = 0
@@ -1272,6 +1306,8 @@ def main() -> int:
     parser.add_argument("--text", type=Path, default=None, help="Bill text directory; defaults to text/ beside the snapshot")
     parser.add_argument("--statutes", type=Path, default=None,
                         help="Statute index output; defaults to statutes/ beside the snapshot")
+    parser.add_argument("--today", default=None,
+                        help="This run's day (YYYY-MM-DD) for statute first-seen days; defaults to today in Chicago")
     parser.add_argument("--census", type=Path, default=None,
                         help="2020 population table (scripts/census_places.py); defaults to one beside this script")
     parser.add_argument("--brackets", type=Path, default=None,
@@ -1300,7 +1336,7 @@ def main() -> int:
     written, unchanged = write_member_feeds(snapshot, roster, args.out / "members", args.site, reviews)
     print(f"Member feeds: {written} written, {unchanged} unchanged", flush=True)
     statutes_dir = args.statutes or args.snapshot.parent / "statutes"
-    written, unchanged, removed = write_statutes(snapshot, text_dir, statutes_dir)
+    written, unchanged, removed = write_statutes(snapshot, text_dir, statutes_dir, args.today)
     print(f"Statute sections: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
     # Quiet from here to the brackets (golden stdout): law pages, then the sitemap that lists them.
     try:

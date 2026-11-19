@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -9,6 +10,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 import build_feeds  # noqa: E402
 from test_law_context import write_law  # noqa: E402
+from test_statutes import BILL, write_bill  # noqa: E402
 
 INDEX = {"sections": {
     "GV 2271.002": {"h": "PROVISION REQUIRED IN CONTRACT", "b": [["HB1094", "r"], ["SB12", "m"]]},
@@ -120,39 +122,72 @@ class LawPageTests(unittest.TestCase):
         self.assertEqual(build_feeds.write_law_feeds(snapshot, {"sections": {}}, feeds), (0, 0))
         self.assertEqual(before, {p.name: p.read_text("utf-8") for p in feeds.iterdir()})
 
-    def test_first_seen_days_start_at_a_baseline_carry_forward_and_reset_when_a_pair_returns(self):
-        sections = lambda **kw: {"sections": {k.replace("_", " ").replace("x", "."): {"h": "H", "b": v} for k, v in kw.items()}}
-        first = sections(PE_46x06=[["HB1", "m"]])
-        build_feeds.stamp_first_seen(first, None, "2026-11-10")
-        self.assertEqual(first["first_seen_from"], "2026-11-10")
-        self.assertNotIn("f", first["sections"]["PE 46.06"])  # Indexed before the field existed: old.
-        second = sections(PE_46x06=[["HB1", "m"], ["HB2", "a"]], PE_46x07=[["HB3", "n"]])
-        build_feeds.stamp_first_seen(second, first, "2026-11-12")
-        self.assertEqual(second["first_seen_from"], "2026-11-10")
-        self.assertEqual(second["sections"]["PE 46.06"]["f"], {"HB2": "2026-11-12"})
-        self.assertEqual(second["sections"]["PE 46.07"]["f"], {"HB3": "2026-11-12"})
-        # A later run keeps the first day; HB2 leaves, then comes back with a new day.
-        third = sections(PE_46x06=[["HB1", "m"]], PE_46x07=[["HB3", "n"]])
-        build_feeds.stamp_first_seen(third, second, "2026-11-13")
-        self.assertNotIn("f", third["sections"]["PE 46.06"])
-        self.assertEqual(third["sections"]["PE 46.07"]["f"], {"HB3": "2026-11-12"})
-        fourth = sections(PE_46x06=[["HB1", "m"], ["HB2", "m"]])
-        build_feeds.stamp_first_seen(fourth, third, "2026-11-14")
-        self.assertEqual(fourth["sections"]["PE 46.06"]["f"], {"HB2": "2026-11-14"})
-        # No usable day: nothing stamped. A bad previous day is dropped, not copied.
-        none = sections(PE_46x06=[["HB1", "m"]])
-        build_feeds.stamp_first_seen(none, fourth, None)
-        self.assertNotIn("first_seen_from", none)
-        bad_prev = {"first_seen_from": "2026-11-10", "sections": {"PE 46.06": {"b": [["HB1", "m"]], "f": {"HB1": "x"}}}}
-        fifth = sections(PE_46x06=[["HB1", "m"]])
-        build_feeds.stamp_first_seen(fifth, bad_prev, "2026-11-15")
-        self.assertNotIn("f", fifth["sections"]["PE 46.06"])
+    def test_first_seen_history_only_grows_whatever_a_run_looks_like(self):
+        text, out = self.root / "text", self.root / "statutes"
+        write_bill(text, "HB9", [("I", "Introduced")], BILL)
+        sb2 = "### SECTION 1.\n\nSection 1.01, Election Code, is amended to read as follows:\n\nSec. 1.01. FIRST. Other.\n"
+        both = {"bills": [{"id": "HB9"}, {"id": "SB2"}]}
+        index = lambda: json.loads((out / "index.json").read_text("utf-8"))
+        history = lambda: (out / "first-seen.json").read_text("utf-8")
+        # Baseline: everything indexed on the first run counts as old.
+        build_feeds.write_statutes(both, text, out, "2026-11-10")
+        self.assertEqual(index()["first_seen_from"], "2026-11-10")
+        self.assertFalse(any("f" in e for e in index()["sections"].values()))
+        # SB2's text arrives later: its pair is new that run's day, never the snapshot's.
+        write_bill(text, "SB2", [("I", "Introduced")], sb2)
+        build_feeds.write_statutes({**both, "generated_at": "2026-11-01T00:00:00Z"}, text, out, "2026-11-12")
+        self.assertEqual(index()["sections"]["EL 1.01"]["f"], {"SB2": "2026-11-12"})
+        kept = history()
+        # A run that finds no section keeps the previous index and history.
+        before = (out / "index.json").read_text("utf-8")
+        self.assertEqual(build_feeds.write_statutes({"bills": []}, text, out, "2026-11-13"), (0, 0, 0))
+        self.assertEqual((out / "index.json").read_text("utf-8"), before)
+        self.assertEqual(history(), kept)
+        # A partial run drops SB2 from the index but not from the history; it returns with its first day (no flood).
+        build_feeds.write_statutes({"bills": [{"id": "HB9"}]}, text, out, "2026-11-14")
+        self.assertNotIn("f", index()["sections"]["EL 1.01"])
+        build_feeds.write_statutes(both, text, out, "2026-11-15")
+        self.assertEqual(index()["sections"]["EL 1.01"]["f"], {"SB2": "2026-11-12"})
+        # Older code (a rollback) rewrites the index without days and leaves the history; the next run restores them.
+        old, _ = build_feeds.build_statutes(both, text)
+        (out / "index.json").write_text(json.dumps(old), "utf-8")
+        build_feeds.write_statutes(both, text, out, "2026-11-16")
+        self.assertEqual(index()["sections"]["EL 1.01"]["f"], {"SB2": "2026-11-12"})
+        self.assertEqual(index()["first_seen_from"], "2026-11-10")
+        # No usable day: the history is untouched and the recorded days still show.
+        kept = history()
+        build_feeds.write_statutes(both, text, out, "someday")
+        self.assertEqual(history(), kept)
+        self.assertEqual(index()["sections"]["EL 1.01"]["f"], {"SB2": "2026-11-12"})
 
-    def test_snapshot_day_is_the_chicago_day_of_generated_at(self):
-        self.assertEqual(build_feeds.snapshot_day({"generated_at": "2026-11-20T03:00:00Z"}), "2026-11-19")
-        self.assertEqual(build_feeds.snapshot_day({"generated_at": "2026-11-20T18:00:00+00:00"}), "2026-11-20")
-        for bad in ({}, {"generated_at": "soon"}, {"generated_at": "2026-11-20T03:00:00"}):
-            self.assertIsNone(build_feeds.snapshot_day(bad), bad)
+    def test_unreadable_history_is_never_restarted_and_a_bad_previous_index_cannot_crash_the_run(self):
+        text, out = self.root / "text", self.root / "statutes"
+        write_bill(text, "HB9", [("I", "Introduced")], BILL)
+        out.mkdir()
+        (out / "index.json").write_text(json.dumps({"format": "texas-bill-statutes-v1", "sections": {"EL 1.01": {"b": 5}}}), "utf-8")
+        for bad in ("{not json", json.dumps({"format": "texas-bill-statutes-first-seen-v1", "from": "2026-11-10",
+                                            "pairs": {"EL 1.01": {"SB2": "soon"}}})):
+            (out / "first-seen.json").write_text(bad, "utf-8")
+            build_feeds.write_statutes({"bills": [{"id": "HB9"}]}, text, out, "2026-11-12")
+            self.assertEqual((out / "first-seen.json").read_text("utf-8"), bad)
+            written = json.loads((out / "index.json").read_text("utf-8"))
+            self.assertNotIn("first_seen_from", written)
+            self.assertFalse(any("f" in e for e in written["sections"].values()))
+
+    def test_an_empty_first_run_never_becomes_the_baseline(self):
+        text, out = self.root / "text", self.root / "statutes"
+        text.mkdir()
+        build_feeds.write_statutes({"bills": [{"id": "HB9"}]}, text, out, "2026-11-10")
+        self.assertFalse((out / "first-seen.json").exists())
+        write_bill(text, "HB9", [("I", "Introduced")], BILL)
+        build_feeds.write_statutes({"bills": [{"id": "HB9"}]}, text, out, "2026-11-11")
+        self.assertEqual(json.loads((out / "first-seen.json").read_text("utf-8"))["from"], "2026-11-11")
+
+    def test_today_is_the_chicago_day(self):
+        import datetime as dt
+        utc = lambda s: dt.datetime.fromisoformat(s).replace(tzinfo=dt.timezone.utc)
+        self.assertEqual(build_feeds.chicago_today(utc("2026-11-20T03:00:00")), "2026-11-19")
+        self.assertEqual(build_feeds.chicago_today(utc("2026-11-20T18:00:00")), "2026-11-20")
 
     def test_law_feed_announces_a_bill_that_starts_changing_the_section(self):
         snapshot = {"bills": [{"id": "HB1094", "caption": "Relating to contracts.", "actions": ["Filed"],
