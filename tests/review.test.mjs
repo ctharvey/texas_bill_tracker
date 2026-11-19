@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {reviewModel,pageSegments} from '../src/review.js';
+import {reviewModel,pageSegments} from '../src/features/reviewfile/render.js';
 const bundle = () => ({format:'texas-bill-review-v1',bill_id:'HB1',
     document:{bill_id:'HB1',session:'90R',pages:['😀 Board must act.'],version:'introduced'},
     result:{bill_id:'HB1',summary:{text:'A summary.'}},

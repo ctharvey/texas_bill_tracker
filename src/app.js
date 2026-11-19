@@ -4,11 +4,12 @@ import {topicHue, topicStyle, plainTitle, daysUntil} from './features/home/rows.
 import {runState, passRows, passJobs, lookup, RUN_LIMIT_MINUTES} from './features/review/model.js';
 import {recentChanges, updateEntries, changeText} from './features/review/updates.js';
 import {AREAS, AREA_GROUPS, AREA_BY_ID, billAreas, inArea, areaCounts, topAgencies, subjectLabels} from './features/areas/model.js';
-import {reviewModel, renderReview,
+import {
   STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, parseStatuteQuery, statuteKeysFor,
   compareLaw, currentLaw, groupStatuteEntries} from './review.js';
 import {fillDrawerBrackets} from './features/brackets/view.js';
 import {stageFiles, stageSections} from './features/stages/view.js';
+import {reviewFileSection} from './features/reviewfile/view.js';
 import {exportMarkup} from './features/export/view.js';
 import {methodMarkup} from './features/pages/method.js';
 import {savingMarkup} from './features/pages/saving.js';
@@ -41,7 +42,6 @@ import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, 
 const SORTS={newest:'Newest filed',latest:'Latest action',oldest:'Oldest last action',actionstage:'Last action stage',number:'Bill number',agencies:'Most agencies',hearing:'Hearing progress',influence:'Author influence'};
 const agencyName = id => AGENCY_NAME[id]||state.luna?.agencies?.[id]||id;
 const areaName = id => AREA_BY_ID.get(id)?.name||id;
-const reviews = new Map();
 loadSaved();
 // The dashboard visit before this one: read, and today stamped, the first time the dashboard is drawn in this page
 // load, so other pages never add the key. null on a first visit or without storage.
@@ -1714,16 +1714,8 @@ function fillBillPage(){
   loadCardVersions();
   loadBillArt();placeBillArt();
 
-  const reviewSection=document.createElement('section');reviewSection.className='drawer-section';
-  const heading=document.createElement('h3');heading.textContent='Full text & highlighted evidence';
-  const area=document.createElement('div');area.className='review-file-area';
-  const local=document.createElement('input');local.type='file';local.accept='.json,application/json';local.hidden=true;
-  const load=document.createElement('button');load.className='outline-button';load.textContent='Open a review file';
-  load.addEventListener('click',()=>local.click());
-  const draw=()=>{if(reviews.has(b.id))renderReview(area,reviews.get(b.id),true);else{const note=document.createElement('p');note.textContent='A reviewed full-text analysis is not yet available. Review files open only in this browser session.';area.replaceChildren(note);}};
-  local.addEventListener('change',async()=>{try{const file=local.files[0];if(!file)return;if(file.size>15*1024*1024)throw Error('Select a file smaller than 15 MB');const bundle=JSON.parse(await file.text());reviewModel(bundle);if(bundle.bill_id!==b.id)throw Error('This review belongs to '+bundle.bill_id);reviews.set(b.id,bundle);draw();toast('Private review opened');}catch(error){toast('Review could not be opened: '+error.message)}});
-  reviewSection.append(heading,load,local,area);
-  $('#bill-g-text').append(billTextSection(b),reviewSection);draw();
+  const review=reviewFileSection(b);
+  $('#bill-g-text').append(billTextSection(b),review.section);review.draw();
   $('#bill-g-history').append(stageSections(b));
   $('#bill-page-title').focus({preventScroll:true});
   fillDrawerStatutes(b.id);
