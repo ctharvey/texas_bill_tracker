@@ -7,7 +7,8 @@ import {todayData, todayMarkup} from './features/today/view.js';
 import {memberTitle, rosterMember, influencePill, tenurePill, memberNameHtml, authorMember, authorHtml, filerHtml} from './features/members/names.js';
 import {NEAR_FILES, saveNear, nearLocate, nearAddress, nearData, nearRow, nearMarkup} from './features/near/view.js';
 import {memberData, memberMarkup} from './features/members/view.js';
-import {followButton, memberFeedHref, followedMarkup} from './features/follows/view.js';
+import {followButton, memberFeedHref} from './features/follows/view.js';
+import {followingMarkup} from './features/searches/view.js';
 import {recentChanges, changeText} from './features/review/updates.js';
 import {AREAS, AREA_GROUPS, AREA_BY_ID, billAreas, inArea, areaCounts, topAgencies, subjectLabels} from './features/areas/model.js';
 import {statuteLabel, parseStatuteQuery, statuteKeysFor} from './features/statutes/model.js';
@@ -330,26 +331,6 @@ function saveCurrentSearch(){
   if(state.searches.some(s=>JSON.stringify(s.filters)===JSON.stringify(filters))){toast(`Already saved as “${state.searches.find(s=>JSON.stringify(s.filters)===JSON.stringify(filters)).name}”`);return}
   changeSearch('save-search',{id:newSearchId(),name,filters,seen:todayDay()});
   renderOverview();toast(`Saved “${name}” · find it under Following`);
-}
-function searchSummary(f){
-  const parts=[f.query&&`Search “${f.query}”`,f.area&&`Area: ${areaName(f.area)}`,f.topic&&`Topic: ${f.topic}`,f.agency&&`Agency: ${agencyName(f.agency)}`,f.chamber,f.party&&`Party: ${f.party} authors`,f.stage&&`Stage: ${f.stage}`,
-    f.outlook&&`Hearing: ${f.outlook}`,f.action&&`Last action: ${f.action}`,f.companion&&'Has a companion bill',f.onlyWatch&&'Watched bills only',f.sort&&f.sort!=='newest'&&`Sorted by ${SORTS[f.sort]||f.sort}`].filter(Boolean);
-  return parts.join(' · ')||'All bills';
-}
-function savedSearchesMarkup(){
-  if(!state.searches.length)return `<section class="followed-section"><h3>Saved searches</h3><p class="tools-note">Set filters or a search in the <a class="text-link" href="#all" data-view="all">Bill explorer</a>, then choose <strong>Save search</strong> to keep it here, with a count of bills that moved since you last opened it.</p></section>`;
-  const rows=state.searches.map(s=>{
-    const {total,fresh}=searchCounts(s);
-    const name=state.renamingSearch===s.id
-      ?`<form class="search-rename" data-search-rename-form="${esc(s.id)}"><input name="name" maxlength="80" value="${esc(s.name)}" aria-label="Name for this search" autocomplete="off"><button class="outline-button" type="submit">Save</button></form>`
-      :`<a class="text-link saved-search-name" href="${esc(buildHash('all',s.filters))}" data-search-open="${esc(s.id)}">${esc(s.name)}</a>`;
-    return `<div class="saved-search">${name}<p>${esc(searchSummary(s.filters))}</p><p class="saved-search-counts"><strong>${total.toLocaleString()}</strong> ${total===1?'bill':'bills'}${fresh?` · <span class="saved-search-new">${fresh.toLocaleString()} with new actions</span>`:''}${s.seen?` · opened ${esc(shortDate(s.seen))}`:''}</p><div class="tools-row">${state.renamingSearch===s.id?'':`<button class="text-button" data-search-rename="${esc(s.id)}">Rename</button>`}<button class="text-button danger" data-search-delete="${esc(s.id)}">Delete</button></div></div>`;
-  }).join('');
-  return `<section class="followed-section"><h3>Saved searches <span>${state.searches.length}</span></h3><p class="tools-note">“New actions” counts bills with an action dated after the day you last opened the search.</p><div class="saved-searches">${rows}</div></section>`;
-}
-// Following: saved searches and followed legislators; later also named watchlists.
-function followingMarkup(){
-  return `<div class="section-head"><div><div class="section-overline">FOLLOWING</div><h2>Your searches and legislators</h2></div><span class="subtitle">Saved in this browser, files and sync links</span></div>${savedSearchesMarkup()}${followedMarkup()}`;
 }
 const FOLLOW_VIEWS=new Set(['following','member','local']);
 function refreshWatch(){renderOverview();if(state.view==='home')refreshHome();else if(state.view==='all'||state.view==='watchlist'||FOLLOW_VIEWS.has(state.view))renderContent()}
@@ -767,7 +748,7 @@ function registerViews(){
   registerView('home',{heading:['This session, at a glance.','What changed on your bills, what moved today, upcoming hearings and Luna’s newest reviews.'],render:homeMarkup});
   registerView('all',{heading:['See what’s moving.','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:explorerMarkup,after:renderResults});
   registerView('watchlist',{heading:['Your watchlist.','Bills you starred on this device, with a clear view of their movement.'],render:explorerMarkup,after:renderResults});
-  registerView('following',{heading:['Following.','Legislators you follow on this device, and every bill they file or sign onto.'],render:followingMarkup});
+  registerView('following',{heading:['Following.','Legislators you follow on this device, and every bill they file or sign onto.'],render:()=>followingMarkup({searchCounts,agencyName,areaName,SORTS})});
   registerView('today',{heading:['Today at the Lege.','Bills with a recorded action that day, by type of action. Dates follow Texas time.'],render:()=>todayMarkup({dateText,todayRow})});
   registerView('local',{heading:['Near you.','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],render:()=>nearMarkup({followButton})});
   registerView('member',{heading:['One legislator.','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],render:()=>memberMarkup({followButton,memberFeedHref})});
