@@ -24,3 +24,10 @@ let redrawResults = () => {}, persist = () => false;
 export function setExplorerHooks({renderResults, persistState}){redrawResults=renderResults;persist=persistState}
 export const renderResults = () => redrawResults();
 export const persistState = push => persist(push);
+// The page chrome and view switch the saved-lists and sync code redraws after a change; app.js sets them before boot.
+let hooks = {renderOverview(){}, refreshHome(){}, renderMoveBanner(){}, setView(){}};
+export function setSyncHooks(fns){hooks=fns}
+export const renderOverview = () => hooks.renderOverview();
+export const refreshHome = () => hooks.refreshHome();
+export const renderMoveBanner = () => hooks.renderMoveBanner();
+export const setView = (...args) => hooks.setView(...args);

@@ -3,4 +3,5 @@ export const state = {view:'all',bills:[],watch:new Set(),query:'',topic:'',agen
   follow:[],followShow:30,searches:[],renamingSearch:null};
 // Values app.js and features both read and set, kept apart from the state object so its keys stay the page's state.
 // restoredFilters: the explorer's filters as restored from the last visit; the chips say so until any of them changes.
-export const runtime = {restoredFilters:null};
+// syncAvailable: whether this site's sync links work; null until the first check.
+export const runtime = {restoredFilters:null,syncAvailable:null};

@@ -39,7 +39,7 @@ import {$, esc, toast} from './core/dom.js';
 import {copyText, download} from './core/copy.js';
 import {SORTS, agencyName, areaName, realAgencies, todayDay} from './core/labels.js';
 import {timeoutSignal, loadShardedMap, httpError} from './core/net.js';
-import {registerView, setFallbackView, viewHeading, renderView, setRenderContent, setExplorerHooks} from './core/router.js';
+import {registerView, setFallbackView, viewHeading, renderView, setRenderContent, setExplorerHooks, setSyncHooks} from './core/router.js';
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
 import {storageKey, followKey, searchesKey, prefsKey, disclaimerKey, visitKey, STORAGE_OK, readJson, writeJson, memoryStorage, loadSaved} from './core/storage.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
@@ -57,6 +57,7 @@ import {AGENCIES, AGENCY_NAME, SCOPE_AGENCY_ID, applyLunaTags, applyLunaExtras, 
 
 setRenderContent(renderContent);  // features redraw through core/router.js's renderContent
 setExplorerHooks({renderResults,persistState});
+setSyncHooks({renderOverview,refreshHome,renderMoveBanner,setView});
 loadSaved();
 // The dashboard visit before this one: read, and today stamped, the first time the dashboard is drawn in this page
 // load, so other pages never add the key. null on a first visit or without storage.
@@ -191,7 +192,7 @@ function keepAside(held){
   const n=held.watch.length+held.follows.length+held.searches.length;
   toast(`${n} saved ${n===1?'item':'items'} did not fit the sync link and ${n===1?'was':'were'} kept aside: see Export`);
 }
-let syncAvailable=null,lastPull=0;
+let lastPull=0;
 // The site root, whatever page is open: a bill page's path is /bill/<ID>.
 const siteBase=()=>`${location.origin}/`;
 // Every view but a bill page lives at /#view. A plain hash change on /bill/<ID> would stay under that path, so it
@@ -355,7 +356,7 @@ function onOtherTab(e){
 }
 
 async function setupSync(key){
-  syncAvailable=await sync.isAvailable();
+  runtime.syncAvailable=await sync.isAvailable();
   if(key)await openSyncLink(key);
   else if(sync.linked)await pullSync();
   window.addEventListener('focus',()=>{if(Date.now()-lastPull>30000)pullSync()});
@@ -365,8 +366,8 @@ async function setupSync(key){
 }
 
 async function openSyncLink(key){
-  if(syncAvailable===null)syncAvailable=await sync.isAvailable();
-  if(!syncAvailable){toast('Sync links are not available on this site yet');return}
+  if(runtime.syncAvailable===null)runtime.syncAvailable=await sync.isAvailable();
+  if(!runtime.syncAvailable){toast('Sync links are not available on this site yet');return}
   try{
     // Probe first: a view-only link is shown as a shared list and never replaces this device's own link.
     const probe=createSyncClient({storage:memoryStorage(),getWatch:()=>[]});probe.connect(key);
@@ -381,7 +382,7 @@ async function openSyncLink(key){
 
 // The client merges a join, adopts the link's copy and stores its version together (sync.js). True when it did.
 async function pullSync(){
-  if(!syncAvailable||!sync.linked)return false;
+  if(!runtime.syncAvailable||!sync.linked)return false;
   lastPull=Date.now();
   try{
     const pulled=await sync.pull();
@@ -434,8 +435,8 @@ async function receiveArrivingMove(bootReady){
     addFollows:codes=>changeFollow('follow',codes),
     addSearch:s=>changeSearch('save-search',s),
     setSettings:moveSettings,
-    joinLink:async key=>{sync.connect(key);if(syncAvailable===null)syncAvailable=await sync.isAvailable();await pullSync()},
-    flush:async()=>{if(syncAvailable&&sync.linked?.mode==='edit')await sync.flush()},
+    joinLink:async key=>{sync.connect(key);if(runtime.syncAvailable===null)runtime.syncAvailable=await sync.isAvailable();await pullSync()},
+    flush:async()=>{if(runtime.syncAvailable&&sync.linked?.mode==='edit')await sync.flush()},
   })}});
   await bootReady;
   moveStatus=result;
@@ -699,8 +700,8 @@ function renderContent(){keepFocus(()=>renderView(state.view,$('#dynamic-content
 // Each view's heading and content. Features take theirs over as they move into src/features/.
 function registerViews(){
   registerView('home',{heading:['This session, at a glance.','What changed on your bills, what moved today, upcoming hearings and Luna’s newest reviews.'],render:homeMarkup});
-  registerView('all',{heading:['See what’s moving.','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:()=>explorerMarkup({sync,syncAvailable,listStore}),after:renderResults});
-  registerView('watchlist',{heading:['Your watchlist.','Bills you starred on this device, with a clear view of their movement.'],render:()=>explorerMarkup({sync,syncAvailable,listStore}),after:renderResults});
+  registerView('all',{heading:['See what’s moving.','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:()=>explorerMarkup({sync,syncAvailable:runtime.syncAvailable,listStore}),after:renderResults});
+  registerView('watchlist',{heading:['Your watchlist.','Bills you starred on this device, with a clear view of their movement.'],render:()=>explorerMarkup({sync,syncAvailable:runtime.syncAvailable,listStore}),after:renderResults});
   registerView('following',{heading:['Following.','Legislators you follow on this device, and every bill they file or sign onto.'],render:()=>followingMarkup({searchCounts,agencyName,areaName,SORTS})});
   registerView('today',{heading:['Today at the Lege.','Bills with a recorded action that day, by type of action. Dates follow Texas time.'],render:()=>todayMarkup({dateText,todayRow})});
   registerView('local',{heading:['Near you.','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],render:()=>nearMarkup({followButton})});
@@ -710,7 +711,7 @@ function registerViews(){
   registerView('agencies',{heading:['Follow the agencies.','Explore where legislation might land across Texas government.'],render:agenciesMarkup});
   registerView('review',{heading:['Full-text review.','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:()=>reviewMarkup({stampText,dateText,changeCounts,changeRows,todayRow})});
   registerView('method',{heading:['How the atlas works.','Signals and uncertainty are displayed separately from verified legislative actions.'],render:methodMarkup});
-  registerView('saving',{heading:['Save your work.','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],render:()=>savingMarkup({linked:sync.linked,syncAvailable})});
+  registerView('saving',{heading:['Save your work.','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],render:()=>savingMarkup({linked:sync.linked,syncAvailable:runtime.syncAvailable})});
   registerView('export',{heading:['Export your saved info.','Everything this browser has saved, in one file you can keep or import on another device.'],render:()=>exportMarkup({watch:state.watch,follows:state.follow,searches:state.searches,theme:savedTheme(),memberName:code=>{const m=memberByCode(state.roster,code);return m?memberTitle(m):null},synced:Boolean(sync.linked?.editKey),kept:STORAGE_OK?heldCount(listStore):0,previous:STORAGE_OK?previousLinks(listStore):[]})});
   registerView('data',{heading:['Behind the tracker.','Understand coverage, refreshes, and how to load or export bill data.'],render:()=>dataMarkup({stampText,reviewParts})});
   setFallbackView('data');
