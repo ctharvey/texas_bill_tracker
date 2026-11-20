@@ -65,6 +65,32 @@ def capture_info() -> dict:
     return json.loads(CAPTURE.read_text("utf-8")) if CAPTURE.is_file() else {"files": {}}
 
 
+def build_site_pages(site) -> Path:
+    """The static pages the data run writes into live/share (member, topic, agency, about, home, today, bill, law),
+    built by scripts/build_feeds.py from the captured snapshot, the committed agent page lists
+    (fixtures/agent/pages.json, see make_site_pages.py) and a shell made from the index.html this site serves, as the
+    deployer makes current/shell.html. Returns the share folder."""
+    live = site.tmp / "pages" / "live"
+    live.mkdir(parents=True)
+    for name in ("bills.json", "members.json", "luna", "text"):
+        source = LIVE / name
+        if source.is_dir():
+            shutil.copytree(source, live / name)
+        elif source.is_file():
+            shutil.copyfile(source, live / name)
+    agent = live / "agent" / "data"
+    agent.mkdir(parents=True)
+    shutil.copyfile(FIXTURES / "agent" / "pages.json", agent / "pages.json")
+    shell = site.tmp / "pages" / "shell.html"
+    shell.write_bytes(deploy_static.shell_page((site.root / "index.html").read_bytes()))
+    done = subprocess.run([sys.executable, "scripts/build_feeds.py", "--snapshot", str(live / "bills.json"),
+                           "--out", str(site.tmp / "pages" / "feeds"), "--statutes", str(site.tmp / "pages" / "statutes"),
+                           "--today", capture_info()["captured_at"][:10], "--no-indexnow", "--shell", str(shell)],
+                          cwd=REPO, capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr[-2000:]
+    return live / "share"
+
+
 class _Server(ThreadingHTTPServer):
     # A page load opens about 50 module requests at once. The default listen backlog (5) refused some of them under
     # parallel runs (ECONNREFUSED), and a refused module leaves the app unstarted: a 20 s selector timeout.

@@ -197,6 +197,11 @@ if os.environ.get("TBA_E2E") == "1":
     def device(device_factory):
         return device_factory()
 
+    @pytest.fixture(scope="session")
+    def site_pages(site):
+        """The data run's static pages (live/share) for this site, built once (harness.build_site_pages)."""
+        return harness.build_site_pages(site)
+
     @pytest.fixture
     def fresh_sync(site):
         """An empty sync database and a fresh rate limiter (10 link creations per hour per address) for this test."""
