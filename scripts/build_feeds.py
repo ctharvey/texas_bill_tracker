@@ -1233,7 +1233,27 @@ def _current_law(law, code: str, number: str) -> tuple[str, str, str] | None:
     return heading, text, f"live/law/{code}/{chapter}.md"
 
 
-def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str] | None, site: str = SITE) -> str:
+def _law_shell_page(shell: str, *, title: str, url: str, label: str, feed: str, tags: str, body: list[str],
+                    view: str, aria: str) -> str:
+    """A law section or chapter page inside the site shell (SEO chunk 4 phase 5): the app takes it over in place."""
+    a = lambda value: escape(value, {'"': "&quot;"})
+    head = f"""
+<title>{escape(title)} · Texas Bill Atlas</title>
+<link rel="canonical" href="{a(url)}">
+<link rel="alternate" type="application/rss+xml" title="{a(label)}" href="{a(feed)}">
+{SHELL_ICONS}
+{tags}
+"""
+    content = f'\n<article class="law-page static-page" aria-label="{a(aria)}">\n{chr(10).join(body)}\n</article>\n'
+    version = hashlib.sha256((head + content).encode()).hexdigest()[:12]
+    return pages.render_page(shell, head=f'{head}<meta name="page-version" content="{version}">', content=content,
+                             view=view)
+
+
+def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str] | None, site: str = SITE,
+             shell: str | None = None) -> str:
+    """The page at /law/<CODE>/<section>. With the deployed shell it is the whole site page and the app takes it over;
+    without one it is the standalone page, whose script sends people to the app."""
     code, number = key.split(" ")
     url, target = f"{site}law/{code}/{number}", f"{site}#statute?law={code}&sec={number}"
     feed = f"{site}live/feeds/law/{code}-{number}.xml"
@@ -1284,6 +1304,9 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     links.append(f'<li><a href="{a(feed)}">RSS feed of actions on these bills</a></li>')
     body += ["<h2>Links</h2>", "<ul>\n" + "\n".join(links) + "\n</ul>",
              "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
+    if shell is not None:  # The page is the app: no "Open in" link.
+        return _law_shell_page(shell, title=title, url=url, label=label, feed=feed, tags=tags,
+                               body=body[:1] + body[2:], view=f"law:{code} {number}", aria="Law section")
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -1373,7 +1396,8 @@ def write_law_feeds(snapshot: dict, index: dict, out_dir: Path, site: str = SITE
     return written, unchanged
 
 
-def write_law_pages(index: dict, out_dir: Path, site: str = SITE, law_dir: Path | None = None) -> tuple[int, int, int]:
+def write_law_pages(index: dict, out_dir: Path, site: str = SITE, law_dir: Path | None = None,
+                    shell: str | None = None) -> tuple[int, int, int]:
     """One page per section in the statute index (live/share/law/<CODE>/<section>.html), rewritten only when it
     changes; pages for sections no bill changes now are removed. Current text comes from live/law when present."""
     law = None
@@ -1394,7 +1418,7 @@ def write_law_pages(index: dict, out_dir: Path, site: str = SITE, law_dir: Path 
             current = _current_law(law, code, number)
         except (OSError, ValueError, KeyError):
             current = None
-        if write_if_changed(folder / f"{number}.html", law_page(key, entry, CODE_NAME[code], current, site)):
+        if write_if_changed(folder / f"{number}.html", law_page(key, entry, CODE_NAME[code], current, site, shell)):
             written += 1
         else:
             unchanged += 1
@@ -1532,10 +1556,12 @@ def write_law_chapter_feeds(snapshot: dict, index: dict, out_dir: Path, site: st
     return written, unchanged
 
 
-def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE) -> str:
+def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, shell: str | None = None) -> str:
+    """The page at /law/<CODE>/<chapter>, built like law_page. The standalone page still sends people to the old
+    #chapter address: pointed at its own path, it would reload itself once the gateway serves it to everyone."""
     code, chapter = key.split(" ")
     code_name = CODE_NAME[code]
-    url = target = f"{site}#chapter?law={code}&ch={chapter}"
+    url, target = f"{site}law/{code}/{chapter}", f"{site}#chapter?law={code}&ch={chapter}"
     feed = f"{site}live/feeds/law/{code}-{chapter}.xml"
     name = title_case(heading)
     label = f"{code_name} Chapter {chapter}"
@@ -1581,6 +1607,9 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE) -> 
         f'<li><a href="{a(official)}">Official text on statutes.capitol.texas.gov</a></li>',
         f'<li><a href="{a(feed)}">RSS feed of actions on these bills</a></li>']) + "\n</ul>",
         "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
+    if shell is not None:  # The page is the app: no "Open in" link.
+        return _law_shell_page(shell, title=title, url=url, label=label, feed=feed, tags=tags,
+                               body=body[:1] + body[2:], view=f"chapter:{code} {chapter}", aria="Law chapter")
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -1602,7 +1631,7 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE) -> 
 
 
 def write_law_chapter_pages(index: dict, out_dir: Path, site: str = SITE,
-                            law_dir: Path | None = None) -> tuple[int, int, int]:
+                            law_dir: Path | None = None, shell: str | None = None) -> tuple[int, int, int]:
     """live/share/law/<CODE>/<chapter>.html per chapter with a bill, rewritten only when it changes; pages of chapters
     with none now are removed (section pages in the same folders are never touched). An index with no chapters
     removes nothing."""
@@ -1615,7 +1644,7 @@ def write_law_chapter_pages(index: dict, out_dir: Path, site: str = SITE,
         keep.setdefault(code, set()).add(f"{chapter}.html")
         folder = out_dir / code
         folder.mkdir(parents=True, exist_ok=True)
-        if write_if_changed(folder / f"{chapter}.html", law_chapter_page(key, g, _chapter_heading(g, law, code, chapter), site)):
+        if write_if_changed(folder / f"{chapter}.html", law_chapter_page(key, g, _chapter_heading(g, law, code, chapter), site, shell)):
             written += 1
         else:
             unchanged += 1
@@ -1668,8 +1697,8 @@ def main() -> int:
     parser.add_argument("--brackets", type=Path, default=None,
                         help="Population bracket output; defaults to brackets/ beside the snapshot")
     parser.add_argument("--shell", type=Path, default=pages.SHELL_PATH,
-                        help="The deployed page shell (shell.html in the current release); bill pages are standalone "
-                             "without one")
+                        help="The deployed page shell (shell.html in the current release); bill and law pages are "
+                             "standalone without one")
     parser.add_argument("--no-indexnow", action="store_true",
                         help="Don't submit changed bill pages to IndexNow (only the server's live run submits anyway)")
     args = parser.parse_args()
@@ -1684,9 +1713,10 @@ def main() -> int:
     write_bill_art(og_dir)  # No output line: the golden run pins this script's stdout.
     text_dir = args.text or args.snapshot.parent / "text"
     changed: list[str] = []
+    shell = pages.load_shell(args.shell)
     written, unchanged, removed = write_share_pages(snapshot, args.share or args.snapshot.parent / "share", args.site,
                                                     headlines, load_rendered(og_dir / "rendered.json"), text_dir, changed,
-                                                    pages.load_shell(args.shell))
+                                                    shell)
     print(f"Share pages: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
     if not args.no_indexnow and args.site == SITE and args.snapshot == LIVE_SNAPSHOT:
         print(f"IndexNow: {submit_indexnow(changed, args.site)}", flush=True)
@@ -1705,11 +1735,11 @@ def main() -> int:
     law_keys = list((statute_index.get("sections") or {}) if isinstance(statute_index, dict) else {})
     if law_keys:
         write_law_pages(statute_index, (args.share or args.snapshot.parent / "share") / "law", args.site,
-                        args.snapshot.parent / "law")
+                        args.snapshot.parent / "law", shell)
         write_law_feeds(snapshot, statute_index, args.out / "law", args.site, reviews)
     if law_keys or (isinstance(statute_index, dict) and statute_index.get("chapters")):
         write_law_chapter_pages(statute_index, (args.share or args.snapshot.parent / "share") / "law", args.site,
-                                args.snapshot.parent / "law")
+                                args.snapshot.parent / "law", shell)
         write_law_chapter_feeds(snapshot, statute_index, args.out / "law", args.site, reviews, args.snapshot.parent / "law")
     write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml", sitemap(snapshot, args.site, law_keys))
     from atlas.feeds.brackets import default_census, write_brackets

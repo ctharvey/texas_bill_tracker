@@ -151,7 +151,7 @@ class ChapterFeedAndPageTests(unittest.TestCase):
         self.assertEqual(build_feeds.write_law_chapter_pages(INDEX, self.pages), (0, 3, 0))
         page = (self.pages / "PE" / "46.html").read_text("utf-8")
         self.assertIn("<title>Penal Code Chapter 46: Weapons · Texas Bill Atlas</title>", page)
-        self.assertIn('<link rel="canonical" href="https://billatlas.org/#chapter?law=PE&amp;ch=46">', page)
+        self.assertIn('<link rel="canonical" href="https://billatlas.org/law/PE/46">', page)
         self.assertIn("2 bills in the 90th Legislature would change something in this chapter", page)
         self.assertIn('<a href="https://billatlas.org/bill/HB1094">HB 1094</a> repeals the whole chapter', page)
         self.assertIn('href="https://billatlas.org/law/PE/46.06">§ 46.06</a>: UNLAWFUL SALE OF FIREARMS', page)
