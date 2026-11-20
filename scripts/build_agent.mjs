@@ -6,7 +6,8 @@ import {mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writ
 import {dirname, join, relative, sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {AGENCY_NAME, NO_HEARING, applyLunaExtras, applyLunaTags, assessHearing, attachMembers, authorInfluence, authorshipParty,
-  companionIndex, lastActionInfo, memberSummary, normalizeBill, officialUrl, POLICY_AREAS, reviewProgress, SCOPE_AGENCY_ID} from '../src/taxonomy.js';
+  companionIndex, lastActionInfo, memberSummary, newestFirst, normalizeBill, officialUrl, POLICY_AREAS, reviewProgress,
+  SCOPE_AGENCY_ID} from '../src/taxonomy.js';
 import {buildHash} from '../src/prefs.js';
 import {routeForView, topicSlug} from '../src/core/routes.js';
 import {state} from '../src/core/state.js';
@@ -166,7 +167,8 @@ export const slug = text => String(text).toLowerCase().replace(/&/g, ' and ').re
 const cell = value => String(value ?? '').replace(/\r?\n/g, ' ').replace(/\|/g, '\\|').trim();
 const linkText = value => cell(value).replace(/([[\]])/g, '\\$1');
 const tracker = (filters = {}, extra = {}) => SITE + buildHash('all', filters, extra);
-const byRecent = (a, b) => (b.lastAction.date || '').localeCompare(a.lastAction.date || '') || a.id.localeCompare(b.id, 'en', {numeric: true});
+// Newest last action first; on the same day the newer bill (higher number) first, as the app orders lists.
+const byRecent = (a, b) => (b.lastAction.date || '').localeCompare(a.lastAction.date || '') || newestFirst(a.id, b.id);
 
 export function loadBills({snapshot, tags = null, extras = null, roster = null, minBills = 1000}) {
   if (snapshot?.session !== '90R' || snapshot.data_mode !== 'official-ftp' || !Array.isArray(snapshot.bills)
