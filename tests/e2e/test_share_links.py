@@ -152,4 +152,4 @@ def test_clipboard_blocked_falls_back_to_showing_the_link(device):
     page.evaluate("Object.defineProperty(navigator, 'clipboard', {value: {writeText: () => Promise.reject(new Error('no'))}})")
     reveal(page, "#share-watch")
     page.locator("#share-watch").click()
-    expect(page.locator("#toast")).to_have_text(f"Copy failed. Share link: {device.site.base}#all?list=HB110")
+    expect(page.locator("#toast")).to_have_text(f"Copy failed. Share link: {device.site.base}explorer#list=HB110")

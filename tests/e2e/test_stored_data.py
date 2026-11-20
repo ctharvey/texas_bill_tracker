@@ -20,6 +20,7 @@ import json
 import re
 import shutil
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 from playwright.sync_api import expect

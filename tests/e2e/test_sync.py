@@ -93,11 +93,10 @@ def wait_server(device, key, check, message):
 
 
 def reopen(device, hash_):
-    """A real page load (a goto that only changes the hash would not run the on-open pull)."""
-    page = device.open(hash_)
-    page.reload(wait_until="networkidle")
-    page.wait_for_selector("#dynamic-content *", state="attached", timeout=20000)
-    return page
+    """Exactly one real page load, so the on-open pull runs once. Leaving the page first makes the goto a load even
+    when only the hash would change; a second load would hide the first pull's toast."""
+    device.page.goto("about:blank")
+    return device.open(hash_)
 
 
 def stored_list(device, key):
@@ -171,7 +170,10 @@ def test_conflicting_edits_both_survive(device_factory, fresh_sync):
     star(a, "HB381")  # A's write lands first.
     wait_server(a, key_of(edit), lambda d: "HB381" in d["watch"], "A's edit reaches the server")
     # B has not pulled since joining; it still holds the version from before A's write.
-    page = b.open("#bill?id=HB1003")
+    # An in-page move: B is on /explorer, so opening "/#bill.." would be a page load, and its pull would refresh B.
+    page = b.page
+    page.evaluate("location.hash = '#bill?id=HB1003'")
+    page.wait_for_selector("#bill-page [data-watch='HB1003']")
     is_put_ok = lambda r: r.url.endswith("/api/sync") and r.request.method == "PUT" and r.status == 200
     with page.expect_response(is_put_ok, timeout=15000):
         page.locator("#bill-page [data-watch='HB1003']").first.click()

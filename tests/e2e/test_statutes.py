@@ -99,8 +99,12 @@ def test_bill_against_bill_compare(device):
     legend = page.locator(".law-legend")
     expect(legend).to_contain_text("parts differ")
     expect(legend).not_to_contain_text("Pick a different version")
-    # Picking the left's bill in the bar asks for a different left.
+    # Picking the left's bill in the bar shows it on the right and puts current law back on the left.
     page.locator('[data-law-compare="SB253"]').click()
+    expect(left).to_have_value("law")
+    expect(legend).to_contain_text("parts differ")
+    # The same version on both sides asks for a different left.
+    left.select_option(label=other)
     expect(legend).to_contain_text("Pick a different version for the left")
 
 
@@ -143,7 +147,7 @@ def test_back_from_a_bill_opened_on_the_section_page_returns_to_the_section(devi
 
 def test_section_search_finds_every_bill_that_changes_it(device):
     page = open_section(device)
-    on_page = {n.replace(" ", "") for n in page.locator(".law-version a.bill-number").all_inner_texts()}
+    on_page = {n.replace(" ", "") for n in page.locator(".law-version a.bill-number").all_text_contents()}  # folded bills too
     assert len(on_page) == 8
     page.locator("[data-view=all]").first.click()
     page.fill("#bill-search", "62.051")
