@@ -349,7 +349,12 @@ def run_checks(include_ci=True, sample=8):
     for site in SITES:
         def home(site=site):
             status, _, body = get(site)
-            digest = asset_digest(body.decode("utf-8", "replace"))
+            page = body.decode("utf-8", "replace")
+            if not asset_digest(page) and 'src="/boot.js"' in page:
+                # The static-first shell loads /boot.js, which imports the release's assets/<digest>/app.js.
+                _, _, boot = get(f"{site}boot.js")
+                page = boot.decode("utf-8", "replace")
+            digest = asset_digest(page)
             digests[site] = digest
             if status != 200 or not digest:
                 return False, f"HTTP {status}, build {digest}"

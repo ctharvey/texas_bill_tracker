@@ -20,6 +20,7 @@ def test_freshness_flags_stale_and_unreadable_stamps():
 def test_asset_digest_reads_the_bundle_path():
     assert dc.asset_digest('<script type="module" src="./assets/7ace0c0ad67129a7/app.js"></script>') == "7ace0c0ad67129a7"
     assert dc.asset_digest('<script src="./src/app.js"></script>') is None
+    assert dc.asset_digest("import './assets/b7db127407b5ef5f/app.js';\n") == "b7db127407b5ef5f"  # /boot.js
 
 
 def test_highest_bill_numbers_from_ftp_and_snapshot():
