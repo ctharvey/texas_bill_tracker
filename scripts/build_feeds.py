@@ -568,26 +568,122 @@ def write_feeds(snapshot: dict, out_dir: Path, site: str = SITE, reviews: dict |
     return written, unchanged
 
 
-def sitemap(snapshot: dict, site: str = SITE, law_keys=(), members=(), paths=()) -> str:
-    """The home page, every bill's address (/bill/<ID>), each dated by its last action, every law section a bill
-    changes (/law/<CODE>/<section>), each member's page (/member/<code>/<slug>) and the other page paths given
-    (topic/<slug>, agency/<id>). robots.txt points here."""
-    rows = [f"  <url><loc>{escape(site)}</loc></url>"]
+# Sitemaps: live/sitemap.xml is an index of live/sitemaps/<name>.xml (SEO chunk 7). Every lastmod comes from data.
+SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
+SITEMAP_NAMES = ("bills", "laws", "members", "groups", "pages")
+SITEMAP_MAX_URLS = 50000
+
+
+def _day(value) -> str | None:
+    """The YYYY-MM-DD start of a date or timestamp, or None."""
+    day = str(value or "")[:10]
+    return day if _DAY.fullmatch(day) else None
+
+
+def _newest(days) -> str | None:
+    return max((d for d in map(_day, days) if d), default=None)
+
+
+def bill_lastmod(bill: dict, review: dict | None = None) -> str | None:
+    """Newest of the last action and the Luna review's reviewed_at."""
+    return _newest([bill.get("last_action_date"), review.get("reviewed_at") if isinstance(review, dict) else None])
+
+
+def law_copied_days(law_dir: Path | None) -> dict[str, str]:
+    """Code -> day of the law copy's copied_at (law/index.json, codes[CODE].copied_at); {} when absent or malformed."""
+    if law_dir is None:
+        return {}
+    try:
+        codes = json.loads((law_dir / "index.json").read_text("utf-8")).get("codes")
+    except (OSError, ValueError, AttributeError):
+        return {}
+    return {c: d for c, e in (codes.items() if isinstance(codes, dict) else [])
+            if isinstance(e, dict) and (d := _day(e.get("copied_at")))}
+
+
+def section_lastmod(entry: dict, code: str, copied: dict[str, str]) -> str | None:
+    """Newest first-seen day on a statute index section, or the code's copy day."""
+    since = entry.get("f") if isinstance(entry, dict) and isinstance(entry.get("f"), dict) else {}
+    return _newest(list(since.values()) + [copied.get(code)])
+
+
+def chapter_lastmod(g: dict, code: str, copied: dict[str, str]) -> str | None:
+    """Newest of a chapter's own first-seen days, its sections' days and the code's copy day."""
+    days = list(g["since"].values()) + [copied.get(code)]
+    for _pairs, since, _h in g["sections"].values():
+        days += list(since.values())
+    return _newest(days)
+
+
+def sitemap_entries(snapshot: dict, site: str = SITE, law_keys=(), members=(), paths=(), reviews: dict | None = None,
+                    index: dict | None = None, copied: dict[str, str] | None = None, roster: dict | None = None,
+                    pages_data: dict | None = None) -> dict[str, list[tuple[str, str | None]]]:
+    """Child name -> sorted (loc, lastmod) rows. Bills: valid ids; laws: sections in law_keys and the chapter pages
+    write_law_chapter_pages writes; members: the coded ones given; groups: topic/ and agency/ paths; pages: home and
+    the other paths (today, about/*)."""
+    reviews, copied, index = reviews or {}, copied or {}, index if isinstance(index, dict) else {}
+    marks: dict[str, str | None] = {}
     for bill in snapshot.get("bills") or []:
-        if not isinstance(bill, dict) or not BILL_ID.fullmatch(str(bill.get("id", ""))):
-            continue
-        day = str(bill.get("last_action_date") or "")[:10]
-        lastmod = f"<lastmod>{day}</lastmod>" if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) else ""
-        rows.append(f"  <url><loc>{escape(site)}bill/{bill['id']}</loc>{lastmod}</url>")
-    for key in sorted(k for k in law_keys if STATUTE_KEY.fullmatch(k) and k[:2] in CODE_NAME):
+        if isinstance(bill, dict) and BILL_ID.fullmatch(str(bill.get("id", ""))):
+            marks[bill["id"]] = bill_lastmod(bill, reviews.get(bill["id"]))
+    rows: dict[str, list] = {name: [] for name in SITEMAP_NAMES}
+    rows["bills"] = [(f"{site}bill/{b}", d) for b, d in marks.items()]
+    sections = index.get("sections") if isinstance(index.get("sections"), dict) else {}
+    for key in (k for k in law_keys if STATUTE_KEY.fullmatch(k) and k[:2] in CODE_NAME):
         code, number = key.split(" ")
-        rows.append(f"  <url><loc>{escape(site)}law/{code}/{number}</loc></url>")
-    for member in sorted((m for m in members if MEMBER_CODE.fullmatch(str(m.get("code", "")))), key=lambda m: m["code"]):
-        rows.append(f"  <url><loc>{escape(site + member_path(member))}</loc></url>")
-    for path in sorted(paths):
-        rows.append(f"  <url><loc>{escape(site + path)}</loc></url>")
-    return ('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-            + "\n".join(rows) + "\n</urlset>\n")
+        rows["laws"].append((f"{site}law/{code}/{number}", section_lastmod(sections.get(key), code, copied)))
+    for key, g in chapter_groups(index).items():
+        code, chapter = key.split(" ")
+        rows["laws"].append((f"{site}law/{code}/{chapter}", chapter_lastmod(g, code, copied)))
+    coded = [m for m in members if MEMBER_CODE.fullmatch(str(m.get("code", "")))]
+    _by_code, joined = member_bills(snapshot, roster or {}) if roster else ({}, {})
+    for member in coded:
+        rows["members"].append((site + member_path(member), _newest(marks.get(b["id"]) for b, _r in joined.get(member["code"], []))))
+    grouped = {}
+    for kind in ("topic", "agency"):
+        for key, _name, bill_ids in _group_entries(pages_data, kind):
+            grouped[f"{kind}/{key}"] = _newest(marks.get(b) for b in bill_ids)
+    newest = _newest(marks.values())
+    for path in paths:
+        if path in grouped or path.split("/")[0] in ("topic", "agency"):
+            rows["groups"].append((site + path, grouped.get(path)))
+        else:
+            rows["pages"].append((site + path, newest if path == "today" else None))
+    rows["pages"].append((site, newest))
+    return {name: sorted(r) for name, r in rows.items()}
+
+
+def render_urlset(rows: list[tuple[str, str | None]]) -> str:
+    if len(rows) > SITEMAP_MAX_URLS:
+        raise ValueError(f"sitemap has {len(rows)} URLs; the limit is {SITEMAP_MAX_URLS}")
+    body = "\n".join(f"  <url><loc>{escape(loc)}</loc>{f'<lastmod>{d}</lastmod>' if d else ''}</url>" for loc, d in rows)
+    return f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="{SITEMAP_NS}">\n{body}\n</urlset>\n'
+
+
+def render_sitemap_index(children: list[tuple[str, str | None]]) -> str:
+    body = "\n".join(f"  <sitemap><loc>{escape(loc)}</loc>{f'<lastmod>{d}</lastmod>' if d else ''}</sitemap>"
+                     for loc, d in children)
+    return f'<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="{SITEMAP_NS}">\n{body}\n</sitemapindex>\n'
+
+
+def write_sitemaps(path: Path, snapshot: dict, site: str = SITE, law_keys=(), members=(), paths=(),
+                   reviews: dict | None = None, index: dict | None = None, law_dir: Path | None = None,
+                   roster: dict | None = None, pages_data: dict | None = None) -> None:
+    """The index at `path` and the non-empty children in path.parent/sitemaps; a known child now empty is removed
+    (nothing else in that folder is touched). robots.txt points at the index."""
+    entries = sitemap_entries(snapshot, site, law_keys, members, paths, reviews, index, law_copied_days(law_dir),
+                              roster, pages_data)
+    folder = path.parent / "sitemaps"
+    listed = []
+    for name in SITEMAP_NAMES:
+        rows = entries[name]
+        if rows:
+            folder.mkdir(parents=True, exist_ok=True)
+            write_if_changed(folder / f"{name}.xml", render_urlset(rows))
+            listed.append((f"{site}live/sitemaps/{name}.xml", _newest(d for _l, d in rows)))
+        else:
+            (folder / f"{name}.xml").unlink(missing_ok=True)
+    write_if_changed(path, render_sitemap_index(listed))
 
 
 API_DOCS = ("api-catalog.json", "openapi.json", "auth.md")
@@ -1772,8 +1868,8 @@ def write_law_pages(index: dict, out_dir: Path, site: str = SITE, law_dir: Path 
 
 
 # Chapter feeds and share pages. A chapter has bills when the index lists it (whole-chapter changes) or lists any
-# section in it (the number before the first dot). Pages are not in the sitemap: the gateway serves /law/<CODE>/<section>
-# only, so /law/PE/46 would 404 on reload; the app address is #chapter?law=PE&ch=46.
+# section in it (the number before the first dot). Chapter pages are in the laws sitemap (law/<CODE>/<chapter>, the
+# set chapter_groups gives); the app address is #chapter?law=PE&ch=46.
 _LAW_CHAPTER_FEED_NAME = re.compile(r"([A-Z]{2})-(\d+[A-Z]?)\.xml")
 _LAW_CHAPTER_PAGE_NAME = re.compile(r"\d+[A-Z]?\.html")
 _SMALL_WORDS = {"of", "and", "the", "for", "to", "in", "by", "or", "a", "an", "on", "with", "under", "from", "as", "at"}
@@ -2082,8 +2178,9 @@ def main() -> int:
     groups = write_group_pages(site_pages, snapshot, args.share or args.snapshot.parent / "share", args.site, shell)
     groups += write_about_pages(site_pages, args.share or args.snapshot.parent / "share", args.site, shell)
     groups += write_view_pages(site_pages, args.share or args.snapshot.parent / "share", args.site, shell)
-    write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml",
-                     sitemap(snapshot, args.site, law_keys, members, groups))
+    write_sitemaps(args.sitemap or args.snapshot.parent / "sitemap.xml", snapshot, args.site, law_keys, members, groups,
+                   reviews, statute_index if isinstance(statute_index, dict) else {}, args.snapshot.parent / "law",
+                   roster, site_pages)
     from atlas.feeds.brackets import default_census, write_brackets
     status = write_brackets(snapshot, text_dir, args.census or default_census(), args.brackets or args.snapshot.parent / "brackets")
     print(f"Population brackets: {status}", flush=True)

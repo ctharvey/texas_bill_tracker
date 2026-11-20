@@ -94,11 +94,10 @@ class MemberPages(unittest.TestCase):
         self.assertTrue((self.tmp / 'A4395.html').exists())
 
     def test_sitemap_lists_member_addresses(self):
-        xml = bf.sitemap(SNAPSHOT, members=list(ROSTER.values()) + [{'code': 'x'}])
-        self.assertIn('<loc>https://billatlas.org/member/A2150/rafael-anchia</loc>', xml)
-        self.assertLess(xml.index('member/A2150'), xml.index('member/A4395'))
-        self.assertNotIn('member/x', xml)
-        self.assertNotIn('/member/', bf.sitemap(SNAPSHOT))
+        locs = [loc for loc, _ in bf.sitemap_entries(SNAPSHOT, members=list(ROSTER.values()) + [{'code': 'x'}])['members']]
+        self.assertEqual(locs, ['https://billatlas.org/member/A2150/rafael-anchia',
+                                'https://billatlas.org/member/A4395/daniel-alders'])
+        self.assertEqual(bf.sitemap_entries(SNAPSHOT)['members'], [])
 
 
 class SlugMatchesTheApp(unittest.TestCase):

@@ -95,9 +95,9 @@ class GroupPages(unittest.TestCase):
         self.assertEqual(bf.load_site_pages(path)['format'], bf.SITE_PAGES_FORMAT)
 
     def test_sitemap_lists_group_paths(self):
-        xml = bf.sitemap({'bills': []}, paths=self.paths)
-        self.assertIn('<loc>https://billatlas.org/agency/txdot</loc>', xml)
-        self.assertIn('<loc>https://billatlas.org/topic/immigration</loc>', xml)
+        locs = [loc for loc, _ in bf.sitemap_entries({'bills': []}, paths=self.paths)['groups']]
+        self.assertIn('https://billatlas.org/agency/txdot', locs)
+        self.assertIn('https://billatlas.org/topic/immigration', locs)
 
 
 class BillPagesLinkToTheirGroups(unittest.TestCase):

@@ -120,6 +120,19 @@ class Network(unittest.TestCase):
         self.assertEqual(cp.sitemap_sample(xml, 2), ['https://billatlas.org/bill/HB2', 'https://billatlas.org/bill/HB7'])
         self.assertEqual(cp.sitemap_sample(xml, 0), [])
 
+    def test_sitemap_sample_follows_an_index_into_its_children(self):
+        index = ('<sitemapindex><sitemap><loc>https://billatlas.org/live/sitemaps/bills.xml</loc></sitemap>'
+                 '<sitemap><loc>https://billatlas.org/live/sitemaps/laws.xml</loc></sitemap></sitemapindex>')
+        children = {'https://billatlas.org/live/sitemaps/bills.xml':
+                    ''.join(f'<url><loc>https://billatlas.org/bill/HB{i}</loc></url>' for i in range(4)),
+                    'https://billatlas.org/live/sitemaps/laws.xml':
+                    ''.join(f'<url><loc>https://billatlas.org/law/PE/{i}</loc></url>' for i in range(4))}
+        self.assertEqual(cp.sitemap_sample(index, 2, children.__getitem__),
+                         ['https://billatlas.org/bill/HB2', 'https://billatlas.org/law/PE/2'])
+        self.assertEqual(cp.sitemap_sample(index, 2), [])
+        self.assertEqual(cp.sitemap_sample(index, 0, children.__getitem__), [])
+        self.assertEqual(cp.sitemap_sample(index, 2, lambda url: (_ for _ in ()).throw(OSError('down'))), [])
+
 
 class Fixtures(unittest.TestCase):
     def test_addresses_follow_the_gateway(self):

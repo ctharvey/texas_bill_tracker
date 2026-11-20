@@ -28,7 +28,7 @@ ENDPOINT = f"https://api.cloudflare.com/client/v4/zones/{ZONE_ID}/purge_cache"
 HOST = "billatlas.org"
 # Origin paths under live/ (after Cloudflare's rewrites of /openapi.json, /auth.md and /.well-known/api-catalog).
 # A trailing slash marks a folder.
-PATHS = ("bills.json", "feeds/", "share/", "sitemap.xml", "statutes/", "brackets/", "text/", "history/",
+PATHS = ("bills.json", "feeds/", "share/", "sitemap.xml", "sitemaps/", "statutes/", "brackets/", "text/", "history/",
          "api-catalog.json", "openapi.json", "auth.md")
 PREFIXES = [f"{HOST}/live/{path}" for path in PATHS]
 LIVE = Path(os.environ.get("TBA_LIVE_DIR", "/var/www/html/texas-bill-atlas/live"))

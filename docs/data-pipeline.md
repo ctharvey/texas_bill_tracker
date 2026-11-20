@@ -56,13 +56,16 @@ between files without reinstalling units. A push that changes a job's code or in
   `/law/<CODE>/<section>` to crawlers and AI agents by the gateway (people get the app): the bills that change the
   section, its current text from `live/law` (up to 3,000 characters; new sections have none) and the official link.
   Pages for sections no bill changes any more are removed. Written quietly after the statute index.
-- `live/sitemap.xml` (home, every `/bill/<ID>` and every `/law/<CODE>/<section>`); the API docs from `scripts/api/` (`api-catalog.json`, `openapi.json`, `auth.md`).
+- `live/sitemap.xml`, a sitemap index of `live/sitemaps/{bills,laws,members,groups,pages}.xml` (only non-empty children are written;
+  laws list sections and chapters, groups list topics and agencies, pages list home, today and about). Each entry's `lastmod` comes from
+  data: the last action or Luna review (bills), first-seen days or the law copy's `copied_at` (laws), the newest bill (members, groups,
+  home, today); the index's `lastmod` is the newest in its child. The API docs from `scripts/api/` (`api-catalog.json`, `openapi.json`, `auth.md`).
 - Share-card inputs `live/og/cards.json`, and bill art `live/og/art/<ID>.jpg` with `art.json`.
 - Statutes: `live/statutes/` lists the law sections each bill amends, adds or repeals, with the quoted wording.
 - Population limits: `live/brackets/` lists each population test and the places that meet it under the 2020 Census
   (`data/census/tx_population_2020.json`, from `scripts/census_places.py`; skipped if absent).
 
-The edge keeps the files only this run writes (`bills.json`, `feeds/`, `share/`, `sitemap.xml`, `statutes/`,
+The edge keeps the files only this run writes (`bills.json`, `feeds/`, `share/`, `sitemap.xml`, `sitemaps/`, `statutes/`,
 `brackets/`, `text/`, `history/`, the API docs) for 30 days, so after every run, finished or not, `purge_cache.py`
 purges the ones that changed. It compares each file's modification time and size with `live/purge-state.json`, the
 fingerprint from the last successful purge, and purges added, rewritten and deleted files by exact path (a folder with

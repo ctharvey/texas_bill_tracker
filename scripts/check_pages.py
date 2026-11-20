@@ -198,13 +198,32 @@ def fetch(url: str, agent: str, timeout: float = 20) -> tuple[int, str, str, str
         return error.code, error.geturl() or url, error.read().decode("utf-8", "replace"), error.headers.get("X-Robots-Tag", "")
 
 
-def sitemap_sample(xml: str, count: int) -> list[str]:
-    """`count` addresses spread evenly through the sitemap (the same ones each run while it is unchanged)."""
-    locs = [u for u in re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", xml) if "/live/" not in urlsplit(u).path]
+def _spread(locs: list[str], count: int) -> list[str]:
     if count <= 0 or not locs:
         return []
     step = max(1, len(locs) // count)
     return locs[step // 2::step][:count]  # Off the first entry, which is the home page.
+
+
+def sitemap_sample(xml: str, count: int, load=None) -> list[str]:
+    """`count` addresses spread evenly through the sitemap (the same ones each run while it is unchanged). An index is
+    followed into its children (fetched with load(url) -> xml), the count shared between them."""
+    def pages(text: str) -> list[str]:
+        return [u for u in re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", text) if "/live/" not in urlsplit(u).path]
+
+    if "<sitemapindex" not in xml:
+        return _spread(pages(xml), count)
+    children = re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", xml)
+    if load is None or count <= 0 or not children:
+        return []
+    out = []
+    for i, child in enumerate(children):
+        try:
+            locs = pages(load(child))
+        except (OSError, ValueError):
+            continue  # An unreadable child is skipped; the others still sample.
+        out += _spread(locs, count // len(children) + (1 if i < count % len(children) else 0))
+    return out
 
 
 def check_network(addresses: list[str], site: str, delay: float, getter=fetch, sleep=time.sleep) -> list[dict]:
@@ -307,7 +326,10 @@ def main(argv: list[str] | None = None) -> int:
         addresses = list(args.addresses) or list(FIXED)
         if args.sample > 0:
             _, _, xml, _ = fetch(urljoin(args.site, SITEMAP), AGENTS["desktop"])
-            addresses += sitemap_sample(xml, args.sample)
+            def load_child(url: str) -> str:
+                time.sleep(args.delay)
+                return fetch(url, AGENTS["desktop"])[2]
+            addresses += sitemap_sample(xml, args.sample, load_child)
             time.sleep(args.delay)
         urls = list(dict.fromkeys(urljoin(args.site, a) for a in addresses))
         reports = check_network(urls, args.site, args.delay)

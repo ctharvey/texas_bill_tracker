@@ -210,13 +210,12 @@ class LawPageTests(unittest.TestCase):
         build_feeds.write_law_pages(index, self.out)  # Malformed entries never stop the pages either.
 
     def test_sitemap_lists_law_addresses(self):
-        text = build_feeds.sitemap({"bills": [{"id": "HB1"}]}, law_keys=list(INDEX["sections"]))
-        ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-        locs = [e.text for e in ET.fromstring(text).findall("s:url/s:loc", ns)]
-        self.assertEqual(locs, ["https://billatlas.org/", "https://billatlas.org/bill/HB1",
-                                "https://billatlas.org/law/GV/2271.002", "https://billatlas.org/law/GV/403.606",
-                                "https://billatlas.org/law/GV/9999.001"])
-        self.assertEqual(build_feeds.sitemap({"bills": []}), build_feeds.sitemap({"bills": []}, law_keys=[]))
+        entries = build_feeds.sitemap_entries({"bills": [{"id": "HB1"}]}, law_keys=list(INDEX["sections"]))
+        self.assertEqual([loc for loc, _ in entries["laws"]],
+                         ["https://billatlas.org/law/GV/2271.002", "https://billatlas.org/law/GV/403.606",
+                          "https://billatlas.org/law/GV/9999.001"])
+        self.assertEqual([loc for loc, _ in entries["bills"]], ["https://billatlas.org/bill/HB1"])
+        self.assertEqual(build_feeds.sitemap_entries({"bills": []}), build_feeds.sitemap_entries({"bills": []}, law_keys=[]))
 
 
 if __name__ == "__main__":

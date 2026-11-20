@@ -171,12 +171,12 @@ class ChapterFeedAndPageTests(unittest.TestCase):
         self.assertEqual(build_feeds.write_law_chapter_pages({"sections": {}}, self.pages), (0, 0, 0))
         self.assertTrue((self.pages / "PE" / "12.html").exists())
 
-    def test_chapter_pages_are_not_in_the_sitemap(self):
-        locs = ET.fromstring(build_feeds.sitemap({"bills": []}, law_keys=list(INDEX["sections"]) + list(INDEX["chapters"]))
-                             ).findall("{http://www.sitemaps.org/schemas/sitemap/0.9}url/{http://www.sitemaps.org/schemas/sitemap/0.9}loc")
-        urls = [e.text for e in locs]
-        self.assertEqual(urls, ["https://billatlas.org/", "https://billatlas.org/law/PE/12.01",
-                                "https://billatlas.org/law/PE/46.06"])
+    def test_chapter_pages_are_in_the_sitemap(self):
+        entries = build_feeds.sitemap_entries({"bills": []}, law_keys=list(INDEX["sections"]) + list(INDEX["chapters"]),
+                                              index=INDEX)
+        self.assertEqual([loc for loc, _ in entries["laws"]],
+                         ["https://billatlas.org/law/ED/12A", "https://billatlas.org/law/PE/12", "https://billatlas.org/law/PE/12.01",
+                          "https://billatlas.org/law/PE/46", "https://billatlas.org/law/PE/46.06"])
 
     def test_heading_comes_from_the_law_copy_when_the_index_has_none(self):
         law = write_law(self.root)
