@@ -8,7 +8,7 @@ import {pathToFileURL} from 'node:url';
 import {AGENCY_NAME, NO_HEARING, applyLunaExtras, applyLunaTags, assessHearing, attachMembers, authorInfluence, authorshipParty,
   companionIndex, lastActionInfo, memberSummary, newestFirst, normalizeBill, officialUrl, POLICY_AREAS, reviewProgress,
   SCOPE_AGENCY_ID} from '../src/taxonomy.js';
-import {buildHash} from '../src/prefs.js';
+import {buildUrl} from '../src/prefs.js';
 import {routeForView, topicSlug} from '../src/core/routes.js';
 import {state} from '../src/core/state.js';
 import {stampText} from '../src/core/format.js';
@@ -166,7 +166,7 @@ export const slug = text => String(text).toLowerCase().replace(/&/g, ' and ').re
   .replace(/^-+|-+$/g, '').slice(0, 80) || 'unnamed';
 const cell = value => String(value ?? '').replace(/\r?\n/g, ' ').replace(/\|/g, '\\|').trim();
 const linkText = value => cell(value).replace(/([[\]])/g, '\\$1');
-const tracker = (filters = {}, extra = {}) => SITE + buildHash('all', filters, extra);
+const tracker = (filters = {}, extra = {}) => SITE.replace(/\/$/, '') + buildUrl('all', filters, extra);
 // Newest last action first; on the same day the newer bill (higher number) first, as the app orders lists.
 const byRecent = (a, b) => (b.lastAction.date || '').localeCompare(a.lastAction.date || '') || newestFirst(a.id, b.id);
 
@@ -565,7 +565,7 @@ export function buildPages({snapshot, tags = null, extras = null, roster = null,
     }
   };
   pagedGroup('bills/index', 'All bills', `${freshness} Also by [filing date](${AGENT}filed/index.md), or [search](${AGENT}search).`,
-    bills, SITE + '#all');
+    bills, `${SITE}explorer`);
 
   const indexes = [];
   const byCount = label => (a, b) => b[1].length - a[1].length || String(label(a[0])).localeCompare(String(label(b[0])));
@@ -809,12 +809,13 @@ ${indexes.map(([title, href, n]) => `- [${title}](${AGENT}${href}) (${n} groups)
 
 ## Mapping tracker links
 
-A bill's tracker page is \`${SITE}bill/<ID>\`; other views keep their state after \`#\` in the address. Equivalents here:
+Every tracker view has a path: a bill is \`${SITE}bill/<ID>\`, the explorer with filters is \`${SITE}explorer?topic=Water\`. Older links that keep the view after \`#\` (\`#all?topic=Water\`) still open, so you may meet them. Equivalents here:
 
 - \`${SITE}bill/${example.id}\` (or the older \`${SITE}#all?bill=${example.id}\`) -> \`${AGENT}bills/${example.id}.md\`
-- \`#all?topic=<topic>\` -> \`${AGENT}topics/index.md\`; \`#all?agency=<id>\` -> \`${AGENT}agencies/index.md\`; \`#all?action=<category>\` -> \`${AGENT}last-action/index.md\`; \`#all?outlook=<status>\` -> \`${AGENT}hearing/index.md\`; \`#all?chamber=<chamber>\` -> \`${AGENT}chamber/index.md\`
+- \`/explorer?topic=<topic>\` or \`/topic/<slug>\` (older: \`#all?topic=<topic>\`) -> \`${AGENT}topics/index.md\`; \`/explorer?agency=<id>\` or \`/agency/<id>\` (older: \`#all?agency=<id>\`) -> \`${AGENT}agencies/index.md\`; \`/explorer?action=<category>\` -> \`${AGENT}last-action/index.md\`; \`/explorer?outlook=<status>\` -> \`${AGENT}hearing/index.md\`; \`/explorer?chamber=<chamber>\` -> \`${AGENT}chamber/index.md\`
+- \`/member/<code>/<slug>\` -> \`${AGENT}authors/index.md\`; \`/law/<CODE>/<key>\` is a Texas statute section or chapter (not in this edition).
 - Text search (\`query=<words>\`) -> \`${AGENT}search?q=<words>\`.
-- A shared list (\`#all?list=HB1,SB2\`): fetch each \`bills/<ID>.md\`.
+- A shared list (\`${SITE}explorer#list=HB1,SB2\`; older: \`#all?list=HB1,SB2\`): fetch each \`bills/<ID>.md\`.
 
 ## Feeds and saved lists
 
@@ -834,14 +835,14 @@ const SAVING = `# Saving and sharing (Texas Bill Atlas)
 
 There are no accounts. A person's watchlist and filters live in their browser; they can carry them in a link or file, or sync them with a private link.
 
-- **Links to a view**: the tracker's address describes the view, e.g. \`${SITE}#all?topic=Water\`; a bill's page is \`${SITE}bill/HB1\`.
-- **Share links**: \`${SITE}#all?list=HB1,SB2\` opens a read-only list. For agents: fetch \`${AGENT}bills/<ID>.md\` for each id.
+- **Links to a view**: the tracker's address describes the view, e.g. \`${SITE}explorer?topic=Water\`; a bill's page is \`${SITE}bill/HB1\`. Older \`#all?topic=Water\` links still open.
+- **Share links**: \`${SITE}explorer#list=HB1,SB2\` opens a read-only list (the older \`#all?list=HB1,SB2\` still works). For agents: fetch \`${AGENT}bills/<ID>.md\` for each id.
 - **Export/import**: the watchlist file is JSON: \`{"format": "texas-bill-atlas-watchlist-v1", "session": "90R", "bills": ["HB1", "SB2"]}\`. Import also accepts any text listing bill numbers.
 - **RSS**: \`${SITE}live/feeds/<ID>.xml\` per bill.
 
 ## Private sync links (read-only access for agents)
 
-A sync list has an edit key and a view key (22 characters each). Never ask a person for their edit key; it lets anyone change the list. A view-only link looks like \`${SITE}#watchlist?sync=<view key>\`. With a view key:
+A sync list has an edit key and a view key (22 characters each). Never ask a person for their edit key; it lets anyone change the list. A view-only link looks like \`${SITE}watchlist#sync=<view key>\` (older links use \`#watchlist?sync=<view key>\`). With a view key:
 
 - \`GET ${SITE}api/sync\` with header \`X-Sync-Key: <view key>\` returns \`{"mode": "view", "version": n, "data": {"watch": ["HB1", ...], "filters": {}}}\`
 - \`GET ${SITE}api/sync/feed/<view key>.xml\` is an RSS feed of the latest actions on every bill in the list

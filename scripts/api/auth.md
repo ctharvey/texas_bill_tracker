@@ -21,7 +21,7 @@ No credential is issued or accepted for public data. Do not send `Authorization`
 
 ### A person's watchlist
 
-People who sync their watchlist have two links of the same shape, `https://billatlas.org/#watchlist?sync=<key>`:
+People who sync their watchlist have two links of the same shape, `https://billatlas.org/watchlist#sync=<key>`:
 a **view-only link**, safe to share, and an **edit link**, which works like a password. You may ask a person for
 their *view-only* link (Watchlist page, "Copy view-only link"). Never ask for the edit link.
 

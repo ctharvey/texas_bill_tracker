@@ -471,7 +471,7 @@ def usage(meta: dict, topics: list[str] = ()) -> str:
   named in the title or caption; unreviewed bills that affect a place without naming it are not found.
 - Bills filed in the last few days: `filed_from=<date>` with no q (all of them, most recent action first).
 - Paging: `limit` (default {DEFAULT_LIMIT}, at most {MAX_LIMIT}) and `offset`.
-- Tracker links: the tracker keeps its filters after `#`, which never reaches a server. `{SITE}#all?topic=Education&agency=tea`
+- Tracker links: the tracker's explorer keeps its filters in the address. `{SITE}explorer?topic=Education&agency=tea`
   is the same view as `{AGENT}search?topic=Education&agency=tea`; the topic, agency and chamber values carry over.
   `query=` becomes `q=`.
 {topic_line}
@@ -549,7 +549,7 @@ def as_markdown(found: dict, params: dict, disclaimer: str = "") -> str:
         if nxt < total:
             lines += [f"Next page: {link(params, offset=nxt)}", ""]
     lines += [f"As JSON: {link(params, format='json', offset=found['offset'])}",
-              f"Same words in the tracker: {SITE}#all?{urlencode({'query': params['q']})}" if params["q"] else "",
+              f"Same words in the tracker: {SITE}explorer?{urlencode({'query': params['q']})}" if params["q"] else "",
               f"How search works: {AGENT}search", ""]
     if disclaimer:
         lines += ["---", disclaimer, ""]

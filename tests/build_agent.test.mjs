@@ -72,7 +72,7 @@ test('markdown pages escape table cells and list every group with tracker links'
   assert.match(files.get('bills/HB5.md'), /^# HB 5: /);
   assert.match(files.get('bills/HB5.md'), /1\. 2026-11-08: Filed/);
   assert.ok(files.has(`topics/${slug('Water')}.md`));
-  assert.match(files.get('topics/water.md'), /#all\?topic=Water/);
+  assert.match(files.get('topics/water.md'), /https:\/\/billatlas\.org\/explorer\?topic=Water/);
   assert.ok(files.has('agencies/twdb.md'));
   assert.ok(files.has('authors/house-cole.md') && files.has('authors/house-smith.md'));
   assert.match(files.get('authors/house-smith.md'), /\| coauthor \|/);
@@ -83,6 +83,20 @@ test('markdown pages escape table cells and list every group with tracker links'
   const all = JSON.parse(files.get('data/bills.json'));
   assert.deepEqual(all.bills.map(b => b.id), ['HB5', 'SB12']);
   assert.equal(all.tags_as_of, '2026-11-10T13:00:00Z');
+});
+
+test('agent output links to clean paths; hash app links appear only in "older" notes', () => {
+  const files = build();
+  const HASH = /\/#(all|bill|watchlist|member|statute|chapter)\b/;
+  const offenders = [];
+  for (const [name, text] of files) {
+    if (typeof text !== 'string') continue;
+    for (const line of text.split('\n')) if (HASH.test(line) && !/older/i.test(line)) offenders.push(`${name}: ${line.slice(0, 120)}`);
+  }
+  assert.deepEqual(offenders, []);
+  assert.match(files.get('bills/index.md'), /https:\/\/billatlas\.org\/explorer\b/);
+  assert.match(files.get('saving.md'), /billatlas\.org\/explorer#list=HB1,SB2/);
+  assert.match(files.get('saving.md'), /billatlas\.org\/watchlist#sync=<view key>/);
 });
 
 test('output is deterministic: identical inputs give identical files', () => {
