@@ -1,4 +1,5 @@
 // Saving choices without accounts: URL state, remembered filters, profile and watchlist files, and sync merging.
+import {routeForPath, routeForView, slugify} from './core/routes.js';
 export const FILTER_DEFAULTS = {query: '', topic: '', area: '', agency: '', chamber: '', party: '', stage: '', action: '', outlook: '', sort: 'newest', onlyWatch: false, companion: false};
 const FILTER_NAMES = Object.keys(FILTER_DEFAULTS);
 // On-or-off filters: true or false when remembered, 1 or 0 in an address.
@@ -70,48 +71,77 @@ export function parseHash(hash) {
     statute: chapter || (view === 'statute' && LAW_CODE.test(law) && LAW_SECTION.test(sec) && sec.length <= 16 ? `${law} ${sec}` : null)};
 }
 
+// The filters of the views that keep them in the address, defaults left out.
+function filterParts(view, filters) {
+  const parts = [];
+  if (view !== 'all' && view !== 'watchlist') return parts;
+  for (const name of FILTER_NAMES) {
+    const value = filters?.[name];
+    if (value === undefined || value === FILTER_DEFAULTS[name]) continue;
+    parts.push(`${name}=${ON_OFF.has(name) ? (value ? '1' : '0') : encodeURIComponent(value)}`);
+  }
+  return parts;
+}
+
+// What rides along with any view: a shared list, a bill open over another view (old links) and a view-only sync key.
+// On a path address these stay in the fragment, which never reaches the server, its logs or Cloudflare.
+function contextParts(view, {list = null, bill = null, sync = null} = {}) {
+  const parts = [];
+  if (list?.length) parts.push(`list=${list.join(',')}`);
+  if (bill && view !== 'bill') parts.push(`bill=${bill}`);
+  if (sync && SYNC_KEY.test(sync)) parts.push(`sync=${sync}`);
+  return parts;
+}
+
 // `sync` is only ever a view-only key; edit keys are never written into the address bar.
 export function buildHash(view, filters, {list = null, bill = null, sync = null, member = null, statute = null} = {}) {
-  const parts = [];
-  if (view === 'all' || view === 'watchlist') {
-    for (const name of FILTER_NAMES) {
-      const value = filters?.[name];
-      if (value === undefined || value === FILTER_DEFAULTS[name]) continue;
-      parts.push(`${name}=${ON_OFF.has(name) ? (value ? '1' : '0') : encodeURIComponent(value)}`);
-    }
-  }
+  const parts = filterParts(view, filters);
   if (view === 'bill' && isBillId(bill)) parts.push(`id=${bill}`);
   if (view === 'member' && MEMBER_CODE.test(member || '')) parts.push(`code=${member}`);
   const [law, sec] = String(statute || '').split(' ');
   const chapter = view === 'statute' && LAW_CODE.test(law || '') && LAW_CHAPTER.test(sec || '') && sec.length <= 8;
   if (chapter) parts.push(`law=${law}`, `ch=${sec}`);
   else if (view === 'statute' && LAW_CODE.test(law || '') && LAW_SECTION.test(sec || '')) parts.push(`law=${law}`, `sec=${sec}`);
-  if (list?.length) parts.push(`list=${list.join(',')}`);
-  if (bill && view !== 'bill') parts.push(`bill=${bill}`);
-  if (sync && SYNC_KEY.test(sync)) parts.push(`sync=${sync}`);
+  parts.push(...contextParts(view, {list, bill, sync}));
   return `#${chapter ? 'chapter' : VIEWS.includes(view) ? view : 'all'}${parts.length ? `?${parts.join('&')}` : ''}`;
 }
 
-// A bill page's address is the path /bill/<ID>; a shared list or view-only sync key it was opened from rides in the
-// fragment (/bill/HB5#list=HB5,SB2&sync=...). Every other view is /#view?... as before.
+// Every view has a path (core/routes.js): /today, /explorer?topic=Water, /bill/HB5, /law/PE/46.06, /law/PE/46,
+// /member/A4395/alders. A shared list, an open bill and a view-only sync key ride in the fragment
+// (/bill/HB5#list=HB5,SB2&sync=...). Old /#view?... links still parse; the app rewrites them to their path.
 const BILL_PATH = /^\/bill\/([A-Za-z]{2,3}\d{1,5})\/?$/;
-// A law section's address is /law/<CODE>/<section> (/law/PE/46.06); old /#statute?law=PE&sec=46.06 links still work.
 const LAW_PATH = /^\/law\/([A-Za-z]{2})\/(\d+[A-Za-z]?(?:\.\d+[A-Za-z]?)+)\/?$/;
+const CHAPTER_PATH = /^\/law\/([A-Za-z]{2})\/(\d+[A-Za-z]?)\/?$/;
+const MEMBER_PATH = /^\/member\/([A-Za-z]\d{3,5})(?:\/[^/]*)?\/?$/;  // The slug is for reading only; the code decides.
+const CONTEXT = new Set(['list', 'bill', 'sync']);
 
-export function parseLocation(pathname, hash) {
+// The fragment's list, bill and sync on a path address; anything else in it is ignored (the path decides the view).
+function contextFrom(hash) {
+  return [...new URLSearchParams(String(hash || '').replace(/^#\??/, ''))].filter(([name]) => CONTEXT.has(name))
+    .map(([name, value]) => `${name}=${encodeURIComponent(value)}`);
+}
+
+export function parseLocation(pathname, hash, search = '') {
   const path = String(pathname || '');
-  const extra = String(hash || '').replace(/^#\??/, '');
-  const law = LAW_PATH.exec(path);
-  if (law) {
-    // The path wins over any law/sec in the fragment, as a bill path's id does.
-    const kept = extra.split('&').filter(part => part && !/^(?:law|sec)=/.test(part)).join('&');
-    const p = parseHash(`#statute?law=${law[1].toUpperCase()}&sec=${law[2].toUpperCase()}${kept ? `&${kept}` : ''}`);
-    return p.statute ? p : parseHash('#all');
-  }
-  const match = BILL_PATH.exec(path);
-  if (!match) return parseHash(hash);
-  const p = parseHash(`#bill?id=${encodeURIComponent(match[1])}${extra ? `&${extra}` : ''}`);
-  return p.bill ? p : parseHash('#all');
+  const context = contextFrom(hash);
+  const at = (view, params = []) => {
+    const all = [...params, ...context];
+    return parseHash(`#${view}${all.length ? `?${all.join('&')}` : ''}`);
+  };
+  const keyed = (p, ok) => ok(p) ? p : parseHash('#all');
+  let m = LAW_PATH.exec(path);
+  if (m) return keyed(at('statute', [`law=${m[1].toUpperCase()}`, `sec=${m[2].toUpperCase()}`]), p => p.statute);
+  if ((m = CHAPTER_PATH.exec(path))) return keyed(at('chapter', [`law=${m[1].toUpperCase()}`, `ch=${m[2].toUpperCase()}`]), p => p.statute);
+  if ((m = BILL_PATH.exec(path))) return keyed(at('bill', [`id=${encodeURIComponent(m[1])}`]), p => p.bill);
+  if ((m = MEMBER_PATH.exec(path))) return keyed(at('member', [`code=${m[1].toUpperCase()}`]), p => p.member);
+  const route = routeForPath(path);
+  const raw = String(hash || '').replace(/^#/, '');
+  // At the root, a fragment naming a view is an old link (#today, #all?topic=Water); one that is only context
+  // (#list=HB5) belongs to the home page.
+  if (!route || route.view === 'home' && raw && !/^[a-z]+=/.test(raw)) return parseHash(hash);
+  const query = route.filters ? [...new URLSearchParams(String(search || ''))].filter(([name]) => FILTER_NAMES.includes(name))
+    .map(([name, value]) => `${name}=${encodeURIComponent(value)}`) : [];
+  return at(route.view, query);
 }
 
 // The bill link the Share button copies. `version` is the bill's drawn share card (live/og/rendered.json); preview
@@ -128,15 +158,29 @@ export function lawPath(statute) {
   return LAW_CODE.test(law || '') && LAW_SECTION.test(sec || '') && sec.length <= 16 ? `/law/${law}/${sec}` : null;
 }
 
+// The address of a whole chapter's view (/law/PE/46), or null.
+export function chapterPath(statute) {
+  const [law, ch] = String(statute || '').split(' ');
+  return LAW_CODE.test(law || '') && LAW_CHAPTER.test(ch || '') && ch.length <= 8 ? `/law/${law}/${ch}` : null;
+}
+
+// `slug` (members only) is the member's name, made readable; a member address without one still opens.
 export function buildUrl(view, filters, options = {}) {
-  const law = view === 'statute' ? lawPath(options.statute) : null;
-  if (law) {
-    const extra = buildHash('statute', filters, {...options, statute: null}).replace(/^#statute\??/, '');
-    return `${law}${extra ? `#${extra}` : ''}`;
+  view = VIEWS.includes(view) ? view : 'all';
+  const context = contextParts(view, options);
+  const fragment = context.length ? `#${context.join('&')}` : '';
+  const law = view === 'statute' ? lawPath(options.statute) || chapterPath(options.statute) : null;
+  if (law) return `${law}${fragment}`;
+  if (view === 'bill' && isBillId(options.bill)) return `/bill/${options.bill}${fragment}`;
+  if (view === 'member' && MEMBER_CODE.test(options.member || '')) {
+    const slug = slugify(options.slug);
+    return `/member/${options.member}${slug ? `/${slug}` : ''}${fragment}`;
   }
-  if (view !== 'bill' || !isBillId(options.bill)) return `/${buildHash(view, filters, options)}`;
-  const extra = buildHash('bill', {}, {...options, bill: null}).replace(/^#bill\??/, '');
-  return `/bill/${options.bill}${extra ? `#${extra}` : ''}`;
+  const route = routeForView(view);
+  // A keyed view without its key keeps the old form, which opens the explorer.
+  if (!route?.path) return `/${buildHash(view, filters, options)}`;
+  const query = filterParts(view, filters);
+  return `${route.path}${query.length ? `?${query.join('&')}` : ''}${fragment}`;
 }
 
 export function watchlistFile(ids, now = new Date()) {

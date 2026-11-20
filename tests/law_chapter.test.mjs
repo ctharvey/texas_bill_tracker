@@ -30,7 +30,7 @@ test('a chapter address opens the statute view with the chapter key and is writt
   assert.equal(parseHash('#chapter?law=PE&ch=12a').statute, 'PE 12A');
   assert.equal(parseHash('#chapter?law=PE&ch=../x').statute, null);
   assert.equal(buildHash('statute', {}, {statute: 'PE 46'}), '#chapter?law=PE&ch=46');
-  assert.equal(buildUrl('statute', {}, {statute: 'PE 46'}), '/#chapter?law=PE&ch=46', 'no /law/ path: the gateway serves only sections there');
+  assert.equal(buildUrl('statute', {}, {statute: 'PE 46'}), '/law/PE/46');  // Served once chunk 3's gateway route is live.
   assert.equal(buildUrl('statute', {}, {statute: 'PE 46.06'}), '/law/PE/46.06');
 });
 

@@ -116,8 +116,8 @@ async function init(){
   });
   // A sync link pasted into an open tab arrives as a hash change, not a page load.
   window.addEventListener('hashchange',()=>{const key=applyLocation(false);if(key)openSyncLink(key)});
-  // Back and Forward between /bill/<ID> and /#view change the path, which fires popstate but not hashchange.
-  window.addEventListener('popstate',()=>{if(location.pathname===lastPath)return;const key=applyLocation(false);if(key)openSyncLink(key)});
+  // Back and Forward between paths (or queries) fire popstate but not hashchange.
+  window.addEventListener('popstate',()=>{if(location.pathname+location.search===lastPath)return;const key=applyLocation(false);if(key)openSyncLink(key)});
   // With <base href="/">, a fragment-only link on a bill page points at the site root: a view link goes through
   // goTo, and an in-page anchor (the skip link) stays on this page.
   document.addEventListener('click',e=>{
@@ -129,7 +129,7 @@ async function init(){
     goTo(href);
   });
   state.near=cleanNear(readJson(NEAR_KEY),null);
-  const located=parseLocation(location.pathname,location.hash),staticHere=staticMatches(runtime.staticView,located);
+  const located=parseLocation(location.pathname,location.hash,location.search),staticHere=staticMatches(runtime.staticView,located);
   const decision=takeover(runtime.staticView,{loaded:state.meta?.data_mode!=='unavailable',matches:staticHere});
   runtime.keepStatic=decision==='keep';
   // A matching static page keeps the reader's place on the first draw; a non-matching one still scrolls to the top.

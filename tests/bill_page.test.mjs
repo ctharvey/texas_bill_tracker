@@ -49,10 +49,10 @@ test('a bill page lives at /bill/<ID>; its list or view-only sync context rides 
   assert.equal(parseLocation('/bill/XX5', '').view, 'all');
 });
 
-test('other views stay at /#view, and old bill addresses still parse at the root', () => {
-  assert.equal(buildUrl('all', {topic: 'Water'}), '/#all?topic=Water');
+test('other views have their own paths, and old bill addresses still parse at the root', () => {
+  assert.equal(buildUrl('all', {topic: 'Water'}), '/explorer?topic=Water');
   assert.equal(buildUrl('bill', {}, {bill: null}), '/#bill');
-  assert.equal(buildUrl('member', {}, {member: 'A4875'}), '/#member?code=A4875');
+  assert.equal(buildUrl('member', {}, {member: 'A4875'}), '/member/A4875');
   for (const hash of ['#bill?id=HB5', '#all?topic=Water&bill=HB5', '#today?bill=hb5']) {
     const p = parseLocation('/', hash);
     assert.equal(p.bill, 'HB5', hash);

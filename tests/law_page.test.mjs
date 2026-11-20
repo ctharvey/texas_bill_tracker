@@ -34,14 +34,15 @@ test('a law page keeps an open bill and a shared list in the fragment; the path 
   assert.equal(parseLocation('/law/PE/46.06', '#law=GV&sec=1.01').statute, 'PE 46.06');
 });
 
-test('a malformed law address never opens a section, and other views keep /#view', () => {
-  for (const path of ['/law/PEN/46.06', '/law/PE/46', '/law/PE/46.06/extra']) {
+test('a malformed law address never opens a section, and other views have their own paths', () => {
+  assert.equal(parseLocation('/law/PE/46', '').statute, 'PE 46');  // A whole chapter, not a malformed section.
+  for (const path of ['/law/PEN/46.06', '/law/PE/46.06/extra']) {
     assert.deepEqual(parseLocation(path, '#all'), parseHash('#all'));  // Not a law address: the fragment decides.
   }
   assert.equal(parseLocation('/law/PE/1.12345678901234567', '').view, 'all');  // Shaped right but too long.
   assert.equal(lawPath('PE'), null);
   assert.equal(lawPath(null), null);
   assert.equal(buildUrl('statute', {}, {statute: null}), '/#statute');
-  assert.equal(buildUrl('member', {}, {member: 'A4875'}), '/#member?code=A4875');
+  assert.equal(buildUrl('member', {}, {member: 'A4875'}), '/member/A4875');
   assert.deepEqual(parseLocation('/', '#all?topic=Water'), parseHash('#all?topic=Water'));
 });

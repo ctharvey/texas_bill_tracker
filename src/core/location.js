@@ -1,4 +1,4 @@
-// The address and remembered filters: reading /#view?... and /bill/<ID> into state, each view's own filters, opening
+// The address and remembered filters: reading a view's path (or an old /#view?... link) into state, each view's own filters, opening
 // and leaving a bill page, and writing the address and the explorer's remembered filters back. setView is a router hook.
 import {cleanFilters, FILTER_DEFAULTS, pickFilters, parseLocation, buildHash, buildUrl, lawPath, sameFilters} from '../prefs.js';
 import {SORTS} from './labels.js';
@@ -8,14 +8,16 @@ import {sync} from '../features/sync/lists.js';
 import {readJson, prefsKey, writeJson} from './storage.js';
 import {setView} from './router.js';
 
-// Every view but a bill or law page lives at /#view. A plain hash change on /bill/<ID> would stay under that path, so it
-// moves to / instead and is handled like any other hash change.
-export let lastPath=location.pathname;
+// Every view has a path (prefs.buildUrl). goTo still takes an old-style #view address: it moves to /#view and is handled
+// like any other hash change, and persistState then writes the view's path in its place.
+// lastPath is the path and query last handled: popstate skips a move that changes only the fragment (hashchange has it).
+const here=()=>location.pathname+location.search;
+export let lastPath=here();
 export function goTo(hash){
   hash=String(hash||'').startsWith('#')?String(hash):`#${hash||''}`;
-  if(location.pathname==='/'){location.hash=hash;return}
+  if(here()==='/'){location.hash=hash;return}
   try{history.pushState(null,'',`/${hash}`)}catch{location.href=`/${hash}`;return}
-  lastPath=location.pathname;
+  lastPath=here();
   window.dispatchEvent(new HashChangeEvent('hashchange'));
 }
 
@@ -45,8 +47,8 @@ let billReturn=null;
 
 // Returns a sync key from the URL, if any, for setupSync to resolve.
 export function applyLocation(initial){
-  const p=parseLocation(location.pathname,location.hash);
-  lastPath=location.pathname;
+  const p=parseLocation(location.pathname,location.hash,location.search);
+  lastPath=here();
   // An old link with `bill=` on another view opens the bill page; setView's persistState replaces the address.
   const legacy=Boolean(p.bill)&&p.view!=='bill';
   if(legacy)billReturn={hash:withoutBill(location.hash)};
@@ -71,7 +73,8 @@ export function applyLocation(initial){
   state.statuteKey=p.statute;
   state.openBill=view==='bill'?p.bill:null;
   // Arriving back at the page a bill was opened from: show as many results as before, then return to the same place.
-  const back=view!=='bill'&&billReturn?.scrollY!==undefined&&location.hash===billReturn.hash?billReturn:null;
+  // Compared as the address this view will have, so an old-style link back (goTo) matches its path too.
+  const back=view!=='bill'&&billReturn?.scrollY!==undefined&&currentUrl(view)===billReturn.url?billReturn:null;
   if(back){state.visibleCount=Math.max(state.visibleCount,back.visibleCount);billReturn=null}
   setView(view,false,{focus:!back});
   if(back)window.scrollTo({top:back.scrollY,behavior:'instant'});
@@ -83,14 +86,14 @@ function currentHash(){
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey});
 }
 
-function currentUrl(){
-  return buildUrl(state.view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
+function currentUrl(view=state.view){
+  return buildUrl(view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey});
 }
 
 // Opens a bill's page with a history entry, remembering where it was opened from (not when moving bill to bill).
 export function openBillPage(id,push=false){
-  if(state.view!=='bill')billReturn={hash:currentHash(),visibleCount:state.visibleCount,scrollY:window.scrollY};
+  if(state.view!=='bill')billReturn={hash:currentHash(),url:currentUrl(),visibleCount:state.visibleCount,scrollY:window.scrollY};
   state.openBill=id;
   setView('bill',push);
   window.scrollTo({top:0,behavior:'instant'});
@@ -105,8 +108,8 @@ export const keptPrefs=()=>{const p=readJson(prefsKey);return p&&typeof p==='obj
 export function persistState(push=false){
   const url=currentUrl();
   let pushed=false;
-  if(location.pathname+location.hash!==url)try{if(push){history.pushState(null,'',url);pushed=true}else history.replaceState(null,'',url)}catch{}
-  lastPath=location.pathname;
+  if(here()+location.hash!==url)try{if(push){history.pushState(null,'',url);pushed=true}else history.replaceState(null,'',url)}catch{}
+  lastPath=here();
   const canonical=document.querySelector('link[rel="canonical"]');
   const law=state.view==='statute'?lawPath(state.statuteKey):null;
   if(canonical)canonical.href=state.view==='bill'&&state.openBill?`https://billatlas.org/bill/${state.openBill}`:law?`https://billatlas.org${law}`:'https://billatlas.org/';
