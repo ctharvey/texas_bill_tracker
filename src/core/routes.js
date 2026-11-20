@@ -1,23 +1,24 @@
 // Every view's address (SEO chunk 2). One table for reading and writing paths, kept as data so the gateway's list
 // (chunk 3) and the sitemap (chunk 7) can be checked against it. `indexable` is for the canonical and robots meta:
 // personal views and the filterable explorer are not. Names pending the roadmap's open question 1.
+// `description` is the page's meta description until chunk 6 writes one per page (home keeps index.html's own).
 export const ROUTES = [
   {view: 'home', path: '/', indexable: true},
-  {view: 'today', path: '/today', indexable: true},
-  {view: 'all', path: '/explorer', indexable: false, filters: true},
-  {view: 'local', path: '/near-you', indexable: false},
-  {view: 'watchlist', path: '/watchlist', indexable: false, filters: true},
-  {view: 'following', path: '/following', indexable: false},
-  {view: 'agencies', path: '/agencies', indexable: true},
-  {view: 'review', path: '/review', indexable: true},
-  {view: 'method', path: '/about/method', indexable: true},
-  {view: 'data', path: '/about/data', indexable: true},
-  {view: 'saving', path: '/about/saving', indexable: true},
-  {view: 'export', path: '/about/export', indexable: false},
+  {view: 'today', path: '/today', indexable: true, description: 'Every Texas bill with a recorded action today, by topic, from the official legislative record.'},
+  {view: 'all', path: '/explorer', indexable: false, filters: true, description: 'Search and filter every bill filed in the 90th Texas Legislature by topic, agency, chamber, party and stage.'},
+  {view: 'local', path: '/near-you', indexable: false, description: 'Find your Texas House and Senate members and the bills tied to your districts and county.'},
+  {view: 'watchlist', path: '/watchlist', indexable: false, filters: true, description: 'Your watchlist of Texas bills, saved in this browser.'},
+  {view: 'following', path: '/following', indexable: false, description: 'The legislators, laws and searches you follow, saved in this browser.'},
+  {view: 'agencies', path: '/agencies', indexable: true, description: 'Texas state agencies and the bills in the 90th Legislature that could affect each one.'},
+  {view: 'review', path: '/review', indexable: true, description: 'How far the full-text reviews of Texas bills have progressed, and what they found.'},
+  {view: 'method', path: '/about/method', indexable: true, description: 'How Texas Bill Atlas reads the official record, tags bills and shows hearing progress and author prominence.'},
+  {view: 'data', path: '/about/data', indexable: true, description: 'The sources behind Texas Bill Atlas, how fresh they are, and how to import your own lists.'},
+  {view: 'saving', path: '/about/saving', indexable: true, description: 'How Texas Bill Atlas saves your watchlist and follows without an account, and how sync links work.'},
+  {view: 'export', path: '/about/export', indexable: false, description: 'Download or import your saved Texas Bill Atlas lists.'},
   // Views with a key in the path; `pattern` documents the shape, prefs.js parses it.
-  {view: 'bill', pattern: '/bill/<ID>', indexable: true},
-  {view: 'statute', pattern: '/law/<CODE>/<section or chapter>', indexable: true},
-  {view: 'member', pattern: '/member/<code>/<name-slug>', indexable: true},
+  {view: 'bill', pattern: '/bill/<ID>', indexable: true, description: 'A Texas bill in the 90th Legislature: its official history, text, the laws it changes and the agencies it affects.'},
+  {view: 'statute', pattern: '/law/<CODE>/<section or chapter>', indexable: true, description: 'A part of Texas law and the bills in the 90th Legislature that would change it.'},
+  {view: 'member', pattern: '/member/<code>/<name-slug>', indexable: true, description: 'A member of the 90th Texas Legislature and the bills they filed.'},
 ];
 
 const BY_PATH = new Map(ROUTES.filter(r => r.path).map(r => [r.path, r]));
@@ -35,6 +36,16 @@ export const routeForView = view => BY_VIEW.get(view) || null;
 // A readable path segment from a name, accents dropped ("Jose Menendez" -> "jose-menendez"). Only for readability: the
 // code is the key.
 export function slugify(text) {
-  return String(text || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  return String(text || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '');
+}
+
+// The canonical address, robots and description for a view at `url` (what buildUrl wrote). A personal or filterable
+// view, a shared list and a keyed view without its key point at the home page and are not indexed.
+const SITE = 'https://billatlas.org';
+export function pageMeta(view, url, shared = false) {
+  const route = routeForView(view);
+  const indexable = Boolean(route?.indexable) && !String(url).startsWith('/#') && !shared;
+  return {canonical: indexable ? SITE + String(url).split(/[?#]/)[0] : `${SITE}/`, robots: indexable ? null : 'noindex, follow',
+    description: route?.description || null};
 }

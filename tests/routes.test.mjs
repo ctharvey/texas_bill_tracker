@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ROUTES, routeForPath, routeForView, slugify} from '../src/core/routes.js';
+import {ROUTES, routeForPath, routeForView, slugify, pageMeta} from '../src/core/routes.js';
 import {VIEWS, FILTER_DEFAULTS, parseHash, parseLocation, buildUrl, isAppPath} from '../src/prefs.js';
 
 // Splits a built address the way the browser does, then reads it back.
@@ -68,7 +68,7 @@ test('a key in the path: bills, sections, chapters and members', () => {
 });
 
 test('slugs are plain lowercase words joined by dashes', () => {
-  assert.equal(slugify('José Menéndez'), 'jose-menendez');
+  assert.equal(slugify('Jos\u00e9 Men\u00e9ndez'), 'jose-menendez');
   assert.equal(slugify("  O'Brien, Jr. "), 'o-brien-jr');
   assert.equal(slugify(''), '');
   assert.equal(slugify(null), '');
@@ -121,4 +121,18 @@ test("only the app's own paths open in place; files and unknown paths are left t
     assert.ok(isAppPath(path), path);
   for (const path of ['/live/feeds/HB1.xml', '/live/sitemap.xml', '/app.css', '/agent/', '/nope', '/bill/', '/law/PE'])
     assert.ok(!isAppPath(path), path);
+});
+
+test('canonical, robots and description come from the route table', () => {
+  const site = 'https://billatlas.org';
+  assert.deepEqual(pageMeta('today', '/today'), {canonical: `${site}/today`, robots: null, description: routeForView('today').description});
+  assert.equal(pageMeta('bill', '/bill/HB5#list=HB5,SB2').canonical, `${site}/bill/HB5`);
+  assert.equal(pageMeta('statute', '/law/PE/46').canonical, `${site}/law/PE/46`);
+  assert.equal(pageMeta('member', '/member/A4395/kyle-alders').canonical, `${site}/member/A4395/kyle-alders`);
+  assert.equal(pageMeta('home', '/').description, null);  // index.html's own description stays.
+  // Personal and filterable views, shared lists and keyless views: the home page, not indexed.
+  for (const [view, url, shared] of [['all', '/explorer?topic=Water'], ['watchlist', '/watchlist'], ['following', '/following'],
+    ['local', '/near-you'], ['export', '/about/export'], ['bill', '/#bill'], ['today', '/today#list=HB5', true]])
+    assert.deepEqual([pageMeta(view, url, shared).canonical, pageMeta(view, url, shared).robots], [`${site}/`, 'noindex, follow'], url);
+  for (const r of ROUTES) if (r.view !== 'home') assert.ok(r.description && r.description.length <= 160, r.view);
 });

@@ -1,6 +1,8 @@
 // The address and remembered filters: reading a view's path (or an old /#view?... link) into state, each view's own filters, opening
 // and leaving a bill page, and writing the address and the explorer's remembered filters back. setView is a router hook.
-import {cleanFilters, FILTER_DEFAULTS, pickFilters, parseLocation, buildHash, buildUrl, lawPath, sameFilters} from '../prefs.js';
+import {cleanFilters, FILTER_DEFAULTS, pickFilters, parseLocation, buildHash, buildUrl, sameFilters} from '../prefs.js';
+import {pageMeta} from './routes.js';
+import {memberByCode} from '../geo.js';
 import {SORTS} from './labels.js';
 import {state, runtime} from './state.js';
 import {$} from './dom.js';
@@ -92,9 +94,36 @@ function currentHash(){
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey});
 }
 
+// A member's name for the readable part of their address. Until the roster is here, the name already in the address
+// is kept, so a cold load never drops it.
+function memberSlug(){
+  const m=memberByCode(state.roster,state.memberCode);
+  if(m)return m.full_name||m.display_name;
+  const hit=/^\/member\/([^/]+)\/([^/]+)/.exec(location.pathname);
+  return hit&&hit[1].toUpperCase()===state.memberCode?decodeURIComponent(hit[2]):null;
+}
+
 function currentUrl(view=state.view){
   return buildUrl(view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
-    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey});
+    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,slug:view==='member'?memberSlug():null,
+    statute:state.statuteKey});
+}
+
+// The canonical address, robots and description for the view on screen (routes.pageMeta).
+let homeDescription=null;
+function setMeta(name,content){
+  let el=document.querySelector(`meta[name="${name}"]`);
+  if(content===null){el?.remove();return}
+  if(!el){el=document.createElement('meta');el.name=name;document.head.append(el)}
+  el.content=content;
+}
+function writeMeta(url){
+  const meta=pageMeta(state.view,url,Boolean(state.sharedList));
+  const canonical=document.querySelector('link[rel="canonical"]');
+  if(canonical)canonical.href=meta.canonical;
+  setMeta('robots',meta.robots);
+  homeDescription??=document.querySelector('meta[name="description"]')?.content||null;
+  if(homeDescription!==null)setMeta('description',meta.description||homeDescription);
 }
 
 // Opens a bill's page with a history entry, remembering where it was opened from (not when moving bill to bill).
@@ -116,9 +145,7 @@ export function persistState(push=false){
   let pushed=false;
   if(here()+location.hash!==url)try{if(push){history.pushState(null,'',url);pushed=true}else history.replaceState(null,'',url)}catch{}
   lastPath=here();
-  const canonical=document.querySelector('link[rel="canonical"]');
-  const law=state.view==='statute'?lawPath(state.statuteKey):null;
-  if(canonical)canonical.href=state.view==='bill'&&state.openBill?`https://billatlas.org/bill/${state.openBill}`:law?`https://billatlas.org${law}`:'https://billatlas.org/';
+  writeMeta(url);
   if(state.view==='all'&&filtersFor==='all'&&!state.sharedList&&!(readJson(prefsKey)?.filters&&sameFilters(readJson(prefsKey).filters,state)))writeJson(prefsKey,{...keptPrefs(),filters:pickFilters(state)});
   return pushed;
 }
