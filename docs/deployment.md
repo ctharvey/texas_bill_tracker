@@ -19,7 +19,9 @@ and sync keys live in browser storage tied to the address they were saved under.
   `sudo -u texas-bill-atlas touch /var/lib/texas-bill-atlas/refresh/{data,agent,og}`.
 - **Units and the deployer itself** are installed by hand as root and do not update on push. The deployer runs from
   `/usr/local/lib/texas-bill-atlas/deploy_static.py`: reinstall it *before* pushing a deployer change, or the new
-  commit deploys with the old deployer.
+  commit deploys with the old deployer. If that happens, reinstall it and push any new commit: the deployer skips a
+  commit that is already published, so it rebuilds the release only for a new one (happened 2026-11-19 with the
+  `app.css`, `boot.js` and `shell.html` release files).
 
 ## Installing on a new server
 
