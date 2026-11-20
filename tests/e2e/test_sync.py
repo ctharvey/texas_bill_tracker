@@ -92,11 +92,11 @@ def wait_server(device, key, check, message):
         time.sleep(0.1)
 
 
-def reopen(device, hash_):
-    """Exactly one real page load, so the on-open pull runs once. Leaving the page first makes the goto a load even
-    when only the hash would change; a second load would hide the first pull's toast."""
-    device.page.goto("about:blank")
-    return device.open(hash_)
+def reopen(device, path):
+    """Exactly one real page load, so the on-open pull runs once (a second load would hide its toast). A goto to a
+    path with no fragment always loads the page; one that only changed the hash would not run the pull."""
+    assert path.startswith("/") and "#" not in path, path
+    return device.open(path)
 
 
 def stored_list(device, key):
@@ -149,7 +149,7 @@ def test_an_edit_on_the_second_device_reaches_the_first_when_it_pulls(device_fac
     follow(b, "A2150")
     wait_server(b, key_of(edit), lambda d: "HB381" in d["watch"] and "A2150" in d["follows"], "B's edits reach the server")
     # A reloads (the same pull that runs when a synced page opens).
-    page = reopen(a, "#watchlist")
+    page = reopen(a, "/watchlist")
     expect(page.locator("#nav-watch")).to_have_text(str(len(WATCH) + 1))
     expect(page.locator("#bill-list [data-watch='HB381']")).to_have_attribute("aria-pressed", "true")
     assert stored_list(a, "tx-bill-atlas-watch-90r") == [*WATCH, "HB381"]
@@ -182,7 +182,7 @@ def test_conflicting_edits_both_survive(device_factory, fresh_sync):
     assert server_data(b, key_of(edit))["data"]["watch"] == [*WATCH, "HB381", "HB1003"]
     expect(page.locator("#toast")).not_to_contain_text("Sync")  # no error shown to the person
     expect(page.locator("#nav-watch")).to_have_text(str(len(WATCH) + 2))  # B now shows A's bill too
-    reopen(a, "#watchlist")
+    reopen(a, "/watchlist")
     expect(a.page.locator("#nav-watch")).to_have_text(str(len(WATCH) + 2))
     assert stored_list(a, "tx-bill-atlas-watch-90r") == [*WATCH, "HB381", "HB1003"]
 
@@ -274,7 +274,7 @@ def test_deleting_the_link_keeps_the_list_on_the_device(device_factory, fresh_sy
     for key in (key_of(edit), key_of(view)):
         assert page.request.get(site.base + "api/sync", headers={"X-Sync-Key": key}).status == 404
     # The other device is told the link is gone, and keeps its own copy of the list.
-    page_b = reopen(b, "#watchlist")
+    page_b = reopen(b, "/watchlist")
     expect(page_b.locator("#toast")).to_have_text("Sync: This sync link no longer exists")
     expect(page_b.locator("#nav-watch")).to_have_text(str(len(WATCH)))
     assert stored_list(b, "tx-bill-atlas-watch-90r") == WATCH
