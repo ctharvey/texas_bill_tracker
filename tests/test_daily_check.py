@@ -100,6 +100,17 @@ def test_each_missing_part_fails():
     assert dc.verdict(findings(agent_ok=False, text_state="none"))[0] is False
 
 
+def test_a_resolution_needs_a_summary_but_not_policy_tags():
+    untagged = {"summary": "Designates Texas Police Chiefs Day.", "policy_tags": []}
+    roster = {**MEMBERS, "senate|Plesa": {}, "senate|Bhojani": {}}  # Senate ids look up the Senate roster.
+    for bill_id in ("HR29", "SR3", "HCR12", "SCR1"):
+        assert findings(bill={**BILL, "id": bill_id}, members=roster, tag=untagged) == [], bill_id
+        no_summary = findings(bill={**BILL, "id": bill_id}, members=roster, tag={**untagged, "summary": ""})
+        assert levels(no_summary) == ["fail"], bill_id
+    for bill_id in ("HB1160", "SB12", "HJR5", "SJR2"):  # Bills and constitutional amendments still need tags.
+        assert levels(findings(bill={**BILL, "id": bill_id}, members=roster, tag=untagged)) == ["fail"], bill_id
+
+
 def test_a_bill_newer_than_the_agent_build_only_warns_about_the_agent_edition():
     assert levels(findings(agent_ok=False, search_ok=False, agent_behind=True)) == ["warn"]
     assert levels(findings(agent_ok=False, search_ok=False)) == ["fail"]

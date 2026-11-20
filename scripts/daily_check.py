@@ -201,8 +201,13 @@ def bill_findings(bill, official, members, tag, luna_failed, text_state, agent_o
     elif text_state == "placeholder":
         out.append(("warn", "official HTML text is a placeholder (PDF only), so Luna waits"))
     if tag:
-        if not tag.get("summary") or not tag.get("policy_tags"):
-            out.append(("fail", "Luna review has no summary or policy tags"))
+        # Simple and concurrent resolutions are mostly ceremonial (a day, a commendation): Luna rightly gives them
+        # no policy area, so they need only a summary. Joint resolutions amend the constitution and need tags.
+        ceremonial = re.match(r"(HR|SR|HCR|SCR)\d", str(bill.get("id", "")))
+        if not tag.get("summary"):
+            out.append(("fail", "Luna review has no summary"))
+        elif not tag.get("policy_tags") and not ceremonial:
+            out.append(("fail", "Luna review has no policy tags"))
     elif text_state == "ok" and luna_failed and text_is_new:
         out.append(("warn", "text was posted after the last data run; the next run passes it to Luna"))
     elif text_state == "ok":
