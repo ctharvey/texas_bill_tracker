@@ -101,7 +101,7 @@ class WriteSharePages(unittest.TestCase):
             snap = {'bills': [BILL, {'id': 'HB1', 'caption': 'A.'}]}
             changed = []
             bf.write_share_pages(snap, base / 'share', text_dir=base / 'text', changed=changed)
-            self.assertEqual(changed, ['HB486', 'HB1'])
+            self.assertEqual(changed, ['bill/HB486', 'bill/HB1'])
             self.assertIn('<ins>(3) roadkill</ins>', (base / 'share' / 'HB486.html').read_text('utf-8'))
             changed = []
             bf.write_share_pages(snap, base / 'share', text_dir=base / 'text', changed=changed)
@@ -126,11 +126,11 @@ class IndexNow(unittest.TestCase):
         self.assertRegex(bf.INDEXNOW_KEY, r'^[a-f0-9]{32}$')
 
     def test_payload_names_the_host_key_and_bill_pages(self):
-        payload = bf.indexnow_payload(['HB1', 'SB2'])
+        payload = bf.indexnow_payload(['bill/HB1', 'bill/SB2'])
         self.assertEqual(payload, {'host': 'billatlas.org', 'key': bf.INDEXNOW_KEY,
                                    'keyLocation': f'https://billatlas.org/{bf.INDEXNOW_KEY}.txt',
                                    'urlList': ['https://billatlas.org/bill/HB1', 'https://billatlas.org/bill/SB2']})
-        self.assertEqual(len(bf.indexnow_payload(['HB1'] * 12000)['urlList']), bf.INDEXNOW_MAX_URLS)
+        self.assertEqual(len(bf.indexnow_payload([f'bill/HB{i}' for i in range(12000)])['urlList']), bf.INDEXNOW_MAX_URLS)
 
     def test_submission_posts_json_and_reports_the_status(self):
         sent = []
@@ -138,7 +138,7 @@ class IndexNow(unittest.TestCase):
         def opener(request, timeout):
             sent.append(request)
             return Response(202)
-        self.assertEqual(bf.submit_indexnow(['HB1'], opener=opener), 'HTTP 202 for 1 pages')
+        self.assertEqual(bf.submit_indexnow(['bill/HB1'], opener=opener), 'HTTP 202 for 1 pages')
         self.assertEqual(sent[0].get_method(), 'POST')
         self.assertEqual(sent[0].full_url, bf.INDEXNOW_ENDPOINT)
         self.assertEqual(json.loads(sent[0].data)['urlList'], ['https://billatlas.org/bill/HB1'])
@@ -151,8 +151,8 @@ class IndexNow(unittest.TestCase):
 
         def offline(request, timeout):
             raise urllib.error.URLError('down')
-        self.assertEqual(bf.submit_indexnow(['HB1'], opener=refused), 'HTTP 403 for 1 pages (not accepted)')
-        self.assertEqual(bf.submit_indexnow(['HB1'], opener=offline), 'failed: URLError')
+        self.assertEqual(bf.submit_indexnow(['bill/HB1'], opener=refused), 'HTTP 403 for 1 pages (not accepted)')
+        self.assertEqual(bf.submit_indexnow(['bill/HB1'], opener=offline), 'failed: URLError')
 
 
 if __name__ == '__main__':

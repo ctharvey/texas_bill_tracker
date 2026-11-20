@@ -93,10 +93,10 @@ class WriteSharePagesWithShell(unittest.TestCase):
             out = Path(folder)
             changed = []
             bf.write_share_pages(snap, out, changed=changed)  # standalone pages, as before the shell is deployed
-            self.assertEqual(changed, ['HB486', 'HB1'])
+            self.assertEqual(changed, ['bill/HB486', 'bill/HB1'])
             changed = []
             self.assertEqual(bf.write_share_pages(snap, out, changed=changed, shell=SHELL), (2, 0, 0))
-            self.assertEqual(changed, ['HB486', 'HB1'])  # Moving into the shell is a real change, once.
+            self.assertEqual(changed, ['bill/HB486', 'bill/HB1'])  # Moving into the shell is a real change, once.
             changed = []
             self.assertEqual(bf.write_share_pages(snap, out, changed=changed, shell=SHELL), (0, 2, 0))
             other_shell = SHELL.replace('<html lang="en">', '<html lang="en" data-shell="2">')
@@ -104,7 +104,7 @@ class WriteSharePagesWithShell(unittest.TestCase):
             self.assertEqual(changed, [])
             edited = {'bills': [dict(BILL, status='Referred'), {'id': 'HB1', 'caption': 'A.'}]}
             bf.write_share_pages(edited, out, changed=changed, shell=other_shell)
-            self.assertEqual(changed, ['HB486'])
+            self.assertEqual(changed, ['bill/HB486'])
             self.assertIn('data-shell="2"', (out / 'HB1.html').read_text('utf-8'))
 
 

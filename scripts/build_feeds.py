@@ -135,19 +135,32 @@ def names(value) -> list[str]:
     return [s.strip() for s in re.split(r"[;,]", value) if s.strip()] if isinstance(value, str) else []
 
 
-def member_roles(bill: dict, roster: dict) -> dict[str, str]:
-    """Member code -> first role (author before coauthor before sponsor before cosponsor) on this bill."""
+def _bill_names(bill: dict, roster: dict):
+    """(field, role, name, member or None) for each name on the bill; member only when the roster has it in the
+    chamber that role serves in. The one join member feeds, member pages and bill-page links share."""
     origin = "house" if str(bill.get("id", "")).upper().startswith("H") else "senate"
     other = "senate" if origin == "house" else "house"
-    found: dict[str, str] = {}
     for key, role, side in ROLES:
         chamber = origin if side == "origin" else other
         for name in names(bill.get(key)):
             member = roster.get(f"{chamber}|{name}")
             code = member.get("code") if member else None
-            if isinstance(code, str) and member.get("chamber") == chamber:
-                found.setdefault(code, role)
+            yield key, role, name, (member if isinstance(code, str) and member.get("chamber") == chamber else None)
+
+
+def member_roles(bill: dict, roster: dict) -> dict[str, str]:
+    """Member code -> first role (author before coauthor before sponsor before cosponsor) on this bill."""
+    found: dict[str, str] = {}
+    for _key, role, _name, member in _bill_names(bill, roster):
+        if member:
+            found.setdefault(member["code"], role)
     return found
+
+
+def bill_member_paths(bill: dict, roster: dict) -> dict[tuple[str, str], str]:
+    """(field, name) -> member page path, for the names on the bill whose coded member has a page."""
+    return {(key, name): member_path(member) for key, _role, name, member in _bill_names(bill, roster)
+            if member and MEMBER_CODE.fullmatch(member["code"])}
 
 
 def member_title(member: dict) -> str:
@@ -163,7 +176,7 @@ def member_feed(member: dict, bills: list[tuple[dict, str]], site: str = SITE, r
         for item in all_items(bill, reviews.get(bill["id"])):
             items.append({**item, "caption": f"{title} · {role}. {item['caption']}"})
     items.sort(key=lambda i: i["date"] or "", reverse=True)
-    return render_rss(f"{title} · Texas Bill Atlas", f"{site}#member?code={member['code']}",
+    return render_rss(f"{title} · Texas Bill Atlas", f"{site}{member_path(member)}",
                       f"Actions on bills {title} filed or signed onto in the 90th Legislature. "
                       "Unofficial; confirm on Texas Legislature Online.", items[:MEMBER_FEED_ITEMS], site)
 
@@ -301,7 +314,7 @@ def member_bills(snapshot: dict, roster: dict) -> tuple[dict[str, dict], dict[st
 
 
 def write_member_pages(snapshot: dict, roster: dict, out_dir: Path, site: str = SITE,
-                       shell: str | None = None) -> tuple[int, int, int]:
+                       shell: str | None = None, changed: list[str] | None = None) -> tuple[int, int, int]:
     """One page per coded roster member, bills or not. Without the deployed shell nothing is written or removed: the
     gateway then serves the app, which draws the member itself. Pages for codes no longer in the roster are removed;
     an empty roster never empties the folder."""
@@ -313,7 +326,7 @@ def write_member_pages(snapshot: dict, roster: dict, out_dir: Path, site: str = 
     out_dir.mkdir(parents=True, exist_ok=True)
     written = unchanged = removed = 0
     for code, member in by_code.items():
-        if write_if_changed(out_dir / f"{code}.html", member_page(member, bills[code], shell, site)):
+        if _write_page(out_dir / f"{code}.html", member_page(member, bills[code], shell, site), member_path(member), changed):
             written += 1
         else:
             unchanged += 1
@@ -420,7 +433,7 @@ def group_page(kind: str, key: str, name: str, bill_ids: list[str], by_id: dict[
 
 
 def write_group_pages(data: dict | None, snapshot: dict, share_dir: Path, site: str = SITE,
-                      shell: str | None = None) -> list[str]:
+                      shell: str | None = None, changed: list[str] | None = None) -> list[str]:
     """Topic and agency pages under share_dir/topic and share_dir/agency; returns the paths written ("topic/<slug>",
     "agency/<id>") for the sitemap. Without the shell or the agent's lists nothing is written or removed, and a kind
     with no entries never empties its folder."""
@@ -437,7 +450,8 @@ def write_group_pages(data: dict | None, snapshot: dict, share_dir: Path, site: 
         keep = set()
         for key, name, bill_ids in entries:
             keep.add(f"{key}.html")
-            write_if_changed(folder / f"{key}.html", group_page(kind, key, name, bill_ids, by_id, shell, site))
+            _write_page(folder / f"{key}.html", group_page(kind, key, name, bill_ids, by_id, shell, site),
+                        f"{kind}/{key}", changed)
             paths.append(f"{kind}/{key}")
         pattern = TOPIC_SLUG if kind == "topic" else AGENCY_ID
         for path in folder.iterdir():
@@ -477,7 +491,8 @@ def _about_entries(data: dict | None) -> list[dict]:
     return out
 
 
-def write_about_pages(data: dict | None, share_dir: Path, site: str = SITE, shell: str | None = None) -> list[str]:
+def write_about_pages(data: dict | None, share_dir: Path, site: str = SITE, shell: str | None = None,
+                      changed: list[str] | None = None) -> list[str]:
     """The about pages the agent drew; returns their paths ("about/method") for the sitemap. Without the shell or the
     agent's file nothing is written or removed; a view the agent no longer draws is removed."""
     entries = _about_entries(data)
@@ -486,7 +501,7 @@ def write_about_pages(data: dict | None, share_dir: Path, site: str = SITE, shel
     folder = share_dir / "about"
     folder.mkdir(parents=True, exist_ok=True)
     for entry in entries:
-        write_if_changed(folder / f"{entry['view']}.html", about_page(entry, shell, site))
+        _write_page(folder / f"{entry['view']}.html", about_page(entry, shell, site), f"about/{entry['view']}", changed)
     keep = {f"{e['view']}.html" for e in entries}
     for path in folder.iterdir():
         if path.suffix == ".html" and path.stem in ABOUT_VIEWS and path.name not in keep:
@@ -516,7 +531,8 @@ def view_page(entry: dict, shell: str, site: str = SITE) -> str:
                              view=f"page:{view}", heading=heading)
 
 
-def write_view_pages(data: dict | None, share_dir: Path, site: str = SITE, shell: str | None = None) -> list[str]:
+def write_view_pages(data: dict | None, share_dir: Path, site: str = SITE, shell: str | None = None,
+                     changed: list[str] | None = None) -> list[str]:
     """share_dir/home.html and share_dir/today.html; returns the sitemap paths of those written ("today"; home is
     always listed). Without the shell or the agent's file nothing is written; an old page is never removed, since the
     gateway serves the app in its place only when the file is missing."""
@@ -530,7 +546,8 @@ def write_view_pages(data: dict | None, share_dir: Path, site: str = SITE, shell
         if not (isinstance(entry.get("html"), str) and entry["html"].strip() and isinstance(heading, list)
                 and len(heading) == 2 and all(isinstance(h, str) and h for h in heading)):
             continue
-        write_if_changed(share_dir / f"{entry['view']}.html", view_page(entry, shell, site))
+        _write_page(share_dir / f"{entry['view']}.html", view_page(entry, shell, site),
+                    "" if entry["view"] == "home" else entry["view"], changed)
         if entry["view"] != "home":
             written.append(entry["view"])
     return written
@@ -551,6 +568,17 @@ def write_if_changed(path: Path, text: str) -> bool:
     except BaseException:
         Path(temporary).unlink(missing_ok=True)
         raise
+    return True
+
+
+def _write_page(path: Path, page: str, url_path: str, changed: list[str] | None) -> bool:
+    """write_if_changed for a shell page; url_path (relative to the site, "" for home) is added to `changed` when the
+    page was written and its own part (page-version) is new or different: a new shell alone is not a change."""
+    before = _page_version(path)
+    if not write_if_changed(path, page):
+        return False
+    if changed is not None and (before is None or before != _page_version(page)):
+        changed.append(url_path)
     return True
 
 
@@ -803,11 +831,18 @@ def share_text_html(markdown: str, limit: int = SHARE_TEXT_MAX) -> tuple[str, bo
     return "\n".join(parts), False
 
 
+BILL_LAWS_MAX = 100
+
+
 def share_body(bill: dict, site: str, headline: str | None, text: tuple[dict, str] | None, in_app: bool = False,
-               groups: list[tuple[str, str, str]] | None = None) -> str:
+               groups: list[tuple[str, str, str]] | None = None,
+               member_paths: dict[tuple[str, str], str] | None = None,
+               laws: list[tuple[str, str, str]] | None = None) -> str:
     """The share page's visible content: the official record, a labelled AI line, the start of the bill text, links.
     in_app: the page is inside the site shell, where the app takes it over, so it has no "Open in" link.
-    groups: (kind, key, name) of the topic and agency pages that list this bill (bill_groups), linked when given."""
+    groups: (kind, key, name) of the topic and agency pages that list this bill (bill_groups), linked when given.
+    member_paths: (field, name) -> member page path (bill_member_paths); laws: (url path, label, kind) of the law
+    pages this bill changes (bill_law_links), listed up to BILL_LAWS_MAX."""
     bill_id = bill["id"]
     caption = " ".join(str(bill.get("caption") or bill.get("title") or "No caption available").split())
     official = f"https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill={bill_id}"
@@ -819,12 +854,15 @@ def share_body(bill: dict, site: str, headline: str | None, text: tuple[dict, st
         facts.append(("Filed", _long_date(bill["filed_at"])))
     if bill.get("last_action"):
         facts.append(("Most recent action", str(bill["last_action"])))
+    facts = [(k, escape(v)) for k, v in facts]
     for key, label in (("authors", "Authors"), ("coauthors", "Coauthors"), ("sponsors", "Sponsors"), ("cosponsors", "Cosponsors")):
         if _names(bill.get(key)):
-            facts.append((label, ", ".join(_names(bill.get(key)))))
+            facts.append((label, ", ".join(
+                f'<a href="{a(f"{site}{member_paths[key, n]}")}">{escape(n)}</a>' if (key, n) in (member_paths or {})
+                else escape(n) for n in _names(bill.get(key)))))
     if _names(bill.get("subjects")):
-        facts.append(("Official subjects", "; ".join(_names(bill.get("subjects")))))
-    rows = "\n".join(f"<dt>{escape(k)}</dt><dd>{escape(v)}</dd>" for k, v in facts)
+        facts.append(("Official subjects", escape("; ".join(_names(bill.get("subjects"))))))
+    rows = "\n".join(f"<dt>{escape(k)}</dt><dd>{v}</dd>" for k, v in facts)
     out = [f"<h1>{escape(bill_number(bill_id))}: {escape(caption)}</h1>",
            *([] if in_app else
              [f'<p><a href="{a(f"{site}#bill?id={bill_id}")}">Open {escape(bill_number(bill_id))} in Texas Bill Atlas</a></p>']),
@@ -835,6 +873,12 @@ def share_body(bill: dict, site: str, headline: str | None, text: tuple[dict, st
         found = [f'<a href="{a(f"{site}{k}/{key}")}">{escape(name)}</a>' for k, key, name in groups or [] if k == kind]
         if found:
             out.append(f"<p><strong>{label}:</strong> {', '.join(found)}. From AI review or caption rules.</p>")
+    if laws:
+        items = "\n".join(f'<li>{escape(kind)} <a href="{a(f"{site}{path}")}">{escape(label)}</a></li>'
+                          for path, label, kind in laws[:BILL_LAWS_MAX])
+        out += ["<h2>Laws this bill changes</h2>", f"<ul>\n{items}\n</ul>"]
+        if len(laws) > BILL_LAWS_MAX:
+            out.append(f"<p>and {len(laws) - BILL_LAWS_MAX} more.</p>")
     links = []
     if text:
         version, markdown = text
@@ -854,7 +898,9 @@ def share_body(bill: dict, site: str, headline: str | None, text: tuple[dict, st
 
 def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_v: str | None = None,
                text: tuple[dict, str] | None = None, shell: str | None = None,
-               groups: list[tuple[str, str, str]] | None = None) -> str:
+               groups: list[tuple[str, str, str]] | None = None,
+               member_paths: dict[tuple[str, str], str] | None = None,
+               laws: list[tuple[str, str, str]] | None = None) -> str:
     """The page at /bill/<ID>, served to everyone. With the deployed shell (scripts/pages.py) it is the whole site page
     and the app takes it over in place. Without one (no release has published it yet) it is the standalone page, whose
     script sends people to the app at the site root and lets crawlers stay."""
@@ -878,7 +924,7 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_
     if shell is not None:
         # The shell's head slot also holds the site icons, so the page brings its own.
         head = page_head.head_html(**head_args, links=(markdown,))
-        content = f'\n<article class="bill-page static-page" aria-label="Bill details">\n{share_body(bill, site, headline, text, True, groups)}\n</article>\n'
+        content = f'\n<article class="bill-page static-page" aria-label="Bill details">\n{share_body(bill, site, headline, text, True, groups, member_paths, laws)}\n</article>\n'
         # page-version covers only this bill's part, so a new shell alone is not a change to submit to IndexNow.
         version = hashlib.sha256((head + content).encode()).hexdigest()[:12]
         return pages.render_page(shell, head=f'{head}<meta name="page-version" content="{version}">',
@@ -1083,11 +1129,14 @@ def _page_version(page: Path | str) -> str | None:
 def write_share_pages(snapshot: dict, out_dir: Path, site: str = SITE, headlines: dict[str, str] | None = None,
                       rendered: dict[str, str] | None = None, text_dir: Path | None = None,
                       changed: list[str] | None = None, shell: str | None = None,
-                      groups: dict[str, list[tuple[str, str, str]]] | None = None) -> tuple[int, int, int]:
+                      groups: dict[str, list[tuple[str, str, str]]] | None = None,
+                      roster: dict | None = None,
+                      laws: dict[str, list[tuple[str, str, str]]] | None = None) -> tuple[int, int, int]:
     """One share page per bill, rewritten only when it changes; pages for bills no longer in the snapshot removed.
     With text_dir the page shows the start of the bill's latest text; with shell it is built inside the site shell.
-    Rewritten bill ids are added to `changed`, except pages whose own part (page-version) is unchanged: a new shell
-    rewrites every page, but no bill changed."""
+    Rewritten pages ("bill/<ID>") are added to `changed`, except pages whose own part (page-version) is unchanged: a
+    new shell rewrites every page, but no bill changed. roster links the names it resolves to member pages; laws
+    (bill_law_links) lists the law pages each bill changes."""
     out_dir.mkdir(parents=True, exist_ok=True)
     headlines, rendered, keep = headlines or {}, rendered or {}, set()
     written = unchanged = removed = 0
@@ -1098,12 +1147,10 @@ def write_share_pages(snapshot: dict, out_dir: Path, site: str = SITE, headlines
         text = _latest_text(text_dir, bill["id"]) if text_dir else None
         path = out_dir / f"{bill['id']}.html"
         page = share_page(bill, site, headlines.get(bill["id"]), rendered.get(bill["id"]), text, shell,
-                          (groups or {}).get(bill["id"]))
-        before = _page_version(path)
-        if write_if_changed(path, page):
+                          (groups or {}).get(bill["id"]), bill_member_paths(bill, roster) if roster else None,
+                          (laws or {}).get(bill["id"]))
+        if _write_page(path, page, f"bill/{bill['id']}", changed):
             written += 1
-            if changed is not None and (before is None or before != _page_version(page)):
-                changed.append(bill["id"])
         else:
             unchanged += 1
     if keep:  # An empty or broken snapshot never empties the folder.
@@ -1114,7 +1161,8 @@ def write_share_pages(snapshot: dict, out_dir: Path, site: str = SITE, headlines
     return written, unchanged, removed
 
 
-# IndexNow: tell Bing and the engines sharing its submissions (Yandex, Seznam, Naver, Yep) which bill pages changed.
+# IndexNow: tell Bing and the engines sharing its submissions (Yandex, Seznam, Naver, Yep) which pages changed (bills,
+# laws, members, topics, agencies, about, today, home), once per run after every page is written.
 # The key is public by design; public/<key>.txt at the site root proves the site is ours.
 INDEXNOW_KEY = "7b91498ed44f1a3d41b650238bfe5f85"
 INDEXNOW_ENDPOINT = "https://api.indexnow.org/indexnow"
@@ -1123,19 +1171,26 @@ INDEXNOW_MAX_URLS = 10000
 LIVE_SNAPSHOT = Path("/var/www/html/texas-bill-atlas/live/bills.json")
 
 
-def indexnow_payload(bill_ids: list[str], site: str = SITE) -> dict:
+def _indexnow_rank(path: str) -> int:
+    """Bills first, then laws, members, topics and agencies, then the other pages (about, today, home)."""
+    return {"bill": 0, "law": 1, "member": 2, "topic": 3, "agency": 3}.get(path.split("/")[0], 4)
+
+
+def indexnow_payload(paths: list[str], site: str = SITE) -> dict:
+    """paths are relative to the site ("bill/HB1", "" for home); ordered by page type, stable, duplicates dropped."""
     from urllib.parse import urlsplit
+    ordered = sorted(dict.fromkeys(paths), key=_indexnow_rank)
     return {"host": urlsplit(site).hostname, "key": INDEXNOW_KEY, "keyLocation": f"{site}{INDEXNOW_KEY}.txt",
-            "urlList": [f"{site}bill/{bill_id}" for bill_id in bill_ids[:INDEXNOW_MAX_URLS]]}
+            "urlList": [f"{site}{path}" for path in ordered[:INDEXNOW_MAX_URLS]]}
 
 
-def submit_indexnow(bill_ids: list[str], site: str = SITE, opener=None) -> str:
-    """POST the changed bill pages; returns a status line. Never raises: search pings must not fail the data run."""
-    if not bill_ids:
+def submit_indexnow(paths: list[str], site: str = SITE, opener=None) -> str:
+    """POST the changed pages; returns a status line. Never raises: search pings must not fail the data run."""
+    if not paths:
         return "nothing changed"
     import urllib.error
     import urllib.request
-    payload = indexnow_payload(bill_ids, site)
+    payload = indexnow_payload(paths, site)
     request = urllib.request.Request(INDEXNOW_ENDPOINT, data=json.dumps(payload).encode("utf-8"), method="POST",
                                      headers={"Content-Type": "application/json; charset=utf-8"})
     try:
@@ -1691,9 +1746,10 @@ def _law_shell_page(shell: str, *, head_args: dict, label: str, feed: str, body:
 
 
 def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str] | None, site: str = SITE,
-             shell: str | None = None) -> str:
+             shell: str | None = None, chapters: set[str] | frozenset[str] | None = None) -> str:
     """The page at /law/<CODE>/<section>. With the deployed shell it is the whole site page and the app takes it over;
-    without one it is the standalone page, whose script sends people to the app."""
+    without one it is the standalone page, whose script sends people to the app. `chapters` (chapter_groups keys)
+    are the chapter pages that exist; the section links its own chapter only when that page is there."""
     code, number = key.split(" ")
     url, target = f"{site}law/{code}/{number}", f"{site}#statute?law={code}&sec={number}"
     feed = f"{site}live/feeds/law/{code}-{number}.xml"
@@ -1713,11 +1769,15 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     a = lambda value: escape(value, {'"': "&quot;"})
     items = "\n".join(f'<li><a href="{a(f"{site}bill/{b}")}">{escape(bill_number(b))}</a> '
                       f'{LAW_KIND_WORDS.get(k, "changes")} this section</li>' for b, k in bills)
+    chapter = number.split(".")[0]
+    chapter_name, chapter_url = f"{code_name or CODE_NAME[code]} Chapter {chapter}", f"{site}law/{code}/{chapter}"
     body = [f"<h1>{escape(label)}{': ' + escape(name) if name else ''}</h1>",
             f'<p><a href="{a(target)}">Open {escape(label)} in Texas Bill Atlas</a> '
             + ("to read each proposal.</p>" if proposed else "to compare each bill's wording with current law.</p>"),
-            f"<h2>{escape(count[0].upper() + count[1:])}</h2>", f"<ul>\n{items}\n</ul>",
-            "<p>Bills are matched to sections automatically from their text and can be missed, for example when a bill "
+            f"<h2>{escape(count[0].upper() + count[1:])}</h2>", f"<ul>\n{items}\n</ul>"]
+    if chapters and f"{code} {chapter}" in chapters:
+        body.append(f'<p>Part of <a href="{a(chapter_url)}">{escape(chapter_name)}</a>, with every bill that changes it.</p>')
+    body += ["<p>Bills are matched to sections automatically from their text and can be missed, for example when a bill "
             "changes a whole chapter at once or renumbers sections. No bill listed here does not mean no bill changes "
             "this section.</p>"]
     # As the app's officialStatuteUrl (checked for every code the index uses).
@@ -1736,8 +1796,6 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     links.append(f'<li><a href="{a(feed)}">RSS feed of actions on these bills</a></li>')
     body += ["<h2>Links</h2>", "<ul>\n" + "\n".join(links) + "\n</ul>",
              "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
-    chapter = number.split(".")[0]
-    chapter_name, chapter_url = f"{code_name or CODE_NAME[code]} Chapter {chapter}", f"{site}law/{code}/{chapter}"
     jsonld = (page_head.law_section(name=title, label=label, url=url, official=official, chapter_name=chapter_name,
                                     chapter_url=chapter_url),
               page_head.breadcrumbs(site, [(chapter_name, chapter_url), (label, url)]))
@@ -1831,13 +1889,14 @@ def write_law_feeds(snapshot: dict, index: dict, out_dir: Path, site: str = SITE
 
 
 def write_law_pages(index: dict, out_dir: Path, site: str = SITE, law_dir: Path | None = None,
-                    shell: str | None = None) -> tuple[int, int, int]:
+                    shell: str | None = None, changed: list[str] | None = None) -> tuple[int, int, int]:
     """One page per section in the statute index (live/share/law/<CODE>/<section>.html), rewritten only when it
     changes; pages for sections no bill changes now are removed. Current text comes from live/law when present."""
     law = None
     if law_dir is not None and (law_dir / "index.json").is_file():
         from law_context import LawCopy  # Imported here: law_context reads this module's statute parser.
         law = LawCopy(law_dir)
+    chapters = frozenset(chapter_groups(index))  # The chapter pages write_law_chapter_pages writes.
     sections = index.get("sections") or {}
     written = unchanged = removed = 0
     keep: dict[str, set[str]] = {}
@@ -1852,7 +1911,8 @@ def write_law_pages(index: dict, out_dir: Path, site: str = SITE, law_dir: Path 
             current = _current_law(law, code, number)
         except (OSError, ValueError, KeyError):
             current = None
-        if write_if_changed(folder / f"{number}.html", law_page(key, entry, CODE_NAME[code], current, site, shell)):
+        if _write_page(folder / f"{number}.html", law_page(key, entry, CODE_NAME[code], current, site, shell, chapters),
+                       f"law/{code}/{number}", changed):
             written += 1
         else:
             unchanged += 1
@@ -1918,6 +1978,28 @@ def chapter_groups(index: dict) -> dict[str, dict]:
     return groups
 
 
+def _natural(number: str) -> list[tuple[int, str]]:
+    return [(int(n), s) for n, s in re.findall(r"(\d+)([A-Z]*)", number)]
+
+
+def bill_law_links(index: dict) -> dict[str, list[tuple[str, str, str]]]:
+    """Bill id -> sorted (url path, label, kind word) of the law pages it changes: each section and whole chapter the
+    index assigns to it, only those chapter_groups gives (the pages write_law_pages and write_law_chapter_pages write)."""
+    found: dict[str, list[tuple]] = {}
+    for key, g in chapter_groups(index).items():
+        code, chapter = key.split(" ")
+        for bill, kind in g["whole"]:
+            found.setdefault(bill, []).append(((code, _natural(chapter), 0), f"law/{code}/{chapter}",
+                                               chapter_label(code, chapter), kind))
+        for skey, (pairs, _since, _h) in g["sections"].items():
+            number = skey.split(" ")[1]
+            for bill, kind in pairs:
+                found.setdefault(bill, []).append(((code, _natural(number), 1), f"law/{code}/{number}",
+                                                   law_label(code, number, CODE_NAME[code]), kind))
+    return {bill: [(path, label, LAW_KIND_WORDS.get(kind, "changes")) for _s, path, label, kind in sorted(rows, key=lambda r: r[0])]
+            for bill, rows in found.items()}
+
+
 def chapter_label(code: str, chapter: str, heading: str = "") -> str:
     """"Penal Code chapter 46 (Weapons)"."""
     return f"{CODE_NAME.get(code, code)} chapter {chapter}" + (f" ({title_case(heading)})" if heading else "")
@@ -1958,7 +2040,7 @@ def chapter_feed(key: str, g: dict, by_id: dict[str, dict], heading: str = "", s
             items.append({**item, "caption": f"{bill_number(bill_id)} {shown}. {item['caption']}"})
     items.sort(key=lambda i: i["date"] or "", reverse=True)
     official = f"https://statutes.capitol.texas.gov/?tab=1&code={code}&chapter={code}.{chapter}"
-    return render_rss(f"{label} · Texas Bill Atlas", f"{site}#chapter?law={code}&ch={chapter}",
+    return render_rss(f"{label} · Texas Bill Atlas", f"{site}law/{code}/{chapter}",
                       f"Actions on bills in the 90th Legislature that would change {label}, as a whole or in any of its "
                       f"sections. {LAW_LIMITS.replace('this section', 'this chapter')} Official text: {official} "
                       f"Unofficial; confirm on Texas Legislature Online.", items[:MEMBER_FEED_ITEMS], site)
@@ -2058,7 +2140,8 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
 
 
 def write_law_chapter_pages(index: dict, out_dir: Path, site: str = SITE,
-                            law_dir: Path | None = None, shell: str | None = None) -> tuple[int, int, int]:
+                            law_dir: Path | None = None, shell: str | None = None,
+                            changed: list[str] | None = None) -> tuple[int, int, int]:
     """live/share/law/<CODE>/<chapter>.html per chapter with a bill, rewritten only when it changes; pages of chapters
     with none now are removed (section pages in the same folders are never touched). An index with no chapters
     removes nothing."""
@@ -2071,7 +2154,8 @@ def write_law_chapter_pages(index: dict, out_dir: Path, site: str = SITE,
         keep.setdefault(code, set()).add(f"{chapter}.html")
         folder = out_dir / code
         folder.mkdir(parents=True, exist_ok=True)
-        if write_if_changed(folder / f"{chapter}.html", law_chapter_page(key, g, _chapter_heading(g, law, code, chapter), site, shell)):
+        if _write_page(folder / f"{chapter}.html", law_chapter_page(key, g, _chapter_heading(g, law, code, chapter), site, shell),
+                       f"law/{code}/{chapter}", changed):
             written += 1
         else:
             unchanged += 1
@@ -2129,7 +2213,8 @@ def main() -> int:
                         help="The deployed page shell (shell.html in the current release); bill and law pages are "
                              "standalone without one")
     parser.add_argument("--no-indexnow", action="store_true",
-                        help="Don't submit changed bill pages to IndexNow (only the server's live run submits anyway)")
+                        help="Don't submit changed pages (bills, laws, members, topics, agencies, about, today, home) to IndexNow "
+                             "(only the server's live run submits anyway)")
     args = parser.parse_args()
     tags = args.tags or args.snapshot.parent / "luna" / "tags.json"
     snapshot, reviews = json.loads(args.snapshot.read_text("utf-8")), load_reviews(tags)
@@ -2141,46 +2226,50 @@ def main() -> int:
     print(f"Share cards: {count} listed{', changed' if changed else ''}", flush=True)
     write_bill_art(og_dir)  # No output line: the golden run pins this script's stdout.
     text_dir = args.text or args.snapshot.parent / "text"
-    changed: list[str] = []
+    changed: list[str] = []  # Page paths relative to the site ("bill/HB1", "law/PE/46.06", "" for home).
     shell = pages.load_shell(args.shell)
     site_pages = load_site_pages(args.site_pages or args.snapshot.parent / "agent" / "data" / "pages.json")
-    # Bill pages link to topic and agency pages only when those pages are written (they need the shell too).
-    written, unchanged, removed = write_share_pages(snapshot, args.share or args.snapshot.parent / "share", args.site,
-                                                    headlines, load_rendered(og_dir / "rendered.json"), text_dir, changed,
-                                                    shell, bill_groups(site_pages) if shell else None)
-    print(f"Share pages: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
-    if not args.no_indexnow and args.site == SITE and args.snapshot == LIVE_SNAPSHOT:
-        print(f"IndexNow: {submit_indexnow(changed, args.site)}", flush=True)
-    write_api_docs(args.snapshot.parent)
     roster = load_roster(args.members or args.snapshot.parent / "members.json")
-    written, unchanged = write_member_feeds(snapshot, roster, args.out / "members", args.site, reviews)
-    print(f"Member feeds: {written} written, {unchanged} unchanged", flush=True)
+    # The statute index comes first: bill pages list the law pages they change.
     statutes_dir = args.statutes or args.snapshot.parent / "statutes"
     written, unchanged, removed = write_statutes(snapshot, text_dir, statutes_dir, args.today, args.snapshot.parent / "law")
     print(f"Statute sections: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
-    # Quiet from here to the brackets (golden stdout): law and member pages, then the sitemap that lists them.
     try:
         statute_index = json.loads((statutes_dir / "index.json").read_text("utf-8"))
     except (OSError, ValueError):
         statute_index = {}
-    law_keys = list((statute_index.get("sections") or {}) if isinstance(statute_index, dict) else {})
+    if not isinstance(statute_index, dict):
+        statute_index = {}
+    # Bill pages link to topic, agency, member and law pages only when those pages are written (they need the shell too).
+    written, unchanged, removed = write_share_pages(snapshot, args.share or args.snapshot.parent / "share", args.site,
+                                                    headlines, load_rendered(og_dir / "rendered.json"), text_dir, changed,
+                                                    shell, bill_groups(site_pages) if shell else None,
+                                                    roster if shell else None,
+                                                    bill_law_links(statute_index) if shell else None)
+    print(f"Share pages: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
+    write_api_docs(args.snapshot.parent)
+    written, unchanged = write_member_feeds(snapshot, roster, args.out / "members", args.site, reviews)
+    print(f"Member feeds: {written} written, {unchanged} unchanged", flush=True)
+    # Quiet from here to the brackets (golden stdout): law and member pages, then the sitemap that lists them.
+    law_keys = list(statute_index.get("sections") or {})
     if law_keys:
         write_law_pages(statute_index, (args.share or args.snapshot.parent / "share") / "law", args.site,
-                        args.snapshot.parent / "law", shell)
+                        args.snapshot.parent / "law", shell, changed)
         write_law_feeds(snapshot, statute_index, args.out / "law", args.site, reviews)
-    if law_keys or (isinstance(statute_index, dict) and statute_index.get("chapters")):
+    if law_keys or statute_index.get("chapters"):
         write_law_chapter_pages(statute_index, (args.share or args.snapshot.parent / "share") / "law", args.site,
-                                args.snapshot.parent / "law", shell)
+                                args.snapshot.parent / "law", shell, changed)
         write_law_chapter_feeds(snapshot, statute_index, args.out / "law", args.site, reviews, args.snapshot.parent / "law")
-    write_member_pages(snapshot, roster, (args.share or args.snapshot.parent / "share") / "member", args.site, shell)
+    write_member_pages(snapshot, roster, (args.share or args.snapshot.parent / "share") / "member", args.site, shell, changed)
     # Members are listed only with their pages: without the shell the address would serve the bare app.
     members = [m for m in roster.values() if isinstance(m, dict)] if shell else []
-    groups = write_group_pages(site_pages, snapshot, args.share or args.snapshot.parent / "share", args.site, shell)
-    groups += write_about_pages(site_pages, args.share or args.snapshot.parent / "share", args.site, shell)
-    groups += write_view_pages(site_pages, args.share or args.snapshot.parent / "share", args.site, shell)
+    groups = write_group_pages(site_pages, snapshot, args.share or args.snapshot.parent / "share", args.site, shell, changed)
+    groups += write_about_pages(site_pages, args.share or args.snapshot.parent / "share", args.site, shell, changed)
+    groups += write_view_pages(site_pages, args.share or args.snapshot.parent / "share", args.site, shell, changed)
     write_sitemaps(args.sitemap or args.snapshot.parent / "sitemap.xml", snapshot, args.site, law_keys, members, groups,
-                   reviews, statute_index if isinstance(statute_index, dict) else {}, args.snapshot.parent / "law",
-                   roster, site_pages)
+                   reviews, statute_index, args.snapshot.parent / "law", roster, site_pages)
+    if not args.no_indexnow and args.site == SITE and args.snapshot == LIVE_SNAPSHOT:
+        print(f"IndexNow: {submit_indexnow(changed, args.site)}", flush=True)
     from atlas.feeds.brackets import default_census, write_brackets
     status = write_brackets(snapshot, text_dir, args.census or default_census(), args.brackets or args.snapshot.parent / "brackets")
     print(f"Population brackets: {status}", flush=True)

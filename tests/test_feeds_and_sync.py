@@ -110,7 +110,7 @@ class MemberFeedTests(unittest.TestCase):
     def test_member_feed_lists_actions_with_the_role_and_links_the_member_page(self):
         root = ET.fromstring(build_feeds.member_feed(ROSTER['house|Smith'], [(BILL, 'Coauthor')]))
         self.assertEqual(root.findtext('./channel/title'), 'Rep. Ann Smith · Texas Bill Atlas')
-        self.assertTrue(root.findtext('./channel/link').endswith('#member?code=A1001'))
+        self.assertTrue(root.findtext('./channel/link').endswith('/member/A1001/ann-smith'))
         items = root.findall('./channel/item')
         self.assertEqual([i.findtext('title') for i in items], ['HB5: Referred to Natural Resources', 'HB5: Filed'])
         self.assertTrue(items[0].findtext('description').startswith('Rep. Ann Smith · Coauthor. Relating to'))

@@ -120,7 +120,7 @@ class ChapterFeedAndPageTests(unittest.TestCase):
         self.assertEqual(build_feeds.write_law_chapter_feeds(SNAPSHOT, INDEX, self.feeds), (0, 3))
         root = ET.fromstring((self.feeds / "PE-46.xml").read_text("utf-8"))
         self.assertEqual(root.findtext("channel/title"), "Penal Code chapter 46 (Weapons) · Texas Bill Atlas")
-        self.assertEqual(root.findtext("channel/link"), "https://billatlas.org/#chapter?law=PE&ch=46")
+        self.assertEqual(root.findtext("channel/link"), "https://billatlas.org/law/PE/46")
         titles = [i.findtext("title") for i in root.findall("channel/item")]
         self.assertIn("HB1094: Now repeals the whole chapter", titles)
         self.assertIn("SB12: Now amends § 46.06", titles)
