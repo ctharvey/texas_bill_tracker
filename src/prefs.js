@@ -121,6 +121,12 @@ function contextFrom(hash) {
     .map(([name, value]) => `${name}=${encodeURIComponent(value)}`);
 }
 
+// Whether a same-site path is one of the app's own views (opened in place), not a file such as /live/feeds/HB1.xml.
+export function isAppPath(pathname) {
+  const path = String(pathname || '');
+  return Boolean(routeForPath(path)) || [BILL_PATH, LAW_PATH, CHAPTER_PATH, MEMBER_PATH].some(re => re.test(path));
+}
+
 export function parseLocation(pathname, hash, search = '') {
   const path = String(pathname || '');
   const context = contextFrom(hash);

@@ -4,7 +4,7 @@
 import {SEARCH_FIELDS} from '../search/model.js';
 import {state, runtime} from '../../core/state.js';
 import {areaName, agencyName, todayDay, SORTS, realAgencies} from '../../core/labels.js';
-import {sameFilters, buildHash} from '../../prefs.js';
+import {sameFilters, buildUrl} from '../../prefs.js';
 import {esc, $} from '../../core/dom.js';
 import {AREA_GROUPS, AREAS, AREA_BY_ID, inArea, areaCounts, topAgencies, subjectLabels} from '../areas/model.js';
 import {assessHearing, NO_HEARING, SCOPE_AGENCY_ID, POLICY_AREAS, PARTY_FILTERS, LAST_ACTION_TYPES, lastActionInfo, relatedFor, companionGroups, openLinkHtml, authorInfluence, authorshipParty, companionLabel} from '../../taxonomy.js';
@@ -42,8 +42,8 @@ function activeFiltersMarkup(){
 function emptyNextSteps(){
   const filters=activeFilters().filter(([key])=>key!=='query');
   const steps=[filters.length?'<button type="button" class="outline-button" data-clear-all>Clear all filters</button>':'',
-    state.query&&(filters.length||state.view!=='all')?`<a class="outline-button" href="${esc(buildHash('all',{query:state.query}))}">Search every bill for “${esc(state.query)}”</a>`:'',
-    state.view==='watchlist'&&!state.watch.size?'<a class="outline-button" href="#all" data-view="all">Browse all bills</a>':''].filter(Boolean);
+    state.query&&(filters.length||state.view!=='all')?`<a class="outline-button" href="${esc(buildUrl('all',{query:state.query}))}">Search every bill for “${esc(state.query)}”</a>`:'',
+    state.view==='watchlist'&&!state.watch.size?'<a class="outline-button" href="/explorer" data-view="all">Browse all bills</a>':''].filter(Boolean);
   return steps.length?`<p class="empty-steps">${steps.join('')}</p>`:'';
 }
 export function clearFilter(key){
@@ -63,7 +63,7 @@ function areaHeaderMarkup(){
   const row=areaCounts(bills,todayDay()).find(r=>r.area.id===area.id);
   const hearing=new Map();for(const b of bills){const l=assessHearing(b).label;hearing.set(l,(hearing.get(l)||0)+1)}
   const status=[NO_HEARING,'Referred','Scheduled','Heard'].filter(l=>hearing.get(l)).map(l=>`<span><strong>${hearing.get(l).toLocaleString()}</strong> ${esc(l.toLowerCase())}</span>`).join('');
-  const agencies=topAgencies(bills,3,new Set([SCOPE_AGENCY_ID])).map(a=>`<a class="text-link" href="${esc(buildHash('all',{area:area.id,agency:a.id}))}">${esc(agencyName(a.id))}</a> (${a.count.toLocaleString()})`).join(', ');
+  const agencies=topAgencies(bills,3,new Set([SCOPE_AGENCY_ID])).map(a=>`<a class="text-link" href="${esc(buildUrl('all',{area:area.id,agency:a.id}))}">${esc(agencyName(a.id))}</a> (${a.count.toLocaleString()})`).join(', ');
   return `<h2>${esc(area.name)}</h2><p class="area-audience">For ${esc(area.audience.charAt(0).toLowerCase()+area.audience.slice(1))}.</p>`
     +`<p class="home-counts"><span><strong>${bills.length.toLocaleString()}</strong> ${bills.length===1?'bill':'bills'}</span><span><strong>${(row?.moved||0).toLocaleString()}</strong> with an action in the last 7 days</span>${status}</p>`
     +(agencies?`<p class="area-agencies">Agencies named most: ${agencies}.</p>`:'')

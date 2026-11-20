@@ -37,7 +37,7 @@ export function memberMarkup(){
   const head=title=>`<div class="section-head"><div><div class="section-overline">MEMBER</div><h2>${title}</h2></div><span class="subtitle">90th Legislature</span></div>`;
   if(!state.roster)return `${head('Member roster unavailable')}<div class="info-callout callout-warn">The member roster could not be loaded, so member pages are not available right now. Try again later.</div>`;
   const m=memberByCode(state.roster,state.memberCode);
-  if(!m)return `${head('Member not found')}<div class="info-callout callout-warn">No member of the 90th Legislature has the code ${state.memberCode?`<strong>${esc(state.memberCode)}</strong>`:'in this address'}. Find members from a bill's authors or from <a class="text-link" href="#local" data-view="local">Near you</a>.</div>`;
+  if(!m)return `${head('Member not found')}<div class="info-callout callout-warn">No member of the 90th Legislature has the code ${state.memberCode?`<strong>${esc(state.memberCode)}</strong>`:'in this address'}. Find members from a bill's authors or from <a class="text-link" href="/near-you" data-view="local">Near you</a>.</div>`;
   const tables=districtTables();
   const counties=m.district&&tables?countiesOf(tables,m.chamber,m.district):[];
   const split=c=>Object.keys(tables?.counties?.[c]?.[m.chamber]||{}).length>1;

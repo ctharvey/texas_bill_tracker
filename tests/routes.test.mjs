@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ROUTES, routeForPath, routeForView, slugify} from '../src/core/routes.js';
-import {VIEWS, FILTER_DEFAULTS, parseHash, parseLocation, buildUrl} from '../src/prefs.js';
+import {VIEWS, FILTER_DEFAULTS, parseHash, parseLocation, buildUrl, isAppPath} from '../src/prefs.js';
 
 // Splits a built address the way the browser does, then reads it back.
 function reread(url) {
@@ -113,4 +113,12 @@ test('#move is left alone: at the root it reads as it always has, and on a path 
   assert.deepEqual(parseLocation('/', '#move'), parseHash('#move'));
   assert.deepEqual(parseLocation('/today', '#move'), parseHash('#today'));
   assert.deepEqual(parseLocation('/bill/HB5', '#move').bill, 'HB5');
+});
+
+test("only the app's own paths open in place; files and unknown paths are left to the browser", () => {
+  for (const view of VIEWS) assert.ok(isAppPath(buildUrl(view, {}, KEYS[view] || {}).split(/[?#]/)[0]), view);
+  for (const path of ['/law/PE/46', '/member/A4395/kyle-alders', '/today/'])
+    assert.ok(isAppPath(path), path);
+  for (const path of ['/live/feeds/HB1.xml', '/live/sitemap.xml', '/app.css', '/agent/', '/nope', '/bill/', '/law/PE'])
+    assert.ok(!isAppPath(path), path);
 });

@@ -12,7 +12,7 @@ export const followButton=m=>{if(!m?.code)return '';const on=state.follow.includ
 export const memberFeedHref=code=>`./live/feeds/members/${encodeURIComponent(code)}.xml`;
 
 export function followedMarkup(){
-  if(!state.follow.length)return `<section class="followed-section"><h3>Followed legislators</h3><p class="tools-note">Follow a legislator from their member page or from <a class="text-link" href="#local" data-view="local">Near you</a> to see every bill they file or sign onto here.</p></section>`;
+  if(!state.follow.length)return `<section class="followed-section"><h3>Followed legislators</h3><p class="tools-note">Follow a legislator from their member page or from <a class="text-link" href="/near-you" data-view="local">Near you</a> to see every bill they file or sign onto here.</p></section>`;
   if(!state.roster)return `<section class="followed-section"><h3>Followed legislators</h3><p class="tools-note">The member roster could not be loaded, so followed legislators' bills are not shown right now.</p></section>`;
   const members=state.follow.map(code=>memberByCode(state.roster,code)).filter(Boolean);
   const rows=followedBills(state.bills,state.roster,state.follow,newestFirst),limit=state.followShow||30;

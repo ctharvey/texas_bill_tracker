@@ -11,7 +11,7 @@ import {todayDay, realAgencies, agencyName} from '../../core/labels.js';
 import {shortDate, dateText} from '../../core/format.js';
 import {followedBills} from '../../geo.js';
 import {searchCounts} from '../sync/lists.js';
-import {buildHash} from '../../prefs.js';
+import {buildUrl} from '../../prefs.js';
 import {todayData} from '../today/view.js';
 import {recentChanges, changeText} from '../review/updates.js';
 import {areaCounts, AREA_GROUPS} from '../areas/model.js';
@@ -33,7 +33,7 @@ function compactRow(b,note=''){
   return `<article class="compact-row" data-bill-id="${esc(b.id)}"${topicStyle(b.topics)}>${openLinkHtml(b.id,billHref(b.id),'bill-number',b.number)}<span class="compact-text">${openLinkHtml(b.id,billHref(b.id),'bill-title-link',plainTitle(b))}</span>${note?`<span class="compact-note" title="${esc(note)}">${esc(note)}</span>`:''}</article>`;
 }
 export function homeMarkup(){
-  return `<div class="home-top"><form class="home-search" id="home-search-form" role="search"><label for="home-search">Search every bill</label><div class="home-search-row"><input id="home-search" name="query" maxlength="200" placeholder="Bill number, author, subject, agency or keyword…" autocomplete="off"><button class="primary-button" type="submit">Search</button></div><p class="tools-note">Or <a class="text-link" href="#all" data-view="all">browse all ${state.bills.length.toLocaleString()} bills</a>.</p></form>
+  return `<div class="home-top"><form class="home-search" id="home-search-form" role="search"><label for="home-search">Search every bill</label><div class="home-search-row"><input id="home-search" name="query" maxlength="200" placeholder="Bill number, author, subject, agency or keyword…" autocomplete="off"><button class="primary-button" type="submit">Search</button></div><p class="tools-note">Or <a class="text-link" href="/explorer" data-view="all">browse all ${state.bills.length.toLocaleString()} bills</a>.</p></form>
     <div class="calendar-mini home-milestone"><div class="calendar-eyebrow">UPCOMING MILESTONE</div><div class="calendar-date">JAN 12 <span>2027</span></div><div class="calendar-desc">90th regular session convenes${daysUntil(todayDay(),SESSION_START)?` · in ${daysUntil(todayDay(),SESSION_START)} days`:''}</div><div class="calendar-progress"><span></span></div></div></div>
     <div class="home-grid">${homeCards()}</div>`;
 }
@@ -49,19 +49,19 @@ function homeCards(){
   const mine=[...new Map([...state.bills.filter(b=>state.watch.has(b.id)),...followed].map(b=>[b.id,b])).values()];
   const changed=changedSince(mine,prev,today);
   const searches=state.searches.map(s=>({s,...searchCounts(s)})).filter(x=>x.fresh);
-  const searchList=searches.length?`<ul class="home-searches">${searches.map(({s,fresh})=>`<li><a class="text-link" href="${esc(buildHash('all',s.filters))}" data-search-open="${esc(s.id)}">${esc(s.name)}</a> · ${fresh.toLocaleString()} with new actions</li>`).join('')}</ul>`:'';
+  const searchList=searches.length?`<ul class="home-searches">${searches.map(({s,fresh})=>`<li><a class="text-link" href="${esc(buildUrl('all',s.filters))}" data-search-open="${esc(s.id)}">${esc(s.name)}</a> · ${fresh.toLocaleString()} with new actions</li>`).join('')}</ul>`:'';
   const yours=!mine.length&&!state.searches.length
     ?`<p class="tools-note">Star bills, follow legislators or save a search, and what changes for them shows up here.</p>`
-    :`${changed.length?changed.slice(0,HOME_ROWS).map(datedRow).join(''):`<p class="tools-note">No new actions on your ${mine.length.toLocaleString()} ${mine.length===1?'bill':'bills'}${prev?` since ${esc(dateText(prev))}`:''}.</p>`}${changed.length>HOME_ROWS?`<p class="tools-note">And ${(changed.length-HOME_ROWS).toLocaleString()} more on your <a class="text-link" href="#watchlist" data-view="watchlist">watchlist</a> and under <a class="text-link" href="#following" data-view="following">Following</a>.</p>`:''}${searchList}`;
+    :`${changed.length?changed.slice(0,HOME_ROWS).map(datedRow).join(''):`<p class="tools-note">No new actions on your ${mine.length.toLocaleString()} ${mine.length===1?'bill':'bills'}${prev?` since ${esc(dateText(prev))}`:''}.</p>`}${changed.length>HOME_ROWS?`<p class="tools-note">And ${(changed.length-HOME_ROWS).toLocaleString()} more on your <a class="text-link" href="/watchlist" data-view="watchlist">watchlist</a> and under <a class="text-link" href="/following" data-view="following">Following</a>.</p>`:''}${searchList}`;
   const yoursTitle=prev?`Since your last visit, ${esc(shortDate(prev))}`:'Latest on your bills';
   // The latest day with activity, as on the Today page (unfiltered by its topic chips).
   const {day,rows}=todayData();
   const types=groupByActionType(rows);
   const counts=types.length>1?`<p class="home-counts">${types.map(g=>`<span><strong>${g.rows.length.toLocaleString()}</strong> ${esc(g.label.toLowerCase())}</span>`).join('')}</p>`:'';
   const dayShown=rows.slice(0,HOME_ROWS+1),dayIds=new Set(dayShown.map(r=>r.bill.id));
-  const dayBody=rows.length?`${counts}${dayShown.map(r=>compactRow(r.bill,r.bill.topics[0]||'')).join('')}${more('#today','today','The whole day, by topic')}`:'<p class="tools-note">No recorded activity yet.</p>';
+  const dayBody=rows.length?`${counts}${dayShown.map(r=>compactRow(r.bill,r.bill.topics[0]||'')).join('')}${more('/today','today','The whole day, by topic')}`:'<p class="tools-note">No recorded activity yet.</p>';
   const hearings=state.bills.filter(b=>assessHearing(b).level===3);
-  const hearingBody=hearings.length?hearings.slice(0,HOME_ROWS).map(b=>compactRow(b,lastActionInfo(b).label)).join('')+(hearings.length>HOME_ROWS?more(buildHash('all',{outlook:'Scheduled'}),'','All scheduled hearings'):'')
+  const hearingBody=hearings.length?hearings.slice(0,HOME_ROWS).map(b=>compactRow(b,lastActionInfo(b).label)).join('')+(hearings.length>HOME_ROWS?more(buildUrl('all',{outlook:'Scheduled'}),'','All scheduled hearings'):'')
     :'<p class="tools-note">No hearings are scheduled yet. Committees post them once the session is under way.</p>';
   // Luna's reviews: what changed in the last 24 hours, then the newest reviews; a bill shows once, and not at all
   // when the Today card already lists it.
@@ -70,12 +70,12 @@ function homeCards(){
   const luna=new Map(lunaChanged.bills.filter(r=>byId.has(r.id)).map(r=>[r.id,{bill:byId.get(r.id),note:r.changes.length?changeText(r.changes[0]):''}]));
   for(const b of newestReviewed(state.bills).slice(0,20))if(!luna.has(b.id))luna.set(b.id,{bill:b,note:`Reviewed ${shortDate(b.luna.reviewed_at.slice(0,10))}`});
   const lunaRows=[...luna.values()].filter(r=>!dayIds.has(r.bill.id));
-  const lunaBody=lunaRows.length?`${lunaChanged.bills.length?changeCounts(lunaChanged.counts):''}${lunaRows.slice(0,HOME_ROWS+1).map(r=>compactRow(r.bill,r.note)).join('')}${more('#review','review','Every review and change')}`
+  const lunaBody=lunaRows.length?`${lunaChanged.bills.length?changeCounts(lunaChanged.counts):''}${lunaRows.slice(0,HOME_ROWS+1).map(r=>compactRow(r.bill,r.note)).join('')}${more('/review','review','Every review and change')}`
     :'<p class="tools-note">Luna has not reviewed any bills yet.</p>';
   const tile=(n,label,href,view)=>href
     ?`<a class="stat-tile" href="${esc(href)}"${view?` data-view="${view}"`:''}><strong>${n.toLocaleString()}</strong><span>${label}</span></a>`
     :`<div class="stat-tile"><strong>${n.toLocaleString()}</strong><span>${label}</span></div>`;
-  const stats=`<div class="home-stats">${tile(rows.length,day===today?'bills with action today':`bills with action ${esc(shortDate(day))}`,'#today','today')}${tile(lunaChanged.bills.length,'bills Luna reviewed or updated, last 24 hours','#review','review')}${tile(hearings.length,hearings.length===1?'hearing scheduled':'hearings scheduled',hearings.length?buildHash('all',{outlook:'Scheduled'}):'','')}</div>`;
+  const stats=`<div class="home-stats">${tile(rows.length,day===today?'bills with action today':`bills with action ${esc(shortDate(day))}`,'/today','today')}${tile(lunaChanged.bills.length,'bills Luna reviewed or updated, last 24 hours','/review','review')}${tile(hearings.length,hearings.length===1?'hearing scheduled':'hearings scheduled',hearings.length?buildUrl('all',{outlook:'Scheduled'}):'','')}</div>`;
   // Two columns that do not share row heights, split so their lengths come out close on a typical day.
   // On a phone the columns dissolve and .home-oN puts the cards back in this order.
   return stats+`<div class="home-col">${card(yoursTitle,changed.length,yours,1)}${card(day===today?'Today at the Lege':`Most recent activity, ${esc(shortDate(day))}`,rows.length,dayBody,2)}</div>`
@@ -86,7 +86,7 @@ function areasCard(){
   const rows=areaCounts(state.bills,todayDay());
   const largest=Math.max(1,...rows.map(r=>r.count));
   const item=({area,count,moved})=>`<li>
-    <a class="area-row" href="${esc(buildHash('all',{area:area.id}))}">
+    <a class="area-row" href="${esc(buildUrl('all',{area:area.id}))}">
       <span class="area-row-name">${esc(area.name)}</span>
       <span class="area-count">${count.toLocaleString()} ${count===1?'bill':'bills'}</span>
       <span class="area-track" aria-hidden="true"><i style="width:${100*count/largest}%"></i></span>

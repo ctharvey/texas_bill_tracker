@@ -21,6 +21,12 @@ export function goTo(hash){
   window.dispatchEvent(new HashChangeEvent('hashchange'));
 }
 
+// Opens an app path in place, with a history entry: in-app links are real /path anchors.
+export function navigate(url){
+  try{history.pushState(null,'',url)}catch{location.href=url;return null}
+  return applyLocation(false);
+}
+
 function applyFilters(raw){
   const clean=cleanFilters(raw);
   if(clean.sort&&!Object.hasOwn(SORTS,clean.sort))delete clean.sort;

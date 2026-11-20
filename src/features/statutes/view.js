@@ -3,7 +3,7 @@
 import {state} from '../../core/state.js';
 import {$, esc} from '../../core/dom.js';
 import {timeoutSignal, httpError} from '../../core/net.js';
-import {buildHash} from '../../prefs.js';
+import {buildUrl} from '../../prefs.js';
 import {lastActionInfo, openLinkHtml} from '../../taxonomy.js';
 import {STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, compareLaw, currentLaw, lawCopyUnits, STATUTE_KEY, groupStatuteEntries, lawFollowOf, isLawFollowQuery,
   CHAPTER_KEY, isChapterKey, chapterOf, lawEntries, lawChapterOutline, lawSearchTerms, lawSearchPrefix, lawSearchMatches} from './model.js';
@@ -131,7 +131,7 @@ function lawSearch(terms){
   if(shard==='loading')return 'loading';
   return shard==='error'?null:lawSearchMatches(shard,terms);
 }
-const statuteHref=key=>buildHash('statute',{},{statute:key});
+const statuteHref=key=>buildUrl('statute',{},{statute:key});
 const billNumber=id=>state.bills.find(b=>b.id===id)?.number||id;
 const SMALL_WORDS=new Set(['a','an','and','as','at','by','for','in','of','on','or','the','to','with','from','under']);
 // "FUNDING FOR CERTAIN SCHOOLS" -> "Funding for Certain Schools"

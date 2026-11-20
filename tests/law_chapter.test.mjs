@@ -99,7 +99,7 @@ test('a section no bill changes shows its current text and links its chapter', a
     assert.match(html, /Current law as of Nov 19, 2026/);
     assert.match(html, /A person commits an offense/);
     assert.doesNotMatch(html, /Added by Acts/);
-    assert.match(html, /href="#chapter\?law=PE&amp;ch=46">Chapter 46<\/a>/);
+    assert.match(html, /href="\/law\/PE\/46">Chapter 46<\/a>/);
   } finally {
     globalThis.fetch = real;
   }

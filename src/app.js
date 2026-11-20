@@ -34,13 +34,13 @@ import {siteBase} from './core/links.js';
 import {$, esc, toast} from './core/dom.js';
 import {copyText, download} from './core/copy.js';
 import {SORTS, todayDay} from './core/labels.js';
-import {lastPath, goTo, FILTERED_VIEWS, switchFilters, applyLocation, openBillPage, leaveBillPage, persistState} from './core/location.js';
+import {lastPath, goTo, navigate, FILTERED_VIEWS, switchFilters, applyLocation, openBillPage, leaveBillPage, persistState} from './core/location.js';
 import {timeoutSignal, loadShardedMap, httpError} from './core/net.js';
 import {registerView, setFallbackView, viewHeading, renderView, setRenderContent, setExplorerHooks, setSyncHooks} from './core/router.js';
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
 import {STORAGE_OK, readJson, loadSaved} from './core/storage.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
-  cleanSearches, newSearchId, searchName, searchFitsSync, MAX_SEARCHES, parseLocation, buildUrl, shareUrl} from './prefs.js';
+  cleanSearches, newSearchId, searchName, searchFitsSync, MAX_SEARCHES, parseLocation, buildUrl, shareUrl, isAppPath} from './prefs.js';
 import {heldFile, heldCount, previousLinks} from './core/move.js';
 import {NEAR_KEY, cleanNear, countyDistricts, memberByCode} from './geo.js';
 import {applyLunaTags, applyLunaExtras, attachMembers, reviewProgress, assessHearing, snapshotAgeHours, normalizeBill, cardClickOpens, activityOn} from './taxonomy.js';
@@ -127,6 +127,14 @@ async function init(){
     e.preventDefault();
     if(target){target.tabIndex=target.tabIndex<0?-1:target.tabIndex;target.focus();target.scrollIntoView();return}
     goTo(href);
+  });
+  // A link to one of the app's own paths opens in place; a modified click, a new-tab link or a file is left alone.
+  document.addEventListener('click',e=>{
+    if(e.defaultPrevented||e.button||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;
+    const a=e.target.closest?.('a[href^="/"]');if(!a||a.target||a.hasAttribute('download'))return;
+    const u=new URL(a.href);if(u.origin!==location.origin||!isAppPath(u.pathname))return;
+    e.preventDefault();
+    const key=navigate(u.pathname+u.search+u.hash);if(key)openSyncLink(key);
   });
   state.near=cleanNear(readJson(NEAR_KEY),null);
   const located=parseLocation(location.pathname,location.hash,location.search),staticHere=staticMatches(runtime.staticView,located);
@@ -294,7 +302,7 @@ function renderNotice(){
   // A healthy live snapshot gets one slim line; anything to be careful about keeps the full box.
   const slim=!warn;
   $('#source-notice').className=`source-notice${warn?' warn':''}${slim?' slim':''}`;
-  $('#source-notice').innerHTML=`<span class="notice-icon">${warn?'!':'✓'}</span><div>${slim?'<strong>Bulk-data snapshot</strong> from the legislature’s published files; it may lag the official record.':copy} <a href="#data" data-view="data">Coverage & sources →</a></div>`;
+  $('#source-notice').innerHTML=`<span class="notice-icon">${warn?'!':'✓'}</span><div>${slim?'<strong>Bulk-data snapshot</strong> from the legislature’s published files; it may lag the official record.':copy} <a href="/about/data" data-view="data">Coverage & sources →</a></div>`;
   $('#footer-timestamp').textContent=`${imported?'Imported':'Snapshot'}: ${stampText(state.meta?.generated_at)}`;
 }
 

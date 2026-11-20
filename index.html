@@ -41,7 +41,7 @@
   <p class="agent-hint" aria-hidden="true">Reading this as an AI agent or script? This page is drawn with JavaScript. The same bills, tags and members are at <a href="https://agent.billatlas.org/llms.txt" tabindex="-1">agent.billatlas.org</a> as Markdown and JSON, with keyword search and no JavaScript needed.</p>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Main navigation">
-      <a class="brand" href="#home" aria-label="Texas Bill Atlas home">
+      <a class="brand" href="/" aria-label="Texas Bill Atlas home">
         <span class="brand-mark" aria-hidden="true"><svg class="warbler-mark" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><defs><mask id="bw-eyeline" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256"><rect width="256" height="256" fill="#fff"/><path d="M124 130C104 130 92 129 82 129C70 129 60 135 50 144C62 140 72 139 82 139C92 139 104 138 124 138Z"/></mask><g id="bw-side"><g mask="url(#bw-eyeline)"><path transform="rotate(-12 92 140)" d="M100 98C86 92 66 98 58 116C50 132 44 158 54 176C64 194 94 198 108 182C118 170 116 150 112 132C110 116 106 102 100 98Z" fill="#f5b517"/></g><circle cx="82" cy="134" r="12.5" fill="#fff" stroke="#141414" stroke-width="3"/><circle cx="84.5" cy="135" r="7.5" fill="#141414"/><circle cx="87" cy="131.5" r="2.8" fill="#fff"/></g></defs><g transform="translate(128 128) scale(1.12) translate(-128 -146)"><circle cx="128" cy="146" r="90" fill="#f7f3ea" stroke="#f7f3ea" stroke-width="12"/><circle cx="128" cy="146" r="90" fill="#141414"/><use href="#bw-side" transform="translate(-3 0)"/><use href="#bw-side" transform="matrix(-1 0 0 1 259 0)"/><path d="M119.5 157H136.5L128 170Z" fill="#8e8e8e" stroke="#8e8e8e" stroke-width="4" stroke-linejoin="round"/></g></svg></span>
         <span class="brand-text">TEXAS<span>BILL ATLAS</span></span>
       </a>
@@ -49,23 +49,23 @@
       <!-- Items marked data-bar make the phone's bottom bar; More opens the whole menu there. -->
       <div class="nav-label">BROWSE</div>
       <nav class="main-nav" id="main-nav" aria-label="Browse">
-        <a class="nav-item" href="#home" data-view="home" data-bar><span class="nav-icon">⌂</span> Home</a>
-        <a class="nav-item" href="#today" data-view="today"><span class="nav-icon">◷</span> Today <span class="nav-count" id="nav-today" title="Bills with a recorded action today" hidden></span></a>
-        <a class="nav-item" href="#all" data-view="all" data-bar><span class="nav-icon">▦</span> Bill explorer <span class="nav-count" id="nav-all">—</span></a>
-        <a class="nav-item" href="#local" data-view="local"><span class="nav-icon">⌖</span> Near you</a>
-        <a class="nav-item" href="#agencies" data-view="agencies"><span class="nav-icon">▤</span> Agency index</a>
+        <a class="nav-item" href="/" data-view="home" data-bar><span class="nav-icon">⌂</span> Home</a>
+        <a class="nav-item" href="/today" data-view="today"><span class="nav-icon">◷</span> Today <span class="nav-count" id="nav-today" title="Bills with a recorded action today" hidden></span></a>
+        <a class="nav-item" href="/explorer" data-view="all" data-bar><span class="nav-icon">▦</span> Bill explorer <span class="nav-count" id="nav-all">—</span></a>
+        <a class="nav-item" href="/near-you" data-view="local"><span class="nav-icon">⌖</span> Near you</a>
+        <a class="nav-item" href="/agencies" data-view="agencies"><span class="nav-icon">▤</span> Agency index</a>
       </nav>
       <div class="nav-label nav-label-second">YOURS</div>
       <nav class="main-nav" aria-label="Yours">
-        <a class="nav-item" href="#watchlist" data-view="watchlist" data-bar><span class="nav-icon">☆</span> Watchlist <span class="nav-count" id="nav-watch">0</span></a>
-        <a class="nav-item" href="#following" data-view="following"><span class="nav-icon">♢</span> Following <span class="nav-count" id="nav-follow">0</span></a>
+        <a class="nav-item" href="/watchlist" data-view="watchlist" data-bar><span class="nav-icon">☆</span> Watchlist <span class="nav-count" id="nav-watch">0</span></a>
+        <a class="nav-item" href="/following" data-view="following"><span class="nav-icon">♢</span> Following <span class="nav-count" id="nav-follow">0</span></a>
       </nav>
       <div class="nav-label nav-label-second">ABOUT</div>
       <nav class="main-nav" aria-label="About">
-        <a class="nav-item" href="#method" data-view="method"><span class="nav-icon">◈</span> How it works</a>
-        <a class="nav-item" href="#saving" data-view="saving"><span class="nav-icon">⇩</span> Saving your info</a>
-        <a class="nav-item" href="#data" data-view="data"><span class="nav-icon">⇄</span> Data & imports</a>
-        <a class="nav-item" href="#review" data-view="review"><span class="nav-icon">◎</span> Review progress <span class="nav-count" id="nav-review">—</span></a>
+        <a class="nav-item" href="/about/method" data-view="method"><span class="nav-icon">◈</span> How it works</a>
+        <a class="nav-item" href="/about/saving" data-view="saving"><span class="nav-icon">⇩</span> Saving your info</a>
+        <a class="nav-item" href="/about/data" data-view="data"><span class="nav-icon">⇄</span> Data & imports</a>
+        <a class="nav-item" href="/review" data-view="review"><span class="nav-icon">◎</span> Review progress <span class="nav-count" id="nav-review">—</span></a>
         <a class="nav-item" href="https://discord.gg/Cxj7P7sBcE" target="_blank" rel="noopener noreferrer" aria-label="Discord community (opens in a new tab)"><span class="nav-icon" aria-hidden="true">✉</span> Discord <span class="nav-ext" aria-hidden="true">↗</span></a>
       </nav>
       <button type="button" class="nav-item nav-more" id="nav-more" aria-expanded="false"><span class="nav-icon">☰</span> <span class="nav-more-label">More</span></button>

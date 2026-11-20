@@ -32,7 +32,7 @@ export function oldSiteBanner({status, target, goHref, what = ''}) {
   if (status === 'gone') return `<div class="info-callout move-banner"><div><strong>Texas Bill Atlas has moved to ${name}.</strong></div><div class="tools-row">${go}</div></div>`;
   const reason = status?.startsWith('failed:') ? FAILED[status.slice(7)] || FAILED.timeout : '';
   return `<div class="info-callout move-banner${reason ? ' callout-warn' : ''}" role="status"><div><strong>Texas Bill Atlas has moved to ${name}.</strong> This browser has ${esc(what || 'saved data')} saved at this address. Copy it all to ${name} in one step; nothing here is removed.${reason ? ` <span class="move-error">${esc(reason)}</span>` : ''}</div>`
-    + `<div class="tools-row"><button class="primary-button" id="move-start">Move my saved lists</button><a class="outline-button" href="#export" data-view="export">Export a file instead</a></div></div>`;
+    + `<div class="tools-row"><button class="primary-button" id="move-start">Move my saved lists</button><a class="outline-button" href="/about/export" data-view="export">Export a file instead</a></div></div>`;
 }
 
 // result: applyMove's {ok, counts, previousKey} or {ok:false, reason}. source: the old site's origin.
