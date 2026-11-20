@@ -51,7 +51,7 @@ class RenderPageTests(unittest.TestCase):
 
     def test_no_heading_empties_the_slot_and_hides_the_page_heading(self):
         page = render(heading=None)
-        self.assertIn('<!--heading--><!--/heading-->', page)
+        self.assertIn('<!--heading--><h1 id="page-title"></h1><p id="page-subtitle"></p><!--/heading-->', page)
         self.assertIn('<div class="page-heading" hidden', page)
         self.assertNotIn('<div class="page-heading"><div>', page)
 

@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-11-19
+- Bill pages are one page for everyone: once a release has published `shell.html`, the data run builds each `/bill/<ID>` page inside the site shell (header, navigation, footer, CSP and theme as in the app) and the app takes it over in place, so a browser loads one page with no redirect. Without a shell the page stays standalone, as before. A `page-version` covering only the bill's part keeps a new shell from sending every bill to IndexNow. Law pages switch later (they wait on the gateway route).
 - Static page shell, groundwork (no page uses it yet): the deploy publishes stable entry points `app.css` and `boot.js` (a module that imports the current digest folder) and a `shell.html` built from the un-versioned `index.html` with head, heading and content slots; `scripts/pages.py` fills those slots into static pages stamped with the shell's version, and the app keeps a matching static page on screen, without scrolling, until its own view is ready or the data proves unavailable.
 - Follow a law, phase 3:
   - **Follow a chapter.** A whole chapter can be followed (`#chapter?law=PE&ch=46`, saved as the search "PE 46"). Any bill that changes a section in it, or the whole chapter at once, counts as new. The chapter page lists the whole-chapter bills, the sections bills change and every section in the chapter (from the law copy).

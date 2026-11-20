@@ -11,6 +11,8 @@ MARKERS = ('head', 'heading', 'content')
 VIEW = re.compile(r'(?:bill|law|chapter):[A-Za-z0-9 .]+')
 SCRIPT = re.compile(r'<script\b[^>]*>', re.IGNORECASE)
 LD_JSON = '<script type="application/ld+json">'
+# The app writes every view's heading into these two elements, so a page without a heading keeps them, empty.
+EMPTY_HEADING = '<h1 id="page-title"></h1><p id="page-subtitle"></p>'
 
 
 def markers(shell: str) -> bool:
@@ -55,7 +57,7 @@ def render_page(shell: str, *, head: str, content: str, view: str, heading: str 
         _clean_scripts(value)
     slot = f'{head}<meta name="shell-version" content="{shell_version(shell)}">'
     page = _fill(shell, 'head', slot)
-    page = _fill(page, 'heading', heading or '')
+    page = _fill(page, 'heading', EMPTY_HEADING if heading is None else heading)
     page = _fill(page, 'content', content)
     page = page.replace('<div class="page-heading"', '<div class="page-heading" hidden', 1) if heading is None else page
     return page.replace('<section id="dynamic-content"', f'<section id="dynamic-content" data-static-view="{html.escape(view, quote=True)}"', 1)

@@ -18,6 +18,8 @@ import sys
 import tempfile
 from xml.sax.saxutils import escape
 
+import pages
+
 BILL_ID = re.compile(r"(HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9]\d{0,4}")
 SITE = "https://billatlas.org/"
 
@@ -327,6 +329,11 @@ AGENT_SITE = "https://agent.billatlas.org/"
 # Crawlers that read the share page as a page: its script must not send them to the app (whose canonical is the home
 # page). Any user agent saying bot, crawler or spider, as search engines' renderers do.
 _CRAWLER_JS = r"/bot|crawl|spider|slurp|Google-InspectionTool|BingPreview/i"
+# The icon links index.html keeps in its head slot (scripts/pages.py replaces the whole slot).
+SHELL_ICONS = "\n".join(('<link rel="icon" href="/favicon.ico" sizes="32x32">',
+                         '<link rel="icon" href="/icon.png" type="image/png" sizes="192x192">',
+                         '<link rel="apple-touch-icon" href="/apple-touch-icon.png">'))
+_PAGE_VERSION = re.compile(r'<meta name="page-version" content="([0-9a-f]+)">')
 
 
 def _names(value: object) -> list[str]:
@@ -353,8 +360,9 @@ def share_text_html(markdown: str, limit: int = SHARE_TEXT_MAX) -> tuple[str, bo
     return "\n".join(parts), False
 
 
-def share_body(bill: dict, site: str, headline: str | None, text: tuple[dict, str] | None) -> str:
-    """The share page's visible content: the official record, a labelled AI line, the start of the bill text, links."""
+def share_body(bill: dict, site: str, headline: str | None, text: tuple[dict, str] | None, in_app: bool = False) -> str:
+    """The share page's visible content: the official record, a labelled AI line, the start of the bill text, links.
+    in_app: the page is inside the site shell, where the app takes it over, so it has no "Open in" link."""
     bill_id = bill["id"]
     caption = " ".join(str(bill.get("caption") or bill.get("title") or "No caption available").split())
     official = f"https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill={bill_id}"
@@ -373,7 +381,8 @@ def share_body(bill: dict, site: str, headline: str | None, text: tuple[dict, st
         facts.append(("Official subjects", "; ".join(_names(bill.get("subjects")))))
     rows = "\n".join(f"<dt>{escape(k)}</dt><dd>{escape(v)}</dd>" for k, v in facts)
     out = [f"<h1>{escape(bill_number(bill_id))}: {escape(caption)}</h1>",
-           f'<p><a href="{a(f"{site}#bill?id={bill_id}")}">Open {escape(bill_number(bill_id))} in Texas Bill Atlas</a></p>',
+           *([] if in_app else
+             [f'<p><a href="{a(f"{site}#bill?id={bill_id}")}">Open {escape(bill_number(bill_id))} in Texas Bill Atlas</a></p>']),
            f"<dl>\n{rows}\n</dl>"]
     if headline:
         out.append(f"<p><strong>AI summary (not official):</strong> {escape(headline)}</p>")
@@ -395,12 +404,12 @@ def share_body(bill: dict, site: str, headline: str | None, text: tuple[dict, st
 
 
 def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_v: str | None = None,
-               text: tuple[dict, str] | None = None) -> str:
+               text: tuple[dict, str] | None = None, shell: str | None = None) -> str:
+    """The page at /bill/<ID>, served to everyone. With the deployed shell (scripts/pages.py) it is the whole site page
+    and the app takes it over in place. Without one (no release has published it yet) it is the standalone page, whose
+    script sends people to the app at the site root and lets crawlers stay."""
     bill_id = bill["id"]
     caption = " ".join(str(bill.get("caption") or bill.get("title") or "No caption available").split())
-    # Search and link-preview crawlers are served this page; a person who gets it is sent to the app at the site root,
-    # which moves the address to /bill/<ID> itself (sending them to /bill/<ID> could serve this page again). Crawlers
-    # that run scripts stay here, or they would index the app's home page instead of the bill.
     url, target = f"{site}bill/{bill_id}", f"{site}#bill?id={bill_id}"
     title = clip(f"{bill_number(bill_id)}: {caption}", SHARE_TITLE_MAX)
     # The official caption is in the title; an AI-written line is labelled as one.
@@ -419,6 +428,21 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_
             ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
             ("name", "twitter:image:alt", image_alt), ("name", "description", description)]
     tags = "\n".join(f'<meta {kind}="{name}" content="{a(value)}">' for kind, name, value in meta)
+    if shell is not None:
+        # The shell's head slot also holds the site icons, so the page brings its own.
+        head = f"""
+<title>{escape(title)} · Texas Bill Atlas</title>
+<link rel="canonical" href="{a(url)}">
+<link rel="alternate" type="text/markdown" href="{a(f"{AGENT_SITE}bills/{bill_id}.md")}">
+{SHELL_ICONS}
+{tags}
+<script type="application/ld+json">{legislation_jsonld(bill, site)}</script>
+"""
+        content = f'\n<article class="bill-page static-page" aria-label="Bill details">\n{share_body(bill, site, headline, text, True)}\n</article>\n'
+        # page-version covers only this bill's part, so a new shell alone is not a change to submit to IndexNow.
+        version = hashlib.sha256((head + content).encode()).hexdigest()[:12]
+        return pages.render_page(shell, head=f'{head}<meta name="page-version" content="{version}">',
+                                 content=content, view=f"bill:{bill_id}")
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -611,11 +635,23 @@ def load_rendered(path: Path | None) -> dict[str, str]:
             if BILL_ID.fullmatch(str(k)) and isinstance(v, str) and re.fullmatch(r"[0-9a-f]{1,64}", v)}
 
 
+def _page_version(page: Path | str) -> str | None:
+    """A shell page's page-version (a path is read first); None for a standalone page or an unreadable file."""
+    try:
+        text = page.read_text("utf-8") if isinstance(page, Path) else page
+    except OSError:
+        return None
+    match = _PAGE_VERSION.search(text)
+    return match.group(1) if match else None
+
+
 def write_share_pages(snapshot: dict, out_dir: Path, site: str = SITE, headlines: dict[str, str] | None = None,
                       rendered: dict[str, str] | None = None, text_dir: Path | None = None,
-                      changed: list[str] | None = None) -> tuple[int, int, int]:
+                      changed: list[str] | None = None, shell: str | None = None) -> tuple[int, int, int]:
     """One share page per bill, rewritten only when it changes; pages for bills no longer in the snapshot removed.
-    With text_dir the page shows the start of the bill's latest text. Rewritten bill ids are added to `changed`."""
+    With text_dir the page shows the start of the bill's latest text; with shell it is built inside the site shell.
+    Rewritten bill ids are added to `changed`, except pages whose own part (page-version) is unchanged: a new shell
+    rewrites every page, but no bill changed."""
     out_dir.mkdir(parents=True, exist_ok=True)
     headlines, rendered, keep = headlines or {}, rendered or {}, set()
     written = unchanged = removed = 0
@@ -624,10 +660,12 @@ def write_share_pages(snapshot: dict, out_dir: Path, site: str = SITE, headlines
             continue  # Never build a file name from an unexpected id.
         keep.add(f"{bill['id']}.html")
         text = _latest_text(text_dir, bill["id"]) if text_dir else None
-        if write_if_changed(out_dir / f"{bill['id']}.html",
-                            share_page(bill, site, headlines.get(bill["id"]), rendered.get(bill["id"]), text)):
+        path = out_dir / f"{bill['id']}.html"
+        page = share_page(bill, site, headlines.get(bill["id"]), rendered.get(bill["id"]), text, shell)
+        before = _page_version(path)
+        if write_if_changed(path, page):
             written += 1
-            if changed is not None:
+            if changed is not None and (before is None or before != _page_version(page)):
                 changed.append(bill["id"])
         else:
             unchanged += 1
@@ -1615,6 +1653,9 @@ def main() -> int:
                         help="2020 population table (scripts/census_places.py); defaults to one beside this script")
     parser.add_argument("--brackets", type=Path, default=None,
                         help="Population bracket output; defaults to brackets/ beside the snapshot")
+    parser.add_argument("--shell", type=Path, default=pages.SHELL_PATH,
+                        help="The deployed page shell (shell.html in the current release); bill pages are standalone "
+                             "without one")
     parser.add_argument("--no-indexnow", action="store_true",
                         help="Don't submit changed bill pages to IndexNow (only the server's live run submits anyway)")
     args = parser.parse_args()
@@ -1630,7 +1671,8 @@ def main() -> int:
     text_dir = args.text or args.snapshot.parent / "text"
     changed: list[str] = []
     written, unchanged, removed = write_share_pages(snapshot, args.share or args.snapshot.parent / "share", args.site,
-                                                    headlines, load_rendered(og_dir / "rendered.json"), text_dir, changed)
+                                                    headlines, load_rendered(og_dir / "rendered.json"), text_dir, changed,
+                                                    pages.load_shell(args.shell))
     print(f"Share pages: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
     if not args.no_indexnow and args.site == SITE and args.snapshot == LIVE_SNAPSHOT:
         print(f"IndexNow: {submit_indexnow(changed, args.site)}", flush=True)
