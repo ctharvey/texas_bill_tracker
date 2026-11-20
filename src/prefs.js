@@ -142,9 +142,11 @@ export function parseLocation(pathname, hash, search = '') {
   if ((m = MEMBER_PATH.exec(path))) return keyed(at('member', [`code=${m[1].toUpperCase()}`]), p => p.member);
   const route = routeForPath(path);
   const raw = String(hash || '').replace(/^#/, '');
-  // At the root, a fragment naming a view is an old link (#today, #all?topic=Water); one that is only context
-  // (#list=HB5) belongs to the home page.
-  if (!route || route.view === 'home' && raw && !/^[a-z]+=/.test(raw)) return parseHash(hash);
+  // A fragment naming a view is an old link (#today, #all?topic=Water, #?query=x), wherever it lands: pasted on /explorer
+  // it is a same-page fragment change. At the root anything but plain context (#list=HB5) reads as one, as it always has.
+  const named = raw.split('?')[0];
+  const oldLink = raw.startsWith('?') || VIEWS.includes(named) || named === 'chapter';
+  if (!route || oldLink || route.view === 'home' && raw && !/^[a-z]+=/.test(raw)) return parseHash(hash);
   const query = route.filters ? [...new URLSearchParams(String(search || ''))].filter(([name]) => FILTER_NAMES.includes(name))
     .map(([name, value]) => `${name}=${encodeURIComponent(value)}`) : [];
   return at(route.view, query);

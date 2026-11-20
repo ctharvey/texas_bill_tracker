@@ -27,6 +27,8 @@ import deploy_static  # noqa: E402
 import sync_service as svc  # noqa: E402
 
 MODES = ("src", "bundle")
+# The app's paths (/today, /bill/HB5, /law/PE/46, ...), from the route list the deploy publishes (public/routes.json).
+APP_PATHS = [re.compile(route["match"]) for route in json.loads((REPO / "public" / "routes.json").read_text(encoding="utf-8"))["routes"]]
 
 
 def release_files() -> tuple[str, ...]:
@@ -122,8 +124,8 @@ class Site:
                     self.send_error(405)
                 elif path.startswith("/live/"):
                     self.serve_live(path[len("/live/"):])
-                elif re.fullmatch(r"/bill/(?:HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9]\d{0,4}", path):
-                    self.path = "/index.html"  # As the gateway serves the app at /bill/<ID> to people.
+                elif path != "/" and any(match.fullmatch(path) for match in APP_PATHS):
+                    self.path = "/index.html"  # As the gateway serves the app at every path in the route list.
                     super().do_GET()
                 else:
                     super().do_GET()

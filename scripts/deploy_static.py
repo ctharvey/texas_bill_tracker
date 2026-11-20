@@ -33,7 +33,7 @@ MARKERS = ('head', 'heading', 'content')
 # Files under public/ are served from the site root (/favicon.ico, /social-card.png): stable URLs for browsers and
 # link-preview crawlers, unlike assets/<digest>/. One level only, with names that cannot shadow the page or a folder.
 PUBLIC = 'public/'
-PUBLIC_NAME = re.compile(r'[a-z0-9][a-z0-9-]*\.(?:png|ico|svg|txt|webmanifest)')
+PUBLIC_NAME = re.compile(r'[a-z0-9][a-z0-9-]*\.(?:png|ico|svg|txt|webmanifest|json)')  # routes.json: the route list
 
 
 def release_files(tracked) -> tuple[str, ...]:

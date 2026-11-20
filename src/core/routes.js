@@ -15,10 +15,11 @@ export const ROUTES = [
   {view: 'data', path: '/about/data', indexable: true, description: 'The sources behind Texas Bill Atlas, how fresh they are, and how to import your own lists.'},
   {view: 'saving', path: '/about/saving', indexable: true, description: 'How Texas Bill Atlas saves your watchlist and follows without an account, and how sync links work.'},
   {view: 'export', path: '/about/export', indexable: false, description: 'Download or import your saved Texas Bill Atlas lists.'},
-  // Views with a key in the path; `pattern` documents the shape, prefs.js parses it.
-  {view: 'bill', pattern: '/bill/<ID>', indexable: true, description: 'A Texas bill in the 90th Legislature: its official history, text, the laws it changes and the agencies it affects.'},
-  {view: 'statute', pattern: '/law/<CODE>/<section or chapter>', indexable: true, description: 'A part of Texas law and the bills in the 90th Legislature that would change it.'},
-  {view: 'member', pattern: '/member/<code>/<name-slug>', indexable: true, description: 'A member of the 90th Texas Legislature and the bills they filed.'},
+  // Views with a key in the path; `pattern` documents the shape and `match` is the server's test for the canonical
+  // form the app writes (prefs.js parses more leniently).
+  {view: 'bill', pattern: '/bill/<ID>', match: '^/bill/(HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9][0-9]{0,4}$', indexable: true, description: 'A Texas bill in the 90th Legislature: its official history, text, the laws it changes and the agencies it affects.'},
+  {view: 'statute', pattern: '/law/<CODE>/<section or chapter>', match: '^/law/[A-Z]{2}/[0-9]+[A-Z]?(\\.[0-9]+[A-Z]?)*$', indexable: true, description: 'A part of Texas law and the bills in the 90th Legislature that would change it.'},
+  {view: 'member', pattern: '/member/<code>/<name-slug>', match: '^/member/A[0-9]{3,5}(/[a-z0-9-]{1,60})?$', indexable: true, description: 'A member of the 90th Texas Legislature and the bills they filed.'},
 ];
 
 const BY_PATH = new Map(ROUTES.filter(r => r.path).map(r => [r.path, r]));
@@ -48,4 +49,12 @@ export function pageMeta(view, url, shared = false) {
   const indexable = Boolean(route?.indexable) && !String(url).startsWith('/#') && !shared;
   return {canonical: indexable ? SITE + String(url).split(/[?#]/)[0] : `${SITE}/`, robots: indexable ? null : 'noindex, follow',
     description: route?.description || null};
+}
+
+// The route list the deploy publishes as /routes.json (public/routes.json, written by scripts/routes_json.mjs): the
+// gateway's matchers and the E2E server are checked against it. Every route has `match`, an anchored RE2-compatible
+// pattern for the canonical path.
+export function routeList() {
+  return {format: 'texas-bill-atlas-routes-v1', routes: ROUTES.map(({view, path, pattern, match, indexable}) => ({view,
+    path: path || pattern, match: match || `^${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, indexable}))};
 }

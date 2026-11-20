@@ -1,0 +1,95 @@
+{
+ "format": "texas-bill-atlas-routes-v1",
+ "routes": [
+  {
+   "view": "home",
+   "path": "/",
+   "match": "^/$",
+   "indexable": true
+  },
+  {
+   "view": "today",
+   "path": "/today",
+   "match": "^/today$",
+   "indexable": true
+  },
+  {
+   "view": "all",
+   "path": "/explorer",
+   "match": "^/explorer$",
+   "indexable": false
+  },
+  {
+   "view": "local",
+   "path": "/near-you",
+   "match": "^/near-you$",
+   "indexable": false
+  },
+  {
+   "view": "watchlist",
+   "path": "/watchlist",
+   "match": "^/watchlist$",
+   "indexable": false
+  },
+  {
+   "view": "following",
+   "path": "/following",
+   "match": "^/following$",
+   "indexable": false
+  },
+  {
+   "view": "agencies",
+   "path": "/agencies",
+   "match": "^/agencies$",
+   "indexable": true
+  },
+  {
+   "view": "review",
+   "path": "/review",
+   "match": "^/review$",
+   "indexable": true
+  },
+  {
+   "view": "method",
+   "path": "/about/method",
+   "match": "^/about/method$",
+   "indexable": true
+  },
+  {
+   "view": "data",
+   "path": "/about/data",
+   "match": "^/about/data$",
+   "indexable": true
+  },
+  {
+   "view": "saving",
+   "path": "/about/saving",
+   "match": "^/about/saving$",
+   "indexable": true
+  },
+  {
+   "view": "export",
+   "path": "/about/export",
+   "match": "^/about/export$",
+   "indexable": false
+  },
+  {
+   "view": "bill",
+   "path": "/bill/<ID>",
+   "match": "^/bill/(HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9][0-9]{0,4}$",
+   "indexable": true
+  },
+  {
+   "view": "statute",
+   "path": "/law/<CODE>/<section or chapter>",
+   "match": "^/law/[A-Z]{2}/[0-9]+[A-Z]?(\\.[0-9]+[A-Z]?)*$",
+   "indexable": true
+  },
+  {
+   "view": "member",
+   "path": "/member/<code>/<name-slug>",
+   "match": "^/member/A[0-9]{3,5}(/[a-z0-9-]{1,60})?$",
+   "indexable": true
+  }
+ ]
+}

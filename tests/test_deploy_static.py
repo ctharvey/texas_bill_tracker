@@ -155,6 +155,11 @@ class PublicFilesTests(unittest.TestCase):
         self.assertIn('social-card.png', moved)
         self.assertFalse(any(name.startswith('public/') for name in moved))
 
+    def test_the_route_list_is_published_at_the_site_root(self):
+        """SEO chunk 3: the gateway's route test and the E2E server read /routes.json."""
+        files = deploy.release_files(['index.html', 'public/routes.json', *deploy.DATA_FILES])
+        self.assertIn('routes.json', deploy.root_files({name: b'x' for name in files}))
+
     def test_unexpected_public_names_are_refused(self):
         for name in ('public/index.html', 'public/live', 'public/sub/x.png', 'public/.hidden.png', 'public/Assets.png'):
             with self.subTest(name=name), self.assertRaises(ValueError):

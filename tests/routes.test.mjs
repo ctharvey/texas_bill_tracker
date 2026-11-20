@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ROUTES, routeForPath, routeForView, slugify, pageMeta} from '../src/core/routes.js';
+import {readFileSync} from 'node:fs';
+import {ROUTES, routeForPath, routeForView, slugify, pageMeta, routeList} from '../src/core/routes.js';
 import {VIEWS, FILTER_DEFAULTS, parseHash, parseLocation, buildUrl, isAppPath, shareListUrl, syncLinkUrl} from '../src/prefs.js';
 
 // Splits a built address the way the browser does, then reads it back.
@@ -159,4 +160,30 @@ test('links copied before paths open exactly what the new links open', () => {
   assert.equal(buildUrl(p.view, p.filters, {list: p.list}), '/explorer#list=HB5,SB2');
   const s = parseLocation('/', `#watchlist?sync=${key}`);
   assert.equal(buildUrl(s.view, s.filters, {}), '/watchlist');
+});
+
+test('an old #view fragment on a fixed path is an old link; on a keyed path it is ignored', () => {
+  assert.deepEqual(parseLocation('/explorer', '#all?query=wage'), parseHash('#all?query=wage'));
+  assert.deepEqual(parseLocation('/today', '#watchlist'), parseHash('#watchlist'));
+  assert.deepEqual(parseLocation('/about/method', '#?query=x'), parseHash('#?query=x'));
+  assert.deepEqual(parseLocation('/explorer', '#chapter?law=PE&ch=46'), parseHash('#chapter?law=PE&ch=46'));
+  // Context and anything else stay with the path's own view.
+  assert.equal(parseLocation('/explorer', '#list=HB5', '?topic=Water').filters.topic, 'Water');
+  assert.equal(parseLocation('/today', '#main-content').view, 'today');
+  assert.equal(parseLocation('/bill/HB5', '#all?topic=Water').bill, 'HB5');
+  assert.equal(parseLocation('/law/PE/46.06', '#today').statute, 'PE 46.06');
+});
+
+test('public/routes.json is the route table, and each route matches exactly the paths the app writes for it', () => {
+  const published = JSON.parse(readFileSync(new URL('../public/routes.json', import.meta.url), 'utf8'));
+  assert.deepEqual(published, routeList(), 'run: node scripts/routes_json.mjs');
+  const matchers = published.routes.map(r => [r.view, new RegExp(r.match)]);
+  const samples = {bill: [{bill: 'HB5'}, {bill: 'SJR12'}], statute: [{statute: 'PE 46.06'}, {statute: 'PE 46'}, {statute: 'ED 30A.151'}],
+    member: [{member: 'A4285', slug: 'Suleman Lalani'}, {member: 'A4285'}]};
+  for (const view of VIEWS) for (const options of samples[view] || [{}]) {
+    const path = buildUrl(view, {}, options).split(/[?#]/)[0];
+    assert.deepEqual(matchers.filter(([, re]) => re.test(path)).map(([v]) => v), [view], path);
+  }
+  for (const path of ['/nope', '/bill/HB0', '/bill/hb5', '/law/PEN/1', '/member/B1234', '/today/x', '/live/bills.json', '/explorer/'])
+    assert.deepEqual(matchers.filter(([, re]) => re.test(path)).map(([v]) => v), [], path);
 });
