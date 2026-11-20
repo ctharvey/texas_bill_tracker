@@ -44,6 +44,7 @@ def build_bundle(target: Path) -> str:
     bundle = {name: (REPO / name).read_bytes() for name in release_files()}
     digest, versioned = deploy_static.versioned_assets(bundle)
     bundle.update(versioned)
+    bundle.update(deploy_static.entry_points(bundle, digest))  # /app.css and /boot.js, which static pages load
     for name, content in bundle.items():
         path = target / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -68,8 +69,9 @@ def capture_info() -> dict:
 def build_site_pages(site) -> Path:
     """The static pages the data run writes into live/share (member, topic, agency, about, home, today, bill, law),
     built by scripts/build_feeds.py from the captured snapshot, the committed agent page lists
-    (fixtures/agent/pages.json, see make_site_pages.py) and a shell made from the index.html this site serves, as the
-    deployer makes current/shell.html. Returns the share folder."""
+    (fixtures/agent/pages.json, see make_site_pages.py) and a shell: in bundle mode deploy_static.shell_page of the
+    source index.html, as the deployer makes current/shell.html (it loads /app.css and /boot.js); in src mode the
+    source index.html itself, which loads ./src/. Returns the share folder."""
     live = site.tmp / "pages" / "live"
     live.mkdir(parents=True)
     for name in ("bills.json", "members.json", "luna", "text"):
@@ -82,7 +84,8 @@ def build_site_pages(site) -> Path:
     agent.mkdir(parents=True)
     shutil.copyfile(FIXTURES / "agent" / "pages.json", agent / "pages.json")
     shell = site.tmp / "pages" / "shell.html"
-    shell.write_bytes(deploy_static.shell_page((site.root / "index.html").read_bytes()))
+    index = (REPO / "index.html").read_bytes()
+    shell.write_bytes(deploy_static.shell_page(index) if site.mode == "bundle" else index)
     done = subprocess.run([sys.executable, "scripts/build_feeds.py", "--snapshot", str(live / "bills.json"),
                            "--out", str(site.tmp / "pages" / "feeds"), "--statutes", str(site.tmp / "pages" / "statutes"),
                            "--today", capture_info()["captured_at"][:10], "--no-indexnow", "--shell", str(shell)],
