@@ -78,7 +78,7 @@ def test_topic_and_agency_pages_list_their_bills(device, site_pages):
     rows = "#dynamic-content .today-group a.bill-number[data-open]"
     for path, file in (("/topic/education", "topic/education.html"), ("/agency/tea", "agency/tea.html")):
         static = (site_pages / file).read_text("utf-8")
-        listed = set(re.findall(r'href="/bill/([A-Z]+[0-9]+)"', static))
+        listed = set(re.findall(r'href="https://billatlas\.org/bill/([A-Z]+[0-9]+)"', static))
         assert 0 < len(listed) <= 100  # the static list's cap
         serve_static(device, path, static)
         page = device.open(path)
@@ -95,6 +95,6 @@ def test_topic_and_agency_pages_list_their_bills(device, site_pages):
 
 def test_unknown_topic_and_agency_say_so(device):
     page = device.open("/topic/no-such-topic")  # no static file: the gateway serves the app
-    expect(page.locator("#page-title")).to_contain_text("Topic not found")
+    expect(page.locator("#dynamic-content .section-head h2")).to_have_text("Topic not found")
     page = device.open("/agency/no-such-agency")
-    expect(page.locator("#page-title")).to_contain_text("Agency not found")
+    expect(page.locator("#dynamic-content .section-head h2")).to_have_text("Agency not found")
