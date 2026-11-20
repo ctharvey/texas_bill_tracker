@@ -1,0 +1,140 @@
+{
+ "note": "Inputs and the head titles (and bill descriptions) the static pages get; tests/test_page_head.py checks build_feeds against them, tests/head.test.mjs checks src/core/head.js.",
+ "cases": [
+  {
+   "kind": "bill",
+   "id": "HB1094",
+   "number": "HB 1094",
+   "caption": "Relating to state contracts with  and investments in certain companies that boycott Israel.",
+   "headline": null,
+   "expected": {
+    "title": "HB 1094: Relating to state contracts with and investments in certain… · Texas Bill Atlas",
+    "description": "Relating to state contracts with and investments in certain companies that boycott Israel."
+   }
+  },
+  {
+   "kind": "bill",
+   "id": "SB9",
+   "number": "SB 9",
+   "caption": "Relating to water.",
+   "headline": "Creates a new  water fund for rural areas.",
+   "expected": {
+    "title": "SB 9: Relating to water. · Texas Bill Atlas",
+    "description": "AI summary: Creates a new water fund for rural areas."
+   }
+  },
+  {
+   "kind": "bill",
+   "id": "HJR3",
+   "number": "HJR 3",
+   "caption": "",
+   "headline": null,
+   "expected": {
+    "title": "HJR 3: No caption available · Texas Bill Atlas",
+    "description": "No caption available"
+   }
+  },
+  {
+   "kind": "member",
+   "code": "A4395",
+   "chamber": "house",
+   "full_name": "Daniel Alders",
+   "expected": {
+    "title": "Rep. Daniel Alders · Texas Bill Atlas"
+   }
+  },
+  {
+   "kind": "member",
+   "code": "A1010",
+   "chamber": "senate",
+   "full_name": "Donna Campbell",
+   "expected": {
+    "title": "Sen. Donna Campbell · Texas Bill Atlas"
+   }
+  },
+  {
+   "kind": "topic",
+   "key": "energy-and-utilities",
+   "name": "Energy & utilities",
+   "expected": {
+    "title": "Energy & utilities: Texas bills · Texas Bill Atlas"
+   }
+  },
+  {
+   "kind": "agency",
+   "key": "txdot",
+   "name": "Texas Department of Transportation",
+   "expected": {
+    "title": "Texas Department of Transportation: Texas bills that could affect it · Texas Bill Atlas"
+   }
+  },
+  {
+   "kind": "agency",
+   "key": "tea",
+   "name": "Texas Education Agency",
+   "expected": {
+    "title": "Texas Education Agency: Texas bills that could affect it · Texas Bill Atlas"
+   }
+  },
+  {
+   "kind": "law",
+   "code": "GV",
+   "number": "403.606",
+   "code_name": "Government Code",
+   "h": "CERTAIN PERSONS INELIGIBLE",
+   "expected": {
+    "title": "Government Code § 403.606: CERTAIN PERSONS INELIGIBLE · Texas Bill Atlas"
+   }
+  },
+  {
+   "kind": "law",
+   "code": "CR",
+   "number": "42.12",
+   "code_name": "Code of Criminal Procedure",
+   "h": "COMMUNITY SUPERVISION; ELIGIBILITY FOR CERTAIN DEFENDANTS CONVICTED OF OFFENSES.",
+   "expected": {
+    "title": "Code of Criminal Procedure Art. 42.12: COMMUNITY SUPERVISION… · Texas Bill Atlas"
+   }
+  },
+  {
+   "kind": "law",
+   "code": "PE",
+   "number": "46.06",
+   "code_name": "Penal Code",
+   "h": "",
+   "expected": {
+    "title": "Penal Code § 46.06 · Texas Bill Atlas"
+   }
+  },
+  {
+   "kind": "chapter",
+   "code": "PE",
+   "chapter": "22",
+   "code_name": "Penal Code",
+   "h": "ASSAULTIVE OFFENSES AGAINST THE PERSON",
+   "expected": {
+    "title": "Penal Code Chapter 22: Assaultive Offenses Against the Person · Texas Bill Atlas"
+   }
+  },
+  {
+   "kind": "chapter",
+   "code": "HS",
+   "chapter": "382",
+   "code_name": "Health and Safety Code",
+   "h": "NON-PROFIT CLEAN AIR AND WATER AUTHORITIES FOR THE STATE",
+   "expected": {
+    "title": "Health and Safety Code Chapter 382: Non-Profit Clean Air and Water… · Texas Bill Atlas"
+   }
+  },
+  {
+   "kind": "chapter",
+   "code": "PE",
+   "chapter": "46",
+   "code_name": "Penal Code",
+   "h": "",
+   "expected": {
+    "title": "Penal Code Chapter 46 · Texas Bill Atlas"
+   }
+  }
+ ]
+}

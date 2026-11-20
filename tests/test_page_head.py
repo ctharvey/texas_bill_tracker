@@ -3,11 +3,18 @@ from pathlib import Path
 import json
 import re
 import sys
+import types
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
+sys.modules.setdefault('fcntl', types.ModuleType('fcntl'))  # Linux-only lock; unused here.
 import page_head as ph  # noqa: E402
+import build_feeds as bf  # noqa: E402
+import deploy_static as deploy  # noqa: E402
+import html  # noqa: E402
+
+FIXTURE = json.loads((ROOT / 'tests' / 'fixtures' / 'page_heads.json').read_text(encoding='utf-8'))
 
 SITE = 'https://billatlas.org/'
 
@@ -97,6 +104,33 @@ class StructuredData(unittest.TestCase):
         self.assertEqual(data['potentialAction']['target']['urlTemplate'],
                          'https://billatlas.org/explorer?query={search_term_string}')
         self.assertEqual(data['potentialAction']['query-input'], 'required name=search_term_string')
+
+
+class SharedFixture(unittest.TestCase):
+    """The titles (and bill descriptions) the static pages get; tests/head.test.mjs checks the app against the same."""
+
+    def built(self, c):
+        k = c['kind']
+        if k == 'bill':
+            return bf.share_page({'id': c['id'], 'caption': c['caption']}, headline=c['headline'])
+        shell = deploy.shell_page((ROOT / 'index.html').read_bytes()).decode()
+        if k == 'member':
+            return bf.member_page({'code': c['code'], 'chamber': c['chamber'], 'full_name': c['full_name'], 'district': '6'},
+                                  [], shell)
+        if k in ('topic', 'agency'):
+            return bf.group_page(k, c['key'], c['name'], [], {}, shell)
+        if k == 'law':
+            return bf.law_page(f"{c['code']} {c['number']}", {'h': c['h'], 'b': [['HB1', 'a']]}, c['code_name'], None)
+        return bf.law_chapter_page(f"{c['code']} {c['chapter']}", {'whole': [], 'sections': {}}, c['h'])
+
+    def test_static_pages_match_the_fixture(self):
+        for c in FIXTURE['cases']:
+            with self.subTest(c):
+                page = self.built(c)
+                self.assertEqual(html.unescape(re.search(r'<title>(.*?)</title>', page).group(1)), c['expected']['title'])
+                if 'description' in c['expected']:
+                    found = re.search(r'<meta name="description" content="([^"]*)">', page).group(1)
+                    self.assertEqual(html.unescape(found), c['expected']['description'])
 
 
 if __name__ == '__main__':

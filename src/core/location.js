@@ -2,6 +2,7 @@
 // and leaving a bill page, and writing the address and the explorer's remembered filters back. setView is a router hook.
 import {cleanFilters, FILTER_DEFAULTS, pickFilters, parseLocation, buildHash, buildUrl, sameFilters} from '../prefs.js';
 import {pageMeta} from './routes.js';
+import {holdHead, writeHead} from './head.js';
 import {memberByCode} from '../geo.js';
 import {SORTS} from './labels.js';
 import {state, runtime} from './state.js';
@@ -111,22 +112,17 @@ function currentUrl(view=state.view){
     statute:state.statuteKey,agency:state.agencyId,topic:state.topicSlug});
 }
 
-// The canonical address, robots and description for the view on screen (routes.pageMeta).
-let homeDescription=null;
-function setMeta(name,content){
-  let el=document.querySelector(`meta[name="${name}"]`);
-  if(content===null){el?.remove();return}
-  if(!el){el=document.createElement('meta');el.name=name;document.head.append(el)}
-  el.content=content;
-}
+// The head for the view on screen: title and description from app.js (runtime.pageHead), canonical, robots and the
+// fallback description from routes.pageMeta. Left alone while the reader is at the static page's own address.
 function writeMeta(url){
+  if(holdHead(runtime.headPath??null,url))return;
+  runtime.headPath=null;
   const meta=pageMeta(state.view,url,Boolean(state.sharedList));
-  const canonical=document.querySelector('link[rel="canonical"]');
-  if(canonical)canonical.href=meta.canonical;
-  setMeta('robots',meta.robots);
-  homeDescription??=document.querySelector('meta[name="description"]')?.content||null;
-  if(homeDescription!==null)setMeta('description',meta.description||homeDescription);
+  const own=runtime.pageHead?.(state.view)||{title:'Bill explorer',description:null};
+  writeHead(document,{title:own.title,description:own.description||meta.description,canonical:meta.canonical,robots:meta.robots});
 }
+// A view's name arrived after it was drawn (the roster, the statute index).
+export const refreshHead=()=>writeMeta(currentUrl());
 
 // Opens a bill's page with a history entry, remembering where it was opened from (not when moving bill to bill).
 export function openBillPage(id,push=false){

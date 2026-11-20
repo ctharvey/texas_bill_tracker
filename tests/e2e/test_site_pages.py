@@ -13,6 +13,7 @@ SITE = "https://billatlas.org"
 CANONICAL = re.compile(r'<link rel="canonical" href="https://billatlas\.org([^"]*)"')
 VIEW = re.compile(r'data-static-view="([^"]+)"')
 TITLE = re.compile(r"<title>([^<]+)</title>")
+DESCRIPTION = re.compile(r'<meta name="description" content="([^"]*)"')
 
 # (address, static file, static view, the app's #page-title). None: the title comes from the static page's own
 # <title>, so the test checks that the static page and the app name the same member, topic or agency.
@@ -98,3 +99,42 @@ def test_unknown_topic_and_agency_say_so(device):
     expect(page.locator("#dynamic-content .section-head h2")).to_have_text("Topic not found")
     page = device.open("/agency/no-such-agency")
     expect(page.locator("#dynamic-content .section-head h2")).to_have_text("Agency not found")
+
+
+@pytest.mark.parametrize("path,file,view,title", PAGES, ids=[p[1] for p in PAGES])
+def test_static_head_stays_after_takeover(device, site_pages, path, file, view, title):
+    """SEO chunk 6: the static head is the indexed one, so the app leaves it alone at the page's own address."""
+    static = (site_pages / file).read_text("utf-8")
+    serve_static(device, path, static)
+    page = device.open(path)
+    expect(page.locator("#dynamic-content[data-static-view]")).to_have_count(0)
+    expect(page.locator("#page-title")).not_to_be_empty()
+    assert page.title() == html.unescape(TITLE.search(static).group(1))
+    expect(page.locator('meta[name="description"]')).to_have_attribute(
+        "content", html.unescape(DESCRIPTION.search(static).group(1)))
+    expect(page.locator('script[type="application/ld+json"]')).to_have_count(static.count("application/ld+json"))
+
+
+def test_moving_in_the_app_writes_the_new_pages_head(device, site_pages):
+    """After an in-app move the app writes the head itself, in the static pages' format (src/core/head.js)."""
+    serve_static(device, "/topic/education", (site_pages / "topic/education.html").read_text("utf-8"))
+    page = device.open("/topic/education")
+    expect(page.locator("#dynamic-content[data-static-view]")).to_have_count(0)
+    first = page.locator("#dynamic-content .today-group a.bill-number[data-open]").first
+    bill = first.get_attribute("data-open")
+    first.click()
+    expect(page).to_have_url(re.compile(rf"/bill/{bill}$"))
+    static = (site_pages / f"{bill}.html").read_text("utf-8")  # The bill's own static page, built by the data run.
+    expect(page).to_have_title(html.unescape(TITLE.search(static).group(1)))
+    description = html.unescape(DESCRIPTION.search(static).group(1))
+    expect(page.locator('meta[name="description"]')).to_have_attribute("content", description)
+    expect(page.locator('meta[property="og:description"]')).to_have_attribute("content", description)
+    expect(page.locator('meta[property="og:title"]')).to_have_attribute(
+        "content", html.unescape(TITLE.search(static).group(1)).rsplit(" · ", 1)[0])
+    expect(page.locator('link[rel="canonical"]')).to_have_attribute("href", f"{SITE}/bill/{bill}")
+    expect(page.locator('meta[property="og:url"]')).to_have_attribute("content", f"{SITE}/bill/{bill}")
+    expect(page.locator('meta[name="robots"]')).to_have_count(0)
+    page.locator('[data-view="all"]').first.click()  # The explorer: filterable, so not indexed.
+    expect(page).to_have_title("Bill explorer · Texas Bill Atlas")
+    expect(page.locator('meta[name="robots"]')).to_have_attribute("content", "noindex, follow")
+    expect(page.locator('link[rel="canonical"]')).to_have_attribute("href", f"{SITE}/")

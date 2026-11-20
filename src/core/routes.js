@@ -1,7 +1,7 @@
 // Every view's address (SEO chunk 2). One table for reading and writing paths, kept as data so the gateway's list
 // (chunk 3) and the sitemap (chunk 7) can be checked against it. `indexable` is for the canonical and robots meta:
 // personal views and the filterable explorer are not. Names pending the roadmap's open question 1.
-// `description` is the page's meta description until chunk 6 writes one per page (home keeps index.html's own).
+// `description` is the meta description of a view with none of its own (core/head.js; home keeps index.html's).
 export const ROUTES = [
   {view: 'home', path: '/', indexable: true},
   {view: 'today', path: '/today', indexable: true, description: 'Every Texas bill with a recorded action today, by topic, from the official legislative record.'},

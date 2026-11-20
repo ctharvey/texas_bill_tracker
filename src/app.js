@@ -17,7 +17,8 @@ import {importFile} from './features/explorer/import.js';
 import {options} from './features/explorer/controls.js';
 import {agenciesMarkup, filterAgencyCards, showAgencyChoices, hideAgencyChoices, setAgencySort, pickAgency, handleAgencyKeydown} from './features/agencies/view.js';
 import {clearFilter, explorerMarkup, drawResults, PREVIEW_WIDE, preview, showPreview, closePreview, stepPreview} from './features/explorer/view.js';
-import {statuteLabel} from './features/statutes/model.js';
+import {statuteLabel, isChapterKey, LAW_CODE_NAMES} from './features/statutes/model.js';
+import {HOME_TITLE, HOME_DESCRIPTION, billHead, memberHead, groupHead, lawHead, chapterHead, headingHead} from './core/head.js';
 import {loadStatutes, statuteMarkup} from './features/statutes/view.js';
 import {stageFiles} from './features/stages/view.js';
 import {exportMarkup} from './features/export/view.js';
@@ -35,7 +36,7 @@ import {stampText} from './core/format.js';
 import {$, esc, toast} from './core/dom.js';
 import {copyText, download} from './core/copy.js';
 import {SORTS, todayDay} from './core/labels.js';
-import {lastPath, goTo, navigate, FILTERED_VIEWS, switchFilters, applyLocation, openBillPage, leaveBillPage, persistState} from './core/location.js';
+import {lastPath, goTo, navigate, FILTERED_VIEWS, switchFilters, applyLocation, openBillPage, leaveBillPage, persistState, refreshHead} from './core/location.js';
 import {timeoutSignal, loadShardedMap, httpError} from './core/net.js';
 import {registerView, setFallbackView, viewHeading, renderView, setRenderContent, setExplorerHooks, setSyncHooks} from './core/router.js';
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
@@ -141,6 +142,8 @@ async function init(){
   const located=parseLocation(location.pathname,location.hash,location.search),staticHere=staticMatches(runtime.staticView,located);
   const decision=takeover(runtime.staticView,{loaded:state.meta?.data_mode!=='unavailable',matches:staticHere});
   runtime.keepStatic=decision==='keep';
+  // The static page's head is the indexed one: kept while the reader stays at its address (core/head.js).
+  runtime.headPath=staticHere?location.pathname:null;
   // A matching static page keeps the reader's place on the first draw; a non-matching one still scrolls to the top.
   runtime.keepScroll=decision!=='none'&&staticHere;
   const syncKey=applyLocation(true);
@@ -257,16 +260,26 @@ function namedHeading(view){
 function refreshNamedHeading(){
   const h=namedHeading(state.view),el=$('#page-title');
   if(!h||!el||el.innerHTML===h)return;
-  el.innerHTML=h;document.title=pageTitle(state.view);
+  el.innerHTML=h;refreshHead();
 }
-function pageTitle(view){
+// The view's title and description in the static pages' format (core/head.js); description null keeps the route's.
+function pageHead(view){
+  if(view==='home')return {title:HOME_TITLE,description:HOME_DESCRIPTION};
   const bill=view==='bill'?state.bills.find(b=>b.id===state.openBill):null;
+  if(bill)return billHead(bill.number,bill.caption||bill.title,bill.headline);
   const member=view==='member'?memberByCode(state.roster,state.memberCode):null;
-  const statute=view==='statute'&&state.statuteKey&&state.statutes?statuteLabel(state.statuteKey,state.statutes.codes):null;
+  if(member)return memberHead(memberTitle(member));
   const group=view==='agency'||view==='topic'?groupTitle(view):null;
-  const name=bill?bill.number:member?memberTitle(member):group||statute||PAGE_NAMES[view]||'Bill explorer';
-  return `${name} · Texas Bill Atlas`;
+  if(group)return groupHead(view,group);
+  if(view==='statute'&&state.statuteKey&&state.statutes){
+    const key=state.statuteKey,[code,number]=key.split(' '),name=state.statutes.codes?.[code]||LAW_CODE_NAMES[code]||code;
+    return isChapterKey(key)?chapterHead(name,number,state.statutes.chapters?.[key]?.h||'')
+      :lawHead(name,code,number,state.statutes.sections?.[key]?.h||'');
+  }
+  if(['today','method','saving','data'].includes(view))return headingHead(viewHeading(view)[0]);
+  return {title:PAGE_NAMES[view]||'Bill explorer',description:null};
 }
+runtime.pageHead=pageHead;
 let viewReady=false;  // Set after the first view is drawn; the first load keeps focus where the browser put it.
 function setView(view,push=false,{focus=true}={}){
   switchFilters(view);
@@ -275,8 +288,7 @@ function setView(view,push=false,{focus=true}={}){
   setNavOpen(false);
   preview.id=null;
   document.querySelectorAll('[data-view]').forEach(el=>{el.classList.toggle('active',el.dataset.view===view);if(el.classList.contains('nav-item')){if(el.dataset.view===view)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current')}});
-  document.title=pageTitle(view);
-  const [title,subtitle]=viewHeading(view);
+  const [title,subtitle]=viewHeading(view);  // The tab title is written with the address (persistState).
   $('#page-title').innerHTML=namedHeading(view)||title;$('#page-subtitle').textContent=subtitle;
   // A bill page has its own header in place of the page heading.
   $('.page-heading').hidden=view==='bill';
