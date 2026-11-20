@@ -16,7 +16,7 @@ import {exportCsv} from './features/explorer/csv.js';
 import {importFile} from './features/explorer/import.js';
 import {options} from './features/explorer/controls.js';
 import {agenciesMarkup, filterAgencyCards, showAgencyChoices, hideAgencyChoices, setAgencySort, pickAgency, handleAgencyKeydown} from './features/agencies/view.js';
-import {clearFilter, explorerMarkup, drawResults, PREVIEW_WIDE, preview, showPreview, closePreview, stepPreview} from './features/explorer/view.js';
+import {clearFilter, explorerMarkup, drawResults, PREVIEW_WIDE, preview, showPreview, closePreview, stepPreview, showMoreLaws} from './features/explorer/view.js';
 import {statuteLabel, isChapterKey, LAW_CODE_NAMES} from './features/statutes/model.js';
 import {HOME_TITLE, HOME_DESCRIPTION, billHead, memberHead, groupHead, lawHead, chapterHead, headingHead} from './core/head.js';
 import {loadStatutes, statuteMarkup} from './features/statutes/view.js';
@@ -42,7 +42,7 @@ import {registerView, setFallbackView, viewHeading, renderView, setRenderContent
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
 import {STORAGE_OK, readJson, loadSaved} from './core/storage.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
-  cleanSearches, newSearchId, searchName, searchFitsSync, MAX_SEARCHES, parseLocation, buildUrl, shareUrl, isAppPath, syncLinkUrl} from './prefs.js';
+  cleanSearches, newSearchId, searchName, searchFitsSync, MAX_SEARCHES, parseLocation, buildUrl, shareUrl, isAppPath, syncLinkUrl, nextScope} from './prefs.js';
 import {heldFile, heldCount, previousLinks} from './core/move.js';
 import {NEAR_KEY, cleanNear, countyDistricts, memberByCode} from './geo.js';
 import {applyLunaTags, applyLunaExtras, attachMembers, reviewProgress, assessHearing, snapshotAgeHours, normalizeBill, cardClickOpens, activityOn} from './taxonomy.js';
@@ -471,6 +471,9 @@ function registerClicks(){
     toast(op==='add'?`Watching ${names}`:`Removed ${names} from your watchlist`)});
   clickOn('watch','[data-watch]',star=>{const id=star.dataset.watch;changeWatch(state.watch.has(id)?'remove':'add',[id]);renderOverview();if(state.view==='all'||state.view==='watchlist')renderResults();if(state.view==='bill')renderContent();toast(state.watch.has(id)?`${id} added to your watchlist`:`${id} removed from your watchlist`)});
   clickOn('search-example','[data-search-example]',x=>{state.query=x.dataset.searchExample;state.visibleCount=30;renderContent();$('#bill-search')?.focus()});
+  // Bills / Laws: the last kind on stays on. The whole explorer is redrawn (the controls and placeholder change).
+  clickOn('search-scope','[data-search-scope]',btn=>{const kind=btn.dataset.searchScope,next=nextScope(state.scope,kind);if(next===state.scope)return;state.scope=next;state.visibleCount=30;renderContent();$(`[data-search-scope="${kind}"]`)?.focus()});
+  clickOn('law-more','#law-more',()=>{showMoreLaws();renderResults()});
   clickOn('topic','[data-topic]',topic=>{state.topic=topic.dataset.topic;state.visibleCount=30;renderContent()});
   clickOn('agency-show-all','#agency-show-all',btn=>{const list=$('#agency-list'),all=list.dataset.all!=='1';list.dataset.all=all?'1':'';btn.setAttribute('aria-expanded',String(all));btn.textContent=all?'Show only agencies with bills':`Show all ${list.children.length}`;filterAgencyCards($('#agency-find').value)});
   clickOn('agency-pick','[data-agency-pick]',pick=>{switchFilters('all');state.agency=pick.dataset.agencyPick;state.visibleCount=30;state.view='all';goTo('all');setView('all')});

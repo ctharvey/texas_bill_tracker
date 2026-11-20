@@ -6,7 +6,8 @@ import {timeoutSignal, httpError} from '../../core/net.js';
 import {buildUrl} from '../../prefs.js';
 import {lastActionInfo, openLinkHtml} from '../../taxonomy.js';
 import {STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, compareLaw, currentLaw, lawCopyUnits, STATUTE_KEY, groupStatuteEntries, lawFollowOf, isLawFollowQuery,
-  CHAPTER_KEY, isChapterKey, chapterOf, lawEntries, lawChapterOutline, lawSearchTerms, lawSearchPrefix, lawSearchMatches} from './model.js';
+  CHAPTER_KEY, isChapterKey, chapterOf, lawEntries, lawChapterOutline, lawSearchTerms, lawSearchPrefix, lawSearchMatches,
+  parseStatuteQuery, statuteKeysFor, LAW_CODES} from './model.js';
 import {renderContent, renderResults, refreshHome} from '../../core/router.js';
 import {billHref} from '../../core/links.js';
 
@@ -340,7 +341,7 @@ export function statuteMarkup(){
 // What opening a section shows: a proposed new section has no current law to compare with.
 const openHint=key=>(state.statutes.sections[key]?.b||[]).every(p=>p[1]==='n')?'Open it to read the proposals.':'Open it to compare with current law.';
 // Explorer: a search for a section number lists the bills that change it; this links to their comparison.
-export function statuteHintMarkup(keys,query=''){
+export function statuteHintMarkup(keys,query='',headings=true){
   // Exactly a section key ("PE 46.06", what a law follow saves): only that section's bills, never text matches.
   if(isLawFollowQuery(query)){
     if(!state.statutes)return `<div class="info-callout${state.statutesFailed?' callout-warn':''} statute-hint">${state.statutesFailed?`The list of laws each bill changes is not available right now, so the bills that change ${esc(query)} cannot be shown. Try again later.`:`Loading the bills that change ${esc(query)}…`}</div>`;
@@ -348,7 +349,41 @@ export function statuteHintMarkup(keys,query=''){
     return `<div class="info-callout statute-hint">Showing only bills that change ${statuteLink(query)}${state.statutes.sections[query]?`. ${openHint(query)}`:': none yet.'}</div>`;
   }
   if(keys.length)return `<div class="info-callout statute-hint">Bills that change ${keys.map(statuteLink).join(', ')} are included. ${keys.length===1?openHint(keys[0]):'Open one to see what its bills change.'}</div>`;
-  return lawHeadingHint(query);
+  return headings?lawHeadingHint(query):'';
+}
+
+// ---- The explorer's Laws results (the Laws button on, Bills off) ----
+// {status, kind, items: [[key, heading]]}. status: 'empty' (no words), 'loading', 'error' or 'ok' (items may be
+// empty). kind 'key': the query names sections or a chapter by number; 'words': heading search.
+const lawHeading=key=>state.statutes?.sections?.[key]?.h||state.statutes?.chapters?.[key]?.h||'';
+export function lawResults(query){
+  const q=String(query||'').trim().replace(/\s+/g,' ');
+  if(!q)return {status:'empty',kind:'words',items:[]};
+  const key=q.toUpperCase();
+  // An exact key ("PE 46.06", "PE 46"): that law, whether or not a bill changes it (every law has a page).
+  if(isLawFollowQuery(key))return {status:'ok',kind:'key',items:[[key,lawHeading(key)]]};
+  const parsed=parseStatuteQuery(q,state.statutes?.codes);
+  if(parsed){
+    if(parsed.code&&LAW_CODES.has(parsed.code)){const k=`${parsed.code} ${parsed.sec}`;return {status:'ok',kind:'key',items:[[k,lawHeading(k)]]}}
+    // A bare number ("62.051"): the sections bills change with that number; others need their code named.
+    if(!state.statutes){if(!state.statutesFailed)loadStatutes();return {status:state.statutesFailed?'error':'loading',kind:'key',items:[]}}
+    return {status:'ok',kind:'key',items:statuteKeysFor(state.statutes,parsed).map(k=>[k,lawHeading(k)])};
+  }
+  const found=lawSearch(lawSearchTerms(q));
+  if(found==='loading')return {status:'loading',kind:'words',items:[]};
+  if(found===null)return lawSearchTerms(q).length?{status:'error',kind:'words',items:[]}:{status:'ok',kind:'words',items:[]};
+  return {status:'ok',kind:'words',items:found};
+}
+const billsChanging=key=>new Set(lawEntries(state.statutes,key).flatMap(e=>(e.b||[]).map(p=>p[0]))).size;
+// The list itself, the first `shown` items. The count and paging are the explorer's (explorer/view.js).
+export function lawResultsMarkup(result,shown,query=''){
+  if(result.status==='empty')return `<div class="info-callout law-results-intro"><p>Search Texas law by words in a section's or chapter's heading (<em>unlawful carrying</em>), or by its number (<em>Penal Code 46.06</em>, <em>PE 46</em>). Every section and chapter opens on its own page, where you can follow it.</p></div>`;
+  if(result.status==='loading')return `<div class="info-callout law-results-intro" role="status">Searching Texas law…</div>`;
+  if(result.status==='error')return `<div class="info-callout callout-warn law-results-intro">Law search is not available right now. Try again later, or turn Bills on to search bills.</div>`;
+  if(!result.items.length)return `<div class="empty-state"><h3>No law matches yet</h3><p>${result.kind==='key'?`No bill changes a section numbered “${esc(query.trim())}”. Add its code to open it anyway, as in <em>Penal Code 46.06</em>.`:`No section or chapter heading has all of these words. Try fewer words, or a section number.`}</p></div>`;
+  const item=([k,h])=>{const n=state.statutes?billsChanging(k):0;
+    return `<li class="law-result">${statuteLink(k)}${h?` <span class="law-heading">${esc(titleCase(h))}</span>`:''}${n?` <small>· ${n} ${n===1?'bill changes':'bills change'} it</small>`:''}</li>`};
+  return `<ul class="law-list law-result-list">${result.items.slice(0,shown).map(item).join('')}</ul>`;
 }
 // Laws whose heading has the search words ("unlawful carrying" -> Penal Code § 46.02), shown above the bills.
 const HEADING_SHOWN=5,HEADING_MAX=40;

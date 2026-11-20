@@ -609,7 +609,7 @@ a.bill-number{padding:6px 0}
 /* #15: Windows high-contrast drops background colours, so selection and highlights get outlines; "increase contrast"
    darkens secondary text and lines in every palette. */
 @media(forced-colors:active){
-  .nav-item[aria-current],.topic-chip.selected,.check-filter.selected,.filter-chip{outline:2px solid Highlight;outline-offset:-2px}
+  .nav-item[aria-current],.topic-chip.selected,.check-filter.selected,.filter-chip,.scope-button[aria-pressed=true]{outline:2px solid Highlight;outline-offset:-2px}
   mark.hl{outline:1px solid Highlight;forced-color-adjust:none;background:Mark;color:MarkText}
   .tag,.status-pill,.chamber-pill,.party-pill,.action-tag{border:1px solid CanvasText}
   .watch-button[aria-pressed=true]{outline:2px solid Highlight}
@@ -737,3 +737,12 @@ a.stat-tile:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--surface
 .static-page{padding-top:24px}.static-page h1{font:var(--head-weight) clamp(22px,2.6vw,30px)/1.25 var(--font-head);letter-spacing:-.03em;margin:0 0 16px;text-wrap:balance}.static-page dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 18px;font-size:var(--fs-xs);margin:0 0 18px}.static-page dt{font-weight:700;color:color-mix(in srgb,var(--ink) 70%,var(--surface))}.static-page dd{margin:0}.static-page p,.static-page li{font-size:var(--fs-sm);line-height:1.6}.static-page a{color:var(--teal);text-decoration:underline}@media(max-width:760px){.static-page dl{grid-template-columns:1fr;gap:2px}.static-page dd{margin-bottom:8px}}
 /* A held toast (core/dom.js toast hold) stays until closed, and its text can be selected and copied. */
 #toast.held{pointer-events:auto;user-select:text;max-width:min(560px,calc(100vw - 44px));overflow-wrap:anywhere}#toast .toast-close{margin-left:10px;border:1px solid #ffffff66;background:transparent;color:#fff;border-radius:calc(6px*var(--rs));padding:3px 9px;font:inherit;font-weight:700;cursor:pointer}
+/* Bills / Laws buttons above the explorer search: both pressed shows both; the last one on stays on. */
+.search-scope{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.scope-label{font-size:var(--fs-xs);font-weight:800;color:var(--muted);margin-right:2px}
+.scope-button{display:inline-flex;align-items:center;gap:7px;border:1px solid color-mix(in srgb,var(--ink) 13%,var(--surface));background:var(--surface);color:color-mix(in srgb,var(--ink) 70%,var(--surface));border-radius:calc(8px*var(--rs));padding:8px 14px;font-size:var(--fs-xs);font-weight:800;cursor:pointer}
+.scope-button svg{flex:none}
+.scope-button:hover{border-color:color-mix(in srgb,var(--accent) 39%,var(--surface));color:var(--teal)}
+.scope-button[aria-pressed=true]{background:var(--teal-soft);border-color:color-mix(in srgb,var(--accent) 43%,var(--surface));color:var(--teal)}
+.scope-button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.law-result-list{background:var(--surface);border:1px solid color-mix(in srgb,var(--ink) 10%,var(--surface));border-radius:calc(11px*var(--rs));padding:14px 19px;box-shadow:var(--shadow);margin:0;gap:9px}

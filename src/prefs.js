@@ -4,6 +4,18 @@ export const FILTER_DEFAULTS = {query: '', topic: '', area: '', agency: '', cham
 const FILTER_NAMES = Object.keys(FILTER_DEFAULTS);
 // On-or-off filters: true or false when remembered, 1 or 0 in an address.
 const ON_OFF = new Set(['onlyWatch', 'companion']);
+// What the explorer's search returns (the Bills and Laws buttons). Not a filter: it never reaches saved searches,
+// follows or the sync server. It rides in the explorer's address (left out when 'both') and its remembered prefs.
+export const SEARCH_SCOPES = ['both', 'bills', 'laws'];
+export const cleanScope = value => SEARCH_SCOPES.includes(value) ? value : 'both';
+const scopePart = (view, scope) => view === 'all' && scope && scope !== 'both' && SEARCH_SCOPES.includes(scope) ? [`scope=${scope}`] : [];
+// The scope after pressing one button: each button turns its kind on or off; the last one on stays on.
+export function nextScope(scope, kind) {
+  const on = {bills: cleanScope(scope) !== 'laws', laws: cleanScope(scope) !== 'bills'};
+  if (!Object.hasOwn(on, kind)) return cleanScope(scope);
+  on[kind] = !on[kind];
+  return on.bills && on.laws ? 'both' : on.bills ? 'bills' : on.laws ? 'laws' : cleanScope(scope);
+}
 // Renamed filter values, so old links, saved searches and remembered filters keep working (taxonomy.NO_HEARING).
 const RENAMED = {outlook: {'Not rated': 'No hearing yet'}};
 // Own keys only, so a value such as "__proto__" passes through as text instead of resolving to Object.prototype.
@@ -61,6 +73,8 @@ export function parseHash(hash) {
   // A bill page is `#bill?id=HB1`; `bill=` on any view is the older address (RSS items, agent docs, saved links).
   const bill = normalizeId((view === 'bill' ? params.get('id') : null) || params.get('bill') || '');
   const sync = params.get('sync') || '';
+  // Only the explorer has a scope; anything but a known value reads as no scope given.
+  const scope = view === 'all' && SEARCH_SCOPES.includes(params.get('scope')) ? params.get('scope') : null;
   const member = String(params.get('code') || '').trim().toUpperCase();
   const agency = String(params.get('id') || '').trim().toLowerCase(), topic = String(params.get('slug') || '').trim().toLowerCase();
   const law = String(params.get('law') || '').toUpperCase(), sec = String(params.get('sec') || '').toUpperCase();
@@ -68,7 +82,7 @@ export function parseHash(hash) {
   // A whole chapter (`#chapter?law=PE&ch=46`) is the statute view with a chapter key ("PE 46").
   const chapter = view === 'chapter' && LAW_CODE.test(law) && LAW_CHAPTER.test(ch) && ch.length <= 8 ? `${law} ${ch}` : null;
   // A bare address is the dashboard; an unknown view (or `#?query=` and the like) is the explorer.
-  return {view: raw === '' ? 'home' : view === 'chapter' ? 'statute' : VIEWS.includes(view) ? view : 'all', filters, hasFilters: Object.keys(filters).length > 0,
+  return {view: raw === '' ? 'home' : view === 'chapter' ? 'statute' : VIEWS.includes(view) ? view : 'all', filters, hasFilters: Object.keys(filters).length > 0, scope,
     list: list && list.length ? list : null, bill: isBillId(bill) ? bill : null, sync: SYNC_KEY.test(sync) ? sync : null,
     member: view === 'member' && MEMBER_CODE.test(member) ? member : null,
     agency: view === 'agency' && AGENCY_ID.test(agency) ? agency : null, topic: view === 'topic' && TOPIC_SLUG.test(topic) ? topic : null,
@@ -98,8 +112,8 @@ function contextParts(view, {list = null, bill = null, sync = null} = {}) {
 }
 
 // `sync` is only ever a view-only key; edit keys are never written into the address bar.
-export function buildHash(view, filters, {list = null, bill = null, sync = null, member = null, statute = null, agency = null, topic = null} = {}) {
-  const parts = filterParts(view, filters);
+export function buildHash(view, filters, {list = null, bill = null, sync = null, member = null, statute = null, agency = null, topic = null, scope = null} = {}) {
+  const parts = [...filterParts(view, filters), ...scopePart(view, scope)];
   if (view === 'bill' && isBillId(bill)) parts.push(`id=${bill}`);
   if (view === 'member' && MEMBER_CODE.test(member || '')) parts.push(`code=${member}`);
   if (view === 'agency' && AGENCY_ID.test(agency || '')) parts.push(`id=${agency}`);
@@ -157,7 +171,7 @@ export function parseLocation(pathname, hash, search = '') {
   const named = raw.split('?')[0];
   const oldLink = raw.startsWith('?') || VIEWS.includes(named) || named === 'chapter';
   if (!route || oldLink || route.view === 'home' && raw && !/^[a-z]+=/.test(raw)) return parseHash(hash);
-  const query = route.filters ? [...new URLSearchParams(String(search || ''))].filter(([name]) => FILTER_NAMES.includes(name))
+  const query = route.filters ? [...new URLSearchParams(String(search || ''))].filter(([name]) => FILTER_NAMES.includes(name) || name === 'scope')
     .map(([name, value]) => `${name}=${encodeURIComponent(value)}`) : [];
   return at(route.view, query);
 }
@@ -210,7 +224,7 @@ export function buildUrl(view, filters, options = {}) {
   const route = routeForView(view);
   // A keyed view without its key keeps the old form, which opens the explorer.
   if (!route?.path) return `/${buildHash(view, filters, options)}`;
-  const query = filterParts(view, filters);
+  const query = [...filterParts(view, filters), ...scopePart(view, options.scope)];
   return `${route.path}${query.length ? `?${query.join('&')}` : ''}${fragment}`;
 }
 

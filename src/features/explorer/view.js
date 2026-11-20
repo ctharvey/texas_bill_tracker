@@ -4,7 +4,7 @@
 import {SEARCH_FIELDS} from '../search/model.js';
 import {state, runtime} from '../../core/state.js';
 import {areaName, agencyName, todayDay, SORTS, realAgencies} from '../../core/labels.js';
-import {sameFilters, buildUrl} from '../../prefs.js';
+import {sameFilters, buildUrl, cleanScope} from '../../prefs.js';
 import {esc, $} from '../../core/dom.js';
 import {AREA_GROUPS, AREAS, AREA_BY_ID, inArea, areaCounts, topAgencies, subjectLabels} from '../areas/model.js';
 import {assessHearing, NO_HEARING, SCOPE_AGENCY_ID, POLICY_AREAS, PARTY_FILTERS, LAST_ACTION_TYPES, lastActionInfo, relatedFor, companionGroups, openLinkHtml, authorInfluence, authorshipParty, companionLabel} from '../../taxonomy.js';
@@ -14,7 +14,7 @@ import {options, agencySortButtons, agencyOptionsMarkup} from './controls.js';
 import {filteredBills, reasonFor, lawKeysFor} from './model.js';
 import {companionsOf, companionCache, relationText, groupWatchButton, agencyVia} from '../companions/view.js';
 import {noticeSearch, TUMBLEWEED} from '../easter/view.js';
-import {statuteHintMarkup} from '../statutes/view.js';
+import {statuteHintMarkup, lawResults, lawResultsMarkup} from '../statutes/view.js';
 import {billHref} from '../../core/links.js';
 import {authorHtml, influencePill} from '../members/names.js';
 import {renderContent, renderResults, persistState} from '../../core/router.js';
@@ -85,14 +85,49 @@ function watchFiltersOpen(){
   const n=activeFilters().filter(([key])=>key!=='query').length;
   return `<details class="watch-filters" id="watch-filters"${n||state.watchFiltersOpen?' open':''}><summary class="outline-button">Filters${n?` · ${n}`:''}</summary>`;
 }
+// ---- Bills / Laws (the buttons above the explorer's search box) ----
+// What the explorer searches: 'both', 'bills' or 'laws'. Only the explorer has the buttons; the watchlist and shared
+// lists always show bills.
+export const searchScope=()=>state.view==='all'&&!state.sharedList?cleanScope(state.scope):'both';
+const SVG='viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
+const SCOPE_ICONS={
+  bills:`<svg ${SVG}><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>`,
+  laws:`<svg ${SVG}><path d="M12 4v16M8 20h8M5 7h14"/><path d="M5 7l-3 6h6zM19 7l-3 6h6z"/></svg>`,
+};
+function scopeToggle(){
+  if(state.view!=='all'||state.sharedList)return '';
+  const scope=searchScope(),on={bills:scope!=='laws',laws:scope!=='bills'};
+  const button=(kind,label,other)=>{const last=on[kind]&&!on[other==='Laws'?'laws':'bills'];
+    return `<button type="button" class="scope-button" data-search-scope="${kind}" aria-pressed="${on[kind]}" title="${last?`One kind stays on: turn on ${other} to switch`:on[kind]?`Hide ${label.toLowerCase()} from the results`:`Show ${label.toLowerCase()} in the results`}">${SCOPE_ICONS[kind]}<span>${label}</span></button>`};
+  return `<div class="search-scope" role="group" aria-label="Search in"><span class="scope-label">Search in</span>${button('bills','Bills','Laws')}${button('laws','Laws','Bills')}</div>`;
+}
+const LAW_PAGE=50;
+const lawPage={query:null,n:LAW_PAGE};
+export function showMoreLaws(){lawPage.n+=LAW_PAGE}
+// Laws only: the law list replaces the bills, and the bill-only controls are hidden (explorerMarkup).
+function drawLawResults(){
+  const area=$('#area-header');if(area)area.hidden=true;
+  const preview=$('#bill-preview');if(preview)preview.hidden=true;
+  const q=state.query.trim();
+  if(lawPage.query!==q){lawPage.query=q;lawPage.n=LAW_PAGE}
+  const r=lawResults(q),n=r.items.length;
+  $('#result-count').textContent=r.status==='ok'?`${n} ${n===1?'law':'laws'}`:'Texas law';
+  $('#result-note').textContent=r.status!=='ok'||!n?'':r.kind==='key'?' · by section number':' · headings with every word';
+  $('#bill-list').innerHTML=lawResultsMarkup(r,lawPage.n,q);
+  $('#results-bottom').innerHTML=n>lawPage.n?`<button class="outline-button" id="law-more">Show ${Math.min(LAW_PAGE,n-lawPage.n)} more · showing ${lawPage.n} of ${n}</button>`:'';
+  persistState();
+}
 export function explorerMarkup(){
+  const lawsOnly=searchScope()==='laws',hide=lawsOnly?' hidden':'';
+  const searchLabel=lawsOnly?'Search Texas law':'Search bills';
+  const placeholder=lawsOnly?'Search Texas law: heading words or a section number…':'Search bill number, author, subject, or keyword…';
   const topics=unique([...POLICY_AREAS.map(t=>t.name),...state.bills.flatMap(b=>b.topics)]).sort();
   const popular=['Education','Healthcare','Elections','Taxes','Immigration','Data centers','Local government','Energy & utilities'];
   return `${sharedBanner()}${state.view==='watchlist'?watchTools():''}
-    <section class="area-header" id="area-header" aria-label="Reader area" hidden></section><div class="explorer-controls"><div class="search-row"><div class="search-wrap"><input aria-label="Search bills" id="bill-search" maxlength="200" placeholder="Search bill number, author, subject, or keyword…" value="${esc(state.query)}" autocomplete="off"></div><details class="share-menu" id="share-menu"><summary class="outline-button">Share / save</summary><div class="share-panel"><button type="button" id="copy-view-link" title="Copy a link to this view, with its filters">Copy link</button>${state.view==='all'&&!state.sharedList?'<button type="button" id="save-search" title="Keep this search and its filters under Following">Save search</button>':''}<button type="button" id="export-csv">↓ Export results (CSV)</button></div></details></div><details class="search-help"><summary>What search looks at</summary><p>Every word you type has to appear somewhere in the bill, in any order. It looks in: ${SEARCH_FIELDS.map(f=>esc(f.label)).join(', ')}. Luna's search terms are words it added to help find a bill; they are not shown on the card, so each result says which field matched.</p><p>Put words in "double quotes" to keep them together. A plural also finds the singular ("wages" finds "wage"). A section number such as <em>Penal Code 46.06</em> finds the bills that change it.</p><p class="search-examples">Try: ${SEARCH_EXAMPLES.map(x=>`<button type="button" class="search-example" data-search-example="${esc(x)}">${esc(x)}</button>`).join('')}</p></details>
-    ${watchFiltersOpen()}<div class="filter-bar"><div class="filter-row">${areaSelect()}<select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted','Vetoed'],state.stage,'Any stage')}</select><button class="check-filter ${state.companion?'selected':''}" id="companion-filter" aria-pressed="${state.companion}" title="Only bills with an identical or similar bill filed in the other chamber">⇄ Has companion</button></div><details class="more-filters" id="more-filters"${moreFiltersOpen()?' open':''}><summary class="outline-button">More filters<span id="more-count">${moreCountText()}</span></summary><div class="filter-row more-row"><div class="agency-combobox" id="agency-combobox"><input aria-label="Affected agency" aria-controls="agency-options" aria-expanded="false" aria-autocomplete="list" role="combobox" id="filter-agency" placeholder="All affected agencies" value="${esc(state.agency?agencyName(state.agency):'')}" autocomplete="off"><span class="agency-chevron" aria-hidden="true">⌄</span><div class="agency-panel" id="agency-panel" hidden><div class="agency-sort" role="group" aria-label="Sort agencies">${agencySortButtons()}</div><div class="agency-options" id="agency-options" role="listbox" hidden>${agencyOptionsMarkup()}</div></div></div><select aria-label="Author party" id="filter-party" title="Republican or Democratic: the primary author's party, with no author or coauthor from the other party. Bipartisan: authors or coauthors from both parties.">${options(Object.keys(PARTY_FILTERS),state.party,'Any party')}</select><select aria-label="Hearing status" id="filter-outlook">${options([NO_HEARING,'Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><select aria-label="Last action" id="filter-action">${options(unique([...LAST_ACTION_TYPES.map(t=>t.label),'Other action']).filter(l=>l===state.action||state.bills.some(b=>lastActionInfo(b).label===l)),state.action,'Any last action')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></details></div>${state.view==='watchlist'?'</details>':''}</div>
-    ${state.view==='watchlist'?'':`<div class="topic-strip" aria-label="Quick topic filters"><button class="topic-chip ${state.topic===''?'selected':''}" data-topic="">All topics</button>${popular.map(t=>`<button class="topic-chip ${state.topic===t?'selected':''}" data-topic="${esc(t)}">${esc(t)}</button>`).join('')}</div>`}
-    <div class="active-filters" id="active-filters" aria-label="Active filters"></div><div class="results-header"><div><strong id="result-count">—</strong><span id="result-note"></span></div><select id="sort-order" aria-label="Sort bills">${options(Object.values(SORTS),SORTS[state.sort],'Sort by')}</select></div><div class="explorer-results" id="explorer-results"><div class="bill-list" id="bill-list"></div><aside class="bill-preview" id="bill-preview" aria-labelledby="preview-title" hidden></aside></div><div class="explorer-bottom" id="results-bottom"></div>`;
+    <section class="area-header" id="area-header" aria-label="Reader area" hidden></section><div class="explorer-controls">${scopeToggle()}<div class="search-row"><div class="search-wrap"><input aria-label="${searchLabel}" id="bill-search" maxlength="200" placeholder="${placeholder}" value="${esc(state.query)}" autocomplete="off"></div><details class="share-menu" id="share-menu"><summary class="outline-button">Share / save</summary><div class="share-panel"><button type="button" id="copy-view-link" title="Copy a link to this view, with its filters">Copy link</button>${state.view==='all'&&!state.sharedList&&!lawsOnly?'<button type="button" id="save-search" title="Keep this search and its filters under Following">Save search</button>':''}<button type="button" id="export-csv"${hide}>↓ Export results (CSV)</button></div></details></div><details class="search-help"${hide}><summary>What search looks at</summary><p>Every word you type has to appear somewhere in the bill, in any order. It looks in: ${SEARCH_FIELDS.map(f=>esc(f.label)).join(', ')}. Luna's search terms are words it added to help find a bill; they are not shown on the card, so each result says which field matched.</p><p>Put words in "double quotes" to keep them together. A plural also finds the singular ("wages" finds "wage"). A section number such as <em>Penal Code 46.06</em> finds the bills that change it.</p><p class="search-examples">Try: ${SEARCH_EXAMPLES.map(x=>`<button type="button" class="search-example" data-search-example="${esc(x)}">${esc(x)}</button>`).join('')}</p></details>
+    ${watchFiltersOpen()}<div class="filter-bar"${hide}><div class="filter-row">${areaSelect()}<select aria-label="Policy area" id="filter-topic">${options(topics,state.topic,'All policy areas')}</select><select aria-label="Chamber" id="filter-chamber">${options(['House','Senate'],state.chamber,'Both chambers')}</select><select aria-label="Stage" id="filter-stage">${options(['Filed','Referred','Scheduled','Heard','Advanced','Passed','Enacted','Vetoed'],state.stage,'Any stage')}</select><button class="check-filter ${state.companion?'selected':''}" id="companion-filter" aria-pressed="${state.companion}" title="Only bills with an identical or similar bill filed in the other chamber">⇄ Has companion</button></div><details class="more-filters" id="more-filters"${moreFiltersOpen()?' open':''}><summary class="outline-button">More filters<span id="more-count">${moreCountText()}</span></summary><div class="filter-row more-row"><div class="agency-combobox" id="agency-combobox"><input aria-label="Affected agency" aria-controls="agency-options" aria-expanded="false" aria-autocomplete="list" role="combobox" id="filter-agency" placeholder="All affected agencies" value="${esc(state.agency?agencyName(state.agency):'')}" autocomplete="off"><span class="agency-chevron" aria-hidden="true">⌄</span><div class="agency-panel" id="agency-panel" hidden><div class="agency-sort" role="group" aria-label="Sort agencies">${agencySortButtons()}</div><div class="agency-options" id="agency-options" role="listbox" hidden>${agencyOptionsMarkup()}</div></div></div><select aria-label="Author party" id="filter-party" title="Republican or Democratic: the primary author's party, with no author or coauthor from the other party. Bipartisan: authors or coauthors from both parties.">${options(Object.keys(PARTY_FILTERS),state.party,'Any party')}</select><select aria-label="Hearing status" id="filter-outlook">${options([NO_HEARING,'Referred','Scheduled','Heard'],state.outlook,'Hearing status')}</select><select aria-label="Last action" id="filter-action">${options(unique([...LAST_ACTION_TYPES.map(t=>t.label),'Other action']).filter(l=>l===state.action||state.bills.some(b=>lastActionInfo(b).label===l)),state.action,'Any last action')}</select><button class="check-filter ${state.onlyWatch?'selected':''}" id="watch-filter">☆ Watched only</button></div></details></div>${state.view==='watchlist'?'</details>':''}</div>
+    ${state.view==='watchlist'?'':`<div class="topic-strip" aria-label="Quick topic filters"${hide}><button class="topic-chip ${state.topic===''?'selected':''}" data-topic="">All topics</button>${popular.map(t=>`<button class="topic-chip ${state.topic===t?'selected':''}" data-topic="${esc(t)}">${esc(t)}</button>`).join('')}</div>`}
+    <div class="active-filters" id="active-filters" aria-label="Active filters"${hide}></div><div class="results-header"><div><strong id="result-count">—</strong><span id="result-note"></span></div><select id="sort-order" aria-label="Sort bills"${hide}>${options(Object.values(SORTS),SORTS[state.sort],'Sort by')}</select></div><div class="explorer-results" id="explorer-results"><div class="bill-list" id="bill-list"></div><aside class="bill-preview" id="bill-preview" aria-labelledby="preview-title" hidden></aside></div><div class="explorer-bottom" id="results-bottom"></div>`;
 }
 
 export function headlineLine(b,where){
@@ -109,6 +144,8 @@ export function relatedBlock(b){
 const reasonLine=reasons=>reasons?.length?`<p class="match-reason"><span>Matched:</span> ${reasons.map(r=>`<span${r.label==='Luna search term'?' title="Words Luna added to help search find this bill; they are not shown on the card"':''}>${esc(r.label)}${r.term?` <mark>${esc(r.term)}</mark>`:''}</span>`).join(' · ')}</p>`:'';
 
 export function drawResults(){
+  const scope=searchScope();
+  if(scope==='laws')return drawLawResults();
   renderAreaHeader();
   const list=filteredBills();
   $('#result-count').textContent=`${list.length} ${list.length===1?'bill':'bills'}`;
@@ -134,7 +171,7 @@ export function drawResults(){
     const names=g.map(b=>b.number).join(' + ');
     return `<div class="companion-group" role="group" aria-label="${esc(`${names}: companion bills`)}"><div class="companion-group-head"><span><span aria-hidden="true">⇄</span> Companion bills · ${esc(names)}${relations.length?` · ${esc(relations.join(', '))}`:''}</span>${groupWatchButton(g.map(b=>b.id))}</div>${g.map(card).join('')}</div>`};
   noticeSearch(state.query);
-  $('#bill-list').innerHTML=statuteHintMarkup(state.sharedList?[]:lawKeysFor(state.query),state.sharedList?'':state.query)+(list.length?shown.map(g=>g.length>1?groupMarkup(g):card(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'&&!state.watch.size?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p>${emptyNextSteps()}${state.view==='watchlist'?'':TUMBLEWEED}</div>`);
+  $('#bill-list').innerHTML=statuteHintMarkup(state.sharedList?[]:lawKeysFor(state.query),state.sharedList?'':state.query,scope==='both')+(list.length?shown.map(g=>g.length>1?groupMarkup(g):card(g[0])).join(''):`<div class="empty-state"><h3>Nothing matches yet</h3><p>${state.view==='watchlist'&&!state.watch.size?'Star bills from the explorer to follow them here.':'Try a broader topic, agency, or keyword.'}</p>${emptyNextSteps()}${state.view==='watchlist'?'':TUMBLEWEED}</div>`);
   $('#results-bottom').innerHTML=`${list.length>shownCount?`<button class="outline-button" id="load-more">Load 30 more · showing ${shownCount} of ${list.length}</button><div style="height:12px"></div>`:''}${esc(state.meta?.coverage_note||'Check the official record for authoritative status.')}`;
   persistState();
   syncPreview();

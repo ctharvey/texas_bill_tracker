@@ -17,7 +17,7 @@ test('setting a theme keeps remembered filters, and a filter save keeps the them
   assert.deepEqual(withTheme(null, 'granite'), {theme: 'granite'});
   assert.deepEqual(withTheme(['x'], 'nope'), {theme: DEFAULT_THEME});
   const app = read('src/core/location.js');
-  assert.match(app, /writeJson\(prefsKey,\{\.\.\.keptPrefs\(\),filters:pickFilters\(state\)\}\)/);
+  assert.match(app, /writeJson\(prefsKey,\{\.\.\.keptPrefs\(\),filters:pickFilters\(state\)(,scope:state\.scope)?\}\)/);
 });
 
 test('the pre-paint script in index.html knows every non-default theme', () => {

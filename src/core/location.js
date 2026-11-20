@@ -1,6 +1,6 @@
 // The address and remembered filters: reading a view's path (or an old /#view?... link) into state, each view's own filters, opening
 // and leaving a bill page, and writing the address and the explorer's remembered filters back. setView is a router hook.
-import {cleanFilters, FILTER_DEFAULTS, pickFilters, parseLocation, buildHash, buildUrl, sameFilters} from '../prefs.js';
+import {cleanFilters, cleanScope, FILTER_DEFAULTS, pickFilters, parseLocation, buildHash, buildUrl, sameFilters} from '../prefs.js';
 import {pageMeta} from './routes.js';
 import {holdHead, writeHead} from './head.js';
 import {memberByCode} from '../geo.js';
@@ -75,6 +75,13 @@ export function applyLocation(initial){
   }
   else urlFilters=initial;
   if(urlFilters&&FILTERED_VIEWS.has(p.view))filtersFor=p.view;
+  // The explorer's scope: the address's, else Both for an address with filters or a list, else the remembered one on
+  // a first load; moving between views keeps it.
+  if(p.view==='all'){
+    if(p.scope)state.scope=p.scope;
+    else if(p.hasFilters||p.list)state.scope='both';
+    else if(initial&&!legacy&&!p.sync)state.scope=cleanScope(readJson(prefsKey)?.scope);
+  }
   if(p.list){state.sharedList=p.list;state.sharedMode='link'}
   else if(!initial&&state.sharedMode==='link'){state.sharedList=null;state.sharedMode=null}
   if(p.member!==state.memberCode)state.memberShow={};
@@ -92,8 +99,10 @@ export function applyLocation(initial){
   return p.sync;
 }
 
+// The scope written into the explorer's address: none for a shared list, which always shows its bills.
+const addressScope=()=>state.sharedList?null:state.scope;
 function currentHash(){
-  return buildHash(state.view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
+  return buildHash(state.view,pickFilters(state),{scope:addressScope(),list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey,agency:state.agencyId,topic:state.topicSlug});
 }
 
@@ -107,7 +116,7 @@ function memberSlug(){
 }
 
 function currentUrl(view=state.view){
-  return buildUrl(view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
+  return buildUrl(view,pickFilters(state),{scope:addressScope(),list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,slug:view==='member'?memberSlug():null,
     statute:state.statuteKey,agency:state.agencyId,topic:state.topicSlug});
 }
@@ -144,6 +153,8 @@ export function persistState(push=false){
   if(here()+location.hash!==url)try{if(push){history.pushState(null,'',url);pushed=true}else history.replaceState(null,'',url)}catch{}
   lastPath=here();
   writeMeta(url);
-  if(state.view==='all'&&filtersFor==='all'&&!state.sharedList&&!(readJson(prefsKey)?.filters&&sameFilters(readJson(prefsKey).filters,state)))writeJson(prefsKey,{...keptPrefs(),filters:pickFilters(state)});
+  const saved=readJson(prefsKey);
+  if(state.view==='all'&&filtersFor==='all'&&!state.sharedList&&!(saved?.filters&&sameFilters(saved.filters,state)&&cleanScope(saved.scope)===state.scope))
+    writeJson(prefsKey,{...keptPrefs(),filters:pickFilters(state),scope:state.scope});
   return pushed;
 }
