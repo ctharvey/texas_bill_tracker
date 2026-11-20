@@ -5,6 +5,7 @@ import {todayMarkup} from './features/today/view.js';
 import {memberTitle} from './features/members/names.js';
 import {saveNear, nearLocate, nearAddress, nearMarkup} from './features/near/view.js';
 import {memberMarkup} from './features/members/view.js';
+import {agencyMarkup, topicMarkup, groupTitle} from './features/groups/view.js';
 import {followButton} from './features/follows/view.js';
 import {followingMarkup} from './features/searches/view.js';
 import {handleSaveClick, importWatchlist} from './features/watchlist/actions.js';
@@ -244,10 +245,11 @@ function setNavOpen(open){
   const more=$('#nav-more');more.setAttribute('aria-expanded',String(open));more.querySelector('.nav-more-label').textContent=open?'Close':'More';
 }
 // push=true adds a history entry (opening a bill page), so the browser's Back returns to the page before it.
-const PAGE_NAMES={home:'Home',all:'Bill explorer',watchlist:'Watchlist',following:'Following',today:'Today',local:'Near you',member:'Legislator',statute:'Section of law',agencies:'Agency index',review:'Review progress',method:'How it works',saving:'Saving your info',export:'Export your saved info',data:'Data & imports'};
+const PAGE_NAMES={home:'Home',all:'Bill explorer',watchlist:'Watchlist',following:'Following',today:'Today',local:'Near you',member:'Legislator',agency:'Agency',topic:'Topic',statute:'Section of law',agencies:'Agency index',review:'Review progress',method:'How it works',saving:'Saving your info',export:'Export your saved info',data:'Data & imports'};
 // The tab title names the page (and the bill or member), so history, tabs and screen readers can tell views apart.
 function namedHeading(view){
   if(view==='member'){const m=memberByCode(state.roster,state.memberCode);return m?esc(memberTitle(m)):null}
+  if(view==='agency'||view==='topic'){const t=groupTitle(view);return t?esc(t):null}
   if(view==='statute'&&state.statuteKey&&state.statutes)return esc(statuteLabel(state.statuteKey,state.statutes.codes));
   return null;
 }
@@ -260,7 +262,8 @@ function pageTitle(view){
   const bill=view==='bill'?state.bills.find(b=>b.id===state.openBill):null;
   const member=view==='member'?memberByCode(state.roster,state.memberCode):null;
   const statute=view==='statute'&&state.statuteKey&&state.statutes?statuteLabel(state.statuteKey,state.statutes.codes):null;
-  const name=bill?bill.number:member?memberTitle(member):statute||PAGE_NAMES[view]||'Bill explorer';
+  const group=view==='agency'||view==='topic'?groupTitle(view):null;
+  const name=bill?bill.number:member?memberTitle(member):group||statute||PAGE_NAMES[view]||'Bill explorer';
   return `${name} · Texas Bill Atlas`;
 }
 let viewReady=false;  // Set after the first view is drawn; the first load keeps focus where the browser put it.
@@ -356,6 +359,8 @@ function registerViews(){
   registerView('today',{heading:['Today at the Lege.','Bills with a recorded action that day, by type of action. Dates follow Texas time.'],render:()=>todayMarkup({todayRow})});
   registerView('local',{heading:['Near you.','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],render:()=>nearMarkup({followButton})});
   registerView('member',{heading:['One legislator.','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],render:memberMarkup});
+  registerView('agency',{heading:['One agency.','The bills in this snapshot that could affect a Texas state agency.'],render:agencyMarkup});
+  registerView('topic',{heading:['One policy topic.','The bills in this snapshot tagged with a policy topic.'],render:topicMarkup});
   registerView('statute',{heading:['One section of law.','A section of Texas law and the bills in the 90th Legislature that would change it.'],render:statuteMarkup});
   registerView('bill',{heading:['One bill.','Its summary, text, changes to law, people, agencies and sources.'],render:()=>'<article class="bill-page" id="bill-page" aria-label="Bill details"></article>',after:fillBillPage});
   registerView('agencies',{heading:['Follow the agencies.','Explore where legislation might land across Texas government.'],render:agenciesMarkup});
@@ -438,6 +443,7 @@ function registerClicks(){
     const shown=$('.law-main h3')?.textContent,sr=$('#sr-status');if(sr&&shown)sr.textContent=`Showing ${shown}`});
   clickOn('law-show','[data-law-show]',lawShow=>{state.statuteShow=lawShow.dataset.lawShow;renderContent()});
   clickOn('member-more','[data-member-more]',memberMore=>{const role=memberMore.dataset.memberMore;state.memberShow[role]=(state.memberShow[role]||30)+30;renderContent()});
+  clickOn('group-more','[data-group-more]',groupMore=>{const key=groupMore.dataset.groupMore;state.groupShow[key]=(state.groupShow[key]||30)+30;renderContent()});
   clickOn('copy-page-ai','#copy-page-ai',copyPage=>copyPageForAi(copyPage));
   clickOn('today-topic','[data-today-topic]',todayTopic=>{state.todayTopic=todayTopic.dataset.todayTopic;state.todayLimit=100;renderContent()});
   clickOn('today-more','#today-more',()=>{state.todayLimit+=100;renderContent()});

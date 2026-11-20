@@ -54,3 +54,19 @@ test('a member page is taken over by the member it was built for', () => {
   assert.equal(staticMatches(member, parseLocation('/member/A2150/rafael-anchia', '')), false);
   assert.equal(staticMatches(member, parseLocation('/bill/HB1094', '')), false);
 });
+
+test('agency and topic pages are taken over by the key they were built for', () => {
+  const agency = parseStaticView('agency:tceq'), topic = parseStaticView('topic:energy-and-utilities');
+  assert.deepEqual(agency, {kind: 'agency', key: 'tceq'});
+  assert.deepEqual(topic, {kind: 'topic', key: 'energy-and-utilities'});
+  for (const value of ['agency:', 'agency:TCEQ', 'agency:-x', 'agency:a/b', 'topic:', 'topic:Energy', 'topic:-x', `topic:${'a'.repeat(81)}`]) {
+    assert.equal(parseStaticView(value), null, value);
+  }
+  assert.equal(staticMatches(agency, parseLocation('/agency/tceq', '')), true);
+  assert.equal(staticMatches(agency, parseLocation('/agency/TCEQ/', '')), true);
+  assert.equal(staticMatches(agency, parseLocation('/agency/tdi', '')), false);
+  assert.equal(staticMatches(agency, parseLocation('/topic/tceq', '')), false);
+  assert.equal(staticMatches(topic, parseLocation('/topic/energy-and-utilities', '')), true);
+  assert.equal(staticMatches(topic, parseLocation('/topic/taxes', '')), false);
+  assert.equal(staticMatches(topic, parseLocation('/agency/energy-and-utilities', '')), false);
+});

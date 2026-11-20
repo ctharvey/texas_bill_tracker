@@ -10,7 +10,7 @@ function reread(url) {
   return parseLocation(u.pathname, u.hash, u.search);
 }
 
-const KEYS = {bill: {bill: 'HB5'}, statute: {statute: 'PE 46.06'}, member: {member: 'A4395'}};
+const KEYS = {bill: {bill: 'HB5'}, statute: {statute: 'PE 46.06'}, member: {member: 'A4395'}, agency: {agency: 'tceq'}, topic: {topic: 'energy-and-utilities'}};
 
 test('every view has exactly one route, and fixed paths are unique', () => {
   assert.deepEqual([...ROUTES.map(r => r.view)].sort(), [...VIEWS].sort());
@@ -79,12 +79,12 @@ test('slugs are plain lowercase words joined by dashes', () => {
 test('every old #view link opens the same view as its path', () => {
   const old = {home: '', today: '#today', all: '#all?topic=Water&sort=latest', local: '#local', watchlist: '#watchlist?party=D',
     following: '#following', agencies: '#agencies', review: '#review', method: '#method', saving: '#saving', export: '#export',
-    data: '#data', bill: '#bill?id=hb5', statute: '#statute?law=PE&sec=46.06', member: '#member?code=A4395'};
+    data: '#data', bill: '#bill?id=hb5', statute: '#statute?law=PE&sec=46.06', member: '#member?code=A4395', agency: '#agency?id=tceq', topic: '#topic?slug=energy-and-utilities'};
   assert.deepEqual(Object.keys(old).sort(), [...VIEWS].sort());
   for (const [view, hash] of Object.entries(old)) {
     const p = parseLocation('/', hash);
     assert.equal(p.view, view, hash);
-    const url = buildUrl(p.view, p.filters, {bill: p.bill, statute: p.statute, member: p.member});
+    const url = buildUrl(p.view, p.filters, {bill: p.bill, statute: p.statute, member: p.member, agency: p.agency, topic: p.topic});
     assert.ok(!url.startsWith('/#'), `${hash} -> ${url}`);
     assert.deepEqual(reread(url), p, `${hash} -> ${url}`);
   }
@@ -179,7 +179,7 @@ test('public/routes.json is the route table, and each route matches exactly the 
   assert.deepEqual(published, routeList(), 'run: node scripts/routes_json.mjs');
   const matchers = published.routes.map(r => [r.view, new RegExp(r.match)]);
   const samples = {bill: [{bill: 'HB5'}, {bill: 'SJR12'}], statute: [{statute: 'PE 46.06'}, {statute: 'PE 46'}, {statute: 'ED 30A.151'}],
-    member: [{member: 'A4285', slug: 'Suleman Lalani'}, {member: 'A4285'}]};
+    member: [{member: 'A4285', slug: 'Suleman Lalani'}, {member: 'A4285'}], agency: [{agency: 'tceq'}], topic: [{topic: 'energy-and-utilities'}]};
   for (const view of VIEWS) for (const options of samples[view] || [{}]) {
     const path = buildUrl(view, {}, options).split(/[?#]/)[0];
     assert.deepEqual(matchers.filter(([, re]) => re.test(path)).map(([v]) => v), [view], path);

@@ -6,8 +6,9 @@ import {mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writ
 import {dirname, join, relative, sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {AGENCY_NAME, NO_HEARING, applyLunaExtras, applyLunaTags, assessHearing, attachMembers, authorInfluence, authorshipParty,
-  companionIndex, lastActionInfo, memberSummary, normalizeBill, officialUrl, reviewProgress} from '../src/taxonomy.js';
+  companionIndex, lastActionInfo, memberSummary, normalizeBill, officialUrl, POLICY_AREAS, reviewProgress, SCOPE_AGENCY_ID} from '../src/taxonomy.js';
 import {buildHash} from '../src/prefs.js';
+import {topicSlug} from '../src/core/routes.js';
 
 export const SITE = 'https://billatlas.org/';
 export const AGENT = 'https://agent.billatlas.org/';
@@ -387,6 +388,19 @@ function groupBy(bills, keysOf) {
   return groups;
 }
 
+// The lists behind the data run's static topic and agency pages (scripts/build_feeds.py, SEO chunk 5). Topics and
+// agencies come from the app's own taxonomy and Luna tags, which only Node applies, so the data run reads this file
+// (live/agent/data/pages.json) instead of recomputing them. Every topic is listed, bills or not; agencies only with bills.
+const AGENCY_PAGE_ID = /^[a-z0-9][a-z0-9-]{0,40}$/;
+export function sitePages(bills, asOf) {
+  const ids = list => [...list].sort(byRecent).map(b => b.id);
+  const topics = POLICY_AREAS.map(a => ({slug: topicSlug(a.name), name: a.name, bills: ids(bills.filter(b => b.topics.includes(a.name)))}));
+  const agencies = [...groupBy(bills, b => b.agencies.map(a => a.id).filter(id => id !== SCOPE_AGENCY_ID))]
+    .filter(([id]) => AGENCY_PAGE_ID.test(id)).sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([id, list]) => ({id, name: list.find(b => b.agencyNames[id])?.agencyNames[id] || AGENCY_NAME[id] || id, bills: ids(list)}));
+  return JSON.stringify({format: 'texas-bill-atlas-site-pages-v1', bill_data_as_of: asOf || null, topics, agencies}) + '\n';
+}
+
 // One page per Texas House and Senate district: its member, their bills, and bills naming its counties or cities.
 // Same matching as the tracker's "Near you" view (src/geo.js). `geo` is that module, passed in so the build still
 // runs where geo.js is not deployed.
@@ -588,6 +602,7 @@ export function buildPages({snapshot, tags = null, extras = null, roster = null,
     + `## Failed, will be retried\n\n${ids(progress.failed.map(f => f.id))}\n\n---\n${DISCLAIMER}\n`);
 
   put('saving.md', SAVING);
+  put('data/pages.json', sitePages(bills, snapshot.generated_at));
   put('data/bills.json', JSON.stringify({format: 'texas-bill-atlas-agent-v1', session: '90R', disclaimer: DISCLAIMER,
     bill_data_as_of: snapshot.generated_at, tags_as_of: tags?.generated_at || null, roster_as_of: roster?.generated_at || null,
     coverage_note: snapshot.coverage_note || null, sources: snapshot.sources || null, count: bills.length, coverage,

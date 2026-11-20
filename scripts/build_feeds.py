@@ -328,6 +328,136 @@ def write_member_pages(snapshot: dict, roster: dict, out_dir: Path, site: str = 
     return written, unchanged, removed
 
 
+# Topic and agency pages (SEO chunk 5 phase 2): live/share/topic/<slug>.html and live/share/agency/<id>.html, served at
+# /topic/<slug> and /agency/<id> inside the site shell. Which bills belong where comes from the agent build
+# (live/agent/data/pages.json, scripts/build_agent.mjs sitePages): the app's taxonomy and Luna tags run only in Node.
+SITE_PAGES_FORMAT = "texas-bill-atlas-site-pages-v1"
+TOPIC_SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,79}")
+AGENCY_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,40}")
+GROUP_PAGE_BILLS = 100
+_GROUP_SOURCE = ("Topics and agencies come from Luna, the AI model that reads each bill's full text, where it has "
+                 "reviewed the bill, and from rules matching the bill's caption otherwise. They can be wrong.")
+
+
+def load_site_pages(path: Path | None) -> dict | None:
+    """The agent build's topic and agency lists, or None when the file is missing, unreadable or not that format."""
+    if path is None:
+        return None
+    try:
+        data = json.loads(path.read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get("format") != SITE_PAGES_FORMAT:
+        return None
+    return data
+
+
+def _group_entries(data: dict | None, kind: str) -> list[tuple[str, str, list[str]]]:
+    """(key, name, bill ids) for each valid topic or agency entry; anything malformed is skipped, never used in a path."""
+    pattern, field = (TOPIC_SLUG, "slug") if kind == "topic" else (AGENCY_ID, "id")
+    out = []
+    for entry in (data or {}).get("topics" if kind == "topic" else "agencies") or []:
+        if not isinstance(entry, dict):
+            continue
+        key, name, bills = entry.get(field), entry.get("name"), entry.get("bills")
+        if isinstance(key, str) and pattern.fullmatch(key) and isinstance(name, str) and name.strip() and isinstance(bills, list):
+            out.append((key, name.strip(), [b for b in bills if isinstance(b, str) and BILL_ID.fullmatch(b)]))
+    return out
+
+
+def bill_groups(data: dict | None) -> dict[str, list[tuple[str, str, str]]]:
+    """Bill id -> (kind, key, name) of each topic and agency page listing it, topics first, in the agent's order."""
+    out: dict[str, list[tuple[str, str, str]]] = {}
+    for kind in ("topic", "agency"):
+        for key, name, bill_ids in _group_entries(data, kind):
+            for bill_id in bill_ids:
+                out.setdefault(bill_id, []).append((kind, key, name))
+    return out
+
+
+def group_page(kind: str, key: str, name: str, bill_ids: list[str], by_id: dict[str, dict], shell: str,
+               site: str = SITE) -> str:
+    """One topic's or agency's page inside the site shell: the bills in it, newest action first (the agent's order),
+    the 100 most recent listed and the rest one link away in the explorer."""
+    from urllib.parse import quote
+    a = lambda value: escape(str(value), {'"': "&quot;"})
+    bills = [by_id[b] for b in bill_ids if b in by_id]
+    total = len(bills)
+    url = f"{site}{kind}/{key}"
+    explorer = f"{site}explorer?{kind}={quote(key if kind == 'agency' else name, safe='')}"
+    if kind == "topic":
+        title = f"{name}: Texas bills"
+        lead = (f"{total} bill{'s' if total != 1 else ''} in the 90th Texas Legislature about {name.lower()}." if total
+                else f"No bills about {name.lower()} in the 90th Texas Legislature yet.")
+    else:
+        title = clip(f"{name}: Texas bills that could affect it", SHARE_TITLE_MAX)
+        lead = (f"{total} bill{'s' if total != 1 else ''} in the 90th Texas Legislature could affect the {name}." if total
+                else f"No bills in the 90th Texas Legislature are linked to the {name} yet.")
+    listed = ", ".join(bill_number(b["id"]) for b in bills[:6]) + (f" and {total - 6} more" if total > 6 else "")
+    description = clip(f"{lead} {listed}." if total else lead, SHARE_DESCRIPTION_MAX)
+    image = f"{site}{SITE_CARD}"
+    meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
+            ("property", "og:title", title), ("property", "og:description", description), ("property", "og:url", url),
+            ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
+            ("property", "og:image:alt", "Texas Bill Atlas"), ("name", "twitter:card", "summary_large_image"),
+            ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
+            ("name", "twitter:image:alt", "Texas Bill Atlas"), ("name", "description", description)]
+    tags = "\n".join(f'<meta {k}="{n}" content="{a(value)}">' for k, n, value in meta)
+    head = f"""
+<title>{escape(title)} · Texas Bill Atlas</title>
+<link rel="canonical" href="{a(url)}">
+{SHELL_ICONS}
+{tags}
+"""
+    body = [f"<h1>{escape(name)}</h1>", f"<p>{escape(lead)}</p>"]
+    if kind == "agency":
+        body.append("<p>These are possible effects, not confirmed legal obligations.</p>")
+    body.append(f"<p>{escape(_GROUP_SOURCE)}</p>")
+    if bills:
+        shown = bills[:GROUP_PAGE_BILLS]
+        items = "\n".join(
+            f'<li><a href="{a(f"{site}bill/{b["id"]}")}">{escape(bill_number(b["id"]))}</a>'
+            + (f": {escape(clip(b.get('caption') or b.get('title') or '', MEMBER_CAPTION_MAX))}"
+               if b.get("caption") or b.get("title") else "")
+            + (f" Last action {escape(str(b['last_action_date'])[:10])}." if b.get("last_action_date") else "")
+            + "</li>" for b in shown)
+        heading = f"The {len(shown)} most recent of {total}" if total > len(shown) else "Bills, newest action first"
+        body += [f"<h2>{escape(heading)}</h2>", f"<ul>\n{items}\n</ul>"]
+    body.append(f'<p><a href="{a(explorer)}">{"All of them" if total else "Search"} in the Bill explorer</a></p>')
+    content = (f'\n<article class="{kind}-page static-page" aria-label="{a(name)}">\n' + "\n".join(body)
+               + "\n</article>\n")
+    version = hashlib.sha256((head + content).encode()).hexdigest()[:12]
+    return pages.render_page(shell, head=f'{head}<meta name="page-version" content="{version}">', content=content,
+                             view=f"{kind}:{key}")
+
+
+def write_group_pages(data: dict | None, snapshot: dict, share_dir: Path, site: str = SITE,
+                      shell: str | None = None) -> list[str]:
+    """Topic and agency pages under share_dir/topic and share_dir/agency; returns the paths written ("topic/<slug>",
+    "agency/<id>") for the sitemap. Without the shell or the agent's lists nothing is written or removed, and a kind
+    with no entries never empties its folder."""
+    if shell is None or data is None:
+        return []
+    by_id = {b["id"]: b for b in snapshot.get("bills") or [] if isinstance(b, dict) and BILL_ID.fullmatch(str(b.get("id", "")))}
+    paths = []
+    for kind in ("topic", "agency"):
+        entries = _group_entries(data, kind)
+        if not entries:
+            continue
+        folder = share_dir / kind
+        folder.mkdir(parents=True, exist_ok=True)
+        keep = set()
+        for key, name, bill_ids in entries:
+            keep.add(f"{key}.html")
+            write_if_changed(folder / f"{key}.html", group_page(kind, key, name, bill_ids, by_id, shell, site))
+            paths.append(f"{kind}/{key}")
+        pattern = TOPIC_SLUG if kind == "topic" else AGENCY_ID
+        for path in folder.iterdir():
+            if path.suffix == ".html" and pattern.fullmatch(path.stem) and path.name not in keep:
+                path.unlink(missing_ok=True)
+    return paths
+
+
 def write_if_changed(path: Path, text: str) -> bool:
     try:
         if path.read_text("utf-8") == text:
@@ -360,9 +490,10 @@ def write_feeds(snapshot: dict, out_dir: Path, site: str = SITE, reviews: dict |
     return written, unchanged
 
 
-def sitemap(snapshot: dict, site: str = SITE, law_keys=(), members=()) -> str:
+def sitemap(snapshot: dict, site: str = SITE, law_keys=(), members=(), paths=()) -> str:
     """The home page, every bill's address (/bill/<ID>), each dated by its last action, every law section a bill
-    changes (/law/<CODE>/<section>) and each member's page (/member/<code>/<slug>). robots.txt points here."""
+    changes (/law/<CODE>/<section>), each member's page (/member/<code>/<slug>) and the other page paths given
+    (topic/<slug>, agency/<id>). robots.txt points here."""
     rows = [f"  <url><loc>{escape(site)}</loc></url>"]
     for bill in snapshot.get("bills") or []:
         if not isinstance(bill, dict) or not BILL_ID.fullmatch(str(bill.get("id", ""))):
@@ -375,6 +506,8 @@ def sitemap(snapshot: dict, site: str = SITE, law_keys=(), members=()) -> str:
         rows.append(f"  <url><loc>{escape(site)}law/{code}/{number}</loc></url>")
     for member in sorted((m for m in members if MEMBER_CODE.fullmatch(str(m.get("code", "")))), key=lambda m: m["code"]):
         rows.append(f"  <url><loc>{escape(site + member_path(member))}</loc></url>")
+    for path in sorted(paths):
+        rows.append(f"  <url><loc>{escape(site + path)}</loc></url>")
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
             + "\n".join(rows) + "\n</urlset>\n")
 
@@ -501,9 +634,11 @@ def share_text_html(markdown: str, limit: int = SHARE_TEXT_MAX) -> tuple[str, bo
     return "\n".join(parts), False
 
 
-def share_body(bill: dict, site: str, headline: str | None, text: tuple[dict, str] | None, in_app: bool = False) -> str:
+def share_body(bill: dict, site: str, headline: str | None, text: tuple[dict, str] | None, in_app: bool = False,
+               groups: list[tuple[str, str, str]] | None = None) -> str:
     """The share page's visible content: the official record, a labelled AI line, the start of the bill text, links.
-    in_app: the page is inside the site shell, where the app takes it over, so it has no "Open in" link."""
+    in_app: the page is inside the site shell, where the app takes it over, so it has no "Open in" link.
+    groups: (kind, key, name) of the topic and agency pages that list this bill (bill_groups), linked when given."""
     bill_id = bill["id"]
     caption = " ".join(str(bill.get("caption") or bill.get("title") or "No caption available").split())
     official = f"https://capitol.texas.gov/BillLookup/History.aspx?LegSess=90R&Bill={bill_id}"
@@ -527,6 +662,10 @@ def share_body(bill: dict, site: str, headline: str | None, text: tuple[dict, st
            f"<dl>\n{rows}\n</dl>"]
     if headline:
         out.append(f"<p><strong>AI summary (not official):</strong> {escape(headline)}</p>")
+    for kind, label in (("topic", "Topics"), ("agency", "Agencies it could affect (possible, not confirmed)")):
+        found = [f'<a href="{a(f"{site}{k}/{key}")}">{escape(name)}</a>' for k, key, name in groups or [] if k == kind]
+        if found:
+            out.append(f"<p><strong>{label}:</strong> {', '.join(found)}. From AI review or caption rules.</p>")
     links = []
     if text:
         version, markdown = text
@@ -545,7 +684,8 @@ def share_body(bill: dict, site: str, headline: str | None, text: tuple[dict, st
 
 
 def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_v: str | None = None,
-               text: tuple[dict, str] | None = None, shell: str | None = None) -> str:
+               text: tuple[dict, str] | None = None, shell: str | None = None,
+               groups: list[tuple[str, str, str]] | None = None) -> str:
     """The page at /bill/<ID>, served to everyone. With the deployed shell (scripts/pages.py) it is the whole site page
     and the app takes it over in place. Without one (no release has published it yet) it is the standalone page, whose
     script sends people to the app at the site root and lets crawlers stay."""
@@ -579,7 +719,7 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_
 {tags}
 <script type="application/ld+json">{legislation_jsonld(bill, site)}</script>
 """
-        content = f'\n<article class="bill-page static-page" aria-label="Bill details">\n{share_body(bill, site, headline, text, True)}\n</article>\n'
+        content = f'\n<article class="bill-page static-page" aria-label="Bill details">\n{share_body(bill, site, headline, text, True, groups)}\n</article>\n'
         # page-version covers only this bill's part, so a new shell alone is not a change to submit to IndexNow.
         version = hashlib.sha256((head + content).encode()).hexdigest()[:12]
         return pages.render_page(shell, head=f'{head}<meta name="page-version" content="{version}">',
@@ -788,7 +928,8 @@ def _page_version(page: Path | str) -> str | None:
 
 def write_share_pages(snapshot: dict, out_dir: Path, site: str = SITE, headlines: dict[str, str] | None = None,
                       rendered: dict[str, str] | None = None, text_dir: Path | None = None,
-                      changed: list[str] | None = None, shell: str | None = None) -> tuple[int, int, int]:
+                      changed: list[str] | None = None, shell: str | None = None,
+                      groups: dict[str, list[tuple[str, str, str]]] | None = None) -> tuple[int, int, int]:
     """One share page per bill, rewritten only when it changes; pages for bills no longer in the snapshot removed.
     With text_dir the page shows the start of the bill's latest text; with shell it is built inside the site shell.
     Rewritten bill ids are added to `changed`, except pages whose own part (page-version) is unchanged: a new shell
@@ -802,7 +943,8 @@ def write_share_pages(snapshot: dict, out_dir: Path, site: str = SITE, headlines
         keep.add(f"{bill['id']}.html")
         text = _latest_text(text_dir, bill["id"]) if text_dir else None
         path = out_dir / f"{bill['id']}.html"
-        page = share_page(bill, site, headlines.get(bill["id"]), rendered.get(bill["id"]), text, shell)
+        page = share_page(bill, site, headlines.get(bill["id"]), rendered.get(bill["id"]), text, shell,
+                          (groups or {}).get(bill["id"]))
         before = _page_version(path)
         if write_if_changed(path, page):
             written += 1
@@ -1818,6 +1960,8 @@ def main() -> int:
     parser.add_argument("--site", default=SITE)
     parser.add_argument("--tags", type=Path, default=None,
                         help="Published Luna tags; defaults to luna/tags.json beside the snapshot when present")
+    parser.add_argument("--site-pages", type=Path, default=None,
+                        help="The agent build's topic and agency lists; defaults to agent/data/pages.json beside the snapshot")
     parser.add_argument("--members", type=Path, default=None,
                         help="Legislator roster for per-member feeds; defaults to members.json beside the snapshot")
     parser.add_argument("--extras", type=Path, default=None,
@@ -1855,9 +1999,11 @@ def main() -> int:
     text_dir = args.text or args.snapshot.parent / "text"
     changed: list[str] = []
     shell = pages.load_shell(args.shell)
+    site_pages = load_site_pages(args.site_pages or args.snapshot.parent / "agent" / "data" / "pages.json")
+    # Bill pages link to topic and agency pages only when those pages are written (they need the shell too).
     written, unchanged, removed = write_share_pages(snapshot, args.share or args.snapshot.parent / "share", args.site,
                                                     headlines, load_rendered(og_dir / "rendered.json"), text_dir, changed,
-                                                    shell)
+                                                    shell, bill_groups(site_pages) if shell else None)
     print(f"Share pages: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
     if not args.no_indexnow and args.site == SITE and args.snapshot == LIVE_SNAPSHOT:
         print(f"IndexNow: {submit_indexnow(changed, args.site)}", flush=True)
@@ -1885,8 +2031,9 @@ def main() -> int:
     write_member_pages(snapshot, roster, (args.share or args.snapshot.parent / "share") / "member", args.site, shell)
     # Members are listed only with their pages: without the shell the address would serve the bare app.
     members = [m for m in roster.values() if isinstance(m, dict)] if shell else []
+    groups = write_group_pages(site_pages, snapshot, args.share or args.snapshot.parent / "share", args.site, shell)
     write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml",
-                     sitemap(snapshot, args.site, law_keys, members))
+                     sitemap(snapshot, args.site, law_keys, members, groups))
     from atlas.feeds.brackets import default_census, write_brackets
     status = write_brackets(snapshot, text_dir, args.census or default_census(), args.brackets or args.snapshot.parent / "brackets")
     print(f"Population brackets: {status}", flush=True)

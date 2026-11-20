@@ -38,6 +38,7 @@ SITEMAP = "live/sitemap.xml"
 CHAPTER_FILE = re.compile(r"\d+[A-Z]?")  # law/<CODE>/<chapter>.html: written, not served by the gateway yet.
 MEMBER_FILE = re.compile(r"A\d{3,5}")  # member/<code>.html, served at /member/<code>/<slug>.
 MEMBER_SLUG = re.compile(r"/[a-z0-9-]{1,60}")
+GROUP_FILE = {"topic": re.compile(r"[a-z0-9][a-z0-9-]{0,79}"), "agency": re.compile(r"[a-z0-9][a-z0-9-]{0,40}")}
 
 
 class PageParser(HTMLParser):
@@ -221,6 +222,8 @@ def fixture_address(path: Path, root: Path, site: str) -> str | None:
         return f"{site}bill/{parts[0]}"
     if len(parts) == 3 and parts[0] == "law" and not CHAPTER_FILE.fullmatch(parts[2]):
         return f"{site}law/{parts[1]}/{parts[2]}"
+    if len(parts) == 2 and parts[0] in GROUP_FILE and GROUP_FILE[parts[0]].fullmatch(parts[1]):
+        return f"{site}{parts[0]}/{parts[1]}"
     if len(parts) == 2 and parts[0] == "member" and MEMBER_FILE.fullmatch(parts[1]):
         # Served at /member/<code>/<any slug>: the address is the page's own canonical when it is one of those.
         base = f"{site}member/{parts[1]}"

@@ -40,10 +40,10 @@ test('src/ registers every click handler exactly once, and nothing else', () => 
   assert.doesNotMatch(sources, /function handleClick/);
 });
 
-test('src/ registers the fifteen views once each, with the data page as the fallback', () => {
+test('src/ registers the seventeen views once each, with the data page as the fallback', () => {
   const names = [...sources.matchAll(/registerView\('(\w+)'/g)].map(m => m[1]);
-  assert.deepEqual(names.sort(), ['agencies', 'all', 'bill', 'data', 'export', 'following', 'home', 'local', 'member', 'method', 'review', 'saving',
-    'statute', 'today', 'watchlist']);
+  assert.deepEqual(names.sort(), ['agencies', 'agency', 'all', 'bill', 'data', 'export', 'following', 'home', 'local', 'member', 'method', 'review', 'saving',
+    'statute', 'today', 'topic', 'watchlist']);
   assert.match(sources, /setFallbackView\('data'\)/);
 });
 

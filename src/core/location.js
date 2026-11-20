@@ -77,7 +77,9 @@ export function applyLocation(initial){
   if(p.list){state.sharedList=p.list;state.sharedMode='link'}
   else if(!initial&&state.sharedMode==='link'){state.sharedList=null;state.sharedMode=null}
   if(p.member!==state.memberCode)state.memberShow={};
+  if(p.agency!==state.agencyId||p.topic!==state.topicSlug)state.groupShow={};
   state.memberCode=p.member;
+  state.agencyId=p.agency;state.topicSlug=p.topic;
   state.statuteKey=p.statute;
   state.openBill=view==='bill'?p.bill:null;
   // Arriving back at the page a bill was opened from: show as many results as before, then return to the same place.
@@ -91,7 +93,7 @@ export function applyLocation(initial){
 
 function currentHash(){
   return buildHash(state.view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
-    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey});
+    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey,agency:state.agencyId,topic:state.topicSlug});
 }
 
 // A member's name for the readable part of their address. Until the roster is here, the name already in the address
@@ -106,7 +108,7 @@ function memberSlug(){
 function currentUrl(view=state.view){
   return buildUrl(view,pickFilters(state),{list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,slug:view==='member'?memberSlug():null,
-    statute:state.statuteKey});
+    statute:state.statuteKey,agency:state.agencyId,topic:state.topicSlug});
 }
 
 // The canonical address, robots and description for the view on screen (routes.pageMeta).

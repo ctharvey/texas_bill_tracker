@@ -19,6 +19,8 @@ export const ROUTES = [
   // form the app writes (prefs.js parses more leniently).
   {view: 'bill', pattern: '/bill/<ID>', match: '^/bill/(HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9][0-9]{0,4}$', indexable: true, description: 'A Texas bill in the 90th Legislature: its official history, text, the laws it changes and the agencies it affects.'},
   {view: 'statute', pattern: '/law/<CODE>/<section or chapter>', match: '^/law/[A-Z]{2}/[0-9]+[A-Z]?(\\.[0-9]+[A-Z]?)*$', indexable: true, description: 'A part of Texas law and the bills in the 90th Legislature that would change it.'},
+  {view: 'agency', pattern: '/agency/<id>', match: '^/agency/[a-z0-9][a-z0-9-]{0,40}$', indexable: true, description: 'A Texas state agency and the bills in the 90th Legislature that could affect it.'},
+  {view: 'topic', pattern: '/topic/<slug>', match: '^/topic/[a-z0-9][a-z0-9-]{0,79}$', indexable: true, description: 'A policy topic and the Texas bills in the 90th Legislature about it.'},
   {view: 'member', pattern: '/member/<code>/<name-slug>', match: '^/member/A[0-9]{3,5}(/[a-z0-9-]{1,60})?$', indexable: true, description: 'A member of the 90th Texas Legislature and the bills they filed.'},
 ];
 
@@ -40,6 +42,11 @@ export function slugify(text) {
   return String(text || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '');
 }
+
+// A topic's path segment ("Energy & utilities" -> "energy-and-utilities"), as the agent edition names its topic pages.
+// Published in addresses, so it must not change; scripts/build_feeds.py does not recompute it (it reads the agent's list).
+export const topicSlug = text => String(text || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '').slice(0, 80);
 
 // The canonical address, robots and description for a view at `url` (what buildUrl wrote). A personal or filterable
 // view, a shared list and a keyed view without its key point at the home page and are not indexed.

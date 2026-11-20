@@ -2,6 +2,7 @@
 import {state} from './state.js';
 import {buildUrl} from '../prefs.js';
 import {memberByCode} from '../geo.js';
+import {topicSlug} from './routes.js';
 
 // A bill's page address (/bill/<ID>), so a bill title is a real link (new tab, copy link) as well as a click target.
 export function billHref(id){
@@ -9,3 +10,5 @@ export function billHref(id){
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null});
 }
 export const memberHref=code=>{const m=memberByCode(state.roster,code);return buildUrl('member',{},{member:code,slug:m&&(m.full_name||m.display_name)})};
+export const agencyHref=id=>buildUrl('agency',{},{agency:id});
+export const topicHref=name=>buildUrl('topic',{},{topic:topicSlug(name)});

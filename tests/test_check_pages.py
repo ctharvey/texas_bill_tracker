@@ -113,6 +113,13 @@ class Fixtures(unittest.TestCase):
         self.assertIsNone(cp.fixture_address(root / 'law/PE/46.html', root, cp.SITE))  # Chapter page, not served yet.
         self.assertIsNone(cp.fixture_address(root / 'law/PE/46A.html', root, cp.SITE))
 
+    def test_topic_and_agency_fixture_addresses(self):
+        root = Path('/share')
+        self.assertEqual(cp.fixture_address(root / 'topic/energy-and-utilities.html', root, cp.SITE),
+                         'https://billatlas.org/topic/energy-and-utilities')
+        self.assertEqual(cp.fixture_address(root / 'agency/txdot.html', root, cp.SITE), 'https://billatlas.org/agency/txdot')
+        self.assertIsNone(cp.fixture_address(root / 'agency/Bad Id.html', root, cp.SITE))
+
     def test_member_fixture_address_is_the_pages_own_slug(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

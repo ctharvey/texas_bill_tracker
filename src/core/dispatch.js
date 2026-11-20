@@ -3,7 +3,7 @@
 export const CLICK_ORDER = ['move', 'feed', 'agency-sort', 'agency-option', 'agency-combobox', 'agency-dismiss', 'nav', 'open-bill', 'copy-ai', 'share-bill',
   'near-locate', 'near-forget', 'near-change', 'near-county-use', 'near-numbers-use', 'near-more', 'follow',
   'save-search', 'follow-law', 'search-open', 'search-rename', 'search-delete', 'follow-more', 'law-compare', 'law-show',
-  'member-more', 'copy-page-ai', 'today-topic', 'today-more', 'today-topics-toggle', 'save-tools', 'watch-group',
+  'member-more', 'group-more', 'copy-page-ai', 'today-topic', 'today-more', 'today-topics-toggle', 'save-tools', 'watch-group',
   'watch', 'search-example', 'topic', 'agency-show-all', 'agency-pick', 'clear-filter', 'clear-filters', 'watch-filter', 'companion-filter', 'load-more', 'export-csv', 'import-trigger',
   'nav-more', 'bill-back', 'skip-link', 'preview-close', 'preview-step', 'bill-jump', 'card'];
 
