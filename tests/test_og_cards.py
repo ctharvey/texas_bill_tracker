@@ -173,9 +173,10 @@ def test_share_page_og_url_carries_the_card_version_and_canonical_stays_plain():
 
 
 def jsonld(html):
-    found = re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)
-    assert len(found) == 1
-    return json.loads(found[0])
+    # The page's one Legislation block (SEO chunk 6 adds a BreadcrumbList block beside it).
+    found = [json.loads(t) for t in re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)]
+    assert [d['@type'] for d in found] == ['Legislation', 'BreadcrumbList']
+    return found[0]
 
 
 def test_share_page_carries_schema_org_legislation_from_the_official_record_only():

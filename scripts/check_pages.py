@@ -119,6 +119,17 @@ def ld_types(blocks: list[str]) -> list[str]:
     return [str(t) for t in types]
 
 
+# JSON-LD each kind of static page must carry (SEO chunk 6), by the address's first path segment.
+EXPECTED_LD = {"bill": ("Legislation", "BreadcrumbList"), "law": ("Legislation", "BreadcrumbList"),
+               "member": ("ProfilePage", "BreadcrumbList"), "topic": ("CollectionPage", "BreadcrumbList"),
+               "agency": ("CollectionPage", "BreadcrumbList"), "about": ("BreadcrumbList",),
+               "today": ("BreadcrumbList",), "": ("WebSite",)}
+
+
+def expected_ld(url: str) -> tuple[str, ...]:
+    return EXPECTED_LD.get(urlsplit(url).path.strip("/").split("/")[0], ())
+
+
 def normalized_hash(page: str) -> str:
     """Whitespace collapsed and nonces dropped, so only a real difference between user agents counts."""
     page = re.sub(r'\snonce="[^"]*"', "", page)
@@ -154,6 +165,11 @@ def inspect(page: str, url: str, status: int = 200, robots_header: str = "") -> 
             failures.append(f"fragment canonical {parser.canonical}")
         elif canonical and plain_url(canonical) != plain_url(url):
             failures.append(f"canonical is {canonical}, not this address")
+        if "(invalid JSON-LD)" in facts["jsonld"]:
+            failures.append("invalid JSON-LD")
+        missing = [t for t in expected_ld(url) if t not in facts["jsonld"]]
+        if missing:
+            failures.append("no JSON-LD " + ", ".join(missing))
     facts["failures"] = failures
     return facts
 

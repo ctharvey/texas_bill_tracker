@@ -21,7 +21,8 @@ def page(title='HB 1: Relating to x. · Texas Bill Atlas', description='Relating
             f'<link rel="canonical" href="{canonical}">' if canonical is not None else '',
             f'<meta name="robots" content="{robots}">' if robots else '',
             '<meta property="og:url" content="https://billatlas.org/bill/HB1?c=abc">',
-            '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Legislation"}</script>']
+            '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Legislation"}</script>',
+            '<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList"}</script>']
     return f'<!doctype html><html><head>{"".join(head)}</head><body><nav>Menu</nav>{body}<script>var x=1</script></body></html>'
 
 
@@ -33,7 +34,7 @@ class Rules(unittest.TestCase):
         self.assertEqual(facts['description'], 'Relating to x.')
         self.assertEqual(facts['canonical'], URL)
         self.assertEqual(facts['og_url'], 'https://billatlas.org/bill/HB1?c=abc')
-        self.assertEqual(facts['jsonld'], ['Legislation'])
+        self.assertEqual(facts['jsonld'], ['Legislation', 'BreadcrumbList'])
         self.assertEqual(facts['text_length'], len('HB 1 Relating to x.'))  # Inside <main>, no nav, no script.
 
     def test_missing_title_and_description_fail(self):
@@ -72,6 +73,21 @@ class Rules(unittest.TestCase):
     def test_jsonld_types_from_lists_graphs_and_bad_json(self):
         self.assertEqual(cp.ld_types(['[{"@type":"A"},{"@graph":[{"@type":["B","C"]}]}]', '{oops']),
                          ['A', 'B', 'C', '(invalid JSON-LD)'])
+
+    def test_each_page_kind_needs_its_jsonld_types(self):
+        bare = page().replace('<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList"}</script>', '')
+        self.assertEqual(cp.inspect(bare, URL)['failures'], ['no JSON-LD BreadcrumbList'])
+        for path, need in (('law/PE/46.06', 'BreadcrumbList'), ('member/A1/x', 'ProfilePage, BreadcrumbList'),
+                           ('topic/water', 'CollectionPage, BreadcrumbList'), ('agency/tea', 'CollectionPage, BreadcrumbList'),
+                           ('about/data', 'BreadcrumbList'), ('today', 'BreadcrumbList'), ('', 'WebSite')):
+            url = f'https://billatlas.org/{path}'
+            with self.subTest(path):
+                self.assertEqual(cp.inspect(bare.replace(URL, url), url)['failures'], [f'no JSON-LD {need}'])
+        url = 'https://billatlas.org/explorer'  # App views have no static JSON-LD to require.
+        self.assertEqual(cp.inspect(bare.replace(URL, url), url)['failures'], [])
+        broken = page().replace('"@type":"Legislation"}', '"@type":"Legislation"')
+        self.assertEqual(cp.inspect(broken, URL)['failures'], ['invalid JSON-LD', 'no JSON-LD Legislation'])
+        self.assertEqual(cp.inspect(bare, URL, robots_header='noindex')['failures'], [])
 
 
 class Network(unittest.TestCase):

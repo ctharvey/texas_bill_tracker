@@ -67,7 +67,8 @@ class BillPageInShell(unittest.TestCase):
         self.assertEqual(h.count('name="description"'), 1)
         self.assertEqual(h.count('property="og:url"'), 1)
         self.assertIn('<link rel="alternate" type="text/markdown" href="https://agent.billatlas.org/bills/HB486.md">', h)
-        self.assertEqual(h.count('application/ld+json'), 1)
+        self.assertEqual(h.count('application/ld+json'), 2)  # Legislation and BreadcrumbList (SEO chunk 6).
+        self.assertEqual(h.count('"@type":"Legislation"'), 1)
         self.assertIn('<link rel="icon" href="/favicon.ico" sizes="32x32">', h)
         self.assertIn('<link rel="apple-touch-icon" href="/apple-touch-icon.png">', h)
 

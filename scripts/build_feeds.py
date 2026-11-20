@@ -19,6 +19,7 @@ import tempfile
 from xml.sax.saxutils import escape
 
 import pages
+import page_head
 
 BILL_ID = re.compile(r"(HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9]\d{0,4}")
 SITE = "https://billatlas.org/"
@@ -236,21 +237,16 @@ def member_page(member: dict, bills: list[tuple[dict, str]], shell: str, site: s
     description = clip(f"{title}, {where}. " + (f"{total} bill{'s' if total != 1 else ''} in the 90th Legislature: "
                                                f"{listed}." if total else "No bills in the 90th Legislature yet."),
                        SHARE_DESCRIPTION_MAX)
-    image = f"{site}{SITE_CARD}"
-    meta = [("property", "og:type", "profile"), ("property", "og:site_name", "Texas Bill Atlas"),
-            ("property", "og:title", title), ("property", "og:description", description), ("property", "og:url", url),
-            ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
-            ("property", "og:image:alt", "Texas Bill Atlas"), ("name", "twitter:card", "summary_large_image"),
-            ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
-            ("name", "twitter:image:alt", "Texas Bill Atlas"), ("name", "description", description)]
-    tags = "\n".join(f'<meta {kind}="{n}" content="{a(value)}">' for kind, n, value in meta)
-    head = f"""
-<title>{escape(clip(title, SHARE_TITLE_MAX))} · Texas Bill Atlas</title>
-<link rel="canonical" href="{a(url)}">
-<link rel="alternate" type="application/rss+xml" title="{a(title)}" href="{a(feed)}">
-{SHELL_ICONS}
-{tags}
-"""
+    official = [u for u in ((member.get("links") or {}).get("tlo"), (member.get("links") or {}).get("lrl"))
+                if isinstance(u, str) and u.startswith("https://")]
+    profile = page_head.member_profile(
+        name=str(member.get("full_name") or member.get("display_name")), url=url, house=house, district=district, same_as=official,
+        party=str(member["party"]) if member.get("party") and member.get("party_basis") != "election" else None)
+    trail = page_head.breadcrumbs(site, [(title, url)])
+    head = page_head.head_html(
+        title=clip(title, SHARE_TITLE_MAX), description=description, url=url, image=f"{site}{SITE_CARD}",
+        og_type="profile", jsonld=(profile, trail),
+        links=(f'<link rel="alternate" type="application/rss+xml" title="{a(title)}" href="{a(feed)}">',))
     body = [f"<h1>{escape(title)}</h1>", f"<p>{escape(where)}</p>"]
     if member.get("party") and member.get("party_source"):
         body.append(f"<p>Party as recorded by {escape(str(member['party_source']))}.</p>")
@@ -395,26 +391,18 @@ def group_page(kind: str, key: str, name: str, bill_ids: list[str], by_id: dict[
                 else f"No bills in the 90th Texas Legislature are linked to the {name} yet.")
     listed = ", ".join(bill_number(b["id"]) for b in bills[:6]) + (f" and {total - 6} more" if total > 6 else "")
     description = clip(f"{lead} {listed}." if total else lead, SHARE_DESCRIPTION_MAX)
-    image = f"{site}{SITE_CARD}"
-    meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
-            ("property", "og:title", title), ("property", "og:description", description), ("property", "og:url", url),
-            ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
-            ("property", "og:image:alt", "Texas Bill Atlas"), ("name", "twitter:card", "summary_large_image"),
-            ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
-            ("name", "twitter:image:alt", "Texas Bill Atlas"), ("name", "description", description)]
-    tags = "\n".join(f'<meta {k}="{n}" content="{a(value)}">' for k, n, value in meta)
-    head = f"""
-<title>{escape(title)} · Texas Bill Atlas</title>
-<link rel="canonical" href="{a(url)}">
-{SHELL_ICONS}
-{tags}
-"""
+    shown = bills[:GROUP_PAGE_BILLS]
+    about = {"@type": "GovernmentOrganization", "name": name} if kind == "agency" else None
+    page = page_head.collection(name=title, url=url, description=description, about=about,
+                                items=[f"{site}bill/{b['id']}" for b in shown])
+    trail = page_head.breadcrumbs(site, ([("Agencies", f"{site}agencies")] if kind == "agency" else []) + [(name, url)])
+    head = page_head.head_html(title=title, description=description, url=url, image=f"{site}{SITE_CARD}",
+                               jsonld=(page, trail))
     body = [f"<h1>{escape(name)}</h1>", f"<p>{escape(lead)}</p>"]
     if kind == "agency":
         body.append("<p>These are possible effects, not confirmed legal obligations.</p>")
     body.append(f"<p>{escape(_GROUP_SOURCE)}</p>")
     if bills:
-        shown = bills[:GROUP_PAGE_BILLS]
         items = "\n".join(
             f'<li><a href="{a(f"{site}bill/{b["id"]}")}">{escape(bill_number(b["id"]))}</a>'
             + (f": {escape(clip(b.get('caption') or b.get('title') or '', MEMBER_CAPTION_MAX))}"
@@ -465,24 +453,11 @@ ABOUT_VIEWS = ("method", "saving", "data")
 
 def about_page(entry: dict, shell: str, site: str = SITE) -> str:
     """One about page inside the site shell, with the app's heading in the heading slot."""
-    a = lambda value: escape(str(value), {'"': "&quot;"})
     view, (title, subtitle) = entry["view"], entry["heading"]
     url, description = f"{site}about/{view}", clip(entry.get("description") or subtitle, SHARE_DESCRIPTION_MAX)
     name = title.rstrip(".")
-    image = f"{site}{SITE_CARD}"
-    meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
-            ("property", "og:title", name), ("property", "og:description", description), ("property", "og:url", url),
-            ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
-            ("property", "og:image:alt", "Texas Bill Atlas"), ("name", "twitter:card", "summary_large_image"),
-            ("name", "twitter:title", name), ("name", "twitter:description", description), ("name", "twitter:image", image),
-            ("name", "twitter:image:alt", "Texas Bill Atlas"), ("name", "description", description)]
-    tags = "\n".join(f'<meta {k}="{n}" content="{a(value)}">' for k, n, value in meta)
-    head = f"""
-<title>{escape(name)} · Texas Bill Atlas</title>
-<link rel="canonical" href="{a(url)}">
-{SHELL_ICONS}
-{tags}
-"""
+    head = page_head.head_html(title=name, description=description, url=url, image=f"{site}{SITE_CARD}",
+                               jsonld=(page_head.breadcrumbs(site, [(name, url)]),))
     heading = f'<h1 id="page-title">{escape(title)}</h1><p id="page-subtitle">{escape(subtitle)}</p>'
     content = f"\n{entry['html']}\n"
     version = hashlib.sha256((head + heading + content).encode()).hexdigest()[:12]
@@ -526,28 +501,14 @@ VIEW_PAGES = {"home": "/", "today": "/today"}
 
 def view_page(entry: dict, shell: str, site: str = SITE) -> str:
     """Home keeps the shell's own head (index.html's title, canonical and cards); Today gets its own."""
-    a = lambda value: escape(str(value), {'"': "&quot;"})
     view, (title, subtitle) = entry["view"], entry["heading"]
-    if view == "home":
-        head = pages.slot_text(shell, "head")
+    if view == "home":  # index.html's own head, plus the site's WebSite and its search.
+        head = pages.slot_text(shell, "head").rstrip("\n") + "\n" + page_head.jsonld_script(page_head.website(site)) + "\n"
     else:
         url, name = f"{site}today", title.rstrip(".")
         description = clip(entry.get("description") or subtitle, SHARE_DESCRIPTION_MAX)
-        image = f"{site}{SITE_CARD}"
-        meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
-                ("property", "og:title", name), ("property", "og:description", description), ("property", "og:url", url),
-                ("property", "og:image", image), ("property", "og:image:width", "1200"),
-                ("property", "og:image:height", "630"), ("property", "og:image:alt", "Texas Bill Atlas"),
-                ("name", "twitter:card", "summary_large_image"), ("name", "twitter:title", name),
-                ("name", "twitter:description", description), ("name", "twitter:image", image),
-                ("name", "twitter:image:alt", "Texas Bill Atlas"), ("name", "description", description)]
-        tags = "\n".join(f'<meta {k}="{n}" content="{a(value)}">' for k, n, value in meta)
-        head = f"""
-<title>{escape(name)} · Texas Bill Atlas</title>
-<link rel="canonical" href="{a(url)}">
-{SHELL_ICONS}
-{tags}
-"""
+        head = page_head.head_html(title=name, description=description, url=url, image=f"{site}{SITE_CARD}",
+                                   jsonld=(page_head.breadcrumbs(site, [(name, url)]),))
     heading = f'<h1 id="page-title">{escape(title)}</h1><p id="page-subtitle">{escape(subtitle)}</p>'
     content = f"\n{entry['html']}\n"
     version = hashlib.sha256((head + heading + content).encode()).hexdigest()[:12]
@@ -681,7 +642,7 @@ LEGISLATION_TYPES = (("HJR", "Joint resolution"), ("SJR", "Joint resolution"), (
 DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
-def legislation_jsonld(bill: dict, site: str = SITE) -> str:
+def legislation_jsonld(bill: dict, site: str = SITE) -> dict:
     """schema.org Legislation for search engines: the official record only (no AI text), with where to check it."""
     bill_id = bill["id"]
     caption = " ".join(str(bill.get("caption") or bill.get("title") or "").split())
@@ -711,8 +672,7 @@ def legislation_jsonld(bill: dict, site: str = SITE) -> str:
         data["workExample"] = {"@type": "LegislationObject", "name": str(latest.get("name") or latest["code"]),
                                "encodingFormat": "text/markdown", "contentUrl": f"{site}live/text/{bill_id}/{latest['code']}.md",
                                "legislationLegalValue": "https://schema.org/UnofficialLegalValue"}
-    # "<" escaped so no caption can close the script element.
-    return json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
+    return data  # page_head.jsonld_script escapes "<" for the page.
 
 
 SHARE_TEXT_MAX = 3000  # Characters of official text shown on a share page; the rest is a link to our full copy.
@@ -720,10 +680,6 @@ AGENT_SITE = "https://agent.billatlas.org/"
 # Crawlers that read the share page as a page: its script must not send them to the app (whose canonical is the home
 # page). Any user agent saying bot, crawler or spider, as search engines' renderers do.
 _CRAWLER_JS = r"/bot|crawl|spider|slurp|Google-InspectionTool|BingPreview/i"
-# The icon links index.html keeps in its head slot (scripts/pages.py replaces the whole slot).
-SHELL_ICONS = "\n".join(('<link rel="icon" href="/favicon.ico" sizes="32x32">',
-                         '<link rel="icon" href="/icon.png" type="image/png" sizes="192x192">',
-                         '<link rel="apple-touch-icon" href="/apple-touch-icon.png">'))
 _PAGE_VERSION = re.compile(r'<meta name="page-version" content="([0-9a-f]+)">')
 
 
@@ -818,24 +774,14 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_
     # Previews are cached under og:url, so a redrawn card gets a new one; the app's Share button copies the same
     # /bill/<ID>?c=<version> address. The canonical link stays plain for search engines.
     og_url = f"{url}?c={image_v}" if image_v else url
-    a = lambda value: escape(value, {'"': "&quot;"})
-    meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
-            ("property", "og:title", title), ("property", "og:description", description), ("property", "og:url", og_url),
-            ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
-            ("property", "og:image:alt", image_alt), ("name", "twitter:card", "summary_large_image"),
-            ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
-            ("name", "twitter:image:alt", image_alt), ("name", "description", description)]
-    tags = "\n".join(f'<meta {kind}="{name}" content="{a(value)}">' for kind, name, value in meta)
+    markdown = f'<link rel="alternate" type="text/markdown" href="{page_head.attr(f"{AGENT_SITE}bills/{bill_id}.md")}">'
+    jsonld = (legislation_jsonld(bill, site),
+              page_head.breadcrumbs(site, [("Bill explorer", f"{site}explorer"), (bill_number(bill_id), url)]))
+    head_args = dict(title=title, description=description, url=url, image=image, image_alt=image_alt, og_url=og_url,
+                     jsonld=jsonld)
     if shell is not None:
         # The shell's head slot also holds the site icons, so the page brings its own.
-        head = f"""
-<title>{escape(title)} · Texas Bill Atlas</title>
-<link rel="canonical" href="{a(url)}">
-<link rel="alternate" type="text/markdown" href="{a(f"{AGENT_SITE}bills/{bill_id}.md")}">
-{SHELL_ICONS}
-{tags}
-<script type="application/ld+json">{legislation_jsonld(bill, site)}</script>
-"""
+        head = page_head.head_html(**head_args, links=(markdown,))
         content = f'\n<article class="bill-page static-page" aria-label="Bill details">\n{share_body(bill, site, headline, text, True, groups)}\n</article>\n'
         # page-version covers only this bill's part, so a new shell alone is not a change to submit to IndexNow.
         version = hashlib.sha256((head + content).encode()).hexdigest()[:12]
@@ -847,12 +793,7 @@ def share_page(bill: dict, site: str = SITE, headline: str | None = None, image_
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#112136">
-<title>{escape(title)} · Texas Bill Atlas</title>
-<link rel="canonical" href="{a(url)}">
-<link rel="alternate" type="text/markdown" href="{a(f"{AGENT_SITE}bills/{bill_id}.md")}">
-<link rel="icon" href="/favicon.ico">
-{tags}
-<script type="application/ld+json">{legislation_jsonld(bill, site)}</script>
+{page_head.head_html(**head_args, links=(markdown, '<link rel="icon" href="/favicon.ico">'), icons=False).strip()}
 <script>if(!{_CRAWLER_JS}.test(navigator.userAgent))location.replace({json.dumps(target)})</script>
 </head>
 <body>
@@ -1633,17 +1574,20 @@ def _current_law(law, code: str, number: str) -> tuple[str, str, str] | None:
     return heading, text, f"live/law/{code}/{chapter}.md"
 
 
-def _law_shell_page(shell: str, *, title: str, url: str, label: str, feed: str, tags: str, body: list[str],
-                    view: str, aria: str) -> str:
+def _law_rss(label: str, feed: str) -> str:
+    return f'<link rel="alternate" type="application/rss+xml" title="{page_head.attr(label)}" href="{page_head.attr(feed)}">'
+
+
+def _law_standalone_head(head_args: dict, label: str, feed: str) -> str:
+    return page_head.head_html(**head_args, links=('<link rel="icon" href="/favicon.ico">', _law_rss(label, feed)),
+                               icons=False).strip()
+
+
+def _law_shell_page(shell: str, *, head_args: dict, label: str, feed: str, body: list[str], view: str,
+                    aria: str) -> str:
     """A law section or chapter page inside the site shell (SEO chunk 4 phase 5): the app takes it over in place."""
     a = lambda value: escape(value, {'"': "&quot;"})
-    head = f"""
-<title>{escape(title)} · Texas Bill Atlas</title>
-<link rel="canonical" href="{a(url)}">
-<link rel="alternate" type="application/rss+xml" title="{a(label)}" href="{a(feed)}">
-{SHELL_ICONS}
-{tags}
-"""
+    head = page_head.head_html(**head_args, links=(_law_rss(label, feed),))
     content = f'\n<article class="law-page static-page" aria-label="{a(aria)}">\n{chr(10).join(body)}\n</article>\n'
     version = hashlib.sha256((head + content).encode()).hexdigest()[:12]
     return pages.render_page(shell, head=f'{head}<meta name="page-version" content="{version}">', content=content,
@@ -1670,15 +1614,7 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     what = ("A proposed new section, not in current law yet: read each bill's version." if proposed
             else "See each bill's wording next to today's law.")
     description = clip(f"{count}: {listed}{more}. {what}", SHARE_DESCRIPTION_MAX)
-    image = f"{site}{SITE_CARD}"
     a = lambda value: escape(value, {'"': "&quot;"})
-    meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
-            ("property", "og:title", title), ("property", "og:description", description), ("property", "og:url", url),
-            ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
-            ("property", "og:image:alt", "Texas Bill Atlas"), ("name", "twitter:card", "summary_large_image"),
-            ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
-            ("name", "twitter:image:alt", "Texas Bill Atlas"), ("name", "description", description)]
-    tags = "\n".join(f'<meta {kind}="{n}" content="{a(value)}">' for kind, n, value in meta)
     items = "\n".join(f'<li><a href="{a(f"{site}bill/{b}")}">{escape(bill_number(b))}</a> '
                       f'{LAW_KIND_WORDS.get(k, "changes")} this section</li>' for b, k in bills)
     body = [f"<h1>{escape(label)}{': ' + escape(name) if name else ''}</h1>",
@@ -1704,8 +1640,14 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     links.append(f'<li><a href="{a(feed)}">RSS feed of actions on these bills</a></li>')
     body += ["<h2>Links</h2>", "<ul>\n" + "\n".join(links) + "\n</ul>",
              "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
+    chapter = number.split(".")[0]
+    chapter_name, chapter_url = f"{code_name or CODE_NAME[code]} Chapter {chapter}", f"{site}law/{code}/{chapter}"
+    jsonld = (page_head.law_section(name=title, label=label, url=url, official=official, chapter_name=chapter_name,
+                                    chapter_url=chapter_url),
+              page_head.breadcrumbs(site, [(chapter_name, chapter_url), (label, url)]))
+    head_args = dict(title=title, description=description, url=url, image=f"{site}{SITE_CARD}", jsonld=jsonld)
     if shell is not None:  # The page is the app: no "Open in" link.
-        return _law_shell_page(shell, title=title, url=url, label=label, feed=feed, tags=tags,
+        return _law_shell_page(shell, head_args=head_args, label=label, feed=feed,
                                body=body[:1] + body[2:], view=f"law:{code} {number}", aria="Law section")
     return f"""<!doctype html>
 <html lang="en">
@@ -1713,11 +1655,7 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#112136">
-<title>{escape(title)} · Texas Bill Atlas</title>
-<link rel="canonical" href="{a(url)}">
-<link rel="icon" href="/favicon.ico">
-<link rel="alternate" type="application/rss+xml" title="{a(label)}" href="{a(feed)}">
-{tags}
+{_law_standalone_head(head_args, label, feed)}
 <script>if(!{_CRAWLER_JS}.test(navigator.userAgent))location.replace({json.dumps(target)})</script>
 </head>
 <body>
@@ -1973,15 +1911,7 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
     count = (f"{len(bill_ids)} bill{'s' if len(bill_ids) != 1 else ''} in the 90th Legislature would change something "
              f"in this chapter")
     description = clip(f"{count}. Follow it in Texas Bill Atlas to see when another bill does.", SHARE_DESCRIPTION_MAX)
-    image = f"{site}{SITE_CARD}"
     a = lambda value: escape(value, {'"': "&quot;"})
-    meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
-            ("property", "og:title", title), ("property", "og:description", description), ("property", "og:url", url),
-            ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
-            ("property", "og:image:alt", "Texas Bill Atlas"), ("name", "twitter:card", "summary_large_image"),
-            ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
-            ("name", "twitter:image:alt", "Texas Bill Atlas"), ("name", "description", description)]
-    tags = "\n".join(f'<meta {kind}="{n}" content="{a(value)}">' for kind, n, value in meta)
     body = [f"<h1>{escape(label)}{': ' + escape(name) if name else ''}</h1>",
             f'<p><a href="{a(target)}">Open {escape(label)} in Texas Bill Atlas</a> to follow it: anything a bill '
             f"changes in this chapter shows up as new.</p>",
@@ -2007,8 +1937,13 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
         f'<li><a href="{a(official)}">Official text on statutes.capitol.texas.gov</a></li>',
         f'<li><a href="{a(feed)}">RSS feed of actions on these bills</a></li>']) + "\n</ul>",
         "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
+    parts = [(f"{_section_short(code, skey.split(' ')[1])}{': ' + shead if shead else ''}",
+              f"{site}law/{code}/{skey.split(' ')[1]}") for skey, (_p, _s, shead) in sections.items()]
+    jsonld = (page_head.law_chapter(name=title, label=label, url=url, official=official, sections=parts),
+              page_head.breadcrumbs(site, [(label, url)]))
+    head_args = dict(title=title, description=description, url=url, image=f"{site}{SITE_CARD}", jsonld=jsonld)
     if shell is not None:  # The page is the app: no "Open in" link.
-        return _law_shell_page(shell, title=title, url=url, label=label, feed=feed, tags=tags,
+        return _law_shell_page(shell, head_args=head_args, label=label, feed=feed,
                                body=body[:1] + body[2:], view=f"chapter:{code} {chapter}", aria="Law chapter")
     return f"""<!doctype html>
 <html lang="en">
@@ -2016,11 +1951,7 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#112136">
-<title>{escape(title)} · Texas Bill Atlas</title>
-<link rel="canonical" href="{a(url)}">
-<link rel="icon" href="/favicon.ico">
-<link rel="alternate" type="application/rss+xml" title="{a(label)}" href="{a(feed)}">
-{tags}
+{_law_standalone_head(head_args, label, feed)}
 <script>if(!{_CRAWLER_JS}.test(navigator.userAgent))location.replace({json.dumps(target)})</script>
 </head>
 <body>
