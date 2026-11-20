@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-11-19
+- Follow a law, leftovers: a saved search whose query is exactly a section key with other filters is summarized as "Bills that change Penal Code § 46.06 · …", not as a text search (docs say how such searches count "new" and what Unfollow removes). When the browser refuses to copy a feed address, the message with the address stays until closed and can be selected. Without `zoneinfo`, the data run's Chicago day follows US daylight time instead of a fixed UTC-6.
 - Bill pages are one page for everyone: once a release has published `shell.html`, the data run builds each `/bill/<ID>` page inside the site shell (header, navigation, footer, CSP and theme as in the app) and the app takes it over in place, so a browser loads one page with no redirect. Without a shell the page stays standalone, as before. A `page-version` covering only the bill's part keeps a new shell from sending every bill to IndexNow. Law pages switch later (they wait on the gateway route).
 - Static page shell, groundwork (no page uses it yet): the deploy publishes stable entry points `app.css` and `boot.js` (a module that imports the current digest folder) and a `shell.html` built from the un-versioned `index.html` with head, heading and content slots; `scripts/pages.py` fills those slots into static pages stamped with the shell's version, and the app keeps a matching static page on screen, without scrolling, until its own view is ready or the data proves unavailable.
 - Follow a law, phase 3:

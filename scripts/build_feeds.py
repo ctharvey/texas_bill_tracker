@@ -1085,9 +1085,23 @@ def chicago_today(now: dt.datetime | None = None) -> str:
     try:
         from zoneinfo import ZoneInfo
         zone = ZoneInfo("America/Chicago")
-    except Exception:  # No tz database (some Windows Pythons): standard time is close enough for a day.
-        zone = dt.timezone(dt.timedelta(hours=-6))
+    except Exception:  # No tz database (some Windows Pythons): the US rule, so CDT does not give yesterday.
+        zone = dt.timezone(dt.timedelta(hours=-5 if _us_central_dst(now) else -6))
     return now.astimezone(zone).date().isoformat()
+
+
+def _us_central_dst(now: dt.datetime) -> bool:
+    """Central daylight time: 2 a.m. CST on the second Sunday of March to 2 a.m. CDT on the first Sunday of November
+    (08:00 and 07:00 UTC)."""
+    utc = now.astimezone(dt.timezone.utc)
+
+    def sunday(month: int, nth: int) -> dt.date:
+        first = dt.date(utc.year, month, 1)
+        return first + dt.timedelta(days=(6 - first.weekday()) % 7 + 7 * (nth - 1))
+
+    start = dt.datetime.combine(sunday(3, 2), dt.time(8), dt.timezone.utc)
+    end = dt.datetime.combine(sunday(11, 1), dt.time(7), dt.timezone.utc)
+    return start <= utc < end
 
 
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")

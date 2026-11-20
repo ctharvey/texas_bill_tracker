@@ -60,9 +60,13 @@ person creates. The optional Near you address lookup sends the typed address to 
   `tx-bill-atlas-searches-90r` (at most 20), preferences and last filters `tx-bill-atlas-prefs-v1`. A followed law
   section is a saved search whose only filter is the section key as the query (`{query: "PE 46.06"}`); a query that
   is exactly a key of one of the 27 indexed codes matches only the bills the statute index lists for that section,
-  never free text (so "PM 2.5" stays a text search). A follow counts a bill as new when it has a dated action after
-  the day the follow was last opened, or when the index's first-seen day for that bill and section is on or after
-  it. Unfollowing removes every saved search for the key; an import skips a law already followed.
+  never free text (so "PM 2.5" stays a text search). This holds with other filters too: `{query: "PE 46.06",
+  topic: "Guns"}` is that section's bills narrowed by topic, and its summary reads "Bills that change ...". The key
+  is case-sensitive: "pe 46.06" is an ordinary search that also finds the section's bills. Any saved search whose
+  query is exactly a key counts a bill as new when it has a dated action after the day it was last opened, or when
+  the index's first-seen day for that bill and section is on or after it. Only the search with the key alone is the
+  follow: Unfollowing removes every such search for the key (a narrowed one stays, as a saved search); an import
+  skips a law already followed.
 - Near you `texas-bill-atlas-near-you-v1`: district numbers, county and how they were found. Coordinates and
   addresses are never stored.
 - Export file `texas-bill-atlas-profile-v1`: `{lists, follows, searches, theme}`. Import also reads older
