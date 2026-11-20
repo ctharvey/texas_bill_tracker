@@ -24,7 +24,7 @@ import {exportMarkup} from './features/export/view.js';
 import {methodMarkup} from './features/pages/method.js';
 import {savingMarkup} from './features/pages/saving.js';
 import {dataMarkup} from './features/pages/data.js';
-import {ABOUT_HEADINGS} from './features/pages/headings.js';
+import {ABOUT_HEADINGS, PAGE_HEADINGS} from './features/pages/headings.js';
 import {setupDisclaimer} from './features/pages/dialogs.js';
 import {copyForAi, copyPageForAi} from './features/ai/view.js';
 import {setupThemePicker, setupModePicker, savedTheme} from './features/theme/view.js';
@@ -353,11 +353,11 @@ function renderContent(){
 
 // Each view's heading and content. Features take theirs over as they move into src/features/.
 function registerViews(){
-  registerView('home',{heading:['This session, at a glance.','What changed on your bills, what moved today, upcoming hearings and Luna’s newest reviews.'],render:homeMarkup});
+  registerView('home',{heading:PAGE_HEADINGS.home,render:homeMarkup});
   registerView('all',{heading:['See what’s moving.','Track legislation by policy, affected agency, author influence, and its path through the Capitol.'],render:explorerMarkup,after:renderResults});
   registerView('watchlist',{heading:['Your watchlist.','Bills you starred on this device, with a clear view of their movement.'],render:explorerMarkup,after:renderResults});
   registerView('following',{heading:['Following.','Legislators you follow on this device, and every bill they file or sign onto.'],render:followingMarkup});
-  registerView('today',{heading:['Today at the Lege.','Bills with a recorded action that day, by type of action. Dates follow Texas time.'],render:()=>todayMarkup({todayRow})});
+  registerView('today',{heading:PAGE_HEADINGS.today,render:()=>todayMarkup({todayRow})});
   registerView('local',{heading:['Near you.','Your Texas House member and Senator, what they filed, and bills that name your county or city.'],render:()=>nearMarkup({followButton})});
   registerView('member',{heading:['One legislator.','A member’s district and the bills they author, coauthor or sponsor in this snapshot.'],render:memberMarkup});
   registerView('agency',{heading:['One agency.','The bills in this snapshot that could affect a Texas state agency.'],render:agencyMarkup});

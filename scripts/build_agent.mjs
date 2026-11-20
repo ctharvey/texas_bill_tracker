@@ -14,7 +14,9 @@ import {stampText} from '../src/core/format.js';
 import {methodMarkup} from '../src/features/pages/method.js';
 import {savingMarkup} from '../src/features/pages/saving.js';
 import {dataMarkup} from '../src/features/pages/data.js';
-import {ABOUT_HEADINGS} from '../src/features/pages/headings.js';
+import {ABOUT_HEADINGS, PAGE_HEADINGS} from '../src/features/pages/headings.js';
+import {homeMarkup, todayRow} from '../src/features/home/view.js';
+import {todayMarkup} from '../src/features/today/view.js';
 import {reviewParts} from '../src/features/review/view.js';
 
 export const SITE = 'https://billatlas.org/';
@@ -415,13 +417,42 @@ export function aboutPages({bills, snapshot, tags = null, roster = null, status 
   } finally { Object.assign(state, saved); }
 }
 
-export function sitePages(bills, asOf, about = []) {
+// Runs draw() with the clock stopped at `iso`, so pages that say "today" or count days describe the snapshot's own
+// moment (and the build stays reproducible); an unreadable time leaves the clock alone.
+export function atTime(iso, draw) {
+  const at = Date.parse(iso || ''), Real = globalThis.Date;
+  if (Number.isNaN(at)) return draw();
+  class Stopped extends Real {
+    constructor(...args) { if (args.length) super(...args); else super(at); }
+    static now() { return at; }
+  }
+  globalThis.Date = Stopped;
+  try { return draw(); } finally { globalThis.Date = Real; }
+}
+
+// Home and Today as a first-time visitor's app draws them at the snapshot's time (nothing watched or followed).
+export function viewPages({bills, snapshot, tags = null, roster = null, status = null}) {
+  const keys = ['bills', 'meta', 'luna', 'roster', 'reviewStatus', 'todayTopic', 'todayLimit', 'todayAllTopics'];
+  const saved = Object.fromEntries(keys.map(k => [k, state[k]]));
+  const tagged = tags?.format === 'texas-bill-luna-tags-v1' && tags.bills && typeof tags.bills === 'object';
+  Object.assign(state, {bills, meta: {...snapshot, bills: undefined, loaded_from: 'Live server snapshot'},
+    luna: tagged ? {...tags, agencies: tags.agencies && typeof tags.agencies === 'object' ? tags.agencies : {}} : null,
+    roster: roster?.format === 'texas-bill-members-v1' ? roster : null, reviewStatus: status,
+    todayTopic: '', todayLimit: 100, todayAllTopics: false});
+  try {
+    const page = (view, html) => ({view, path: view === 'home' ? '/' : routeForView(view).path, heading: PAGE_HEADINGS[view],
+      description: routeForView(view).description || '', html});
+    return atTime(snapshot.generated_at, () => [page('home', homeMarkup()), page('today', todayMarkup({todayRow}))]);
+  } finally { Object.assign(state, saved); }
+}
+
+export function sitePages(bills, asOf, about = [], views = []) {
   const ids = list => [...list].sort(byRecent).map(b => b.id);
   const topics = POLICY_AREAS.map(a => ({slug: topicSlug(a.name), name: a.name, bills: ids(bills.filter(b => b.topics.includes(a.name)))}));
   const agencies = [...groupBy(bills, b => b.agencies.map(a => a.id).filter(id => id !== SCOPE_AGENCY_ID))]
     .filter(([id]) => AGENCY_PAGE_ID.test(id)).sort((a, b) => a[0].localeCompare(b[0]))
     .map(([id, list]) => ({id, name: list.find(b => b.agencyNames[id])?.agencyNames[id] || AGENCY_NAME[id] || id, bills: ids(list)}));
-  return JSON.stringify({format: 'texas-bill-atlas-site-pages-v1', bill_data_as_of: asOf || null, topics, agencies, about}) + '\n';
+  return JSON.stringify({format: 'texas-bill-atlas-site-pages-v1', bill_data_as_of: asOf || null, topics, agencies, about, views}) + '\n';
 }
 
 // One page per Texas House and Senate district: its member, their bills, and bills naming its counties or cities.
@@ -625,7 +656,8 @@ export function buildPages({snapshot, tags = null, extras = null, roster = null,
     + `## Failed, will be retried\n\n${ids(progress.failed.map(f => f.id))}\n\n---\n${DISCLAIMER}\n`);
 
   put('saving.md', SAVING);
-  put('data/pages.json', sitePages(bills, snapshot.generated_at, aboutPages({bills, snapshot, tags, roster, status})));
+  put('data/pages.json', sitePages(bills, snapshot.generated_at, aboutPages({bills, snapshot, tags, roster, status}),
+    viewPages({bills, snapshot, tags, roster, status})));
   put('data/bills.json', JSON.stringify({format: 'texas-bill-atlas-agent-v1', session: '90R', disclaimer: DISCLAIMER,
     bill_data_as_of: snapshot.generated_at, tags_as_of: tags?.generated_at || null, roster_as_of: roster?.generated_at || null,
     coverage_note: snapshot.coverage_note || null, sources: snapshot.sources || null, count: bills.length, coverage,

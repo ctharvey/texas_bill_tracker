@@ -219,6 +219,10 @@ def fixture_address(path: Path, root: Path, site: str) -> str | None:
     """The address the gateway serves a share page at, or None for a page it does not serve."""
     rel = path.relative_to(root).with_suffix("").as_posix()
     parts = rel.split("/")
+    if rel == "home":
+        return site
+    if rel == "today":
+        return f"{site}today"
     if len(parts) == 1:
         return f"{site}bill/{parts[0]}"
     if len(parts) == 3 and parts[0] == "law" and not CHAPTER_FILE.fullmatch(parts[2]):

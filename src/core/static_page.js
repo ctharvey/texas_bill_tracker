@@ -14,6 +14,7 @@ export function parseStaticView(value){
   if(kind==='bill')return BILL_ID.test(key)?{kind,key}:null;
   if(kind==='member')return MEMBER_CODE.test(key)?{kind,key}:null;
   if(kind==='about')return ABOUT.has(key)?{kind,key}:null;
+  if(kind==='page')return key==='home'||key==='today'?{kind,key}:null;
   if(kind==='agency')return AGENCY_ID.test(key)?{kind,key}:null;
   if(kind==='topic')return TOPIC_SLUG.test(key)?{kind,key}:null;
   if(kind==='law'||kind==='chapter')return key?{kind,key}:null;
@@ -24,7 +25,7 @@ export function staticMatches(sv,p){
   if(!sv||!p)return false;
   if(sv.kind==='bill')return p.bill===sv.key;
   if(sv.kind==='member')return p.member===sv.key;
-  if(sv.kind==='about')return p.view===sv.key;
+  if(sv.kind==='about'||sv.kind==='page')return p.view===sv.key;
   if(sv.kind==='agency')return p.agency===sv.key;
   if(sv.kind==='topic')return p.topic===sv.key;
   return p.statute===sv.key;

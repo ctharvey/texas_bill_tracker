@@ -9,7 +9,7 @@ from pathlib import Path
 SHELL_PATH = Path('/var/www/html/texas-bill-atlas/current/shell.html')
 MARKERS = ('head', 'heading', 'content')
 VIEW = re.compile(r'bill:[A-Z]{2,3}[1-9][0-9]{0,4}|(?:law|chapter):[A-Za-z0-9 .]+|member:A[0-9]{3,5}'
-                  r'|agency:[a-z0-9][a-z0-9-]{0,40}|topic:[a-z0-9][a-z0-9-]{0,79}|about:(?:method|saving|data)')
+                  r'|agency:[a-z0-9][a-z0-9-]{0,40}|topic:[a-z0-9][a-z0-9-]{0,79}|about:(?:method|saving|data)|page:(?:home|today)')
 SCRIPT = re.compile(r'<script\b[^>]*>', re.IGNORECASE)
 LD_JSON = '<script type="application/ld+json">'
 # The app writes every view's heading into these two elements, so a page without a heading keeps them, empty.
@@ -46,6 +46,13 @@ def _clean_scripts(value: str) -> None:
         tag = match.group(0).lower()
         if tag != LD_JSON:
             raise ValueError('a slot may not contain an inline script except application/ld+json')
+
+
+def slot_text(shell: str, name: str) -> str:
+    """What the shell itself has in a slot (the home page's own head tags, for one)."""
+    start, end = f'<!--{name}-->', f'<!--/{name}-->'
+    at = shell.index(start) + len(start)
+    return shell[at:shell.index(end, at)]
 
 
 def render_page(shell: str, *, head: str, content: str, view: str, heading: str | None = None) -> str:

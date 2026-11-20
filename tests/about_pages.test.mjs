@@ -26,3 +26,20 @@ test('drawing the about pages leaves the shared state as it was', () => {
   aboutPages({bills: [{id: 'HB1'}], snapshot: {data_mode: 'official-ftp'}});
   assert.equal(state.bills, before);
 });
+
+test('home and today are the app views drawn at the snapshot time, with the clock restored', async () => {
+  const {viewPages, atTime} = await import('../scripts/build_agent.mjs');
+  const {PAGE_HEADINGS} = await import('../src/features/pages/headings.js');
+  const snapshot = live('bills.json');
+  const files = buildPages({snapshot, tags: live('luna/tags.json'), roster: live('members.json'), minBills: 1});
+  const views = JSON.parse(files.get('data/pages.json')).views;
+  assert.deepEqual(views.map(v => [v.view, v.path]), [['home', '/'], ['today', '/today']]);
+  for (const v of views) assert.deepEqual(v.heading, PAGE_HEADINGS[v.view]);
+  assert.match(views[0].html, /home-search/);
+  assert.match(views[0].html, /Star bills, follow legislators or save a search/);  // A first-time visitor's dashboard.
+  assert.equal(atTime('2026-11-12T14:00:00Z', () => new Date().toISOString()), '2026-11-12T14:00:00.000Z');
+  assert.equal(atTime('2026-11-12T14:00:00Z', () => Date.now()), Date.parse('2026-11-12T14:00:00Z'));
+  assert.equal(atTime('not a time', () => typeof Date.now()), 'number');
+  assert.ok(Math.abs(Date.now() - new Date().getTime()) < 1000 && new Date().getFullYear() >= 2026);
+  assert.equal(viewPages.length, 1);
+});

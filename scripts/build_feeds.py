@@ -519,6 +519,62 @@ def write_about_pages(data: dict | None, share_dir: Path, site: str = SITE, shel
     return [f"about/{e['view']}" for e in entries]
 
 
+# Home and Today (SEO chunk 5 phase 4): live/share/home.html (served at /) and live/share/today.html (/today), the app's
+# own views as the agent build drew them at the snapshot's time (scripts/build_agent.mjs viewPages).
+VIEW_PAGES = {"home": "/", "today": "/today"}
+
+
+def view_page(entry: dict, shell: str, site: str = SITE) -> str:
+    """Home keeps the shell's own head (index.html's title, canonical and cards); Today gets its own."""
+    a = lambda value: escape(str(value), {'"': "&quot;"})
+    view, (title, subtitle) = entry["view"], entry["heading"]
+    if view == "home":
+        head = pages.slot_text(shell, "head")
+    else:
+        url, name = f"{site}today", title.rstrip(".")
+        description = clip(entry.get("description") or subtitle, SHARE_DESCRIPTION_MAX)
+        image = f"{site}{SITE_CARD}"
+        meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
+                ("property", "og:title", name), ("property", "og:description", description), ("property", "og:url", url),
+                ("property", "og:image", image), ("property", "og:image:width", "1200"),
+                ("property", "og:image:height", "630"), ("property", "og:image:alt", "Texas Bill Atlas"),
+                ("name", "twitter:card", "summary_large_image"), ("name", "twitter:title", name),
+                ("name", "twitter:description", description), ("name", "twitter:image", image),
+                ("name", "twitter:image:alt", "Texas Bill Atlas"), ("name", "description", description)]
+        tags = "\n".join(f'<meta {k}="{n}" content="{a(value)}">' for k, n, value in meta)
+        head = f"""
+<title>{escape(name)} · Texas Bill Atlas</title>
+<link rel="canonical" href="{a(url)}">
+{SHELL_ICONS}
+{tags}
+"""
+    heading = f'<h1 id="page-title">{escape(title)}</h1><p id="page-subtitle">{escape(subtitle)}</p>'
+    content = f"\n{entry['html']}\n"
+    version = hashlib.sha256((head + heading + content).encode()).hexdigest()[:12]
+    return pages.render_page(shell, head=f'{head}<meta name="page-version" content="{version}">', content=content,
+                             view=f"page:{view}", heading=heading)
+
+
+def write_view_pages(data: dict | None, share_dir: Path, site: str = SITE, shell: str | None = None) -> list[str]:
+    """share_dir/home.html and share_dir/today.html; returns the sitemap paths of those written ("today"; home is
+    always listed). Without the shell or the agent's file nothing is written; an old page is never removed, since the
+    gateway serves the app in its place only when the file is missing."""
+    if shell is None:
+        return []
+    written = []
+    for entry in (data or {}).get("views") or []:
+        if not isinstance(entry, dict) or VIEW_PAGES.get(entry.get("view")) != entry.get("path"):
+            continue
+        heading = entry.get("heading")
+        if not (isinstance(entry.get("html"), str) and entry["html"].strip() and isinstance(heading, list)
+                and len(heading) == 2 and all(isinstance(h, str) and h for h in heading)):
+            continue
+        write_if_changed(share_dir / f"{entry['view']}.html", view_page(entry, shell, site))
+        if entry["view"] != "home":
+            written.append(entry["view"])
+    return written
+
+
 def write_if_changed(path: Path, text: str) -> bool:
     try:
         if path.read_text("utf-8") == text:
@@ -2094,6 +2150,7 @@ def main() -> int:
     members = [m for m in roster.values() if isinstance(m, dict)] if shell else []
     groups = write_group_pages(site_pages, snapshot, args.share or args.snapshot.parent / "share", args.site, shell)
     groups += write_about_pages(site_pages, args.share or args.snapshot.parent / "share", args.site, shell)
+    groups += write_view_pages(site_pages, args.share or args.snapshot.parent / "share", args.site, shell)
     write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml",
                      sitemap(snapshot, args.site, law_keys, members, groups))
     from atlas.feeds.brackets import default_census, write_brackets

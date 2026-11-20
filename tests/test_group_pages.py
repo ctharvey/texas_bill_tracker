@@ -152,6 +152,49 @@ class AboutPages(unittest.TestCase):
         self.assertFalse((self.tmp / 'about' / 'data.html').exists())
 
 
+VIEWS = [{'view': 'home', 'path': '/', 'heading': ['This session, at a glance.', 'What changed.'], 'html': '<div class="home-top">Home</div>'},
+         {'view': 'today', 'path': '/today', 'heading': ['Today at the Lege.', 'Bills with a recorded action that day.'],
+          'description': 'Every Texas bill with a recorded action today.', 'html': '<div class="section-head">Today</div>'},
+         {'view': 'today', 'path': '/elsewhere', 'heading': ['x', 'y'], 'html': '<p>wrong path</p>'},
+         {'view': 'explorer', 'path': '/explorer', 'heading': ['x', 'y'], 'html': '<p>not a static view</p>'}]
+
+
+class HomeAndToday(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+
+    def test_home_keeps_the_shells_own_head(self):
+        self.assertEqual(bf.write_view_pages({'views': VIEWS}, self.tmp, shell=SHELL), ['today'])
+        self.assertEqual(sorted(p.name for p in self.tmp.iterdir()), ['home.html', 'today.html'])
+        home = (self.tmp / 'home.html').read_text('utf-8')
+        self.assertIn(bf.pages.slot_text(SHELL, 'head'), home)
+        self.assertIn('<link rel="canonical" href="https://billatlas.org/">', home)
+        self.assertIn('data-static-view="page:home"', home)
+        self.assertIn('<h1 id="page-title">This session, at a glance.</h1>', home)
+        self.assertIn('<div class="home-top">Home</div>', home)
+
+    def test_today_has_its_own_head(self):
+        bf.write_view_pages({'views': VIEWS}, self.tmp, shell=SHELL)
+        today = (self.tmp / 'today.html').read_text('utf-8')
+        self.assertIn('<link rel="canonical" href="https://billatlas.org/today">', today)
+        self.assertIn('<title>Today at the Lege · Texas Bill Atlas</title>', today)
+        self.assertIn('data-static-view="page:today"', today)
+        self.assertEqual(today.count('rel="canonical"'), 1)
+
+    def test_nothing_without_the_shell_or_the_file(self):
+        self.assertEqual(bf.write_view_pages({'views': VIEWS}, self.tmp, shell=None), [])
+        self.assertEqual(bf.write_view_pages(None, self.tmp, shell=SHELL), [])
+        self.assertEqual(list(self.tmp.iterdir()), [])
+
+    def test_checker_addresses(self):
+        import check_pages as cp
+        root = Path('/share')
+        self.assertEqual(cp.fixture_address(root / 'home.html', root, cp.SITE), 'https://billatlas.org/')
+        self.assertEqual(cp.fixture_address(root / 'today.html', root, cp.SITE), 'https://billatlas.org/today')
+        self.assertEqual(cp.fixture_address(root / 'about/method.html', root, cp.SITE), 'https://billatlas.org/about/method')
+
+
 class AgentListsFeedTheDataRun(unittest.TestCase):
     def test_agent_export_builds_pages_for_every_topic(self):
         node = shutil.which('node')
