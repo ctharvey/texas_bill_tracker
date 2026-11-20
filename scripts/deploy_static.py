@@ -25,6 +25,11 @@ SNAPSHOT = 'data/bills.json'
 KEEP_RELEASES = 10
 ASSETS = 'assets'
 PAGE_REFERENCES = ('./src/styles.css', './src/app.js')
+# Stable URLs the app shell and its lazy-loaded code can rely on, unlike assets/<digest>/.
+ENTRY_POINTS = ('app.css', 'boot.js')
+SHELL = 'shell.html'
+# Slots scripts/pages.py fills to build a static page from the shell.
+MARKERS = ('head', 'heading', 'content')
 # Files under public/ are served from the site root (/favicon.ico, /social-card.png): stable URLs for browsers and
 # link-preview crawlers, unlike assets/<digest>/. One level only, with names that cannot shadow the page or a folder.
 PUBLIC = 'public/'
@@ -76,6 +81,30 @@ def versioned_assets(bundle: dict[str, bytes]) -> tuple[str, dict[str, bytes]]:
         index = index.replace(quoted, f'"./{ASSETS}/{digest}/{reference[len("./src/"):]}"'.encode())
     files['index.html'] = index
     return digest, files
+
+
+def entry_points(bundle: dict[str, bytes], digest: str) -> dict[str, bytes]:
+    """Publish app.css and boot.js at the root so the page has an address that never changes with a release.
+
+    boot.js is a module that imports the current digest folder, so the browser follows it to the versioned code."""
+    return {'app.css': bundle['src/styles.css'], 'boot.js': f"import './{ASSETS}/{digest}/app.js';\n".encode()}
+
+
+def shell_page(index: bytes) -> bytes:
+    """The un-versioned index.html with its stable entry points and slot markers, published as shell.html.
+
+    scripts/pages.py fills the slots to build a static page; the markers are the contract between the two."""
+    for name in MARKERS:
+        for marker in (f'<!--{name}-->', f'<!--/{name}-->'):
+            if index.count(marker.encode()) != 1:
+                raise ValueError(f'index.html must contain {marker} exactly once')
+    page = index
+    for reference, stable in (('./src/styles.css', '/app.css'), ('./src/app.js', '/boot.js')):
+        quoted = f'"{reference}"'.encode()
+        if page.count(quoted) != 1:
+            raise ValueError('index.html must reference ' + reference + ' exactly once')
+        page = page.replace(quoted, f'"{stable}"'.encode())
+    return page
 
 
 def carry_previous_assets(current: Path, staging: Path, digest: str) -> None:
@@ -166,8 +195,11 @@ def main() -> None:
                 or not all(re.fullmatch(r'(?:HB|SB|HJR|SJR|HCR|SCR|HR|SR)\d{1,5}', key) for key in ids)):
             raise ValueError('Refusing incomplete, curated or invalid legislative snapshot')
         require_assets(bundle)
+        original_index = bundle['index.html']  # versioned_assets replaces it; the shell keeps the src/ paths.
         digest, versioned = versioned_assets(bundle)
         bundle.update(versioned)
+        bundle.update(entry_points(bundle, digest))
+        bundle[SHELL] = shell_page(original_index)
         bundle = root_files(bundle)
         release.parent.mkdir(parents=True, exist_ok=True)
         staging = Path(tempfile.mkdtemp(prefix='.staging-', dir=release.parent))

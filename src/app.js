@@ -28,6 +28,7 @@ import {copyForAi, copyPageForAi} from './features/ai/view.js';
 import {setupThemePicker, setupModePicker, savedTheme} from './features/theme/view.js';
 import {setupEasterEggs} from './features/easter/view.js';
 import {state, runtime} from './core/state.js';
+import {parseStaticView, staticMatches, takeover} from './core/static_page.js';
 import {stampText} from './core/format.js';
 import {siteBase} from './core/links.js';
 import {$, esc, toast} from './core/dom.js';
@@ -52,6 +53,8 @@ loadSaved();
 const normalized=normalizeBill;
 
 async function init(){
+  // Which static page a server-rendered shell put on screen, if any; it stays until this app's view is ready.
+  runtime.staticView=parseStaticView($('#dynamic-content')?.dataset.staticView);
   registerViews();
   registerClicks();
   // A move window answers its opener at once (the opener times out otherwise) and applies once the app is ready.
@@ -126,6 +129,11 @@ async function init(){
     goTo(href);
   });
   state.near=cleanNear(readJson(NEAR_KEY),null);
+  const located=parseLocation(location.pathname,location.hash),staticHere=staticMatches(runtime.staticView,located);
+  const decision=takeover(runtime.staticView,{loaded:state.meta?.data_mode!=='unavailable',matches:staticHere});
+  runtime.keepStatic=decision==='keep';
+  // A matching static page keeps the reader's place on the first draw; a non-matching one still scrolls to the top.
+  runtime.keepScroll=decision!=='none'&&staticHere;
   const syncKey=applyLocation(true);
   viewReady=true;
   setupDisclaimer();
@@ -263,9 +271,11 @@ function setView(view,push=false,{focus=true}={}){
   $('.page-heading').hidden=view==='bill';
   $('.page-heading').classList.toggle('law-page',view==='statute');
   $('#overview').hidden=!['all','watchlist'].includes(view);
+  // A view that actually renders clears the static page it is replacing, so later redraws behave normally.
+  if(viewReady&&runtime.keepStatic)runtime.keepStatic=false;
   renderNotice();renderOverview();renderContent();persistState(push);
   // A new view starts at its top; arriving back from a bill, applyLocation restores the old place after this.
-  window.scrollTo({top:0,behavior:'instant'});
+  if(viewReady||!runtime.keepScroll)window.scrollTo({top:0,behavior:'instant'});
   // A new view is announced by moving focus to its heading; the bill page focuses its own title.
   if(viewReady&&focus&&view!=='bill'){const h=$('#page-title');if(h){h.tabIndex=-1;h.focus({preventScroll:true})}}
 }
@@ -320,7 +330,15 @@ function keepFocus(draw){
   const now=document.activeElement;
   if(key&&(!now||now===document.body))document.querySelector(key)?.focus({preventScroll:true});
 }
-function renderContent(){keepFocus(()=>renderView(state.view,$('#dynamic-content')));refreshNamedHeading()}
+function renderContent(){
+  keepFocus(()=>{
+    // While the static page is kept, leave its content alone; the view renders once the app has data.
+    if(runtime.keepStatic)return;
+    renderView(state.view,$('#dynamic-content'));
+    $('#dynamic-content').removeAttribute('data-static-view');
+  });
+  refreshNamedHeading();
+}
 
 // Each view's heading and content. Features take theirs over as they move into src/features/.
 function registerViews(){

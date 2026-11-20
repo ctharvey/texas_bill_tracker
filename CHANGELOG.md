@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-11-19
+- Static page shell, groundwork (no page uses it yet): the deploy publishes stable entry points `app.css` and `boot.js` (a module that imports the current digest folder) and a `shell.html` built from the un-versioned `index.html` with head, heading and content slots; `scripts/pages.py` fills those slots into static pages stamped with the shell's version, and the app keeps a matching static page on screen, without scrolling, until its own view is ready or the data proves unavailable.
 - Follow a law, phase 3:
   - **Follow a chapter.** A whole chapter can be followed (`#chapter?law=PE&ch=46`, saved as the search "PE 46"). Any bill that changes a section in it, or the whole chapter at once, counts as new. The chapter page lists the whole-chapter bills, the sections bills change and every section in the chapter (from the law copy).
   - **Data.** The statute index gains `chapters` for whole-chapter repeals, amendments and additions (HB1094 repeals Government Code chapter 2271), joining the grow-only first-seen history. A history from before this change takes them as its baseline, so deploying does not flood follows. The data run writes a feed and share page per chapter. `/law/PE/46` needs a gateway route, so it is not in the sitemap yet.

@@ -172,5 +172,55 @@ class PublicFilesTests(unittest.TestCase):
         self.assertIn('<link rel="canonical" href="https://billatlas.org/">', page)
 
 
+class EntryPointTests(unittest.TestCase):
+    def test_app_css_is_the_stylesheet_unchanged(self):
+        files = deploy.entry_points(bundle(), 'a' * 16)
+        self.assertEqual(files['app.css'], b'body{}')
+
+    def test_boot_imports_the_digest_folders_app(self):
+        files = deploy.entry_points(bundle(), 'abc123')
+        self.assertEqual(files['boot.js'], b"import './assets/abc123/app.js';\n")
+
+    def test_both_live_at_the_release_root_and_a_new_digest_changes_boot(self):
+        first = deploy.entry_points(bundle(), 'a' * 16)
+        second = deploy.entry_points(bundle(), 'b' * 16)
+        self.assertEqual(set(first), {'app.css', 'boot.js'})
+        self.assertEqual(set(second), {'app.css', 'boot.js'})
+        self.assertNotEqual(first['boot.js'], second['boot.js'])
+        self.assertEqual(first['app.css'], second['app.css'])
+
+
+SHELL_INDEX = (b'<div class="page-heading"><div><!--heading--><h1>x</h1><!--/heading--></div></div>\n'
+               b'<!--head--><title>x</title><!--/head-->\n' + INDEX
+               + b'<section id="dynamic-content"><!--content--><!--/content--></section>\n')
+SHELL_MARKERS = (b'<!--head-->', b'<!--/head-->', b'<!--heading-->', b'<!--/heading-->', b'<!--content-->', b'<!--/content-->')
+
+
+class ShellPageTests(unittest.TestCase):
+    def test_points_at_the_stable_entry_points(self):
+        page = deploy.shell_page(SHELL_INDEX)
+        self.assertIn(b'href="/app.css"', page)
+        self.assertIn(b'src="/boot.js"', page)
+        self.assertNotIn(b'./src/', page)
+        self.assertNotIn(b'assets/', page)
+
+    def test_refuses_a_missing_or_doubled_marker(self):
+        for marker in SHELL_MARKERS:
+            with self.subTest(marker=marker, state='missing'), self.assertRaises(ValueError):
+                deploy.shell_page(SHELL_INDEX.replace(marker, b''))
+            with self.subTest(marker=marker, state='doubled'), self.assertRaises(ValueError):
+                deploy.shell_page(SHELL_INDEX + marker)
+
+    def test_the_real_page_builds_a_shell(self):
+        page = deploy.shell_page((ROOT / 'index.html').read_bytes())
+        self.assertIn(b'href="/app.css"', page)
+        self.assertIn(b'src="/boot.js"', page)
+        for marker in SHELL_MARKERS:
+            self.assertEqual(page.count(marker), 1)
+
+    def test_shell_is_published_at_the_root(self):
+        self.assertEqual(deploy.SHELL, 'shell.html')
+
+
 if __name__ == '__main__':
     unittest.main()
