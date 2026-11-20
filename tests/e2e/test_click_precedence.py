@@ -88,7 +88,7 @@ def test_author_link_in_a_card_goes_to_the_member_page_without_opening_the_bill_
     parent = link.locator("xpath=ancestor::article")
     link.click()
     expect(page.locator("#page-title")).to_have_text(re.compile(r"^(Rep|Sen)\. "))  # the member's name
-    assert re.search(r"#member\?code=", page.url)
+    assert re.search(r"/member/A\d+", page.url)
     expect(page.locator("#bill-page")).to_be_hidden()
     assert "/bill/" not in page.url and "#bill?" not in page.url
 
@@ -146,7 +146,7 @@ def test_view_nav_button_switches_view(device):
     open_more(page)
     page.locator('[data-view="agencies"]').first.click()
     expect(page.locator("#page-title")).to_contain_text("Follow the agencies.")
-    assert page.url.endswith("#agencies")
+    assert page.url.endswith("/agencies")
     expect(page.locator('.sidebar [data-view="agencies"].active')).to_have_count(1)
     page.locator('[data-view="all"]').first.click()
     expect(page.locator("#page-title")).to_contain_text("See what’s moving.")
@@ -175,7 +175,7 @@ def test_row_in_a_list_opens_the_bill_page_from_its_body_and_its_links(device):
 
 def member_code(page):
     page.locator("#bill-list a.member-name").first.wait_for()
-    return re.search(r"code=([^&]+)", page.locator("#bill-list a.member-name").first.get_attribute("href")).group(1)
+    return re.search(r"/member/([^/?#]+)", page.locator("#bill-list a.member-name").first.get_attribute("href")).group(1)
 
 
 def test_follow_button_on_a_member_page_follows_without_navigating(device):
@@ -206,7 +206,7 @@ def test_unfollow_on_the_following_page_does_not_follow_the_neighbouring_links(d
     expect(chip).to_have_count(1)
     chip.get_by_role("button", name=re.compile("Unfollow")).click()
     expect(page.locator(".followed-member")).to_have_count(0)
-    assert page.url.endswith("#following")
+    assert page.url.endswith("/following")
     expect(page.locator("#bill-page")).to_be_hidden()
 
 
@@ -218,7 +218,7 @@ def test_follow_button_in_a_near_you_member_card_does_not_navigate(device):
     expect(follow).to_be_visible()
     follow.click()
     expect(page.locator(".near-member [data-follow]").first).to_have_text("✓ Following")
-    assert "local" in page.url and "member" not in page.url
+    assert "/near-you" in page.url and "/member/" not in page.url
     expect(page.locator("#page-title")).to_contain_text("Near you.")
     expect(page.locator("#bill-page")).to_be_hidden()
     # Rows under it still open the bill page from their body.
@@ -289,5 +289,5 @@ def test_statute_link_on_the_bill_page_navigates(device):
     page = device.open("#bill?id=HB110")
     page.locator("#drawer-statutes a", has_text="62.051").click()
     expect(page.locator(".law-compare-wrap")).to_be_visible()
-    assert re.search(r"#statute\?law=LA&sec=62\.051$", page.url)
+    assert re.search(r"/law/LA/62\.051$", page.url)
     expect(page.locator("#bill-page")).to_be_hidden()

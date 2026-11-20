@@ -118,9 +118,9 @@ def test_opening_saved_search_restores_filters_and_hash(device_factory, site):
     page = d.open("#following")
     link = page.locator(".saved-search-name")
     expect(link).to_have_text("Senate numbered")
-    expect(link).to_have_attribute("href", "#all?chamber=Senate&sort=number")
+    expect(link).to_have_attribute("href", "/explorer?chamber=Senate&sort=number")
     link.click()
-    page.wait_for_function("location.hash === '#all?chamber=Senate&sort=number'")
+    page.wait_for_function("location.pathname + location.search === '/explorer?chamber=Senate&sort=number'")
     expect(page.locator("#filter-chamber")).to_have_value("Senate")
     expect(page.locator("#sort-order")).to_have_value("Bill number")
     expect(page.locator("#page-title")).to_contain_text("See what")
@@ -136,7 +136,7 @@ def test_new_actions_count_and_opening_marks_seen(device_factory, site):
     expect(counts).to_have_text("1 bill · 1 with new actions · opened Jan 1")
     expect(page.locator(".saved-search-new")).to_have_text("1 with new actions")
     page.locator(".saved-search-name").click()
-    page.wait_for_function("location.hash.startsWith('#all')")
+    page.wait_for_function("location.pathname === '/explorer'")
     # Wait for the explorer to render: navigating on before the hashchange is handled leaves the app on Following.
     expect(page.locator("#page-title")).to_contain_text("See what")
     assert stored(d)[0]["seen"] == TODAY

@@ -166,7 +166,7 @@ if os.environ.get("TBA_E2E") == "1":
 
         def open(self, hash_="#all", page=None):
             page = page or self.page
-            page.goto(self.site.base + hash_, wait_until="networkidle")
+            page.goto(self.site.base + hash_.lstrip("/"), wait_until="networkidle")  # "#all?.." or a path ("/today")
             failed = [e for e in self.errors if e.startswith("requestfailed: ")]
             assert not failed, "the page's own code failed to load:\n" + "\n".join(failed)
             page.wait_for_selector("#dynamic-content *", state="attached", timeout=20000)

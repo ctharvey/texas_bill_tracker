@@ -18,7 +18,7 @@ def numbers(page, limit=None):
 
 
 def hash_of(page):
-    return page.evaluate("location.hash")
+    return page.evaluate("location.pathname + location.search")
 
 
 def hash_params(page):
@@ -47,7 +47,7 @@ def test_search_filters_results_and_count(device):
     expect(page.locator("#result-count")).to_have_text("219 bills")
     page.fill("#bill-search", "")
     expect(page.locator("#result-count")).to_have_text(TOTAL)
-    assert hash_of(page) == "#all"
+    assert hash_of(page) == "/explorer"
 
 
 def test_search_with_no_match_shows_empty_state(device):
@@ -152,7 +152,7 @@ def test_sort_order_changes_the_list(device):
     pick(page, "#sort-order", "Newest filed")
     expect(page.locator(".bill-card .bill-number").first).to_have_text("HB 1087")
     assert numbers(page, 3) == newest
-    assert hash_of(page) == "#all"  # the default sort is not written to the address
+    assert hash_of(page) == "/explorer"  # the default sort is not written to the address
 
 
 def test_every_sort_option_is_selectable_and_recorded(device):
@@ -266,7 +266,7 @@ def test_clear_filters_resets_everything(device):
     expect(page.locator("#filter-topic")).to_have_value("")
     expect(page.locator("#filter-chamber")).to_have_value("")
     expect(page.locator("#sort-order")).to_have_value("Newest filed")
-    assert hash_of(page) == "#all"
+    assert hash_of(page) == "/explorer"
     assert numbers(page, 1) == ["HB 1087"]
 
 
@@ -283,7 +283,7 @@ def test_only_watched_toggle(device):
     assert hash_params(page) == {"onlyWatch": ["1"]}
     click(page, "#watch-filter")
     expect(page.locator("#result-count")).to_have_text(TOTAL)
-    assert hash_of(page) == "#all"
+    assert hash_of(page) == "/explorer"
 
 
 def test_only_watched_with_nothing_watched_is_empty(device):
@@ -303,7 +303,7 @@ def test_clicking_a_card_title_opens_the_bill_page_and_back_keeps_the_search(dev
     assert page.url.endswith("/bill/HB110")
     page.click("#bill-back")
     expect(page.locator("#bill-page")).to_have_count(0)
-    page.wait_for_function("location.hash.startsWith('#all')")
+    page.wait_for_function("location.pathname === '/explorer'")
     assert hash_params(page) == {"query": ["HB110"]}
 
 
@@ -361,4 +361,4 @@ def test_remembered_filters_do_not_leak_into_a_fresh_profile(device_factory):
     other = device_factory()
     page2 = other.open("#all")
     expect(page2.locator("#result-count")).to_have_text(TOTAL)
-    assert page2.evaluate("location.hash") == "#all"
+    assert page2.evaluate("location.pathname + location.search") == "/explorer"

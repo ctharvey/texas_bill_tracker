@@ -97,11 +97,11 @@ def test_new_member_shows_newcomer_tag(device):
 def test_drawer_author_links_to_member_page(device):
     page = device.open("#bill?id=HB717")
     link = page.locator("#bill-page a.member-name", has_text="Landgraf")
-    expect(link).to_have_attribute("href", f"#member?code={LANDGRAF}")
+    expect(link).to_have_attribute("href", re.compile(rf"/member/{LANDGRAF}(/[a-z0-9-]+)?$"))
     link.click()
     expect(page.locator("#bill-page")).to_have_count(0)
     expect(page.locator("#page-title")).to_have_text("Rep. Brooks Landgraf")
-    assert page.evaluate("location.hash") == f"#member?code={LANDGRAF}"
+    assert re.search(rf"/member/{LANDGRAF}(/[a-z0-9-]+)?$", page.evaluate("location.pathname"))
     expect(page.locator("#dynamic-content .near-row").first).to_be_visible()
     # The member page lists the bill we came from.
     assert "HB 717" in [t.strip() for t in page.locator("#dynamic-content .bill-number").all_inner_texts()]
@@ -113,7 +113,7 @@ def test_well_formed_unknown_code_says_member_not_found(device):
     expect(page.locator("#dynamic-content .info-callout")).to_contain_text(
         "No member of the 90th Legislature has the code A9999.")
     expect(page.locator("#dynamic-content .info-callout").get_by_role("link", name="Near you")).to_have_attribute(
-        "href", "#local")
+        "href", "/near-you")
 
 
 def test_malformed_or_missing_code_falls_back_the_same_way(device):

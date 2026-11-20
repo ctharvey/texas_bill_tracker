@@ -131,7 +131,7 @@ def test_import_csv_replaces_the_list_and_says_so(device):
     expect(page.locator("#page-title")).to_contain_text("See what")
     expect(page.locator("#result-count")).to_have_text("3 bills")
     assert sorted(card_ids(page)) == ["HB9001", "HB9003", "SB9002"]
-    assert page.evaluate("location.hash") == "#all"
+    assert page.evaluate("location.pathname + location.search") == "/explorer"
     card = page.locator('.bill-card[data-bill-id="HB9001"]')
     expect(card.locator(".bill-title-link")).to_have_text('Relating to "quoted", comma text')
     expect(card.locator(".chamber-pill").first).to_have_text("House")

@@ -1,6 +1,7 @@
 """Following legislators: the follow button, the #nav-follow count, the Following view, persistence and the RSS link."""
 
 import json
+import re
 from pathlib import Path
 
 from playwright.sync_api import expect
@@ -54,7 +55,7 @@ def test_follow_from_member_page_persists_and_lists_bills(device):
     section = page.locator(".followed-section", has_text="Followed legislators")
     expect(section.locator("h3")).to_have_text("Followed legislators 1")
     assert followed_chips(page) == ["Rep. Brooks Landgraf RSS Unfollow"]
-    expect(page.locator(".followed-member a.member-name")).to_have_attribute("href", f"#member?code={LANDGRAF}")
+    expect(page.locator(".followed-member a.member-name")).to_have_attribute("href", re.compile(rf"/member/{LANDGRAF}(/[a-z0-9-]+)?$"))
     expected = authored_numbers("Landgraf", "House")
     rows = section.locator(".near-row")
     expect(rows).to_have_count(len(expected))
@@ -161,5 +162,5 @@ def test_followed_legislator_with_no_bills_says_so(device):
 def test_drawer_author_offers_a_member_link_but_no_follow_button(device):
     page = device.open("#bill?id=HB717")
     drawer = page.locator("#bill-page")
-    expect(drawer.locator("a.member-name", has_text="Landgraf")).to_have_attribute("href", f"#member?code={LANDGRAF}")
+    expect(drawer.locator("a.member-name", has_text="Landgraf")).to_have_attribute("href", re.compile(rf"/member/{LANDGRAF}(/[a-z0-9-]+)?$"))
     expect(drawer.locator("[data-follow]")).to_have_count(0)

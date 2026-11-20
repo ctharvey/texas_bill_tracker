@@ -89,7 +89,7 @@ def test_remembered_filters_are_restored(saved_device):
     page = saved_device.open("#all")
     expect(page.locator("#bill-search")).to_have_value(f["query"])
     expect(page.locator("#filter-chamber")).to_have_value(f["chamber"])
-    assert page.url.split("#", 1)[1].startswith("all?") and f"chamber={f['chamber']}" in page.url
+    assert urlsplit(page.url).path == "/explorer" and f"chamber={f['chamber']}" in page.url
 
 
 def test_near_you_location_is_remembered(saved_device):

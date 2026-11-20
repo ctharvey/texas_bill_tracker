@@ -10,6 +10,7 @@ by itself: "pulling" on another device is reloading the page, which is what a pe
 import json
 import re
 import time
+from urllib.parse import urlsplit
 
 from playwright.sync_api import expect
 
@@ -18,7 +19,7 @@ from harness import click, reveal
 WATCH = ["HB110", "HB239"]
 MEMBER = "A4395"
 SYNC_KEY = "tx-bill-atlas-sync-v1"
-EDIT_RE = r"#watchlist\?sync=[A-Za-z0-9_-]{22}$"
+EDIT_RE = r"/watchlist#sync=[A-Za-z0-9_-]{22}$"
 
 
 def grant_clipboard(device):
@@ -72,7 +73,8 @@ def key_of(link):
 
 
 def hash_of(link):
-    return "#" + link.split("#", 1)[1]
+    parts = urlsplit(link)
+    return parts.path + "#" + parts.fragment
 
 
 def server_data(device, key):

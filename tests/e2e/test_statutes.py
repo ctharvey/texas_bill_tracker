@@ -5,6 +5,7 @@ import re
 from playwright.sync_api import expect
 
 SECTION = "#statute?law=LA&sec=62.051"
+SECTION_PATH = "/law/LA/62.051"
 
 
 def drawer_statutes(device, bill="HB110"):
@@ -43,7 +44,7 @@ def test_drawer_link_opens_the_section_page(device):
     page, box = drawer_statutes(device)
     box.locator("a", has_text="62.051").click()
     page.wait_for_selector(".law-compare-wrap")
-    assert page.url.endswith(SECTION)
+    assert page.url.endswith(SECTION_PATH)
     expect(page.locator("#page-title")).to_have_text("Labor Code § 62.051")
     head = page.locator(".section-head").first
     expect(head).to_contain_text("Minimum Wage")
@@ -137,7 +138,7 @@ def test_back_from_a_bill_opened_on_the_section_page_returns_to_the_section(devi
     assert "/bill/" in page.url
     page.locator("#bill-back").click()
     expect(page.locator("#bill-page")).to_have_count(0)
-    assert page.url.endswith(SECTION)
+    assert page.url.endswith(SECTION_PATH)
 
 
 def test_section_search_finds_every_bill_that_changes_it(device):
@@ -149,14 +150,14 @@ def test_section_search_finds_every_bill_that_changes_it(device):
     hint = page.locator(".statute-hint")
     expect(hint).to_be_visible()
     expect(hint.locator("a")).to_have_text("Labor Code § 62.051")
-    expect(hint.locator("a")).to_have_attribute("href", re.compile(r"statute\?law=LA&sec=62\.051"))
+    expect(hint.locator("a")).to_have_attribute("href", re.compile(r"/law/LA/62\.051$"))
     listed = page.locator("#bill-list")
     for bill in on_page:
         expect(listed.locator(f'[data-bill-id="{bill}"]')).to_have_count(1)
     expect(page.locator("#result-count")).to_have_text(re.compile(r"^\d+ bills$"))
     hint.locator("a").click()
     page.wait_for_selector(".law-compare-wrap")
-    assert page.url.endswith(SECTION)
+    assert page.url.endswith(SECTION_PATH)
 
 
 def test_section_search_by_code_name(device):

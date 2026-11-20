@@ -98,7 +98,7 @@ def test_row_links_open_the_bill_page(device):
     assert page.url.endswith("/bill/HB1083")
     page.locator("#bill-back").click()
     expect(bill).to_have_count(0)
-    assert page.url.endswith("#today")
+    assert page.url.endswith("/today")
     page.locator(".today-row .bill-title-link", has_text="wrongfully imprisoned").click()
     expect(bill.locator(".drawer-number")).to_have_text("90R / HB 1083")
 

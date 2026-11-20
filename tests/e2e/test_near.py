@@ -80,7 +80,7 @@ def test_use_my_location_shows_house_member_and_county_bills(device):
     expect(cards.nth(0)).to_contain_text("Rep. Brooks Landgraf")
     expect(cards.nth(0)).to_contain_text("Senior")
     expect(cards.nth(0)).to_contain_text("Republican · 12 years in the House")
-    expect(cards.nth(0).get_by_role("link", name="All their bills →")).to_have_attribute("href", "#member?code=A3040")
+    expect(cards.nth(0).get_by_role("link", name="All their bills →")).to_have_attribute("href", re.compile(r"/member/A3040(/[a-z0-9-]+)?$"))
     expect(cards.nth(1)).to_contain_text("Texas Senate · District 31")
     expect(cards.nth(1)).to_contain_text("Sen. Kevin Sparks")
 

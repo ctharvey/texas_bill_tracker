@@ -60,7 +60,7 @@ def test_saving_page_link_to_watchlist(device):
     page = device.open("#saving")
     page.locator('.section-head [data-view="watchlist"]').click()
     expect(page.locator("#page-title")).to_contain_text("Your watchlist.")
-    assert page.url.endswith("#watchlist")
+    assert page.url.endswith("/watchlist")
 
 
 def test_data_page(device):

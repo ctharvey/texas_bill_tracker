@@ -12,7 +12,7 @@ def test_what_search_looks_at_lists_the_fields_and_its_examples_run(device):
     help_.locator('[data-search-example="HB 110"]').click()
     expect(page.locator("#bill-search")).to_have_value("HB 110")
     expect(page.locator("#result-count")).to_have_text("1 bill")
-    assert page.url.endswith("#all?query=HB%20110")
+    assert page.url.endswith("/explorer?query=HB%20110")
 
 
 def test_each_result_says_why_it_matched(device):

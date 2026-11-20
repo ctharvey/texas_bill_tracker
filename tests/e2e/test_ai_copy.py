@@ -112,7 +112,7 @@ def test_page_button_on_an_info_page_points_at_its_agent_page(device):
     expect(page.locator("#copy-page-ai")).to_have_text("Copied")
     lines = clipboard(page).split("\n")
     assert lines[0] == "Texas Bill Atlas (90th Legislature): Saving your info"
-    assert lines[1].endswith("#saving")
+    assert lines[1].endswith("/about/saving")
     assert f"AI-readable version: {AGENT}saving.md" in lines
 
 

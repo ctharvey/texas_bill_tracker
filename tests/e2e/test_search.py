@@ -25,7 +25,7 @@ def search(page, query):
     """Type a query and wait until the app has recorded it in the address (which happens after it renders)."""
     page.fill("#bill-search", query)
     page.wait_for_function(
-        "q => (new URLSearchParams(location.hash.split('?')[1] || '').get('query') || '') === q", arg=query)
+        "q => (new URLSearchParams(location.search).get('query') || '') === q", arg=query)
 
 
 def count_for(page, query) -> int:
@@ -292,7 +292,7 @@ def test_odd_input_is_safe_and_survives_the_address_bar(device, typed):
     expect(page.locator("#result-count")).to_have_text(COUNT)
     shown = page.locator("#result-count").inner_text()
     # The same address in a new tab gives the same box and the same results.
-    again = device.open(page.evaluate("location.hash"), page=device.new_page())
+    again = device.open(page.evaluate("location.pathname + location.search + location.hash"), page=device.new_page())
     expect(again.locator("#bill-search")).to_have_value(typed)
     expect(again.locator("#result-count")).to_have_text(shown)
     # Nothing typed, or read back from the address, is ever turned into markup.
@@ -307,7 +307,7 @@ def test_a_very_long_query_finds_nothing_and_is_cut_in_the_address(device):
     expect_count(page, "0 bills")
     expect(page.locator("#bill-list")).to_contain_text("Nothing matches yet")
     # Only the first 200 characters are searched, kept in the address and remembered.
-    page.wait_for_function("(new URLSearchParams(location.hash.split('?')[1]).get('query') || '').length === 200")
+    page.wait_for_function("(new URLSearchParams(location.search).get('query') || '').length === 200")
     expect(page.locator("#bill-search")).to_have_attribute("maxlength", "200")
     again = device.open("#all", page=device.new_page())
     assert again.input_value("#bill-search") == "x" * 200
@@ -446,7 +446,7 @@ def test_opening_and_closing_a_bill_keeps_the_search(device):
     assert page.evaluate("location.pathname") == "/bill/HB110"
     page.locator("#bill-back").click()
     expect(page.locator("#bill-page")).to_have_count(0)
-    assert "query=minimum%20wage" in page.evaluate("location.hash")
+    assert "query=minimum%20wage" in page.evaluate("location.search")
     expect(page.locator("#bill-search")).to_have_value("minimum wage")
     expect_count(page, "9 bills")
 
@@ -458,7 +458,7 @@ def test_clear_filters_empties_the_search(device):
     page.click("#clear-filters")
     expect_count(page, TOTAL)
     expect(page.locator("#bill-search")).to_have_value("")
-    assert page.evaluate("location.hash") == "#all"
+    assert page.evaluate("location.pathname + location.search") == "/explorer"
 
 
 def test_the_watchlist_has_its_own_search(device):
@@ -475,7 +475,7 @@ def test_the_watchlist_has_its_own_search(device):
     expect_count(page, "1 bill")
     # An unwatched companion bill may be listed beside it for context; only the watched card counts.
     assert page.locator("#bill-list .bill-card:not(.unwatched-companion) .bill-number").all_inner_texts() == ["HB 110"]
-    assert page.evaluate("location.hash") == "#watchlist?query=minimum%20wage"
+    assert page.evaluate("location.pathname + location.search") == "/watchlist?query=minimum%20wage"
     search(page, "school")  # matches many bills, none of them watched
     expect_count(page, "0 bills")
     # The explorer still has its own last query.

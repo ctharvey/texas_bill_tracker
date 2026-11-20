@@ -2,6 +2,8 @@
 its links and watch button."""
 
 import json
+import re
+from urllib.parse import urlsplit
 
 from playwright.sync_api import expect
 
@@ -60,7 +62,7 @@ def test_old_bill_link_redirects_to_the_bill_page(device):
     assert page.url.endswith("/bill/HB110")
     page.locator("#bill-back").click()
     expect(page.locator(PAGE)).to_have_count(0)
-    assert page.url.endswith("#all?topic=Labor")  # Back to results goes to the list the link named
+    assert page.url.endswith("/explorer?topic=Labor")  # Back to results goes to the list the link named
 
 
 def test_unknown_bill_shows_a_not_found_page(device):
@@ -102,7 +104,7 @@ def test_authors_and_sponsors_lists_with_counts(device):
     expect(author).to_have_count(1)
     expect(author).to_contain_text("Ana-María Rodríguez Ramos")
     expect(author).to_contain_text("Democratic · HD 102")
-    expect(author.locator("a.text-link").first).to_have_attribute("href", "#member?code=A3735")
+    expect(author.locator("a.text-link").first).to_have_attribute("href", re.compile(r"/member/A3735(/[a-z0-9-]+)?$"))
     expect(author.locator("a.member-official")).to_have_attribute("target", "_blank")
     expect(section.get_by_text("None listed in the source snapshot")).to_have_count(3)
 
@@ -184,7 +186,7 @@ def test_back_to_results_from_a_first_page_goes_to_the_explorer(device):
     page = device.open("#bill?id=HB110")
     page.locator("#bill-back").click()
     expect(page.locator(PAGE)).to_have_count(0)
-    assert page.url.split("#", 1)[1].startswith("all")
+    assert urlsplit(page.url).path == "/explorer"
 
 
 def test_browser_back_returns_to_the_list_as_it_was_left(device):

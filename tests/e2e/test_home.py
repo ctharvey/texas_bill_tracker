@@ -1,6 +1,7 @@
 """The dashboard (#home): the default view, its search box, your bills since the last visit, and the visit stamp."""
 
 import json
+from urllib.parse import urlsplit
 
 from playwright.sync_api import expect
 
@@ -19,7 +20,7 @@ def test_a_bare_address_opens_the_dashboard(device):
     page = device.open("")
     expect(page.locator("#home-search")).to_be_visible()
     expect(page.locator("#page-title")).to_contain_text("This session, at a glance.")
-    assert page.url.endswith("#home")
+    assert urlsplit(page.url).path == "/" and not urlsplit(page.url).query
     expect(page.locator('.nav-item[data-view="home"]')).to_have_class("nav-item active")
 
 
@@ -29,7 +30,7 @@ def test_dashboard_search_hands_its_words_to_the_explorer(device):
     page.locator("#home-search-form button[type=submit]").click()
     expect(page.locator("#bill-search")).to_have_value("HB110")
     expect(page.locator("#result-count")).to_have_text("1 bill")
-    assert page.url.endswith("#all?query=HB110")
+    assert page.url.endswith("/explorer?query=HB110")
     page.go_back()
     expect(page.locator("#home-search")).to_be_visible()  # Back returns to the dashboard
 

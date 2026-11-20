@@ -61,7 +61,7 @@ def test_click_picks_an_agency_and_filters(device):
     assert sorted(numbers(page)) == ["HB 234", "HB 430", "HB 690", "SB 108"]
     expect(page.locator("#filter-agency")).to_have_value("Employees Retirement System of Texas")
     expect(page.locator("#agency-options")).to_be_hidden()
-    assert page.evaluate("location.hash") == "#all?agency=ers"
+    assert page.evaluate("location.pathname + location.search") == "/explorer?agency=ers"
 
 
 def test_keyboard_arrows_and_enter_pick(device):
@@ -80,7 +80,7 @@ def test_keyboard_arrows_and_enter_pick(device):
     assert numbers(page) == ["HB 542"]
     expect(page.locator("#filter-agency")).to_have_value("General Land Office")
     expect(page.locator("#agency-options")).to_be_hidden()
-    assert page.evaluate("location.hash") == "#all?agency=glo"
+    assert page.evaluate("location.pathname + location.search") == "/explorer?agency=glo"
 
 
 def test_arrow_down_moves_through_options_and_up_goes_back(device):
@@ -116,7 +116,7 @@ def test_choosing_all_agencies_clears_the_filter(device):
     page.locator('[data-agency-option=""]').click()
     expect(page.locator("#result-count")).to_have_text(TOTAL)
     expect(page.locator("#filter-agency")).to_have_value("")
-    assert page.evaluate("location.hash") == "#all"
+    assert page.evaluate("location.pathname + location.search") == "/explorer"
 
 
 def test_editing_the_text_drops_the_picked_agency(device):
@@ -125,7 +125,7 @@ def test_editing_the_text_drops_the_picked_agency(device):
     click(page, "#filter-agency")
     page.keyboard.type("x")
     expect(page.locator("#result-count")).to_have_text(TOTAL)
-    assert "agency=" not in page.evaluate("location.hash")
+    assert "agency=" not in page.evaluate("location.search")
 
 
 def test_escape_closes_and_restores_the_picked_name(device):

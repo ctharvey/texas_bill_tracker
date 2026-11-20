@@ -45,7 +45,7 @@ def test_copy_share_link_text_and_toast(device):
     page.locator("#share-watch").click()
     expect(page.locator("#toast")).to_have_text("Share link copied")
     link = clipboard(page)
-    assert link == device.site.base + "#all?list=HB110,HB1001"
+    assert link == device.site.base + "explorer#list=HB110,HB1001"
 
 
 def test_share_link_never_carries_follows_searches_or_sync_keys(device, fresh_sync):
@@ -72,7 +72,7 @@ def test_share_link_never_carries_follows_searches_or_sync_keys(device, fresh_sy
     page.locator("#share-watch").click()
     expect(page.locator("#toast")).to_have_text("Share link copied")
     link = clipboard(page)
-    assert link == device.site.base + "#all?list=HB110,HB1001"
+    assert link == device.site.base + "explorer#list=HB110,HB1001"
     for secret in ("A2150", "follow", "search", "sync", "HB717", "HB717".lower(), edit_key, view_key, "edit"):
         assert secret not in link, secret
     # The address bar never shows the edit key either.
@@ -93,7 +93,7 @@ def test_stranger_opens_share_link_sees_banner_and_only_those_bills(device_facto
     expect(page.locator("#save-search")).to_have_count(0)
     assert json.loads(stranger.storage().get(WATCH_KEY, "[]")) == []
     # The link stays in the address bar.
-    assert page.url.endswith("#all?list=HB110,HB1001")
+    assert page.url.endswith("/explorer#list=HB110,HB1001")
 
 
 def test_share_link_ignores_invalid_bill_numbers_and_duplicates(device_factory):
@@ -141,7 +141,7 @@ def test_copy_view_link_copies_current_url_with_filters(device):
     page = device.open("#all?query=HB110&chamber=House")
     click(page, "#copy-view-link")
     expect(page.locator("#toast")).to_have_text("Link to this view copied")
-    assert clipboard(page) == device.site.base + "#all?query=HB110&chamber=House"
+    assert clipboard(page) == device.site.base + "explorer?query=HB110&chamber=House"
 
 
 def test_clipboard_blocked_falls_back_to_showing_the_link(device):
