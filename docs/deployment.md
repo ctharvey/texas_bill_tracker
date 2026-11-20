@@ -62,6 +62,7 @@ Cache rules:
 | `/live/luna/status.json` | 15 seconds | origin |
 | `/api/sync/health` | 30 seconds | origin |
 | `/favicon.ico`, `/icon.png`, `/apple-touch-icon.png` | 1 week | 1 week |
+| Other `*.js` and `*.css` (the stable `/app.css` and `/boot.js`, `src/`) | origin (`no-cache`, revalidated) | origin (`no-cache`) |
 
 The page itself is not cached. `/bill/<ID>` is the same page for every visitor: a URL rewrite serves
 `live/share/<ID>.html` (IDs with a bill prefix, case-sensitive), so it shares that file's cache entry and purge, and
