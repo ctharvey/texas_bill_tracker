@@ -139,8 +139,8 @@ class Fixtures(unittest.TestCase):
         root = Path('/share')
         self.assertEqual(cp.fixture_address(root / 'HB1.html', root, cp.SITE), 'https://billatlas.org/bill/HB1')
         self.assertEqual(cp.fixture_address(root / 'law/PE/46.06.html', root, cp.SITE), 'https://billatlas.org/law/PE/46.06')
-        self.assertIsNone(cp.fixture_address(root / 'law/PE/46.html', root, cp.SITE))  # Chapter page, not served yet.
-        self.assertIsNone(cp.fixture_address(root / 'law/PE/46A.html', root, cp.SITE))
+        self.assertEqual(cp.fixture_address(root / 'law/PE/46.html', root, cp.SITE), 'https://billatlas.org/law/PE/46')
+        self.assertEqual(cp.fixture_address(root / 'law/PE/46A.html', root, cp.SITE), 'https://billatlas.org/law/PE/46A')
 
     def test_topic_and_agency_fixture_addresses(self):
         root = Path('/share')
@@ -192,7 +192,7 @@ class Fixtures(unittest.TestCase):
                     self.assertGreater(len(reports), 100)
                     failing = [(r['address'], cp.all_failures(r)) for r in reports if cp.all_failures(r)]
                     self.assertEqual(failing, [])
-                    self.assertTrue(all(cp.CHAPTER_FILE.fullmatch(Path(s).stem) for s in skipped))
+                    self.assertEqual(skipped, [])  # Chapter pages are served (and checked) too.
 
     def test_main_exits_nonzero_on_a_failing_fixture(self):
         with tempfile.TemporaryDirectory() as tmp:
