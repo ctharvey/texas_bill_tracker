@@ -1,6 +1,6 @@
 """Law search usability: plurals, named laws, chapter citations, best matches first with the search words marked, the
 Changed by bills filter in Laws mode, and See all from the law list above the bills. The law heading search files are
-stubbed (the fixtures have no live/law); the fixture statute index has bills changing LA 62.051."""
+stubbed (the fixtures have no live/law); the fixture statute index has bills changing LA 62.051, none LA 62.201."""
 
 import json
 import re
@@ -8,7 +8,7 @@ import re
 from playwright.sync_api import expect
 
 MANIFEST = {"format": "texas-bill-law-search-v1", "prefixes": {"min": 3, "wag": 3, "thi": 60}}
-WAGE = [["LA 62.151", "MINIMUM WAGES FOR SEASONAL WORKERS"], ["LA 62", "MINIMUM WAGE"], ["LA 62.051", "MINIMUM WAGE"]]
+WAGE = [["LA 62.201", "MINIMUM WAGES FOR SEASONAL WORKERS"], ["LA 62", "MINIMUM WAGE"], ["LA 62.051", "MINIMUM WAGE"]]
 SHARDS = {
     "min": WAGE,
     "wag": WAGE,
@@ -38,7 +38,7 @@ def test_a_plural_finds_the_singular_best_match_first_with_the_words_marked(devi
     expect(page.locator("#result-count")).to_have_text("3 laws")
     # The heading that is the search comes first (the chapter before its section), the longer heading last.
     expect(laws(page).first.locator("a")).to_have_attribute("href", re.compile(r"/law/LA/62$"))
-    expect(laws(page).last.locator("a")).to_have_attribute("href", re.compile(r"/law/LA/62\.151$"))
+    expect(laws(page).last.locator("a")).to_have_attribute("href", re.compile(r"/law/LA/62\.201$"))
     expect(laws(page).first.locator("mark.law-match")).to_have_text(["Minimum", "Wage"])
 
 
@@ -50,9 +50,9 @@ def test_changed_by_bills_keeps_only_laws_a_bill_changes(device):
     expect(toggle).to_have_attribute("aria-pressed", "false")
     toggle.click()
     expect(page.locator("#law-changed")).to_have_attribute("aria-pressed", "true")
-    expect(page.locator("#result-count")).to_have_text("2 laws")  # LA 62.051 and its chapter, not LA 62.151.
+    expect(page.locator("#result-count")).to_have_text("2 laws")  # LA 62.051 and its chapter, not LA 62.201.
     expect(page.locator("#result-note")).to_contain_text("changed by bills")
-    expect(laws(page).locator("a[href$='/law/LA/62.151']")).to_have_count(0)
+    expect(laws(page).locator("a[href$='/law/LA/62.201']")).to_have_count(0)
     page.locator("#law-changed").click()
     expect(page.locator("#result-count")).to_have_text("3 laws")
 
