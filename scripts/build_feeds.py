@@ -458,6 +458,67 @@ def write_group_pages(data: dict | None, snapshot: dict, share_dir: Path, site: 
     return paths
 
 
+# About pages (SEO chunk 5 phase 3): live/share/about/<view>.html, served at /about/<view>. The HTML is the app's own
+# view as the agent build drew it (scripts/build_agent.mjs aboutPages), so the static page and the app say the same.
+ABOUT_VIEWS = ("method", "saving", "data")
+
+
+def about_page(entry: dict, shell: str, site: str = SITE) -> str:
+    """One about page inside the site shell, with the app's heading in the heading slot."""
+    a = lambda value: escape(str(value), {'"': "&quot;"})
+    view, (title, subtitle) = entry["view"], entry["heading"]
+    url, description = f"{site}about/{view}", clip(entry.get("description") or subtitle, SHARE_DESCRIPTION_MAX)
+    name = title.rstrip(".")
+    image = f"{site}{SITE_CARD}"
+    meta = [("property", "og:type", "website"), ("property", "og:site_name", "Texas Bill Atlas"),
+            ("property", "og:title", name), ("property", "og:description", description), ("property", "og:url", url),
+            ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
+            ("property", "og:image:alt", "Texas Bill Atlas"), ("name", "twitter:card", "summary_large_image"),
+            ("name", "twitter:title", name), ("name", "twitter:description", description), ("name", "twitter:image", image),
+            ("name", "twitter:image:alt", "Texas Bill Atlas"), ("name", "description", description)]
+    tags = "\n".join(f'<meta {k}="{n}" content="{a(value)}">' for k, n, value in meta)
+    head = f"""
+<title>{escape(name)} · Texas Bill Atlas</title>
+<link rel="canonical" href="{a(url)}">
+{SHELL_ICONS}
+{tags}
+"""
+    heading = f'<h1 id="page-title">{escape(title)}</h1><p id="page-subtitle">{escape(subtitle)}</p>'
+    content = f"\n{entry['html']}\n"
+    version = hashlib.sha256((head + heading + content).encode()).hexdigest()[:12]
+    return pages.render_page(shell, head=f'{head}<meta name="page-version" content="{version}">', content=content,
+                             view=f"about:{view}", heading=heading)
+
+
+def _about_entries(data: dict | None) -> list[dict]:
+    out = []
+    for entry in (data or {}).get("about") or []:
+        if not isinstance(entry, dict) or entry.get("view") not in ABOUT_VIEWS or entry.get("path") != f"/about/{entry['view']}":
+            continue
+        heading = entry.get("heading")
+        if (isinstance(entry.get("html"), str) and entry["html"].strip() and isinstance(heading, list) and len(heading) == 2
+                and all(isinstance(h, str) and h for h in heading)):
+            out.append(entry)
+    return out
+
+
+def write_about_pages(data: dict | None, share_dir: Path, site: str = SITE, shell: str | None = None) -> list[str]:
+    """The about pages the agent drew; returns their paths ("about/method") for the sitemap. Without the shell or the
+    agent's file nothing is written or removed; a view the agent no longer draws is removed."""
+    entries = _about_entries(data)
+    if shell is None or not entries:
+        return []
+    folder = share_dir / "about"
+    folder.mkdir(parents=True, exist_ok=True)
+    for entry in entries:
+        write_if_changed(folder / f"{entry['view']}.html", about_page(entry, shell, site))
+    keep = {f"{e['view']}.html" for e in entries}
+    for path in folder.iterdir():
+        if path.suffix == ".html" and path.stem in ABOUT_VIEWS and path.name not in keep:
+            path.unlink(missing_ok=True)
+    return [f"about/{e['view']}" for e in entries]
+
+
 def write_if_changed(path: Path, text: str) -> bool:
     try:
         if path.read_text("utf-8") == text:
@@ -2032,6 +2093,7 @@ def main() -> int:
     # Members are listed only with their pages: without the shell the address would serve the bare app.
     members = [m for m in roster.values() if isinstance(m, dict)] if shell else []
     groups = write_group_pages(site_pages, snapshot, args.share or args.snapshot.parent / "share", args.site, shell)
+    groups += write_about_pages(site_pages, args.share or args.snapshot.parent / "share", args.site, shell)
     write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml",
                      sitemap(snapshot, args.site, law_keys, members, groups))
     from atlas.feeds.brackets import default_census, write_brackets

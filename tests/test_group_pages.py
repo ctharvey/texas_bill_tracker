@@ -118,6 +118,40 @@ class BillPagesLinkToTheirGroups(unittest.TestCase):
         self.assertNotIn('<strong>Topics:</strong>', bf.share_page(bill, shell=SHELL))
 
 
+ABOUT = [{'view': 'method', 'path': '/about/method', 'heading': ['How the atlas works.', 'Signals & uncertainty.'],
+          'description': 'How Texas Bill Atlas reads the official record.', 'html': '<div class="method-grid"><p>Text</p></div>'},
+         {'view': 'export', 'path': '/about/export', 'heading': ['x', 'y'], 'html': '<p>noindex view</p>'},
+         {'view': 'data', 'path': '/elsewhere', 'heading': ['x', 'y'], 'html': '<p>wrong path</p>'},
+         {'view': 'saving', 'path': '/about/saving', 'heading': ['Save your work.'], 'html': '<p>bad heading</p>'}]
+
+
+class AboutPages(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+
+    def test_only_valid_about_views_are_written_with_the_apps_heading(self):
+        self.assertEqual(bf.write_about_pages({'about': ABOUT}, self.tmp, shell=SHELL), ['about/method'])
+        self.assertEqual([p.name for p in (self.tmp / 'about').iterdir()], ['method.html'])
+        page = (self.tmp / 'about' / 'method.html').read_text('utf-8')
+        self.assertIn('data-static-view="about:method"', page)
+        self.assertIn('<link rel="canonical" href="https://billatlas.org/about/method">', page)
+        self.assertIn('<title>How the atlas works · Texas Bill Atlas</title>', page)
+        self.assertIn('<!--heading--><h1 id="page-title">How the atlas works.</h1><p id="page-subtitle">Signals &amp; '
+                      'uncertainty.</p><!--/heading-->', page)
+        self.assertNotIn('class="page-heading" hidden', page)
+        self.assertIn('<!--content-->\n<div class="method-grid"><p>Text</p></div>\n<!--/content-->', page)
+
+    def test_missing_input_keeps_pages_and_a_dropped_view_is_removed(self):
+        bf.write_about_pages({'about': ABOUT}, self.tmp, shell=SHELL)
+        for data, shell in ((None, SHELL), ({'about': ABOUT}, None), ({'about': []}, SHELL)):
+            self.assertEqual(bf.write_about_pages(data, self.tmp, shell=shell), [])
+        self.assertTrue((self.tmp / 'about' / 'method.html').exists())
+        (self.tmp / 'about' / 'data.html').write_text('old', 'utf-8')
+        bf.write_about_pages({'about': ABOUT}, self.tmp, shell=SHELL)
+        self.assertFalse((self.tmp / 'about' / 'data.html').exists())
+
+
 class AgentListsFeedTheDataRun(unittest.TestCase):
     def test_agent_export_builds_pages_for_every_topic(self):
         node = shutil.which('node')

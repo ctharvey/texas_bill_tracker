@@ -9,7 +9,7 @@ from pathlib import Path
 SHELL_PATH = Path('/var/www/html/texas-bill-atlas/current/shell.html')
 MARKERS = ('head', 'heading', 'content')
 VIEW = re.compile(r'bill:[A-Z]{2,3}[1-9][0-9]{0,4}|(?:law|chapter):[A-Za-z0-9 .]+|member:A[0-9]{3,5}'
-                  r'|agency:[a-z0-9][a-z0-9-]{0,40}|topic:[a-z0-9][a-z0-9-]{0,79}')
+                  r'|agency:[a-z0-9][a-z0-9-]{0,40}|topic:[a-z0-9][a-z0-9-]{0,79}|about:(?:method|saving|data)')
 SCRIPT = re.compile(r'<script\b[^>]*>', re.IGNORECASE)
 LD_JSON = '<script type="application/ld+json">'
 # The app writes every view's heading into these two elements, so a page without a heading keeps them, empty.

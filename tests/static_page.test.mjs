@@ -70,3 +70,11 @@ test('agency and topic pages are taken over by the key they were built for', () 
   assert.equal(staticMatches(topic, parseLocation('/topic/taxes', '')), false);
   assert.equal(staticMatches(topic, parseLocation('/agency/energy-and-utilities', '')), false);
 });
+
+test('an about page is taken over by its own view', () => {
+  const method = parseStaticView('about:method');
+  assert.deepEqual(method, {kind: 'about', key: 'method'});
+  for (const value of ['about:', 'about:export', 'about:home', 'about:Method']) assert.equal(parseStaticView(value), null, value);
+  assert.equal(staticMatches(method, parseLocation('/about/method', '')), true);
+  assert.equal(staticMatches(method, parseLocation('/about/data', '')), false);
+});

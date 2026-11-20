@@ -24,6 +24,7 @@ import {exportMarkup} from './features/export/view.js';
 import {methodMarkup} from './features/pages/method.js';
 import {savingMarkup} from './features/pages/saving.js';
 import {dataMarkup} from './features/pages/data.js';
+import {ABOUT_HEADINGS} from './features/pages/headings.js';
 import {setupDisclaimer} from './features/pages/dialogs.js';
 import {copyForAi, copyPageForAi} from './features/ai/view.js';
 import {setupThemePicker, setupModePicker, savedTheme} from './features/theme/view.js';
@@ -365,10 +366,10 @@ function registerViews(){
   registerView('bill',{heading:['One bill.','Its summary, text, changes to law, people, agencies and sources.'],render:()=>'<article class="bill-page" id="bill-page" aria-label="Bill details"></article>',after:fillBillPage});
   registerView('agencies',{heading:['Follow the agencies.','Explore where legislation might land across Texas government.'],render:agenciesMarkup});
   registerView('review',{heading:['Full-text review.','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:reviewMarkup});
-  registerView('method',{heading:['How the atlas works.','Signals and uncertainty are displayed separately from verified legislative actions.'],render:methodMarkup});
-  registerView('saving',{heading:['Save your work.','Keep your watchlist and views on one device, carry them in a link or file, or sync them privately.'],render:()=>savingMarkup({linked:sync.linked,syncAvailable:runtime.syncAvailable})});
+  registerView('method',{heading:ABOUT_HEADINGS.method,render:methodMarkup});
+  registerView('saving',{heading:ABOUT_HEADINGS.saving,render:()=>savingMarkup({linked:sync.linked,syncAvailable:runtime.syncAvailable})});
   registerView('export',{heading:['Export your saved info.','Everything this browser has saved, in one file you can keep or import on another device.'],render:()=>exportMarkup({watch:state.watch,follows:state.follow,searches:state.searches,theme:savedTheme(),memberName:code=>{const m=memberByCode(state.roster,code);return m?memberTitle(m):null},synced:Boolean(sync.linked?.editKey),kept:STORAGE_OK?heldCount(listStore):0,previous:STORAGE_OK?previousLinks(listStore):[]})});
-  registerView('data',{heading:['Behind the tracker.','Understand coverage, refreshes, and how to load or export bill data.'],render:()=>dataMarkup({stampText,reviewParts})});
+  registerView('data',{heading:ABOUT_HEADINGS.data,render:()=>dataMarkup({stampText,reviewParts})});
   setFallbackView('data');
 }
 

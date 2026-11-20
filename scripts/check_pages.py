@@ -38,7 +38,8 @@ SITEMAP = "live/sitemap.xml"
 CHAPTER_FILE = re.compile(r"\d+[A-Z]?")  # law/<CODE>/<chapter>.html: written, not served by the gateway yet.
 MEMBER_FILE = re.compile(r"A\d{3,5}")  # member/<code>.html, served at /member/<code>/<slug>.
 MEMBER_SLUG = re.compile(r"/[a-z0-9-]{1,60}")
-GROUP_FILE = {"topic": re.compile(r"[a-z0-9][a-z0-9-]{0,79}"), "agency": re.compile(r"[a-z0-9][a-z0-9-]{0,40}")}
+GROUP_FILE = {"topic": re.compile(r"[a-z0-9][a-z0-9-]{0,79}"), "agency": re.compile(r"[a-z0-9][a-z0-9-]{0,40}"),
+              "about": re.compile(r"method|saving|data")}
 
 
 class PageParser(HTMLParser):
