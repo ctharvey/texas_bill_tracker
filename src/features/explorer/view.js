@@ -14,7 +14,7 @@ import {options, agencySortButtons, agencyOptionsMarkup} from './controls.js';
 import {filteredBills, reasonFor, lawKeysFor} from './model.js';
 import {companionsOf, companionCache, relationText, groupWatchButton, agencyVia} from '../companions/view.js';
 import {noticeSearch, TUMBLEWEED} from '../easter/view.js';
-import {statuteHintMarkup, lawResults, lawResultsMarkup} from '../statutes/view.js';
+import {statuteHintMarkup, lawResults, lawResultsMarkup, lawChanged} from '../statutes/view.js';
 import {billHref} from '../../core/links.js';
 import {authorHtml, influencePill} from '../members/names.js';
 import {renderContent, renderResults, persistState} from '../../core/router.js';
@@ -104,16 +104,23 @@ function scopeToggle(){
 const LAW_PAGE=50;
 const lawPage={query:null,n:LAW_PAGE};
 export function showMoreLaws(){lawPage.n+=LAW_PAGE}
+// "Changed by bills": only laws a bill is changing. For this visit only; not in the address or the prefs.
+let lawChangedOnly=false;
+export function toggleLawChanged(){lawChangedOnly=!lawChangedOnly;lawPage.n=LAW_PAGE}
 // Laws only: the law list replaces the bills, and the bill-only controls are hidden (explorerMarkup).
 function drawLawResults(){
   const area=$('#area-header');if(area)area.hidden=true;
   const preview=$('#bill-preview');if(preview)preview.hidden=true;
   const q=state.query.trim();
   if(lawPage.query!==q){lawPage.query=q;lawPage.n=LAW_PAGE}
-  const r=lawResults(q),n=r.items.length;
+  const all=lawResults(q),filter=all.status==='ok'&&all.kind==='words'&&all.items.length>0;
+  // Until the statute index arrives nothing is known to be changed, so the filter waits rather than emptying the list.
+  const on=filter&&lawChangedOnly&&Boolean(state.statutes);
+  const r=on?{...all,items:all.items.filter(([k])=>lawChanged(k))}:all,n=r.items.length;
   $('#result-count').textContent=r.status==='ok'?`${n} ${n===1?'law':'laws'}`:'Texas law';
-  $('#result-note').textContent=r.status!=='ok'||!n?'':r.kind==='key'?' · by section number':' · headings with every word';
-  $('#bill-list').innerHTML=lawResultsMarkup(r,lawPage.n,q);
+  $('#result-note').textContent=r.status!=='ok'||!n&&!on?'':r.kind==='key'?' · by section number':on?' · changed by bills':' · headings with every word';
+  const toggle=filter?`<div class="law-filter"><button type="button" class="check-filter${lawChangedOnly?' selected':''}" id="law-changed" aria-pressed="${lawChangedOnly}" title="Only laws a bill in this session is changing">Changed by bills</button></div>`:'';
+  $('#bill-list').innerHTML=toggle+(on&&!n?`<div class="empty-state"><h3>No bill changes these laws</h3><p>None of the ${all.items.length} laws with these words in the heading is changed by a bill. Turn off “Changed by bills” to see them.</p></div>`:lawResultsMarkup(r,lawPage.n,q));
   $('#results-bottom').innerHTML=n>lawPage.n?`<button class="outline-button" id="law-more">Show ${Math.min(LAW_PAGE,n-lawPage.n)} more · showing ${lawPage.n} of ${n}</button>`:'';
   persistState();
 }

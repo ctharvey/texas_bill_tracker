@@ -6,8 +6,8 @@ import {timeoutSignal, httpError} from '../../core/net.js';
 import {buildUrl} from '../../prefs.js';
 import {lastActionInfo, openLinkHtml} from '../../taxonomy.js';
 import {STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, compareLaw, currentLaw, lawCopyUnits, STATUTE_KEY, groupStatuteEntries, lawFollowOf, isLawFollowQuery,
-  CHAPTER_KEY, isChapterKey, chapterOf, lawEntries, lawChapterOutline, lawSearchTerms, lawSearchPrefix, lawSearchMatches,
-  parseStatuteQuery, statuteKeysFor, LAW_CODES} from './model.js';
+  CHAPTER_KEY, isChapterKey, chapterOf, lawEntries, lawChapterOutline, lawSearchTerms, lawSearchPrefixes, lawSearchMatches,
+  parseStatuteQuery, parseChapterQuery, statuteKeysFor, LAW_CODES, LAW_CODE_NAMES, lawNamedMatches, lawTermMatcher} from './model.js';
 import {renderContent, renderResults, refreshHome} from '../../core/router.js';
 import {billHref} from '../../core/links.js';
 
@@ -110,9 +110,20 @@ let searchManifest=null;
 const searchShards=new Map();  // prefix -> entries, 'loading' or 'error'
 function redrawSearch(){if(state.view==='all'||state.view==='watchlist')renderResults()}
 async function fetchJson(url){const r=await fetch(url,{signal:timeoutSignal(15000)});if(!r.ok)throw httpError(r);return r.json()}
-// Laws whose heading has every search word: [[key, heading]], 'loading', or null (no usable words, or unavailable).
+// Keys bills are changing: every section in the index, its chapter, and chapters changed whole. Ranks search results.
+let changedFor=null,changedSet=new Set();
+export function lawChanged(key){
+  if(!state.statutes)return false;
+  if(changedFor!==state.statutes){changedFor=state.statutes;changedSet=new Set();
+    for(const k of Object.keys(state.statutes.sections||{})){changedSet.add(k);const c=chapterOf(k);if(c)changedSet.add(c)}
+    for(const k of Object.keys(state.statutes.chapters||{}))changedSet.add(k)}
+  return changedSet.has(key);
+}
+// Laws whose heading has every search word, best first: [[key, heading]], 'loading', or null (no usable words, or
+// unavailable). A term with aliases ("guns": firearm, handgun) can need more than one prefix file.
 function lawSearch(terms){
   if(!terms.length)return null;
+  if(!state.statutes&&!state.statutesFailed)loadStatutes();  // Ranks laws bills change first; redraws when it arrives.
   if(!searchManifest){
     searchManifest='loading';
     fetchJson('./live/law/search/index.json').then(m=>{searchManifest=m?.format==='texas-bill-law-search-v1'?m:'error'})
@@ -120,23 +131,28 @@ function lawSearch(terms){
   }
   if(searchManifest==='loading')return 'loading';
   if(searchManifest==='error')return null;
-  const prefix=lawSearchPrefix(searchManifest,terms);
-  if(!prefix)return [];
-  const shard=searchShards.get(prefix);
-  if(!shard){
-    searchShards.set(prefix,'loading');
-    fetchJson(`./live/law/search/${prefix}.json`).then(e=>searchShards.set(prefix,Array.isArray(e)?e:'error'))
-      .catch(error=>{searchShards.set(prefix,'error');console.warn('Law search unavailable',error.message)}).finally(redrawSearch);
-    return 'loading';
+  const prefixes=lawSearchPrefixes(searchManifest,terms);
+  if(!prefixes)return [];
+  let loading=false;const entries=[];
+  for(const prefix of prefixes){
+    const shard=searchShards.get(prefix);
+    if(!shard){
+      searchShards.set(prefix,'loading');loading=true;
+      fetchJson(`./live/law/search/${prefix}.json`).then(e=>searchShards.set(prefix,Array.isArray(e)?e:'error'))
+        .catch(error=>{searchShards.set(prefix,'error');console.warn('Law search unavailable',error.message)}).finally(redrawSearch);
+    }else if(shard==='loading')loading=true;
+    else if(shard==='error')return null;
+    else entries.push(...shard);
   }
-  if(shard==='loading')return 'loading';
-  return shard==='error'?null:lawSearchMatches(shard,terms);
+  return loading?'loading':lawSearchMatches(entries,terms,lawChanged);
 }
 const statuteHref=key=>buildUrl('statute',{},{statute:key});
 const billNumber=id=>state.bills.find(b=>b.id===id)?.number||id;
 const SMALL_WORDS=new Set(['a','an','and','as','at','by','for','in','of','on','or','the','to','with','from','under']);
 // "FUNDING FOR CERTAIN SCHOOLS" -> "Funding for Certain Schools"
 const titleCase=text=>String(text||'').toLowerCase().split(' ').map((w,i)=>i&&SMALL_WORDS.has(w)?w:w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+// A heading in title case with the words the search matched marked.
+const markedHeading=(h,match)=>titleCase(h).split(' ').map(w=>match&&match(w)?`<mark class="law-match">${esc(w)}</mark>`:esc(w)).join(' ');
 const statuteLink=key=>`<a class="text-link" href="${esc(statuteHref(key))}">${esc(statuteLabel(key,state.statutes?.codes))}</a>`;
 
 export function fillDrawerStatutes(id){
@@ -353,8 +369,9 @@ export function statuteHintMarkup(keys,query='',headings=true){
 }
 
 // ---- The explorer's Laws results (the Laws button on, Bills off) ----
-// {status, kind, items: [[key, heading]]}. status: 'empty' (no words), 'loading', 'error' or 'ok' (items may be
-// empty). kind 'key': the query names sections or a chapter by number; 'words': heading search.
+// {status, kind, items: [[key, heading]], bare?}. status: 'empty' (no words), 'loading', 'error' or 'ok' (items may be
+// empty). kind 'key': the query names sections or a chapter by number (bare: a number with no code); 'words': heading
+// search, with any law the query names ("Public Information Act") first.
 const lawHeading=key=>state.statutes?.sections?.[key]?.h||state.statutes?.chapters?.[key]?.h||'';
 export function lawResults(query){
   const q=String(query||'').trim().replace(/\s+/g,' ');
@@ -362,35 +379,49 @@ export function lawResults(query){
   const key=q.toUpperCase();
   // An exact key ("PE 46.06", "PE 46"): that law, whether or not a bill changes it (every law has a page).
   if(isLawFollowQuery(key))return {status:'ok',kind:'key',items:[[key,lawHeading(key)]]};
-  const parsed=parseStatuteQuery(q,state.statutes?.codes);
+  const codes=state.statutes?.codes||LAW_CODE_NAMES;  // Naming a code needs no index.
+  const parsed=parseStatuteQuery(q,codes);
   if(parsed){
     if(parsed.code&&LAW_CODES.has(parsed.code)){const k=`${parsed.code} ${parsed.sec}`;return {status:'ok',kind:'key',items:[[k,lawHeading(k)]]}}
     // A bare number ("62.051"): the sections bills change with that number; others need their code named.
-    if(!state.statutes){if(!state.statutesFailed)loadStatutes();return {status:state.statutesFailed?'error':'loading',kind:'key',items:[]}}
-    return {status:'ok',kind:'key',items:statuteKeysFor(state.statutes,parsed).map(k=>[k,lawHeading(k)])};
+    if(!state.statutes){if(!state.statutesFailed)loadStatutes();return {status:state.statutesFailed?'error':'loading',kind:'key',items:[],bare:parsed.sec}}
+    return {status:'ok',kind:'key',items:statuteKeysFor(state.statutes,parsed).map(k=>[k,lawHeading(k)]),bare:parsed.sec};
   }
-  const found=lawSearch(lawSearchTerms(q));
+  const chapter=parseChapterQuery(q,codes);
+  if(chapter)return {status:'ok',kind:'key',items:[[chapter,lawHeading(chapter)]]};
+  const named=lawNamedMatches(q),terms=lawSearchTerms(q),found=lawSearch(terms);
   if(found==='loading')return {status:'loading',kind:'words',items:[]};
-  if(found===null)return lawSearchTerms(q).length?{status:'error',kind:'words',items:[]}:{status:'ok',kind:'words',items:[]};
-  return {status:'ok',kind:'words',items:found};
+  if(found===null&&!named.length)return terms.length?{status:'error',kind:'words',items:[]}:{status:'ok',kind:'words',items:[]};
+  const pinned=new Set(named.map(n=>n[0]));
+  return {status:'ok',kind:'words',items:[...named,...(found||[]).filter(e=>!pinned.has(e[0]))]};
 }
 const billsChanging=key=>new Set(lawEntries(state.statutes,key).flatMap(e=>(e.b||[]).map(p=>p[0]))).size;
-// The list itself, the first `shown` items. The count and paging are the explorer's (explorer/view.js).
+// The list itself, the first `shown` items. The count, paging and the "Changed by bills" filter are the explorer's
+// (explorer/view.js).
 export function lawResultsMarkup(result,shown,query=''){
-  if(result.status==='empty')return `<div class="info-callout law-results-intro"><p>Search Texas law by words in a section's or chapter's heading (<em>unlawful carrying</em>), or by its number (<em>Penal Code 46.06</em>, <em>PE 46</em>). Every section and chapter opens on its own page, where you can follow it.</p></div>`;
+  if(result.status==='empty')return `<div class="info-callout law-results-intro"><p>Search Texas law by words in a section's or chapter's heading (<em>unlawful carrying</em>), by a law's name (<em>Public Information Act</em>), or by its number (<em>Penal Code 46.06</em>, <em>Penal Code chapter 46</em>). Every section and chapter opens on its own page, where you can follow it.</p></div>`;
   if(result.status==='loading')return `<div class="info-callout law-results-intro" role="status">Searching Texas law…</div>`;
   if(result.status==='error')return `<div class="info-callout callout-warn law-results-intro">Law search is not available right now. Try again later, or turn Bills on to search bills.</div>`;
-  if(!result.items.length)return `<div class="empty-state"><h3>No law matches yet</h3><p>${result.kind==='key'?`No bill changes a section numbered “${esc(query.trim())}”. Add its code to open it anyway, as in <em>Penal Code 46.06</em>.`:`No section or chapter heading has all of these words. Try fewer words, or a section number.`}</p></div>`;
+  const bare=result.bare?esc(result.bare):'';
+  if(!result.items.length)return `<div class="empty-state"><h3>No law matches yet</h3><p>${result.kind==='key'?`No bill changes a section numbered “${bare||esc(query.trim())}”. Add its code to open it anyway, as in <em>Penal Code ${bare||'46.06'}</em>.`:`No section or chapter heading has all of these words. Try fewer words, or a section number.`}</p></div>`;
+  const match=result.kind==='words'?lawTermMatcher(lawSearchTerms(query)):null;
   const item=([k,h])=>{const n=state.statutes?billsChanging(k):0;
-    return `<li class="law-result">${statuteLink(k)}${h?` <span class="law-heading">${esc(titleCase(h))}</span>`:''}${n?` <small>· ${n} ${n===1?'bill changes':'bills change'} it</small>`:''}</li>`};
-  return `<ul class="law-list law-result-list">${result.items.slice(0,shown).map(item).join('')}</ul>`;
+    return `<li class="law-result">${statuteLink(k)}${h?` <span class="law-heading">${markedHeading(h,match)}</span>`:''}${n?` <small>· ${n} ${n===1?'bill changes':'bills change'} it</small>`:''}</li>`};
+  const note=bare?`<p class="near-hint law-results-note">Sections numbered ${bare} that bills change. For another code's ${bare}, add the code, as in <em>Penal Code ${bare}</em>.</p>`:'';
+  return `${note}<ul class="law-list law-result-list">${result.items.slice(0,shown).map(item).join('')}</ul>`;
 }
-// Laws whose heading has the search words ("unlawful carrying" -> Penal Code § 46.02), shown above the bills.
-const HEADING_SHOWN=5,HEADING_MAX=40;
+// Laws whose heading has the search words ("unlawful carrying" -> Penal Code § 46.02), shown above the bills; the
+// full list is the Laws view.
+const HEADING_SHOWN=5;
 function lawHeadingHint(query){
-  const found=lawSearch(lawSearchTerms(query));
-  if(!Array.isArray(found)||!found.length)return '';
-  const item=([k,h])=>`<li>${statuteLink(k)} <span class="law-heading">${esc(titleCase(h))}</span>${state.statutes?.sections?.[k]?' <small>· bills change it</small>':''}</li>`;
-  const shown=found.slice(0,HEADING_SHOWN),rest=found.slice(HEADING_SHOWN,HEADING_MAX);
-  return `<div class="info-callout statute-hint law-heading-hint"><p>Texas law with “${esc(lawSearchTerms(query).join(' '))}” in its heading:</p><ul class="law-list">${shown.map(item).join('')}</ul>${rest.length?`<details class="law-more"><summary>${found.length>HEADING_MAX?`${HEADING_MAX-HEADING_SHOWN} more of ${found.length-HEADING_SHOWN}`:`${rest.length} more`}</summary><ul class="law-list">${rest.map(item).join('')}</ul></details>`:''}</div>`;
+  const hits=lawSearch(lawSearchTerms(query));
+  if(hits==='loading')return '';
+  // Named laws first, as in the Laws view, so "See all N" is the count it shows.
+  const named=lawNamedMatches(query),pinned=new Set(named.map(n=>n[0]));
+  const found=[...named,...(Array.isArray(hits)?hits:[]).filter(e=>!pinned.has(e[0]))];
+  if(!found.length)return '';
+  const match=lawTermMatcher(lawSearchTerms(query));
+  const item=([k,h])=>`<li>${statuteLink(k)} <span class="law-heading">${markedHeading(h,match)}</span>${lawChanged(k)?' <small>· bills change it</small>':''}</li>`;
+  const more=found.length>HEADING_SHOWN?`<button type="button" class="text-button law-see-all" id="law-see-all">See all ${found.length.toLocaleString()} laws →</button>`:'';
+  return `<div class="info-callout statute-hint law-heading-hint"><p>Texas law with “${esc(lawSearchTerms(query).join(' '))}” in its heading:</p><ul class="law-list">${found.slice(0,HEADING_SHOWN).map(item).join('')}</ul>${more}</div>`;
 }

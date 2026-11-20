@@ -16,7 +16,7 @@ import {exportCsv} from './features/explorer/csv.js';
 import {importFile} from './features/explorer/import.js';
 import {options} from './features/explorer/controls.js';
 import {agenciesMarkup, filterAgencyCards, showAgencyChoices, hideAgencyChoices, setAgencySort, pickAgency, handleAgencyKeydown} from './features/agencies/view.js';
-import {clearFilter, explorerMarkup, drawResults, PREVIEW_WIDE, preview, showPreview, closePreview, stepPreview, showMoreLaws} from './features/explorer/view.js';
+import {clearFilter, explorerMarkup, drawResults, PREVIEW_WIDE, preview, showPreview, closePreview, stepPreview, showMoreLaws, toggleLawChanged} from './features/explorer/view.js';
 import {statuteLabel, isChapterKey, LAW_CODE_NAMES} from './features/statutes/model.js';
 import {HOME_TITLE, HOME_DESCRIPTION, billHead, memberHead, groupHead, lawHead, chapterHead, headingHead} from './core/head.js';
 import {loadStatutes, statuteMarkup} from './features/statutes/view.js';
@@ -474,6 +474,8 @@ function registerClicks(){
   // Bills / Laws: the last kind on stays on. The whole explorer is redrawn (the controls and placeholder change).
   clickOn('search-scope','[data-search-scope]',btn=>{const kind=btn.dataset.searchScope,next=nextScope(state.scope,kind);if(next===state.scope)return;state.scope=next;state.visibleCount=30;renderContent();$(`[data-search-scope="${kind}"]`)?.focus()});
   clickOn('law-more','#law-more',()=>{showMoreLaws();renderResults()});
+  clickOn('law-changed','#law-changed',()=>{toggleLawChanged();renderResults();$('#law-changed')?.focus()});
+  clickOn('law-see-all','#law-see-all',()=>{state.scope='laws';state.visibleCount=30;renderContent();$('[data-search-scope="laws"]')?.focus()});
   clickOn('topic','[data-topic]',topic=>{state.topic=topic.dataset.topic;state.visibleCount=30;renderContent()});
   clickOn('agency-show-all','#agency-show-all',btn=>{const list=$('#agency-list'),all=list.dataset.all!=='1';list.dataset.all=all?'1':'';btn.setAttribute('aria-expanded',String(all));btn.textContent=all?'Show only agencies with bills':`Show all ${list.children.length}`;filterAgencyCards($('#agency-find').value)});
   clickOn('agency-pick','[data-agency-pick]',pick=>{switchFilters('all');state.agency=pick.dataset.agencyPick;state.visibleCount=30;state.view='all';goTo('all');setView('all')});

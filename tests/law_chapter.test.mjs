@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {cleanSearches, parseHash, buildHash, buildUrl} from '../src/prefs.js';
 import {isLawFollowQuery, isChapterKey, chapterOf, lawFollowBills, lawFirstSeen, lawFollowSearch, statuteLabel, lawChapterOutline,
-  lawSearchTerms, lawSearchPrefix, lawSearchMatches} from '../src/features/statutes/model.js';
+  lawSearchTerms, lawSearchPrefixes, lawSearchMatches} from '../src/features/statutes/model.js';
 import {state} from '../src/core/state.js';
 import {searchCounts} from '../src/features/sync/lists.js';
 import {statuteMarkup, statuteHintMarkup} from '../src/features/statutes/view.js';
@@ -108,8 +108,8 @@ test('a section no bill changes shows its current text and links its chapter', a
 test('heading search loads the smallest matching prefix file and lists headings with every word', async () => {
   assert.deepEqual(lawSearchTerms('Unlawful carrying of a weapon'), ['unlawful', 'carrying', 'weapon']);
   const manifest = {format: 'texas-bill-law-search-v1', prefixes: {unl: 40, car: 900, wea: 300}};
-  assert.equal(lawSearchPrefix(manifest, ['unlawful', 'carrying']), 'unl');
-  assert.equal(lawSearchPrefix(manifest, ['unlawful', 'zebra']), null, 'a word no heading has: nothing can match');
+  assert.deepEqual(lawSearchPrefixes(manifest, ['unlawful', 'carrying']), ['unl']);
+  assert.equal(lawSearchPrefixes(manifest, ['unlawful', 'zebra']), null, 'a word no heading has: nothing can match');
   const shard = [['PE 46.02', 'UNLAWFUL CARRYING WEAPONS'], ['PE 46', 'WEAPONS'], ['PE 46.06', 'UNLAWFUL TRANSFER OF CERTAIN WEAPONS'],
     ['CN 1.1', 'UNLAWFUL CARRYING'], ['PE 30.05', 'CRIMINAL TRESPASS'], ['GV 411.1', 'BUNLAWFUL CARRYING']];
   assert.deepEqual(lawSearchMatches(shard, ['unlawful', 'carrying']), [['PE 46.02', 'UNLAWFUL CARRYING WEAPONS']],
@@ -130,7 +130,7 @@ test('heading search loads the smallest matching prefix file and lists headings 
     for (let i = 0; i < 5; i++) { await tick(); statuteHintMarkup([], 'unlawful carrying'); }
     const html = statuteHintMarkup([], 'unlawful carrying');
     assert.match(html, /“unlawful carrying” in its heading/);
-    assert.match(html, /Penal Code § 46\.02<\/a> <span class="law-heading">Unlawful Carrying Weapons<\/span> <small>· bills change it/);
+    assert.match(html, /Penal Code § 46\.02<\/a> <span class="law-heading"><mark class="law-match">Unlawful<\/mark> <mark class="law-match">Carrying<\/mark> Weapons<\/span> <small>· bills change it/);
     assert.ok(!asked.some(u => /car\.json|wea\.json/.test(u)), 'only the smallest prefix file is loaded');
     assert.equal(statuteHintMarkup([], 'zz'), '', 'no usable words: no hint');
   } finally {

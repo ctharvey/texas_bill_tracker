@@ -86,19 +86,42 @@ export function statutesByBill(index) {
     return out;
 }
 
-// "48.160", "§ 48.160", "Penal Code 46.06", "ED 48.160", "CCP art. 46.04" -> {code (or null for any code), sec}.
+// Citation-style code names ("Tex. Gov't Code", "Tex. Code Crim. Proc."), after codeName folding below.
+const CITATION_NAMES = {AG: ['agric', 'agriculture'], AL: ['alco bev', 'alc bev'], BC: ['bus and com'], BO: ['bus orgs'],
+    CP: ['civ prac and rem', 'cprc'], CR: ['code crim proc', 'crim proc', 'ccp'], ED: ['educ'], EL: ['elec'], ES: ['est'],
+    FA: ['fam'], FI: ['fin'], GV: ['govt', 'gov'], HR: ['hum res'], HS: ['health and safety'], IN: ['ins'], LA: ['lab'],
+    LG: ['loc govt', 'loc gov', 'local govt'], NR: ['nat res'], OC: ['occ', 'occupations'], PE: ['penal'], PR: ['prop'],
+    PW: ['parks and wild'], SD: ['spec dist'], TN: ['transp'], TX: ['tax'], UT: ['util'], WA: ['water']};
+// Lower case, "&" as "and", no periods or apostrophes, no leading "Tex." / "Texas" / "V.T.C.A.", no trailing "Ann." or "Code".
+const codeName = text => String(text).toLowerCase().replace(/&/g, ' and ').replace(/[.'’]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+    .replace(/^(?:(?:vtca|vernons|tex|texas)\s+)+/, '').replace(/ ann(?:otated)?$/, '').replace(/ code$/, '').replace(/^code of /, '');
+// The code a name means, among `codes` (abbr -> full name); null when none.
+function codeFor(name, codes) {
+    const n = codeName(name);
+    if (!n) return null;
+    for (const [abbr, full] of Object.entries(codes || {}))
+        if (n === abbr.toLowerCase() || n === codeName(full) || (CITATION_NAMES[abbr] || []).includes(n)) return abbr;
+    return null;
+}
+// "48.160", "§ 48.160", "Penal Code 46.06", "ED 48.160", "CCP art. 46.04", "Tex. Gov't Code § 552.001" ->
+// {code (or null for any code), sec}.
 export function parseStatuteQuery(query, codes) {
     const text = String(query || '').trim().replace(/\s+/g, ' ');
     const m = /^(.*?)[\s,]*(?:§+\s*|sec(?:tion)?\.?\s+|art(?:icle)?\.?\s+)?(\d+[a-z]?(?:\.\d+[a-z]?)+)$/i.exec(text);
     if (!m) return null;
-    const sec = m[2].toUpperCase(), name = m[1].trim().replace(/[,§]+$/, '').trim().toLowerCase();
+    const sec = m[2].toUpperCase(), name = m[1].trim().replace(/[,§]+$/, '').trim();
     if (!name) return {code: null, sec};
-    for (const [abbr, full] of Object.entries(codes || {})) {
-        const f = full.toLowerCase();
-        if (name === abbr.toLowerCase() || name === f || name === f.replace(/ code$/, '') || name === f.replace(/^code of /, '')
-            || (abbr === 'CR' && /^(ccp|c\.c\.p\.)$/.test(name))) return {code: abbr, sec};
-    }
-    return null;
+    const code = codeFor(name, codes);
+    return code ? {code, sec} : null;
+}
+// A chapter named with its code: "Penal Code chapter 46", "Tex. Gov't Code ch. 552", "Penal Code 46" -> "PE 46"; else null.
+export function parseChapterQuery(query, codes) {
+    const m = /^(.*?)[\s,]*(ch(?:ap(?:ter)?)?\.?\s*)?(\d+[a-z]?)$/i.exec(String(query || '').trim().replace(/\s+/g, ' '));
+    const name = m ? m[1].trim().replace(/,$/, '') : '';
+    // Without "chapter" only a full code name counts ("Penal Code 46"), so "tax 2025" stays a word search.
+    if (!name || (!m[2] && !/\bcode$/i.test(name))) return null;
+    const code = codeFor(name, codes), key = code && `${code} ${m[3].toUpperCase()}`;
+    return key && isChapterKey(key) ? key : null;
 }
 // Section keys in the index that a parsed query names.
 export function statuteKeysFor(index, parsed) {
@@ -239,22 +262,77 @@ export function lawChapterOutline(markdown) {
 
 // ---- Law heading search (live/law/search, written by scripts/sync_law.py): one file per 3-letter word prefix ----
 const SEARCH_STOP = new Set('of and the for to in by or a an on with under from as at certain other'.split(' '));
+// "Public Information Act": "act" or "law" after other words names the law, and headings rarely say it.
+const SEARCH_OPTIONAL = new Set(['act', 'acts', 'law', 'laws']);
 // The words a heading search uses: 3 letters or more, not a stop word, at most 6.
-export const lawSearchTerms = query => [...new Set(String(query || '').toLowerCase().match(/[a-z0-9]+/g) || [])]
-    .filter(w => w.length >= 3 && !SEARCH_STOP.has(w)).slice(0, 6);
-// The prefix file to load: the term whose prefix has the fewest headings (null when one has none: nothing can match).
-export function lawSearchPrefix(manifest, terms) {
-    const counts = terms.map(t => [t.slice(0, 3), Number(manifest?.prefixes?.[t.slice(0, 3)]) || 0]);
-    if (!counts.length || counts.some(([, n]) => !n)) return null;
-    return counts.sort((a, b) => a[1] - b[1])[0][0];
+export function lawSearchTerms(query) {
+    const words = [...new Set(String(query || '').toLowerCase().match(/[a-z0-9]+/g) || [])].filter(w => w.length >= 3 && !SEARCH_STOP.has(w));
+    const kept = words.filter(w => !SEARCH_OPTIONAL.has(w));
+    return (kept.length ? kept : words).slice(0, 6);
 }
-// Headings in which every term starts a word, chapters first, then in code order.
-export function lawSearchMatches(entries, terms) {
-    const words = terms.map(t => new RegExp(`(?:^|[^a-z0-9])${t.replace(/[^a-z0-9]/g, '')}`));
-    const out = (Array.isArray(entries) ? entries : []).filter(e => Array.isArray(e) && typeof e[0] === 'string'
-        && (STATUTE_KEY.test(e[0]) || isChapterKey(e[0])) && LAW_CODES.has(e[0].slice(0, 2)) && typeof e[1] === 'string'
-        && words.every(w => w.test(e[1].toLowerCase())));
-    return out.sort((a, b) => Number(!isChapterKey(a[0])) - Number(!isChapterKey(b[0])) || a[0].localeCompare(b[0], undefined, {numeric: true}));
+// Everyday words for the statutes' wording. Each also matches as typed. Reviewed by hand against the live headings.
+const WORD_ALIASES = {marijuana: ['marihuana'], dwi: ['intoxicat'], dui: ['intoxicat'], gun: ['firearm', 'handgun', 'weapon'],
+    guns: ['firearm', 'handgun', 'weapon']};
+// The same plural rule as bill search (taxonomy.js): "wages" also finds "wage", "counties" "county".
+const singularOf = w => w.length > 4 && w.endsWith('ies') ? w.slice(0, -3) + 'y'
+    : w.length > 4 && /(s|x|z|ch|sh)es$/.test(w) ? w.slice(0, -2)
+    : w.length > 3 && /[^su]s$/.test(w) ? w.slice(0, -1) : '';
+// The word starts that count as a term: the term, its singular, its aliases.
+export const lawTermForms = term => [...new Set([term, singularOf(term), ...(WORD_ALIASES[term] || [])])].filter(f => f.length >= 3);
+// Laws known by a name their heading does not carry: [phrases, key, heading]. Checked against the live law copy.
+const NAMED_LAWS = [
+    [['public information act', 'open records act', 'open records'], 'GV 552', 'PUBLIC INFORMATION'],
+    [['open meetings act'], 'GV 551', 'OPEN MEETINGS'],
+    [['whistleblower act', 'whistleblower'], 'GV 554', 'PROTECTION FOR REPORTING VIOLATIONS OF LAW'],
+    [['administrative procedure act'], 'GV 2001', 'ADMINISTRATIVE PROCEDURE'],
+    [['sunset act'], 'GV 325', 'SUNSET LAW'],
+    [['tort claims act'], 'CP 101', 'TORT CLAIMS'],
+    [['medical liability act'], 'CP 74', 'MEDICAL LIABILITY'],
+    [['citizens participation act', 'tcpa', 'anti slapp'], 'CP 27', 'ACTIONS INVOLVING THE EXERCISE OF CERTAIN CONSTITUTIONAL RIGHTS'],
+    [['deceptive trade practices act', 'dtpa'], 'BC 17', 'DECEPTIVE TRADE PRACTICES'],
+    [['dwi', 'dui', 'drunk driving'], 'PE 49', 'INTOXICATION AND ALCOHOLIC BEVERAGE OFFENSES'],
+    [['marijuana', 'controlled substances act'], 'HS 481', 'TEXAS CONTROLLED SUBSTANCES ACT'],
+];
+// The named laws a query mentions, as [[key, heading]] (whole words: "dwi" in "dwi penalties", not in "dwight").
+export function lawNamedMatches(query) {
+    const q = ` ${String(query || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()} `;
+    return NAMED_LAWS.filter(([names]) => names.some(n => q.includes(` ${n} `))).map(([, key, heading]) => [key, heading]);
+}
+// The prefix files to load: those of the term whose forms' prefixes have the fewest headings in all (null when a term
+// has none: nothing can match).
+export function lawSearchPrefixes(manifest, terms) {
+    const plans = terms.map(t => {
+        const prefixes = [...new Set(lawTermForms(t).map(f => f.slice(0, 3)))].filter(p => Number(manifest?.prefixes?.[p]) > 0);
+        return {prefixes, n: prefixes.reduce((s, p) => s + Number(manifest.prefixes[p]), 0)};
+    });
+    if (!plans.length || plans.some(p => !p.n)) return null;
+    return plans.sort((a, b) => a.n - b.n)[0].prefixes;
+}
+// Headings in which every term starts a word, best first:
+//   1. the heading is the search, then starts with it, then has its words together;
+//   2. laws bills are changing (changed(key));
+//   3. chapters before sections; 4. shorter headings; 5. code order.
+export function lawSearchMatches(entries, terms, changed = () => false) {
+    const forms = terms.map(lawTermForms);
+    const hits = (word, i) => forms[i].some(f => word.startsWith(f));
+    const seen = new Set(), out = [];
+    for (const e of Array.isArray(entries) ? entries : []) {
+        if (!Array.isArray(e) || typeof e[0] !== 'string' || typeof e[1] !== 'string' || seen.has(e[0])) continue;
+        if (!(STATUTE_KEY.test(e[0]) || isChapterKey(e[0])) || !LAW_CODES.has(e[0].slice(0, 2))) continue;
+        const words = (e[1].toLowerCase().match(/[a-z0-9]+/g) || []).filter(w => !SEARCH_STOP.has(w));
+        if (!forms.every((_, i) => words.some(w => hits(w, i)))) continue;
+        seen.add(e[0]);
+        const together = at => forms.every((_, i) => words[at + i] !== undefined && hits(words[at + i], i));
+        const tier = together(0) ? (words.length === forms.length ? 0 : 1) : words.some((_, at) => together(at)) ? 2 : 3;
+        out.push({e, tier, changed: changed(e[0]) ? 0 : 1, chapter: isChapterKey(e[0]) ? 0 : 1});
+    }
+    return out.sort((a, b) => a.tier - b.tier || a.changed - b.changed || a.chapter - b.chapter || a.e[1].length - b.e[1].length
+        || a.e[0].localeCompare(b.e[0], undefined, {numeric: true})).map(x => x.e);
+}
+// The heading words a search matched, for highlighting: does this heading word start with one of the terms' forms?
+export function lawTermMatcher(terms) {
+    const forms = terms.flatMap(lawTermForms);
+    return word => (String(word).toLowerCase().match(/[a-z0-9]+/g) || []).some(w => !SEARCH_STOP.has(w) && forms.some(f => w.startsWith(f)));
 }
 
 // Current law as the bills quote it: for each subsection, the first amending entry that quotes it (whole-section

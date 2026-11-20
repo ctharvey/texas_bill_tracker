@@ -61,7 +61,7 @@ test('a key or section number lists those laws, an exact key even when no bill c
   assert.deepEqual(lawResults('Penal Code 1.01').items, [['PE 1.01', '']], 'a code by name');
   assert.deepEqual(lawResults('PE 46').items, [['PE 46', '']], 'a chapter key');
   assert.deepEqual(lawResults('46.06').items.map(i => i[0]).sort(), ['GV 46.06', 'PE 46.06'], 'a bare number: the sections bills change');
-  assert.deepEqual(lawResults('99.99'), {status: 'ok', kind: 'key', items: []});
+  assert.deepEqual(lawResults('99.99'), {status: 'ok', kind: 'key', items: [], bare: '99.99'});
 
   const html = lawResultsMarkup(lawResults('PE 46.06'), 50);
   assert.match(html, /href="\/law\/PE\/46\.06"/);
