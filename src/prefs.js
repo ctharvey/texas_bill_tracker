@@ -158,6 +158,17 @@ export function shareUrl(origin, id, version) {
   return `${origin}/bill/${id}${v ? `?c=${v}` : ''}`;
 }
 
+// Links people copy and send. Both are path addresses whose list or key stays in the fragment, so it never reaches the
+// server; links copied before paths (/#all?list=..., /#watchlist?sync=...) still open and are rewritten on arrival.
+export function shareListUrl(origin, ids) {
+  const list = uniqueIds(Array.isArray(ids) ? ids : [...(ids || [])]);
+  return `${origin}${buildUrl('all', {}, {list})}`;
+}
+// A sync link, edit or view-only. buildUrl never writes an edit key into the address bar, so this one is built here.
+export function syncLinkUrl(origin, key) {
+  return SYNC_KEY.test(key || '') ? `${origin}/watchlist#sync=${key}` : null;
+}
+
 // The address of a law section's page, or null for anything that is not a statute key.
 export function lawPath(statute) {
   const [law, sec] = String(statute || '').split(' ');

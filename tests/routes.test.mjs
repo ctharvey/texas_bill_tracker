@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ROUTES, routeForPath, routeForView, slugify, pageMeta} from '../src/core/routes.js';
-import {VIEWS, FILTER_DEFAULTS, parseHash, parseLocation, buildUrl, isAppPath} from '../src/prefs.js';
+import {VIEWS, FILTER_DEFAULTS, parseHash, parseLocation, buildUrl, isAppPath, shareListUrl, syncLinkUrl} from '../src/prefs.js';
 
 // Splits a built address the way the browser does, then reads it back.
 function reread(url) {
@@ -135,4 +135,28 @@ test('canonical, robots and description come from the route table', () => {
     ['local', '/near-you'], ['export', '/about/export'], ['bill', '/#bill'], ['today', '/today#list=HB5', true]])
     assert.deepEqual([pageMeta(view, url, shared).canonical, pageMeta(view, url, shared).robots], [`${site}/`, 'noindex, follow'], url);
   for (const r of ROUTES) if (r.view !== 'home') assert.ok(r.description && r.description.length <= 160, r.view);
+});
+
+test('copied share and sync links are paths, with the list or key in the fragment', () => {
+  const origin = 'https://billatlas.org', key = 'abcdefghijklmnopqrstuv';
+  assert.equal(shareListUrl(origin, new Set(['HB5', 'sb 2', 'HB5', 'bogus'])), `${origin}/explorer#list=HB5,SB2`);
+  assert.equal(shareListUrl(origin, []), `${origin}/explorer`);
+  assert.equal(syncLinkUrl(origin, key), `${origin}/watchlist#sync=${key}`);
+  for (const bad of ['', null, 'short', `${key}x`, 'abc/def?ghijklmnopqrstu']) assert.equal(syncLinkUrl(origin, bad), null, bad);
+  const shared = reread(shareListUrl(origin, ['HB5', 'SB2']));
+  assert.deepEqual([shared.view, shared.list], ['all', ['HB5', 'SB2']]);
+  const synced = reread(syncLinkUrl(origin, key));
+  assert.deepEqual([synced.view, synced.sync], ['watchlist', key]);
+});
+
+test('links copied before paths open exactly what the new links open', () => {
+  const origin = 'https://billatlas.org', key = 'abcdefghijklmnopqrstuv';
+  assert.deepEqual(parseLocation('/', '#all?list=HB5,SB2'), reread(shareListUrl(origin, ['HB5', 'SB2'])));
+  assert.deepEqual(parseLocation('/', `#watchlist?sync=${key}`), reread(syncLinkUrl(origin, key)));
+  // On arrival the address is rewritten from state: a shared list stays in the fragment, and a sync key is only kept
+  // when it is a view-only list on screen (location.currentUrl), so an edit key never stays in the address bar.
+  const p = parseLocation('/', '#all?list=HB5,SB2');
+  assert.equal(buildUrl(p.view, p.filters, {list: p.list}), '/explorer#list=HB5,SB2');
+  const s = parseLocation('/', `#watchlist?sync=${key}`);
+  assert.equal(buildUrl(s.view, s.filters, {}), '/watchlist');
 });

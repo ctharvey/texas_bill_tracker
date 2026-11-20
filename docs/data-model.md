@@ -74,9 +74,10 @@ person creates. The optional Near you address lookup sends the typed address to 
 - Addresses: every view has a path, listed in `src/core/routes.js` (`/today`, `/explorer?chamber=Senate`,
   `/about/method`, `/bill/<ID>`, `/law/<CODE>/<section>`, `/law/<CODE>/<chapter>`, `/member/<code>/<name>`); filters
   are the query string of `/explorer` and `/watchlist`. A shared list, an open bill and a view-only sync key stay in the
-  fragment (`/explorer#list=HB5,SB12`), which never reaches the server. Old `#view?...` links still open the same view
-  and are rewritten to its path; copied share and sync links keep the `/#all?list=...` and `/#watchlist?sync=...` form
-  so older cached copies of the app read them too. Personal and filterable views get canonical `/` and
+  fragment (`/explorer#list=HB5,SB12`), which never reaches the server. Copied links use paths too: a shared list is
+  `/explorer#list=HB5,SB12`, a sync link `/watchlist#sync=<key>`. Old `#view?...` links, including share and sync links
+  copied before paths, still open the same view and are rewritten to its path on arrival (in the browser: the server
+  never sees a fragment); an edit key is never written back into the address. Personal and filterable views get canonical `/` and
   `noindex, follow`.
 
 ## Sync links

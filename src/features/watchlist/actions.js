@@ -2,8 +2,7 @@
 // List changes go through sync/lists.js; redraws and the address save through core/router.js.
 import {sync, changeWatch, refreshWatch, listStore, changeFollow, changeSearch} from '../sync/lists.js';
 import {copyText, download} from '../../core/copy.js';
-import {siteBase} from '../../core/links.js';
-import {buildHash, profileFile, parseProfileFile, MAX_SEARCHES} from '../../prefs.js';
+import {shareListUrl, syncLinkUrl, profileFile, parseProfileFile, MAX_SEARCHES} from '../../prefs.js';
 import {state} from '../../core/state.js';
 import {isLawFollowQuery, lawFollowsOf} from '../statutes/model.js';
 import {savedTheme, setTheme} from '../theme/view.js';
@@ -15,14 +14,14 @@ import {persistState, renderContent} from '../../core/router.js';
 export async function handleSaveClick(target){
   const hit=sel=>target.closest(sel);
   if(hit('#copy-view-link')){persistState();return copyText(location.href,'Link to this view')}
-  if(hit('#share-watch'))return copyText(siteBase()+buildHash('all',{},{list:[...state.watch]}),'Share link');
+  if(hit('#share-watch'))return copyText(shareListUrl(location.origin,state.watch),'Share link');
   if(hit('#export-watch')){download('texas-bill-atlas-saved.json',profileFile({watch:state.watch,follows:state.follow,searches:state.searches,theme:savedTheme()}),'application/json');return toast('Watchlist, followed legislators and saved searches exported')}
   if(hit('#import-watch')){$('#import-watch-file').click();return}
   if(hit('#shared-add')){const before=state.watch.size;changeWatch('add',state.sharedList);refreshWatch();return toast(`Added ${state.watch.size-before} bills to your watchlist`)}
   if(hit('#shared-close')){Object.assign(state,{sharedList:null,sharedMode:null,sharedSyncKey:null,visibleCount:30});return renderContent()}
   if(hit('#sync-create')){try{await sync.create(readWatch(listStore,storageKey),readFollows(listStore,followKey),readSearches(listStore,searchesKey));loadSaved();renderContent();toast('Sync link created. Copy the edit link to your other devices.')}catch(error){toast(error.message)}return}
-  if(hit('#sync-copy-edit'))return copyText(siteBase()+'#watchlist?sync='+sync.linked.editKey,'Edit link');
-  if(hit('#sync-copy-view'))return copyText(siteBase()+'#watchlist?sync='+sync.linked.viewKey,'View-only link');
+  if(hit('#sync-copy-edit'))return copyText(syncLinkUrl(location.origin,sync.linked.editKey),'Edit link');
+  if(hit('#sync-copy-view'))return copyText(syncLinkUrl(location.origin,sync.linked.viewKey),'View-only link');
   if(hit('#sync-forget')){sync.forget();renderContent();return toast('This device stopped syncing; your list stays here')}
   const del=hit('#sync-delete');
   if(del){

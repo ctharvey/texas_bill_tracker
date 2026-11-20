@@ -30,7 +30,6 @@ import {setupEasterEggs} from './features/easter/view.js';
 import {state, runtime} from './core/state.js';
 import {parseStaticView, staticMatches, takeover} from './core/static_page.js';
 import {stampText} from './core/format.js';
-import {siteBase} from './core/links.js';
 import {$, esc, toast} from './core/dom.js';
 import {copyText, download} from './core/copy.js';
 import {SORTS, todayDay} from './core/labels.js';
@@ -40,7 +39,7 @@ import {registerView, setFallbackView, viewHeading, renderView, setRenderContent
 import {onClick, clickOn, dispatchClick} from './core/dispatch.js';
 import {STORAGE_OK, readJson, loadSaved} from './core/storage.js';
 import {FILTER_DEFAULTS, parseHash, buildHash, pickFilters, sameFilters, cleanFilters, profileFile, parseProfileFile, cleanFollows, MAX_FOLLOWS,
-  cleanSearches, newSearchId, searchName, searchFitsSync, MAX_SEARCHES, parseLocation, buildUrl, shareUrl, isAppPath} from './prefs.js';
+  cleanSearches, newSearchId, searchName, searchFitsSync, MAX_SEARCHES, parseLocation, buildUrl, shareUrl, isAppPath, syncLinkUrl} from './prefs.js';
 import {heldFile, heldCount, previousLinks} from './core/move.js';
 import {NEAR_KEY, cleanNear, countyDistricts, memberByCode} from './geo.js';
 import {applyLunaTags, applyLunaExtras, attachMembers, reviewProgress, assessHearing, snapshotAgeHours, normalizeBill, cardClickOpens, activityOn} from './taxonomy.js';
@@ -391,8 +390,8 @@ function registerClicks(){
     if(el.id==='move-start')startMove();
     if(el.id==='move-close'){runtime.moveStatus=null;renderMoveBanner()}
     if(el.id==='move-held'||el.hasAttribute('data-kept-download')){const text=heldFile(listStore);if(text)download('texas-bill-atlas-kept-aside.json',text,'application/json')}
-    if(el.hasAttribute('data-previous-link'))copyText(siteBase()+'#watchlist?sync='+el.dataset.previousLink,'Edit link');
-    if(el.id==='move-previous'&&movePreviousKey())copyText(siteBase()+'#watchlist?sync='+movePreviousKey(),'Edit link');
+    if(el.hasAttribute('data-previous-link'))copyText(syncLinkUrl(location.origin,el.dataset.previousLink),'Edit link');
+    if(el.id==='move-previous'&&movePreviousKey())copyText(syncLinkUrl(location.origin,movePreviousKey()),'Edit link');
   });
   // A feed link copies its address for a feed reader (a browser shows the raw XML); a modified click still opens it.
   clickOn('feed','a[data-feed]',(a,e)=>{if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button)return;e.preventDefault();

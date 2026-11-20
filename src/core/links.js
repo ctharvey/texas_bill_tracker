@@ -9,5 +9,3 @@ export function billHref(id){
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null});
 }
 export const memberHref=code=>{const m=memberByCode(state.roster,code);return buildUrl('member',{},{member:code,slug:m&&(m.full_name||m.display_name)})};
-// The site root, whatever page is open: a bill page's path is /bill/<ID>.
-export const siteBase=()=>`${location.origin}/`;
