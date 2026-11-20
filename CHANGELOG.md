@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20
+- Agent lists break same-day ties newest bill first: `build_agent.mjs` now orders bills with the app's own rule (newest last action, then the higher bill number), so the static topic and agency pages list the same bills, in the same order, as the app's first rows. Before, a big filing day put the opposite end of that day on the static page. Every agent list changes order once.
+- E2E covers the SEO chunk 5 pages (`tests/e2e/test_site_pages.py`): each static page (member, topic, agency, about, home, today) is served for its path as the gateway serves it and the app takes it over in place with the same address, name and canonical; a member's wrong slug is corrected; unknown topics and agencies say so. The E2E bundle now publishes `/app.css` and `/boot.js` as a deploy does. Nightly E2E fixes for chunk 2's path addresses and the law page's folded cards and compare rule.
+
 ## 2026-11-19
 - Home and Today are one page for everyone (SEO chunk 5, phase 4): the agent build draws the dashboard and the Today view with the app's own functions as a first-time visitor sees them, with the clock stopped at the snapshot's time (so "today" is the data's day and the build is reproducible), and the data run writes `live/share/home.html` (keeping `index.html`'s own title, canonical and cards) and `live/share/today.html` inside the site shell; `/today` joins the sitemap. Headings for both move to `src/features/pages/headings.js`. Served at `/` and `/today` once the cth.hosting home and today rules are released; AI agents asking for `/` are still sent to the agent edition first.
 - About pages are one page for everyone (SEO chunk 5, phase 3): the agent build draws the app's own How it works, Saving your info and Data & imports views (`live/agent/data/pages.json`, as a fresh visitor's app would: this snapshot, no sync link), and the data run wraps them in the site shell at `live/share/about/<view>.html` with the view's own heading (now shared from `src/features/pages/headings.js`), listed in the sitemap. The text is the view's output, so the app and the static page cannot drift; a node test checks it. Export stays app-only. Needs the cth.hosting about rule.
@@ -97,12 +101,3 @@
 - The "All state agencies" marker is decided by vote in the second pass under a stricter rule.
 - Reviews use only the official Markdown text; a review is published only while it matches the served text.
 
-## 2026-11-10
-- Bill text on the site: the data run converts each official version to Markdown with insertions and deletions marked.
-- Saving without accounts: links carry views and filters, share links, export/import, RSS feeds and private sync links.
-- Agent edition (Markdown/JSON for every bill and view) with its own search.
-- Companion bills are linked, grouped in results and can be watched together.
-- Member roster with party tint, tenure and members-elect; last-action tags, filter and sorts.
-- Review worker: Markdown input, `--workers N`, flex transport, Flex capacity waits instead of ending the run.
-- Live data moves to `texas-bill-data.timer` writing `live/bills.json`; assets are content-hashed and cached for a year.
-- First-visit disclaimer and a privacy policy in the footer.
