@@ -46,14 +46,17 @@ def jsonld_script(data: dict) -> str:
 
 def head_html(*, title: str, description: str, url: str, image: str, image_alt: str = SITE_NAME,
               og_type: str = "website", og_url: str | None = None, links: tuple[str, ...] = (),
-              jsonld: tuple[dict, ...] = (), icons: bool = True) -> str:
+              jsonld: tuple[dict, ...] = (), icons: bool = True, robots: str | None = None) -> str:
     """The head slot of a static page: title, self canonical, extra <link>s, icons, meta tags and JSON-LD.
-    title is the page's own part (clipped by the caller); og_url defaults to the canonical."""
+    title is the page's own part (clipped by the caller); og_url defaults to the canonical. robots (e.g.
+    "noindex, follow") adds a robots meta tag; None leaves the page indexable."""
     parts = [f"<title>{escape(page_title(title))}</title>", f'<link rel="canonical" href="{attr(url)}">', *links]
     if icons:
         parts.append(SHELL_ICONS)
     parts.append(meta_tags(title=title, description=description, og_url=og_url or url, image=image,
                            image_alt=image_alt, og_type=og_type))
+    if robots:
+        parts.append(f'<meta name="robots" content="{attr(robots)}">')
     parts += [jsonld_script(data) for data in jsonld]
     return "\n" + "\n".join(parts) + "\n"
 

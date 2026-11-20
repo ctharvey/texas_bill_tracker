@@ -21,10 +21,11 @@ _SECTION_SPLIT = re.compile(r"(?m)^## ")
 
 
 class LawCopy:
-    """Read-only view of live/law; each code's index and chapter file is read at most once."""
+    """Read-only view of live/law; each code's index and chapter file is read at most once. keep_texts=False reads
+    chapter files again on each call (a long-running reader, scripts/law_on_demand.py, keeps memory bounded)."""
 
-    def __init__(self, law_dir: Path):
-        self.law_dir = law_dir
+    def __init__(self, law_dir: Path, keep_texts: bool = True):
+        self.law_dir, self.keep_texts = law_dir, keep_texts
         self.top = json.loads((law_dir / "index.json").read_text("utf-8"))
         self._codes: dict[str, dict] = {}
         self._texts: dict[str, dict[str, str]] = {}
@@ -62,7 +63,10 @@ class LawCopy:
         if name not in self._texts:
             blocks = _SECTION_SPLIT.split((self.law_dir / name).read_text("utf-8"))[1:]
             ids = [s[0] for s in self.code(code)["chapters"][chapter].get("sections", [])]
-            self._texts[name] = {sid: block.strip() for sid, block in zip(ids, blocks)}
+            texts = {sid: block.strip() for sid, block in zip(ids, blocks)}
+            if not self.keep_texts:
+                return texts
+            self._texts[name] = texts
         return self._texts[name]
 
 

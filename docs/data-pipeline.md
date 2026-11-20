@@ -53,9 +53,11 @@ between files without reinstalling units. A push that changes a job's code or in
   official record, a `text/markdown` alternate link to the agent edition, schema.org `Legislation` data and the first 3,000 characters of text. Rewritten pages are submitted to
   IndexNow (`--no-indexnow` turns this off).
 - Law pages `live/share/law/<CODE>/<section>.html`, one per section in `live/statutes/` (about 3,900), served at
-  `/law/<CODE>/<section>` to crawlers and AI agents by the gateway (people get the app): the bills that change the
-  section, its current text from `live/law` (up to 3,000 characters; new sections have none) and the official link.
-  Pages for sections no bill changes any more are removed. Written quietly after the statute index.
+  `/law/<CODE>/<section>` to everyone by the gateway: the bills that change the section, its current text from
+  `live/law` (up to 3,000 characters; new sections have none) and the official link. Pages for sections no bill
+  changes any more are removed. Written quietly after the statute index. A section or chapter with no page here is
+  rendered on request by the sync service (`scripts/law_on_demand.py`, `noindex, follow`, never in the sitemap), and
+  a key not in `live/law` gets a 404.
 - `live/sitemap.xml`, a sitemap index of `live/sitemaps/{bills,laws,members,groups,pages}.xml` (only non-empty children are written;
   laws list sections and chapters, groups list topics and agencies, pages list home, today and about). Each entry's `lastmod` comes from
   data: the last action or Luna review (bills), first-seen days or the law copy's `copied_at` (laws), the newest bill (members, groups,

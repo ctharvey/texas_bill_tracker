@@ -25,6 +25,7 @@ import threading
 import time
 
 import build_feeds
+import law_on_demand
 import search_bills
 
 SEARCH_PATHS = {"/search", "/search.md", "/search.json", "/api/search"}
@@ -54,7 +55,8 @@ FEED_ITEMS = 300
 TEXT_FILTERS = {"view", "query", "topic", "area", "agency", "chamber", "party", "stage", "action", "outlook", "sort"}
 BOOL_FILTERS = {"onlyWatch", "companion"}
 SORT_NAME = re.compile(r"[a-z]{1,20}")
-LIMITS = {"create": (10, 3600), "write": (300, 3600), "read": (1200, 3600), "search": (1200, 3600)}
+LIMITS = {"create": (10, 3600), "write": (300, 3600), "read": (1200, 3600), "search": (1200, 3600),
+          "law": (1200, 3600)}
 
 
 class Rejected(Exception):
@@ -305,10 +307,11 @@ def watchlist_feed(bill_ids: list[str], bills: dict, site: str, reviews: dict | 
 class App:
     def __init__(self, store: Store, snapshot: Snapshot, *, trust_proxy=False,
                  allowed_origins=ALLOWED_ORIGINS, site=build_feeds.SITE, clock=time.time,
-                 search: search_bills.Index | None = None, reviews: Reviews | None = None):
+                 search: search_bills.Index | None = None, reviews: Reviews | None = None,
+                 law_pages: law_on_demand.LawPages | None = None):
         self.store, self.snapshot, self.trust_proxy = store, snapshot, trust_proxy
         self.allowed_origins, self.site, self.clock = set(allowed_origins), site, clock
-        self.search_index, self.reviews = search, reviews or Reviews(None)
+        self.search_index, self.reviews, self.law_pages = search, reviews or Reviews(None), law_pages
         self.limiter = RateLimiter()
 
     def handle(self, method: str, path: str, headers, body: bytes | None, peer: str) -> tuple[int, dict, bytes]:
@@ -325,6 +328,15 @@ class App:
                 raise Rejected(405, "method not allowed")
             self.limiter.check(client, "search", now)
             return self.search(path, query, headers)
+        if self.law_pages is not None and law_on_demand.is_law_path(path):
+            # Law sections and chapters with no static page (cth.hosting sends only those here).
+            if method not in ("GET", "HEAD"):
+                raise Rejected(405, "method not allowed")
+            self.limiter.check(client, "law", now)
+            try:
+                return self.law_pages.render(path)
+            except law_on_demand.Unavailable:
+                raise Rejected(503, "law pages are not available right now") from None
         feed = FEED_RE.fullmatch(path)
         if feed and method == "GET":
             self.limiter.check(client, "read", now)
@@ -445,14 +457,16 @@ def make_handler(app: App):
                 traceback.print_exc()  # journald; the client sees only "internal"
                 status, headers, payload = 500, {"Content-Type": "application/json"}, b'{"error": "internal"}'
             self.send_response(status)
-            for name, value in {**headers, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+            # A route may allow caching (law pages: no-cache, as the static ones); everything else is no-store.
+            for name, value in {"Cache-Control": "no-store", **headers, "X-Content-Type-Options": "nosniff",
                                 "Referrer-Policy": "no-referrer"}.items():
                 self.send_header(name, value)
             self.send_header("Content-Length", str(len(payload)))
             if unread:
                 self.send_header("Connection", "close")
             self.end_headers()
-            self.wfile.write(payload)
+            if method != "HEAD":
+                self.wfile.write(payload)
             if unread:
                 self.discard_body(unread)
 
@@ -478,6 +492,7 @@ def make_handler(app: App):
                 pass
 
         def do_GET(self): self.dispatch("GET")
+        def do_HEAD(self): self.dispatch("HEAD")
         def do_POST(self): self.dispatch("POST")
         def do_PUT(self): self.dispatch("PUT")
         def do_DELETE(self): self.dispatch("DELETE")
@@ -501,10 +516,19 @@ def main() -> int:
     parser.add_argument("--allowed-origin", action="append", default=None)
     parser.add_argument("--search-data", type=Path, default=None, help="live/agent/data/bills.json, for /search")
     parser.add_argument("--tags", type=Path, default=None, help="live/luna/tags.json, for review items in feeds")
+    parser.add_argument("--law", type=Path, default=None, help="live/law, for law pages rendered on request")
+    parser.add_argument("--statutes", type=Path, default=None, help="live/statutes/index.json, for those pages' bills")
+    parser.add_argument("--shell", type=Path, default=None, help="The deployed current/shell.html (with --law)")
     args = parser.parse_args()
+    law_pages = None
+    if args.law:
+        if not args.shell:
+            parser.error("--law needs --shell")
+        law_pages = law_on_demand.LawPages(args.law, args.statutes, args.shell)
     app = App(Store(args.db), Snapshot(args.snapshot), trust_proxy=args.trust_proxy,
               allowed_origins=args.allowed_origin or ALLOWED_ORIGINS,
-              search=search_bills.Index(args.search_data) if args.search_data else None, reviews=Reviews(args.tags))
+              search=search_bills.Index(args.search_data) if args.search_data else None, reviews=Reviews(args.tags),
+              law_pages=law_pages)
     server = Server((args.host, args.port), make_handler(app))
     print(f"Sync service listening on {args.host}:{args.port}", flush=True)
     server.serve_forever()

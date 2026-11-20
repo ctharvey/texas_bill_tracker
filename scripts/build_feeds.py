@@ -1746,10 +1746,12 @@ def _law_shell_page(shell: str, *, head_args: dict, label: str, feed: str, body:
 
 
 def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str] | None, site: str = SITE,
-             shell: str | None = None, chapters: set[str] | frozenset[str] | None = None) -> str:
+             shell: str | None = None, chapters: set[str] | frozenset[str] | None = None,
+             robots: str | None = None) -> str:
     """The page at /law/<CODE>/<section>. With the deployed shell it is the whole site page and the app takes it over;
     without one it is the standalone page, whose script sends people to the app. `chapters` (chapter_groups keys)
-    are the chapter pages that exist; the section links its own chapter only when that page is there."""
+    are the chapter pages that exist; the section links its own chapter only when that page is there. robots marks a
+    page rendered on request (scripts/law_on_demand.py) as not indexed."""
     code, number = key.split(" ")
     url, target = f"{site}law/{code}/{number}", f"{site}#statute?law={code}&sec={number}"
     feed = f"{site}live/feeds/law/{code}-{number}.xml"
@@ -1760,12 +1762,15 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     bills = [b for b in entry.get("b") or [] if isinstance(b, list) and len(b) == 2 and BILL_ID.fullmatch(str(b[0]))]
     listed = ", ".join(f"{bill_number(b)} ({LAW_KIND_WORDS.get(k, 'changes')})" for b, k in bills[:6])
     more = f" and {len(bills) - 6} more" if len(bills) > 6 else ""
-    count = f"{len(bills)} bill{'s' if len(bills) != 1 else ''} in the 90th Legislature would change this section"
+    count = (f"{len(bills)} bill{'s' if len(bills) != 1 else ''} in the 90th Legislature would change this section"
+             if bills else "No bill in the 90th Legislature changes this section yet")
     # Only bills add it and current law has no such section: a proposed new section, nothing to compare against.
     proposed = bool(bills) and all(k == "n" for _, k in bills) and not current
     what = ("A proposed new section, not in current law yet: read each bill's version." if proposed
             else "See each bill's wording next to today's law.")
-    description = clip(f"{count}: {listed}{more}. {what}", SHARE_DESCRIPTION_MAX)
+    description = clip(f"{count}: {listed}{more}. {what}" if bills else
+                       f"The current text of {label}. {count}: follow it in Texas Bill Atlas to see when one does.",
+                       SHARE_DESCRIPTION_MAX)
     a = lambda value: escape(value, {'"': "&quot;"})
     items = "\n".join(f'<li><a href="{a(f"{site}bill/{b}")}">{escape(bill_number(b))}</a> '
                       f'{LAW_KIND_WORDS.get(k, "changes")} this section</li>' for b, k in bills)
@@ -1774,7 +1779,9 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     body = [f"<h1>{escape(label)}{': ' + escape(name) if name else ''}</h1>",
             f'<p><a href="{a(target)}">Open {escape(label)} in Texas Bill Atlas</a> '
             + ("to read each proposal.</p>" if proposed else "to compare each bill's wording with current law.</p>"),
-            f"<h2>{escape(count[0].upper() + count[1:])}</h2>", f"<ul>\n{items}\n</ul>"]
+            f"<h2>{escape(count[0].upper() + count[1:])}</h2>"]
+    body.append(f"<ul>\n{items}\n</ul>" if bills else
+                "<p>Follow this section in Texas Bill Atlas: a bill filed later that changes it shows up as new.</p>")
     if chapters and f"{code} {chapter}" in chapters:
         body.append(f'<p>Part of <a href="{a(chapter_url)}">{escape(chapter_name)}</a>, with every bill that changes it.</p>')
     body += ["<p>Bills are matched to sections automatically from their text and can be missed, for example when a bill "
@@ -1799,7 +1806,8 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     jsonld = (page_head.law_section(name=title, label=label, url=url, official=official, chapter_name=chapter_name,
                                     chapter_url=chapter_url),
               page_head.breadcrumbs(site, [(chapter_name, chapter_url), (label, url)]))
-    head_args = dict(title=title, description=description, url=url, image=f"{site}{SITE_CARD}", jsonld=jsonld)
+    head_args = dict(title=title, description=description, url=url, image=f"{site}{SITE_CARD}", jsonld=jsonld,
+                     robots=robots)
     if shell is not None:  # The page is the app: no "Open in" link.
         return _law_shell_page(shell, head_args=head_args, label=label, feed=feed,
                                body=body[:1] + body[2:], view=f"law:{code} {number}", aria="Law section")
@@ -2013,6 +2021,14 @@ def _section_short(code: str, number: str) -> str:
     return f"{'Art.' if code == 'CR' else chr(0xa7)} {number}"
 
 
+_SECTION_NUMBER = re.compile(r"\d+[A-Z]?(?:\.\d+[A-Z]?)+")
+
+
+def _section_name(heading) -> str:
+    """"Sec. 46.06. UNLAWFUL TRANSFER." -> "UNLAWFUL TRANSFER" (a law copy section heading without its number)."""
+    return re.sub(r"^(?:Sec|Art)\.\s+\S+\.\s*", "", str(heading or "")).rstrip(".").strip()
+
+
 def chapter_feed(key: str, g: dict, by_id: dict[str, dict], heading: str = "", site: str = SITE,
                  reviews: dict | None = None) -> str:
     """Every action on the bills that change a whole chapter or any section in it, newest first. Each bill's actions
@@ -2072,9 +2088,12 @@ def write_law_chapter_feeds(snapshot: dict, index: dict, out_dir: Path, site: st
     return written, unchanged
 
 
-def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, shell: str | None = None) -> str:
+def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, shell: str | None = None,
+                     robots: str | None = None, all_sections: list | None = None) -> str:
     """The page at /law/<CODE>/<chapter>, built like law_page. The standalone page still sends people to the old
-    #chapter address: pointed at its own path, it would reload itself once the gateway serves it to everyone."""
+    #chapter address: pointed at its own path, it would reload itself once the gateway serves it to everyone.
+    robots and all_sections ([[number, "Sec. ..." heading]] from the law copy) are for a page rendered on request
+    (scripts/law_on_demand.py): every section of the chapter is listed so any one can be opened and followed."""
     code, chapter = key.split(" ")
     code_name = CODE_NAME[code]
     url, target = f"{site}law/{code}/{chapter}", f"{site}#chapter?law={code}&ch={chapter}"
@@ -2087,8 +2106,10 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
     bill_ids = sorted({b for b, _ in whole} | {b for pairs, _s, _h in sections.values() for b, _ in pairs},
                       key=_bill_order)
     count = (f"{len(bill_ids)} bill{'s' if len(bill_ids) != 1 else ''} in the 90th Legislature would change something "
-             f"in this chapter")
-    description = clip(f"{count}. Follow it in Texas Bill Atlas to see when another bill does.", SHARE_DESCRIPTION_MAX)
+             f"in this chapter" if bill_ids else "No bill in the 90th Legislature changes this chapter yet")
+    description = clip(f"{count}. Follow it in Texas Bill Atlas to see when another bill does." if bill_ids else
+                       f"The sections of {label}. {count}: follow it in Texas Bill Atlas to see when one does.",
+                       SHARE_DESCRIPTION_MAX)
     a = lambda value: escape(value, {'"': "&quot;"})
     body = [f"<h1>{escape(label)}{': ' + escape(name) if name else ''}</h1>",
             f'<p><a href="{a(target)}">Open {escape(label)} in Texas Bill Atlas</a> to follow it: anything a bill '
@@ -2107,6 +2128,12 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
             rows.append(f'<li><a href="{a(f"{site}law/{code}/{number}")}">{escape(_section_short(code, number))}</a>'
                         f"{': ' + escape(shead) if shead else ''}: {who}</li>")
         body += ["<h3>Sections bills change</h3>", "<ul>\n" + "\n".join(rows) + "\n</ul>"]
+    if all_sections:
+        rows = [f'<li><a href="{a(f"{site}law/{code}/{s[0]}")}">{escape(_section_short(code, s[0]))}</a>'
+                f"{': ' + escape(_section_name(s[1])) if _section_name(s[1]) else ''}</li>"
+                for s in all_sections if isinstance(s, (list, tuple)) and len(s) >= 2
+                and _SECTION_NUMBER.fullmatch(str(s[0]))]
+        body += ["<h3>Sections in this chapter</h3>", "<ul>\n" + "\n".join(rows) + "\n</ul>"]
     body += ["<p>Bills are matched to sections automatically from their text and can be missed, for example when a bill "
              "renumbers sections or uses unusual wording. No bill listed here does not mean no bill changes this "
              "chapter.</p>"]
@@ -2119,7 +2146,8 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
               f"{site}law/{code}/{skey.split(' ')[1]}") for skey, (_p, _s, shead) in sections.items()]
     jsonld = (page_head.law_chapter(name=title, label=label, url=url, official=official, sections=parts),
               page_head.breadcrumbs(site, [(label, url)]))
-    head_args = dict(title=title, description=description, url=url, image=f"{site}{SITE_CARD}", jsonld=jsonld)
+    head_args = dict(title=title, description=description, url=url, image=f"{site}{SITE_CARD}", jsonld=jsonld,
+                     robots=robots)
     if shell is not None:  # The page is the app: no "Open in" link.
         return _law_shell_page(shell, head_args=head_args, label=label, feed=feed,
                                body=body[:1] + body[2:], view=f"chapter:{code} {chapter}", aria="Law chapter")

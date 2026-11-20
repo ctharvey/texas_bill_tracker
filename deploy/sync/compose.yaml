@@ -1,5 +1,6 @@
 # Private sync links service. The shared gateway proxies billatlas.org/api/sync* to bills-sync:8787 over
-# edge-bills (cth.hosting). Values come from sync.env next to the deployed copy; none of them are secrets.
+# edge-bills (cth.hosting), and /law/<CODE>/<key> addresses that have no static page (scripts/law_on_demand.py).
+# Values come from sync.env next to the deployed copy; none of them are secrets.
 name: texas-bill-sync
 
 services:
@@ -22,6 +23,7 @@ services:
     # SYNC_APP holds the whole scripts/ folder of one commit (README: Update); this path and that layout change together.
     command: [python3, /app/scripts/sync_service.py, --db, /data/sync.sqlite3, --snapshot, /live/bills.json,
               --search-data, /live/agent/data/bills.json, --tags, /live/luna/tags.json,
+              --law, /live/law, --statutes, /live/statutes/index.json, --shell, /site/current/shell.html,
               --host, 0.0.0.0, --port, '8787', --trust-proxy]
     volumes:
       - type: bind
@@ -34,6 +36,12 @@ services:
       - type: bind
         source: /var/www/html/texas-bill-atlas/live
         target: /live
+        read_only: true
+      # The public web root, for current/shell.html: `current` is a relative link to releases/<commit> that each
+      # deploy replaces, so the folder holding it is mounted, not the file (a file mount would keep the old release).
+      - type: bind
+        source: /var/www/html/texas-bill-atlas
+        target: /site
         read_only: true
     networks:
       edge:

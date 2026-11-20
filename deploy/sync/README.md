@@ -5,6 +5,11 @@ Runs `scripts/sync_service.py` (standard library only) in a locked-down containe
 cth.hosting (`gateway/sites.d/09-billatlas.org.caddy`; `07-bills.ctharvey.me.caddy` serves the old name;
 `docs/gateway-migration.md`).
 
+It also serves agents' `/search` and the law pages no bill touches yet: the gateway sends a `/law/<CODE>/<key>` address
+here when `live/share/law/` has no page for it, and `scripts/law_on_demand.py` renders it from `live/law` inside the
+current site shell (`/site/current/shell.html`), marked `noindex, follow`, or answers 404 for a key not in the law copy.
+If this container cannot be reached, the gateway serves the bare app for those addresses instead.
+
 Layout on the VPS (root-owned except the database directory):
 
 - `/srv/sites/texas-bill-atlas/sync/compose.yaml` - a copy of `deploy/sync/compose.yaml`.
@@ -37,5 +42,8 @@ Update: extract a new `app/<commit>`, point `SYNC_APP` at it, then
 `https://billatlas.org/api/sync/health` returns 200. Roll back by pointing `SYNC_APP` at the previous commit, as long
 as both use the same layout. The compose command and the app folder layout are coupled: switching from flat releases to
 `scripts/` releases means replacing `compose.yaml` and `SYNC_APP` together in one `up -d` (keep the old `compose.yaml`),
-and rolling back across that change means restoring both.
+and rolling back across that change means restoring both. The same holds for the law page arguments (`--law`,
+`--statutes`, `--shell` and the `/site` mount): a release older than them does not accept them, so roll back
+`compose.yaml` with `SYNC_APP`, and release the gateway's law route to bills-sync only after this container serves
+`/law/` (it answers 404 there without those arguments).
 Stopping the container is safe: the site reports sync as unavailable and keeps share links and files working.
