@@ -64,7 +64,7 @@ class RenderPageTests(unittest.TestCase):
         self.assertIn(LD_JSON, page)
 
     def test_rejects_a_bad_view(self):
-        for view in ('home:HB1', 'bill', 'law:PE/46', 'member:A4875', 'bill:HB-1'):
+        for view in ('home:HB1', 'bill', 'law:PE/46', 'agency:A4875', 'member:A4875/x', 'bill:HB-1'):
             with self.subTest(view=view), self.assertRaises(ValueError):
                 render(view=view)
 

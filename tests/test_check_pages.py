@@ -113,6 +113,19 @@ class Fixtures(unittest.TestCase):
         self.assertIsNone(cp.fixture_address(root / 'law/PE/46.html', root, cp.SITE))  # Chapter page, not served yet.
         self.assertIsNone(cp.fixture_address(root / 'law/PE/46A.html', root, cp.SITE))
 
+    def test_member_fixture_address_is_the_pages_own_slug(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'member').mkdir()
+            good = '<link rel="canonical" href="https://billatlas.org/member/A4395/daniel-alders">'
+            (root / 'member' / 'A4395.html').write_text(good, encoding='utf-8')
+            (root / 'member' / 'A2150.html').write_text('<link rel="canonical" href="https://billatlas.org/">', encoding='utf-8')
+            (root / 'member' / 'x.html').write_text(good, encoding='utf-8')
+            address = lambda name: cp.fixture_address(root / 'member' / name, root, cp.SITE)
+            self.assertEqual(address('A4395.html'), 'https://billatlas.org/member/A4395/daniel-alders')
+            self.assertEqual(address('A2150.html'), 'https://billatlas.org/member/A2150')  # Then fails on its canonical.
+            self.assertIsNone(address('x.html'))
+
     def test_generated_share_pages_pass(self):
         """The data run's bill and law pages from the golden capture, as production builds them."""
         capture = ROOT / 'tests' / 'e2e' / 'fixtures' / 'live'
@@ -139,7 +152,7 @@ class Fixtures(unittest.TestCase):
                 reports, skipped = cp.check_fixtures(share, cp.SITE)
                 with self.subTest(name):
                     kinds = {r['address'].split('/')[3] for r in reports}
-                    self.assertEqual(kinds, {'bill', 'law'})
+                    self.assertEqual(kinds, {'bill', 'law', 'member'})
                     self.assertGreater(len(reports), 100)
                     failing = [(r['address'], cp.all_failures(r)) for r in reports if cp.all_failures(r)]
                     self.assertEqual(failing, [])

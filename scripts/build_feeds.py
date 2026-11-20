@@ -170,15 +170,9 @@ def member_feed(member: dict, bills: list[tuple[dict, str]], site: str = SITE, r
 def write_member_feeds(snapshot: dict, roster: dict, out_dir: Path, site: str = SITE,
                        reviews: dict | None = None) -> tuple[int, int]:
     """One feed per coded roster member (empty when they have no bills yet, so a feed link never breaks)."""
-    by_code = {m["code"]: m for m in roster.values() if MEMBER_CODE.fullmatch(str(m.get("code", "")))}
+    by_code, bills = member_bills(snapshot, roster)
     if not by_code:
         return 0, 0
-    bills: dict[str, list] = {code: [] for code in by_code}
-    for bill in snapshot.get("bills") or []:
-        if isinstance(bill, dict) and BILL_ID.fullmatch(str(bill.get("id", ""))):
-            for code, role in member_roles(bill, roster).items():
-                if code in bills:
-                    bills[code].append((bill, role))
     out_dir.mkdir(parents=True, exist_ok=True)
     written = unchanged = 0
     for code, member in by_code.items():
@@ -187,6 +181,151 @@ def write_member_feeds(snapshot: dict, roster: dict, out_dir: Path, site: str = 
         else:
             unchanged += 1
     return written, unchanged
+
+
+# Member pages (SEO chunk 5 phase 1): live/share/member/<code>.html, served at /member/<code>/<slug> inside the site
+# shell, and taken over by the app's member view.
+_MEMBER_PAGE_NAME = re.compile(r"A\d{3,5}\.html")
+MEMBER_CAPTION_MAX = 160
+
+
+def slugify(text: str) -> str:
+    """As the app's slugify (src/core/routes.js): accents dropped, lower case, dashes, at most 60 characters."""
+    import unicodedata
+    folded = re.sub("[̀-ͯ]", "", unicodedata.normalize("NFKD", str(text or ""))).lower()
+    return re.sub(r"[^a-z0-9]+", "-", folded).strip("-")[:60].rstrip("-")
+
+
+def member_path(member: dict) -> str:
+    """The member's address without the site: member/<code>/<slug>, or member/<code> when the name has no slug."""
+    slug = slugify(member.get("full_name") or member.get("display_name") or "")
+    return f"member/{member['code']}" + (f"/{slug}" if slug else "")
+
+
+def _newest_action_first(bill: dict) -> tuple:
+    """Newest last action first, then bill type and number (highest first), so the order never depends on input."""
+    match = re.fullmatch(r"([A-Z]+)(\d+)", str(bill.get("id", "")))
+    day = str(bill.get("last_action_date") or "")[:10]
+    return (-int(day.replace("-", "")) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) else 0,
+            match.group(1) if match else "", -int(match.group(2)) if match else 0)
+
+
+def member_page(member: dict, bills: list[tuple[dict, str]], shell: str, site: str = SITE) -> str:
+    """One legislator's page inside the site shell: who they are, where the party comes from, and every bill they
+    author, coauthor or sponsor in the snapshot, newest action first."""
+    a = lambda value: escape(str(value), {'"': "&quot;"})
+    code, title = member["code"], member_title(member)
+    url = f"{site}{member_path(member)}"
+    feed = f"{site}live/feeds/members/{code}.xml"
+    house = member.get("chamber") == "house"
+    chamber = "Texas House" if house else "Texas Senate"
+    district = str(member.get("district") or "")
+    party = str(member.get("party") or "")
+    if party and member.get("party_basis") == "election":
+        party += " (2026 ballot, unofficial)"
+    where = " · ".join([chamber, f"District {district}" if district else "district not recorded yet"]
+                       + ([party] if party else []))
+    groups: dict[str, list[dict]] = {role: [] for _, role, _ in ROLES}
+    for bill, role in bills:
+        groups.setdefault(role, []).append(bill)
+    for rows in groups.values():
+        rows.sort(key=_newest_action_first)
+    total = sum(len(rows) for rows in groups.values())
+    first = [b for rows in groups.values() for b in rows][:6]
+    listed = ", ".join(bill_number(b["id"]) for b in first) + (f" and {total - 6} more" if total > 6 else "")
+    description = clip(f"{title}, {where}. " + (f"{total} bill{'s' if total != 1 else ''} in the 90th Legislature: "
+                                               f"{listed}." if total else "No bills in the 90th Legislature yet."),
+                       SHARE_DESCRIPTION_MAX)
+    image = f"{site}{SITE_CARD}"
+    meta = [("property", "og:type", "profile"), ("property", "og:site_name", "Texas Bill Atlas"),
+            ("property", "og:title", title), ("property", "og:description", description), ("property", "og:url", url),
+            ("property", "og:image", image), ("property", "og:image:width", "1200"), ("property", "og:image:height", "630"),
+            ("property", "og:image:alt", "Texas Bill Atlas"), ("name", "twitter:card", "summary_large_image"),
+            ("name", "twitter:title", title), ("name", "twitter:description", description), ("name", "twitter:image", image),
+            ("name", "twitter:image:alt", "Texas Bill Atlas"), ("name", "description", description)]
+    tags = "\n".join(f'<meta {kind}="{n}" content="{a(value)}">' for kind, n, value in meta)
+    head = f"""
+<title>{escape(clip(title, SHARE_TITLE_MAX))} · Texas Bill Atlas</title>
+<link rel="canonical" href="{a(url)}">
+<link rel="alternate" type="application/rss+xml" title="{a(title)}" href="{a(feed)}">
+{SHELL_ICONS}
+{tags}
+"""
+    body = [f"<h1>{escape(title)}</h1>", f"<p>{escape(where)}</p>"]
+    if member.get("party") and member.get("party_source"):
+        body.append(f"<p>Party as recorded by {escape(str(member['party_source']))}.</p>")
+    service = [s for s in member.get("service") or [] if isinstance(s, dict)]
+    if service:
+        stints = "\n".join(f"<li>{'House' if s.get('chamber') == 'house' else 'Senate'} District "
+                           f"{escape(str(s.get('district') or '?'))}, {escape(str(s.get('years') or ''))}"
+                           + (f" ({escape(re.sub(r'^(.+) - \1$', r'\1', str(s['legislatures'])))} Legislature)"
+                              if s.get("legislatures") else "")
+                           + "</li>" for s in service)
+        body += ["<h2>Service</h2>", f"<ul>\n{stints}\n</ul>"]
+    else:
+        body.append("<p>Member-elect; no prior service on record.</p>")
+    links = [f'<a href="{a(u)}" rel="noopener noreferrer">{label}</a>'
+             for u, label in (((member.get("links") or {}).get("tlo"), "Texas Legislature Online"),
+                              ((member.get("links") or {}).get("lrl"), "Legislative Reference Library"))
+             if isinstance(u, str) and u.startswith("https://")]
+    links.append(f'<a href="{a(feed)}">RSS feed of actions on their bills</a>')
+    body.append(f"<p>{' · '.join(links)}</p>")
+    body.append(f"<p>{'Representatives author and coauthor House bills and sponsor Senate bills that reach the House.' if house else 'Senators author and coauthor Senate bills and sponsor House bills that reach the Senate.'} "
+                "Sponsors and cosponsors are listed once a bill crosses chambers, so early in the session most bills "
+                "show authors only.</p>")
+    for role, rows in groups.items():
+        if not rows:
+            continue
+        items = "\n".join(
+            f'<li><a href="{a(f"{site}bill/{b["id"]}")}">{escape(bill_number(b["id"]))}</a>'
+            + (f": {escape(clip(b.get('caption') or b.get('title') or '', MEMBER_CAPTION_MAX))}"
+               if b.get("caption") or b.get("title") else "")
+            + (f" Last action {escape(str(b['last_action_date'])[:10])}." if b.get("last_action_date") else "")
+            + "</li>" for b in rows)
+        body += [f"<h2>{escape(role)} ({len(rows)})</h2>", f"<ul>\n{items}\n</ul>"]
+    if not total:
+        body.append("<p>No bills by this member in this snapshot yet.</p>")
+    content = (f'\n<article class="member-page static-page" aria-label="{a(title)}">\n' + "\n".join(body)
+               + "\n</article>\n")
+    version = hashlib.sha256((head + content).encode()).hexdigest()[:12]
+    return pages.render_page(shell, head=f'{head}<meta name="page-version" content="{version}">', content=content,
+                             view=f"member:{code}")
+
+
+def member_bills(snapshot: dict, roster: dict) -> tuple[dict[str, dict], dict[str, list]]:
+    """Coded roster members by code, and each one's (bill, role) pairs: the join the member feeds use."""
+    by_code = {m["code"]: m for m in roster.values() if MEMBER_CODE.fullmatch(str(m.get("code", "")))}
+    bills: dict[str, list] = {code: [] for code in by_code}
+    for bill in snapshot.get("bills") or []:
+        if isinstance(bill, dict) and BILL_ID.fullmatch(str(bill.get("id", ""))):
+            for code, role in member_roles(bill, roster).items():
+                if code in bills:
+                    bills[code].append((bill, role))
+    return by_code, bills
+
+
+def write_member_pages(snapshot: dict, roster: dict, out_dir: Path, site: str = SITE,
+                       shell: str | None = None) -> tuple[int, int, int]:
+    """One page per coded roster member, bills or not. Without the deployed shell nothing is written or removed: the
+    gateway then serves the app, which draws the member itself. Pages for codes no longer in the roster are removed;
+    an empty roster never empties the folder."""
+    if shell is None:
+        return 0, 0, 0
+    by_code, bills = member_bills(snapshot, roster)
+    if not by_code:
+        return 0, 0, 0
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written = unchanged = removed = 0
+    for code, member in by_code.items():
+        if write_if_changed(out_dir / f"{code}.html", member_page(member, bills[code], shell, site)):
+            written += 1
+        else:
+            unchanged += 1
+    for path in out_dir.iterdir():
+        if _MEMBER_PAGE_NAME.fullmatch(path.name) and path.name[:-5] not in by_code:
+            path.unlink(missing_ok=True)
+            removed += 1
+    return written, unchanged, removed
 
 
 def write_if_changed(path: Path, text: str) -> bool:
@@ -221,9 +360,9 @@ def write_feeds(snapshot: dict, out_dir: Path, site: str = SITE, reviews: dict |
     return written, unchanged
 
 
-def sitemap(snapshot: dict, site: str = SITE, law_keys=()) -> str:
-    """The home page, every bill's address (/bill/<ID>), each dated by its last action, and every law section a bill
-    changes (/law/<CODE>/<section>). robots.txt points here."""
+def sitemap(snapshot: dict, site: str = SITE, law_keys=(), members=()) -> str:
+    """The home page, every bill's address (/bill/<ID>), each dated by its last action, every law section a bill
+    changes (/law/<CODE>/<section>) and each member's page (/member/<code>/<slug>). robots.txt points here."""
     rows = [f"  <url><loc>{escape(site)}</loc></url>"]
     for bill in snapshot.get("bills") or []:
         if not isinstance(bill, dict) or not BILL_ID.fullmatch(str(bill.get("id", ""))):
@@ -234,6 +373,8 @@ def sitemap(snapshot: dict, site: str = SITE, law_keys=()) -> str:
     for key in sorted(k for k in law_keys if STATUTE_KEY.fullmatch(k) and k[:2] in CODE_NAME):
         code, number = key.split(" ")
         rows.append(f"  <url><loc>{escape(site)}law/{code}/{number}</loc></url>")
+    for member in sorted((m for m in members if MEMBER_CODE.fullmatch(str(m.get("code", "")))), key=lambda m: m["code"]):
+        rows.append(f"  <url><loc>{escape(site + member_path(member))}</loc></url>")
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
             + "\n".join(rows) + "\n</urlset>\n")
 
@@ -1727,7 +1868,7 @@ def main() -> int:
     statutes_dir = args.statutes or args.snapshot.parent / "statutes"
     written, unchanged, removed = write_statutes(snapshot, text_dir, statutes_dir, args.today, args.snapshot.parent / "law")
     print(f"Statute sections: {written} written, {unchanged} unchanged, {removed} removed", flush=True)
-    # Quiet from here to the brackets (golden stdout): law pages, then the sitemap that lists them.
+    # Quiet from here to the brackets (golden stdout): law and member pages, then the sitemap that lists them.
     try:
         statute_index = json.loads((statutes_dir / "index.json").read_text("utf-8"))
     except (OSError, ValueError):
@@ -1741,7 +1882,11 @@ def main() -> int:
         write_law_chapter_pages(statute_index, (args.share or args.snapshot.parent / "share") / "law", args.site,
                                 args.snapshot.parent / "law", shell)
         write_law_chapter_feeds(snapshot, statute_index, args.out / "law", args.site, reviews, args.snapshot.parent / "law")
-    write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml", sitemap(snapshot, args.site, law_keys))
+    write_member_pages(snapshot, roster, (args.share or args.snapshot.parent / "share") / "member", args.site, shell)
+    # Members are listed only with their pages: without the shell the address would serve the bare app.
+    members = [m for m in roster.values() if isinstance(m, dict)] if shell else []
+    write_if_changed(args.sitemap or args.snapshot.parent / "sitemap.xml",
+                     sitemap(snapshot, args.site, law_keys, members))
     from atlas.feeds.brackets import default_census, write_brackets
     status = write_brackets(snapshot, text_dir, args.census or default_census(), args.brackets or args.snapshot.parent / "brackets")
     print(f"Population brackets: {status}", flush=True)

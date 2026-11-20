@@ -42,3 +42,15 @@ test('takeover keeps a static page only when the data did not load', () => {
 test('a matching bill page keeps its address, so the app does not rewrite it', () => {
   assert.equal(buildUrl('bill', {}, {bill: 'HB1094'}), '/bill/HB1094');
 });
+
+test('a member page is taken over by the member it was built for', () => {
+  const member = parseStaticView('member:A4395');
+  assert.deepEqual(member, {kind: 'member', key: 'A4395'});
+  for (const value of ['member:', 'member:a4395', 'member:A12', 'member:A4395/x', 'member:B4395']) {
+    assert.equal(parseStaticView(value), null, value);
+  }
+  assert.equal(staticMatches(member, parseLocation('/member/A4395/daniel-alders', '')), true);
+  assert.equal(staticMatches(member, parseLocation('/member/A4395', '')), true);
+  assert.equal(staticMatches(member, parseLocation('/member/A2150/rafael-anchia', '')), false);
+  assert.equal(staticMatches(member, parseLocation('/bill/HB1094', '')), false);
+});
