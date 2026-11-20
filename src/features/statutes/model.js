@@ -146,7 +146,7 @@ export function lawParagraph(line) {
     return {current: join('del'), proposed: join('ins')};
 }
 
-const SECTION_HEAD = /^((?:Sec|Art)\. \d+[A-Z]?(?:\.\d+[A-Z]?)+\.\s+[^a-z]*?\.)(?:\s+|$)/;
+const SECTION_HEAD = /^((?:Sec|Art)\. \d+[A-Za-z]?(?:\.\d+[A-Za-z]?)+\.\s+[^a-z]*?\.)(?:\s+|$)/;  // CR has "Art. 42.04a."
 const SUB_LABEL = /^\(([a-z]{1,3}(?:-\d+[a-z]?)?)\)\s/;
 
 // Paragraphs of one bill's entry -> ordered [{label, text}] for one version. "head" is "Sec. N. HEADING."; "" is
@@ -235,9 +235,10 @@ export function compareLaw(left, right) {
 // The history notes after each section in the Legislative Council's files ("Acts 2005, ...", "Amended by:").
 const SOURCE_NOTE = /^(?:Acts \d{4},|Amended by:|(?:Added|Amended|Redesignated|Renumbered|Transferred|Reenacted)(?: and \w+)? (?:by|from) |Subsecs?\. \S+(?: .{0,60})? (?:added|amended) by )/;
 // One section of a chapter file in live/law (Markdown, "## Sec. N. HEADING. text" blocks) -> units like lawUnits,
-// or null when the file has no such section. The first block wins when the file carries several versions.
+// or null when the file has no such section. The first block wins when the file carries several versions. The number
+// is matched without case: keys are upper case, the copy has "Art. 42.04a.".
 export function lawCopyUnits(markdown, number) {
-    const want = new RegExp(`^(?:Sec|Art)\\. ${number.replace(/\./g, '\\.')}\\.\\s`);
+    const want = new RegExp(`^(?:Sec|Art)\\. ${number.replace(/\./g, '\\.')}\\.\\s`, 'i');
     const block = String(markdown).split(/^## /m).slice(1).find(b => want.test(b));
     if (!block) return null;
     const paragraphs = block.split(/\n\s*\n/).map(p => p.replace(/\s+/g, ' ').trim()).filter(p => p && !SOURCE_NOTE.test(p))

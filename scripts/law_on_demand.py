@@ -116,8 +116,9 @@ class LawPages:
         if not found:
             return None
         chapter, entry = found
-        heading = next((s[1] for s in entry.get("sections", []) if s[0] == number), "")
-        current = (heading, law.section_texts(code, chapter).get(number) or "", f"live/law/{code}/{chapter}.md")
+        stored = law.section_id(entry, number)  # "42.04a" in the copy for the key "42.04A"
+        heading = next((s[1] for s in entry.get("sections", []) if s[0] == stored), "")
+        current = (heading, law.section_texts(code, chapter).get(stored) or "", f"live/law/{code}/{chapter}.md")
         index_entry = sections.get(f"{code} {number}")
         own_chapter = number.split(".")[0]
         # The chapter's page always exists now (static or on request), so the section always links it.

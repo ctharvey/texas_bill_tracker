@@ -249,12 +249,12 @@ function chapterMarkup(key,label,head,official){
   const status=id=>{const b=state.bills.find(x=>x.id===id);return b?` <span class="law-status">${esc(lastActionInfo(b).label)}</span>`:''};
   const wholeRows=(whole?.b||[]).filter(p=>Array.isArray(p)&&CHAPTER_KINDS[p[1]]).map(([id,kind])=>`<li>${billLink(id)} <small>· ${esc(CHAPTER_KINDS[kind])}</small>${status(id)}</li>`).join('');
   // A bill quoting only some subsections gives the index no heading; the law copy has every section's.
-  const copied=new Map(typeof outline==='object'?outline.sections:[]);
+  const copied=new Map(typeof outline==='object'?outline.sections.map(([n,h])=>[n.toUpperCase(),h]):[]);  // Keys are upper case (CR 42.04a).
   const sectionRows=sections.map(k=>{const s=state.statutes.sections[k],h=s.h||copied.get(k.split(' ')[1])||'';
     const kinds=(s.b||[]).filter(Array.isArray).map(([id,kind])=>`${billLink(id)} <small>${esc(STATUTE_KINDS[kind]||'')}</small>`).join(', ');
     return `<li>${statuteLink(k)}${h?` <span class="law-heading">${esc(titleCase(h))}</span>`:''}<div>${kinds}</div></li>`}).join('');
   const all=typeof outline==='object'?`<details class="law-more"><summary>All ${outline.sections.length} sections in this chapter</summary><ul class="law-list">${outline.sections.map(([n,h])=>
-      `<li><a class="text-link" href="${esc(statuteHref(`${key.split(' ')[0]} ${n}`))}">${sign} ${esc(n)}</a> <span class="law-heading">${esc(titleCase(h))}</span></li>`).join('')}</ul></details>`
+      `<li><a class="text-link" href="${esc(statuteHref(`${key.split(' ')[0]} ${n.toUpperCase()}`))}">${sign} ${esc(n)}</a> <span class="law-heading">${esc(titleCase(h))}</span></li>`).join('')}</ul></details>`
     :outline==='loading'?'<p class="near-hint">Loading the chapter\'s sections…</p>':'';
   const count=bills.size;
   return `${head(heading?esc(titleCase(heading)):esc(label),`${esc(label)} · ${count?`${count} ${count===1?'bill changes':'bills change'} something in it`:'no bill changes it yet'}`)}${lawToolsMarkup(key,label,count>0)}

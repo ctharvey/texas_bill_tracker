@@ -112,6 +112,48 @@ class ChapterPages(Fixture):
         self.assertIn('<a href="https://billatlas.org/law/GV/2271.002">', content(page))
 
 
+class LowerCaseSuffix(Fixture):
+    """The copy stores two Code of Criminal Procedure articles with a lower-case letter ("42.04a"); keys and addresses
+    are upper case (#22)."""
+
+    def setUp(self):
+        super().setUp()
+        (self.law / 'CR').mkdir()
+        heading = 'CHAPTER 42. JUDGMENT AND SENTENCE'
+        arts = [('42.04', 'RESTRICTIONS ON PROBATION.', 'Old article forty-two point oh four.'),
+                ('42.04a', 'ISSUANCE OF MANDATE; JUDGMENTS FINAL.', 'The mandate issues when the judgment is final.')]
+        (self.law / 'CR' / '42.md').write_text(f'# Code of Criminal Procedure, {heading}\n\n' + ''.join(
+            f'## Art. {n}. {t} {x}\n\n' for n, t, x in arts), 'utf-8')
+        (self.law / 'CR' / 'index.json').write_text(json.dumps({'code': 'CR', 'chapters': {'42': {
+            'heading': heading, 'file': 'CR/42.md', 'sha256': 'b' * 64,
+            'sections': [[n, f'Art. {n}. {t}'] for n, t, _ in arts]}}}), 'utf-8')
+        top = self.law / 'index.json'
+        index = json.loads(top.read_text('utf-8'))
+        index['codes']['CR'] = {'name': 'Code of Criminal Procedure'}
+        top.write_text(json.dumps(index), 'utf-8')
+
+    def test_the_article_opens_at_its_upper_case_address_with_its_own_text(self):
+        status, _headers, page = self.get('/law/CR/42.04A')
+        self.assertEqual(status, 200)
+        self.assertIn('<link rel="canonical" href="https://billatlas.org/law/CR/42.04A">', head(page))
+        self.assertIn('The mandate issues when the judgment is final.', content(page))
+        self.assertNotIn('Old article forty-two', content(page))
+        status, headers, _page = self.get('/law/CR/42.04a')
+        self.assertEqual((status, headers['Location']), (301, '/law/CR/42.04A'))
+
+    def test_the_chapter_links_it_at_the_upper_case_address(self):
+        _status, _headers, page = self.get('/law/CR/42')
+        self.assertIn('<a href="https://billatlas.org/law/CR/42.04A">', content(page))
+        self.assertIn('<a href="https://billatlas.org/law/CR/42.04">', content(page))
+
+    def test_the_law_copy_finds_it_without_case_and_gives_the_stored_id(self):
+        law = lod.LawCopy(self.law)
+        chapter, entry = law.section_chapter('CR', '42.04A')
+        self.assertEqual((chapter, law.section_id(entry, '42.04A')), ('42', '42.04a'))
+        self.assertEqual(law.section_id(entry, '42.04'), '42.04')
+        self.assertIsNone(law.section_id(entry, '42.05'))
+
+
 class Addresses(Fixture):
     def test_keys_not_in_the_law_copy_are_a_real_404(self):
         for path in ('/law/GV/999.99', '/law/GV/2271.999', '/law/GV/999', '/law/ZZ/1.01', '/law/GV/1.' + '1' * 20,

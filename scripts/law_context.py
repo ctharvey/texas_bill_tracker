@@ -47,13 +47,22 @@ class LawCopy:
                 return key, entry
         return None
 
+    @staticmethod
+    def section_id(entry: dict, section: str) -> str | None:
+        """The section id as a chapter entry stores it, matched without case (keys are upper case, the copy has CR
+        "42.04a"); None when the chapter has no such section."""
+        want = section.upper()
+        return next((s[0] for s in entry.get("sections", []) if isinstance(s, (list, tuple)) and s
+                     and str(s[0]).upper() == want), None)
+
     def section_chapter(self, code: str, section: str) -> tuple[str, dict] | None:
+        """(chapter id as stored, its index entry) for a section, matched without case; section_id gives its stored id."""
         guess = section.split(".")[0]
         found = self.chapter(code, guess)
-        if found and any(s[0] == section for s in found[1].get("sections", [])):
+        if found and self.section_id(found[1], section):
             return found
         for key, entry in self.code(code)["chapters"].items():
-            if any(s[0] == section for s in entry.get("sections", [])) and entry.get("file") == f"{code}/{key}.md":
+            if self.section_id(entry, section) and entry.get("file") == f"{code}/{key}.md":
                 return key, entry
         return None
 
@@ -121,7 +130,7 @@ def build(markdown: str, law_dir: Path) -> list[dict]:
         found = law.chapter(code, chapter) if chapter else law.section_chapter(code, number)
         if not found:
             continue
-        current = law.section_texts(code, found[0]).get(number)
+        current = law.section_texts(code, found[0]).get(LawCopy.section_id(found[1], number) or number)
         if not current:
             continue
         text, trimmed = _clip(current, SECTION_TEXT_MAX)

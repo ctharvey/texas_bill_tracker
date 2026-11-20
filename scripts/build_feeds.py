@@ -1720,8 +1720,9 @@ def _current_law(law, code: str, number: str) -> tuple[str, str, str] | None:
     if not found:
         return None
     chapter, entry = found
-    text = law.section_texts(code, chapter).get(number) or ""
-    heading = next((s[1] for s in entry.get("sections", []) if s[0] == number), "")
+    stored = law.section_id(entry, number)  # Matched without case: the copy has CR "42.04a".
+    text = law.section_texts(code, chapter).get(stored) or ""
+    heading = next((s[1] for s in entry.get("sections", []) if s[0] == stored), "")
     return heading, text, f"live/law/{code}/{chapter}.md"
 
 
@@ -2129,10 +2130,10 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
                         f"{': ' + escape(shead) if shead else ''}: {who}</li>")
         body += ["<h3>Sections bills change</h3>", "<ul>\n" + "\n".join(rows) + "\n</ul>"]
     if all_sections:
-        rows = [f'<li><a href="{a(f"{site}law/{code}/{s[0]}")}">{escape(_section_short(code, s[0]))}</a>'
+        rows = [f'<li><a href="{a(f"{site}law/{code}/{str(s[0]).upper()}")}">{escape(_section_short(code, s[0]))}</a>'
                 f"{': ' + escape(_section_name(s[1])) if _section_name(s[1]) else ''}</li>"
                 for s in all_sections if isinstance(s, (list, tuple)) and len(s) >= 2
-                and _SECTION_NUMBER.fullmatch(str(s[0]))]
+                and _SECTION_NUMBER.fullmatch(str(s[0]).upper())]
         body += ["<h3>Sections in this chapter</h3>", "<ul>\n" + "\n".join(rows) + "\n</ul>"]
     body += ["<p>Bills are matched to sections automatically from their text and can be missed, for example when a bill "
              "renumbers sections or uses unusual wording. No bill listed here does not mean no bill changes this "
