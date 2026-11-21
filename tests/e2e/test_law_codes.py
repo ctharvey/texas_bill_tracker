@@ -10,7 +10,7 @@ from playwright.sync_api import expect
 LAW = {"format": "texas-bill-law-v1", "codes": {
     "LA": {"name": "Labor Code", "headings": {"62": "CHAPTER 62. MINIMUM WAGE", "63": "CHAPTER 63. AN UNCHANGED CHAPTER",
                                               "62.v2": "CHAPTER 62. A SECOND VERSION"}},
-    "PE": {"name": "Penal Code", "headings": {"46": "CHAPTER 46. WEAPONS"}},
+    "PE": {"name": "Penal Code", "headings": {"2": "CHAPTER 2. BURDEN OF PROOF"}},  # No fixture bill changes PE 2.
 }}
 
 
