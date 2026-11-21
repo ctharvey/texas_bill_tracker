@@ -117,6 +117,22 @@ class CodePages(unittest.TestCase):
         self.assertTrue((self.share / 'index.html').is_file())
 
 
+class CodeBreadcrumbs(unittest.TestCase):
+    def crumbs(self, page: str) -> list[str]:
+        parser = check_pages.PageParser()
+        parser.feed(page)
+        trail = [b for b in map(json.loads, parser.ld) if b.get('@type') == 'BreadcrumbList'][0]
+        return [i['item'] for i in trail['itemListElement']]
+
+    def test_section_and_chapter_pages_name_their_code_page(self):
+        site = 'https://billatlas.org/'
+        chapter = bf.law_chapter_page('PE 46', bf.chapter_groups(INDEX)['PE 46'], 'WEAPONS', shell=SHELL)
+        self.assertEqual(self.crumbs(chapter), [site, f'{site}law', f'{site}law/PE', f'{site}law/PE/46'])
+        section = bf.law_page('PE 46.02', INDEX['sections']['PE 46.02'], 'Penal Code', None, shell=SHELL)
+        self.assertEqual(self.crumbs(section), [site, f'{site}law', f'{site}law/PE', f'{site}law/PE/46',
+                                                f'{site}law/PE/46.02'])
+
+
 class CodeSitemap(unittest.TestCase):
     def test_code_paths_go_in_the_laws_sitemap_with_their_newest_day(self):
         copied = {'PE': '2026-11-01', 'HS': '2026-11-02'}

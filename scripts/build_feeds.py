@@ -1738,6 +1738,11 @@ def _law_rss(label: str, feed: str) -> str:
     return f'<link rel="alternate" type="application/rss+xml" title="{page_head.attr(label)}" href="{page_head.attr(feed)}">'
 
 
+def _code_trail(code: str, site: str) -> list[tuple[str, str]]:
+    """The breadcrumb steps above a section or chapter: the code index (/law) and the code page (/law/<CODE>)."""
+    return [("Texas law", f"{site}law"), (CODE_NAME[code], f"{site}law/{code}")]
+
+
 def _law_standalone_head(head_args: dict, label: str, feed: str) -> str:
     return page_head.head_html(**head_args, links=('<link rel="icon" href="/favicon.ico">', _law_rss(label, feed)),
                                icons=False).strip()
@@ -1814,7 +1819,7 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
              "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
     jsonld = (page_head.law_section(name=title, label=label, url=url, official=official, chapter_name=chapter_name,
                                     chapter_url=chapter_url),
-              page_head.breadcrumbs(site, [(chapter_name, chapter_url), (label, url)]))
+              page_head.breadcrumbs(site, [*_code_trail(code, site), (chapter_name, chapter_url), (label, url)]))
     head_args = dict(title=title, description=description, url=url, image=f"{site}{SITE_CARD}", jsonld=jsonld,
                      robots=robots)
     if shell is not None:  # The page is the app: no "Open in" link.
@@ -2154,7 +2159,7 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
     parts = [(f"{_section_short(code, skey.split(' ')[1])}{': ' + shead if shead else ''}",
               f"{site}law/{code}/{skey.split(' ')[1]}") for skey, (_p, _s, shead) in sections.items()]
     jsonld = (page_head.law_chapter(name=title, label=label, url=url, official=official, sections=parts),
-              page_head.breadcrumbs(site, [(label, url)]))
+              page_head.breadcrumbs(site, [*_code_trail(code, site), (label, url)]))
     head_args = dict(title=title, description=description, url=url, image=f"{site}{SITE_CARD}", jsonld=jsonld,
                      robots=robots)
     if shell is not None:  # The page is the app: no "Open in" link.
