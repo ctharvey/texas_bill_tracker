@@ -45,6 +45,35 @@ def test_a_code_lists_every_chapter_and_marks_the_ones_bills_change(device):
     expect(page).to_have_url(re.compile(r"/law/LA/62$"))
 
 
+CN_LAW = {"format": "texas-bill-law-v1", "codes": {
+    "CN": {"name": "The Texas Constitution", "headings": {"8": "ARTICLE 8. TAXATION AND REVENUE"}},
+    "LA": LAW["codes"]["LA"],
+}}
+TAIL = " and the bills in the 90th Legislature that would change it."
+
+
+def test_law_page_subtitles_name_what_the_page_shows(device):
+    device.context.route("**/live/law/index.json",
+                         lambda route: route.fulfill(status=200, body=json.dumps(CN_LAW), content_type="application/json"))
+    page = device.open("/law/CN")
+    expect(page.locator("#page-subtitle")).to_have_text(
+        "Every article of the Texas Constitution, and the ones bills in the 90th Legislature would change.")
+    content = page.locator("#dynamic-content")
+    expect(content).to_contain_text("Bills are matched to articles automatically")
+    expect(content).not_to_contain_text("TEXAS CODE")
+    page.locator("#law-chapters li a").first.click()
+    expect(page).to_have_url(re.compile(r"/law/CN/8$"))
+    expect(page.locator("#page-subtitle")).to_have_text("An article of the Texas Constitution" + TAIL)
+    page = device.open("/law/CN/8/1-b")
+    expect(page.locator("#page-subtitle")).to_have_text("A section of the Texas Constitution" + TAIL)
+    page = device.open("/law/LA/62")
+    expect(page.locator("#page-subtitle")).to_have_text("A chapter of Texas law" + TAIL)
+    page = device.open("/law/LA")
+    expect(page.locator("#dynamic-content")).to_contain_text("Bills are matched to chapters automatically")
+    expect(page.locator("#page-subtitle")).to_have_text(
+        "Every chapter of a Texas code, and the ones bills in the 90th Legislature would change.")
+
+
 def test_an_unknown_code_says_so(device):
     stub_law_index(device)
     page = device.open("/law/ZZ")

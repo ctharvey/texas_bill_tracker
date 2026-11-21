@@ -57,10 +57,10 @@ export function lawsMarkup() {
 export function lawCodeMarkup() {
   const code = state.lawCode, name = LAW_CODE_NAMES[code];
   if (!name) return `${head('TEXAS LAW', 'Code not found')}<div class="info-callout callout-warn">No Texas code this site follows matches ${code ? `<strong>${esc(code)}</strong>` : 'this address'}. See <a class="text-link" href="/law" data-view="laws">all Texas codes</a>.</div>`;
-  const title = esc(codeTitle(name)), wait = waiting();
-  if (wait) return `${head('TEXAS CODE', title)}${wait}`;
+  const title = esc(codeTitle(name)), wait = waiting(), kind = code === 'CN' ? 'TEXAS LAW' : 'TEXAS CODE';
+  if (wait) return `${head(kind, title)}${wait}`;
   const chapters = codeChapters(state.lawCodes, code), n = billCounts();
-  if (!chapters.length) return `${head('TEXAS CODE', title)}<div class="info-callout callout-warn">This site has no copy of the ${esc(name)} right now. See <a class="text-link" href="/law" data-view="laws">all Texas codes</a>.</div>`;
+  if (!chapters.length) return `${head(kind, title)}<div class="info-callout callout-warn">This site has no copy of the ${esc(name)} right now. See <a class="text-link" href="/law" data-view="laws">all Texas codes</a>.</div>`;
   const changed = chapters.filter(([c]) => n.get(`${code} ${c}`)).length;
   const word = chapterWord(code), all = chapterCount(chapters.length, word.toLowerCase());
   const lead = !state.statutes ? `${all}.` : changed ? `${all}. Bills in the 90th Legislature would change ${changed} of them.` : `${all}. No bill in the 90th Legislature changes one yet.`;
@@ -68,5 +68,5 @@ export function lawCodeMarkup() {
     const count = n.get(`${code} ${c}`) || 0;
     return `<li${count ? ' class="law-code-changed"' : ''}><a class="text-link" href="${esc(chapterPath(`${code} ${c}`))}">${word} ${esc(c)}</a>${t ? `: ${esc(titleCase(t))}` : ''}${count ? ` <strong>(${billsChange(count)})</strong>` : ''}</li>`;
   }).join('');
-  return `${head('TEXAS CODE', title)}<p class="near-hint">${lead} <a class="text-link" href="/law" data-view="laws">All Texas codes</a></p><ul class="law-code-list" id="law-chapters">${rows}</ul><p class="near-hint">Bills are matched to chapters automatically from their text and can be missed.</p>`;
+  return `${head(kind, title)}<p class="near-hint">${lead} <a class="text-link" href="/law" data-view="laws">All Texas codes</a></p><ul class="law-code-list" id="law-chapters">${rows}</ul><p class="near-hint">Bills are matched to ${word.toLowerCase()}s automatically from their text and can be missed.</p>`;
 }

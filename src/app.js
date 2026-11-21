@@ -259,6 +259,15 @@ function namedHeading(view){
   if(view==='lawcode'){const t=lawCodeTitle();return t?esc(t):null}
   return null;
 }
+// The subtitle names what a law page shows (a section, a chapter or article, the Constitution); null keeps the view's.
+function namedSubtitle(view){
+  const key=view==='statute'?state.statuteKey:null,cn=key?key.startsWith('CN '):view==='lawcode'&&state.lawCode==='CN';
+  const tail=' and the bills in the 90th Legislature that would change it.';
+  if(key&&isChapterKey(key))return (cn?'An article of the Texas Constitution':'A chapter of Texas law')+tail;
+  if(key&&cn)return 'A section of the Texas Constitution'+tail;
+  if(view==='lawcode'&&cn)return 'Every article of the Texas Constitution, and the ones bills in the 90th Legislature would change.';
+  return null;
+}
 function refreshNamedHeading(){
   const h=namedHeading(state.view),el=$('#page-title');
   if(!h||!el||el.innerHTML===h)return;
@@ -293,7 +302,7 @@ function setView(view,push=false,{focus=true}={}){
   preview.id=null;
   document.querySelectorAll('[data-view]').forEach(el=>{el.classList.toggle('active',el.dataset.view===view);if(el.classList.contains('nav-item')){if(el.dataset.view===view)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current')}});
   const [title,subtitle]=viewHeading(view);  // The tab title is written with the address (persistState).
-  $('#page-title').innerHTML=namedHeading(view)||title;$('#page-subtitle').textContent=subtitle;
+  $('#page-title').innerHTML=namedHeading(view)||title;$('#page-subtitle').textContent=namedSubtitle(view)||subtitle;
   // A bill page has its own header in place of the page heading.
   $('.page-heading').hidden=view==='bill';
   $('.page-heading').classList.toggle('law-page',view==='statute');
