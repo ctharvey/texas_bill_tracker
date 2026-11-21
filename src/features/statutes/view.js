@@ -5,7 +5,7 @@ import {$, esc} from '../../core/dom.js';
 import {timeoutSignal, httpError} from '../../core/net.js';
 import {buildUrl} from '../../prefs.js';
 import {lastActionInfo, openLinkHtml} from '../../taxonomy.js';
-import {STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, compareLaw, currentLaw, lawCopyUnits, STATUTE_KEY, groupStatuteEntries, lawFollowOf, isLawFollowQuery,
+import {STATUTE_KINDS, statuteFile, statuteLabel, officialStatuteUrl, validStatuteIndex, validStatuteSection, statutesByBill, compareLaw, currentLaw, lawCopyVersions, closestLawVersion, STATUTE_KEY, groupStatuteEntries, lawFollowOf, isLawFollowQuery,
   CHAPTER_KEY, isChapterKey, chapterOf, chapterWord, canonicalLawKey, lawEntries, lawChapterOutline, lawSearchTerms, lawSearchPrefixes, lawSearchMatches,
   parseStatuteQuery, parseChapterQuery, statuteKeysFor, LAW_CODES, LAW_CODE_NAMES, lawNamedMatches, lawTermMatcher} from './model.js';
 import {renderContent, renderResults, refreshHome} from '../../core/router.js';
@@ -69,10 +69,11 @@ function lawCopy(key){
         const url=`./live/law/${m[1]}/${encodeURIComponent(c)}.md`;
         const r=await fetch(url,{signal:timeoutSignal(15000)});
         if(!r.ok)continue;
-        const units=lawCopyUnits(await r.text(),number);
-        if(!units)continue;
+        // Every section with this number: two laws can each have added one (CN 3.49-d-14).
+        const versions=lawCopyVersions(await r.text(),number);
+        if(!versions.length)continue;
         const when=Date.parse(r.headers.get('last-modified')||'');
-        out={units,url,asOf:Number.isNaN(when)?'':new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'America/Chicago'}).format(when)};
+        out={units:versions[0],versions,url,asOf:Number.isNaN(when)?'':new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'America/Chicago'}).format(when)};
         break;
       }catch(error){console.warn('Current law unavailable',key,error.message)}
     }
@@ -181,7 +182,7 @@ const groupName=g=>{const n=g.entries.map(e=>billNumber(e.bill));return n.length
 function lawOptions(doc,groups,copy=null){
   const law=currentLaw(doc.entries),options=[];
   const names=groupName;
-  if(copy)options.push({id:'law',name:'current law',label:`Current law${copy.asOf?` as of ${copy.asOf}`:''}, statute files`,units:copy.units,partial:false,copy});
+  if(copy)options.push({id:'law',name:'current law',label:`Current law${copy.asOf?` as of ${copy.asOf}`:''}, statute files${copy.of?` (the closest of ${copy.of} sections with this number)`:''}`,units:copy.units,partial:false,copy});
   else if(law.units.length)options.push({id:'law',name:'current law',label:`Current law, as quoted in ${law.sources.map(billNumber).join(', ')}`,units:law.units,partial:law.partial});
   for(const g of groups){
     if(g.kind==='repeal'||!g.units.length)continue;
@@ -283,11 +284,11 @@ export function statuteMarkup(){
   if(isChapterKey(key))return chapterMarkup(key,label,head,official);
   if(!info){
     // No bill changes it: the section as it stands, from the site's copy of the statutes.
-    const copy=lawCopy(key);
-    const text=typeof copy==='object'?lawSingleMarkup(`Current law${copy.asOf?` as of ${copy.asOf}`:''}`,copy.units,
-      `From the Legislative Council's statute files (<a class="text-link" href="${esc(copy.url)}" target="_blank" rel="noopener noreferrer">this chapter</a>); it can trail the official text if a later law changed it.`)
+    const copy=lawCopy(key),many=typeof copy==='object'&&copy.versions.length>1;
+    const text=typeof copy==='object'?lawSingleMarkup(`Current law${copy.asOf?` as of ${copy.asOf}`:''}`,many?copy.versions.flat():copy.units,
+      `${many?`Current law has ${copy.versions.length} sections with this number, each added by a different law; all are shown. `:''}From the Legislative Council's statute files (<a class="text-link" href="${esc(copy.url)}" target="_blank" rel="noopener noreferrer">this chapter</a>); it can trail the official text if a later law changed it.`)
       :copy==='loading'?'<p class="near-hint">Loading current law…</p>':'';
-    const title=typeof copy==='object'&&unitHeading(copy.units)?esc(unitHeading(copy.units)):esc(label);
+    const title=typeof copy==='object'&&!many&&unitHeading(copy.units)?esc(unitHeading(copy.units)):esc(label);
     return `${head(title,'90th Legislature · no bill changes it yet')}${tools}<div class="info-callout">No bill in this snapshot changes ${esc(label)}.${tools?' Follow it to hear when one does.':''} ${official}</div>${text}<p class="tools-note">${LAW_LIMITS}</p>`;
   }
   const doc=statuteDoc(key);
@@ -299,7 +300,7 @@ export function statuteMarkup(){
   // Bills quote only the parts they change: a repeal, or a partial amendment, takes current law from our copy.
   const quoted=currentLaw(doc.entries);
   const copy=doc.entries.some(e=>e.kind!=='add')&&(!quoted.units.length||quoted.partial)?lawCopy(key):'missing';
-  const options=lawOptions(doc,groups,typeof copy==='object'?copy:null),law=options.find(o=>o.id==='law');
+  let options=lawOptions(doc,groups,typeof copy==='object'?copy:null),law=options.find(o=>o.id==='law');
   const lawSource=law?.copy?`from the Legislative Council's statute files${law.copy.asOf?` as of ${esc(law.copy.asOf)}`:''} (<a class="text-link" href="${esc(law.copy.url)}" target="_blank" rel="noopener noreferrer">this chapter</a>)`:'as the bills quote it';
   const gid=g=>g.entries[0].bill,names=groupName;
   // Every bill adds a section with this number and none quotes current wording: it is not law yet.
@@ -315,6 +316,11 @@ export function statuteMarkup(){
   // version with wording.
   const chosen=groups.find(g=>gid(g)===state.statuteCompare.right)||largest
     ||groups.find(g=>g.kind==='amend'&&!g.broad&&g.units.length)||groups.find(g=>g.kind!=='repeal'&&g.units.length)||groups[0];
+  // A number used for several sections: set the bill against the one its wording is closest to.
+  if(typeof copy==='object'&&copy.versions.length>1&&chosen?.units.length){
+    options=lawOptions(doc,groups,{...copy,units:closestLawVersion(copy.versions,chosen.units),of:copy.versions.length});
+    law=options.find(o=>o.id==='law');
+  }
   const count=groups.reduce((n,g)=>n+g.entries.length,0);
   const version=g=>g.entries[0].version_name||g.entries[0].version;
   let main='';

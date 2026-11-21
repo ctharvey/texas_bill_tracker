@@ -312,5 +312,37 @@ class Search(unittest.TestCase):
         self.assertFalse([e for e in entries if e[0].startswith('CN ap')])
 
 
+class SharedNumbers(unittest.TestCase):
+    """Two laws can each add a section with one number (CN 3.49-d-14, CN 8.1-n): both texts are current law."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        law = write_constitution(self.tmp)
+        index = json.loads((law / 'CN' / 'index.json').read_text('utf-8'))
+        entry = index['chapters']['8']
+        entry['sections'] += [['1-n', 'Sec. 1-n. RAW COCOA.'], ['1-n', 'Sec. 1-n. GOODS IN TRANSIT.']]
+        (law / 'CN' / 'index.json').write_text(json.dumps(index), 'utf-8')
+        with (law / 'CN' / '8.md').open('a', encoding='utf-8') as f:
+            f.write('## Sec. 1-n. RAW COCOA. Cocoa may be exempt.\n\n## Sec. 1-n. GOODS IN TRANSIT. Goods may be exempt.\n')
+        self.law = law
+        shell = self.tmp / 'shell.html'
+        shell.write_text(SHELL, 'utf-8')
+        self.pages = lod.LawPages(law, None, shell)
+
+    def test_the_copy_keeps_every_text_with_the_number_in_file_order(self):
+        text = LawCopy(self.law).section_texts('CN', '8')['1-n']
+        self.assertLess(text.index('Cocoa may be exempt.'), text.index('Goods may be exempt.'))
+        self.assertEqual(LawCopy(self.law).section_texts('CN', '8')['1-b'], 'Sec. 1-b. HOMESTEAD EXEMPTIONS. '
+                         'Residence homesteads are exempt.')
+
+    def test_the_section_page_shows_both(self):
+        status, _h, body = self.pages.render('/law/CN/8/1-n')
+        self.assertEqual(status, 200)
+        page = content(body.decode('utf-8'))
+        self.assertIn('Cocoa may be exempt.', page)
+        self.assertIn('Goods may be exempt.', page)
+
+
 if __name__ == '__main__':
     unittest.main()

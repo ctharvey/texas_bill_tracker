@@ -114,9 +114,22 @@ function codeFor(name, codes) {
 // "48.160", "§ 48.160", "Penal Code 46.06", "ED 48.160", "CCP art. 46.04", "Tex. Gov't Code § 552.001" ->
 // {code (or null for any code), sec}.
 // The Constitution named by its code or title: "CN 8.1-b", "Texas Constitution 8.1-b", "Tex. Const. art. 8, § 1-b".
+// Also "Tex. Const. art. VIII § 1-b", "Texas Constitution article 8 section 1-b", and the bills' own order, "Section
+// 1-b, Article VIII, Texas Constitution". Articles are arabic or Roman.
 const CN_NAME = '(?:cn|texas constitution|tex\\.? const(?:itution)?\\.?)';
-const CN_SECTION = new RegExp(`^${CN_NAME}[\\s,]*(?:art(?:icle)?\\.?\\s*)?(\\d{1,2})(?:\\s*,\\s*(?:§+|sec(?:tion)?\\.?)\\s*|\\.|\\s+)(\\d+[a-z]?(?:-[a-z0-9]+)*)$`, 'i');
-const CN_ARTICLE = new RegExp(`^${CN_NAME}[\\s,]*(?:art(?:icle)?\\.?\\s*)?(\\d{1,2})$`, 'i');
+const CN_ART = '(\\d{1,2}|[ivx]{1,6})', CN_SEC = '(\\d+[a-z]?(?:-[a-z0-9]+)*)';
+const CN_SECTION = new RegExp(`^${CN_NAME}[\\s,]*(?:art(?:icle)?\\.?\\s*)?${CN_ART}(?:\\s*,?\\s*(?:§+|sec(?:tion)?\\.?)\\s*|\\.|\\s+)${CN_SEC}$`, 'i');
+const CN_SECTION_FIRST = new RegExp(`^(?:§+|sec(?:tion)?\\.?)\\s*${CN_SEC}\\s*,?\\s*art(?:icle)?\\.?\\s*${CN_ART}\\s*,?\\s*(?:of\\s+)?(?:the\\s+)?${CN_NAME}$`, 'i');
+const CN_ARTICLE = new RegExp(`^${CN_NAME}[\\s,]*(?:art(?:icle)?\\.?\\s*)?${CN_ART}$`, 'i');
+// "8" or "VIII" -> "8"; null for a malformed numeral ("IIII", "VX").
+function cnArticle(text) {
+    if (/^\d+$/.test(text)) return String(Number(text));
+    const value = {i: 1, v: 5, x: 10}, s = text.toLowerCase();
+    let n = 0;
+    for (let i = 0; i < s.length; i++) n += value[s[i]] < (value[s[i + 1]] || 0) ? -value[s[i]] : value[s[i]];
+    const roman = k => 'x'.repeat(Math.floor(k / 10)) + ['', 'i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix'][k % 10];
+    return n > 0 && roman(n) === s ? String(n) : null;
+}
 // What a typed key is, canonical: other codes in upper case, the Constitution with its code in upper case and the
 // section part as typed ("cn 8.1-b" -> "CN 8.1-b"). Not checked: isLawFollowQuery does that.
 export function canonicalLawKey(text) {
@@ -125,8 +138,12 @@ export function canonicalLawKey(text) {
 }
 export function parseStatuteQuery(query, codes) {
     const text = String(query || '').trim().replace(/\s+/g, ' ');
-    const cn = CN_SECTION.exec(text);
-    if (cn) return {code: 'CN', sec: `${cn[1]}.${cn[2]}`};
+    const cn = CN_SECTION.exec(text), first = cn ? null : CN_SECTION_FIRST.exec(text);
+    const [article, section] = cn ? [cn[1], cn[2]] : first ? [first[2], first[1]] : [];
+    if (article) {
+        const n = cnArticle(article);
+        return n ? {code: 'CN', sec: `${n}.${section}`} : null;
+    }
     const m = /^(.*?)[\s,]*(?:§+\s*|sec(?:tion)?\.?\s+|art(?:icle)?\.?\s+)?(\d+[a-z]?(?:\.\d+[a-z]?)+)$/i.exec(text);
     if (!m) return null;
     const sec = m[2].toUpperCase(), name = m[1].trim().replace(/[,§]+$/, '').trim();
@@ -137,7 +154,8 @@ export function parseStatuteQuery(query, codes) {
 // A chapter named with its code: "Penal Code chapter 46", "Tex. Gov't Code ch. 552", "Penal Code 46" -> "PE 46"; else null.
 export function parseChapterQuery(query, codes) {
     const cn = CN_ARTICLE.exec(String(query || '').trim().replace(/\s+/g, ' '));
-    if (cn) return isChapterKey(`CN ${cn[1]}`) ? `CN ${cn[1]}` : null;
+    const n = cn && cnArticle(cn[1]);
+    if (cn) return n && isChapterKey(`CN ${n}`) ? `CN ${n}` : null;
     const m = /^(.*?)[\s,]*(ch(?:ap(?:ter)?)?\.?\s*)?(\d+[a-z]?)$/i.exec(String(query || '').trim().replace(/\s+/g, ' '));
     const name = m ? m[1].trim().replace(/,$/, '') : '';
     // Without "chapter" only a full code name counts ("Penal Code 46"), so "tax 2025" stays a word search.
@@ -262,9 +280,33 @@ const SOURCE_NOTE = /^(?:Acts \d{4},|Amended by:|(?:Added|Amended|Redesignated|R
 // is matched without case: keys are upper case, the copy has "Art. 42.04a.". For the Constitution `number` is the
 // section within its article ("1-b").
 export function lawCopyUnits(markdown, number) {
+    return lawCopyVersions(markdown, number)[0] || null;
+}
+
+// Every section of a chapter file with this number, as units, in file order: a number can be used twice when two
+// laws added a section with it (CN 3.49-d-14). Empty when the file has none.
+export function lawCopyVersions(markdown, number) {
     const want = new RegExp(`^(?:Sec|Art)\\. ${number.replace(/\./g, '\\.')}\\.\\s`, 'i');
-    const block = String(markdown).split(/^## /m).slice(1).find(b => want.test(b));
-    if (!block) return null;
+    return String(markdown).split(/^## /m).slice(1).filter(b => want.test(b)).map(blockUnits).filter(Boolean);
+}
+
+// The version of current law a bill's wording is closest to (share of distinct words in common, so a longer version
+// does not win by size), for a number used twice. Ties keep the earlier version.
+export function closestLawVersion(versions, units) {
+    const words = list => new Set(list.flatMap(u => String(u.text).toLowerCase().match(/[a-z0-9]+/g) || []));
+    const bill = words(units || []);
+    let best = versions[0], score = -1;
+    for (const v of versions) {
+        const own = words(v);
+        let n = 0;
+        for (const w of own) if (bill.has(w)) n++;
+        const s = n / ((own.size + bill.size - n) || 1);
+        if (s > score) { best = v; score = s; }
+    }
+    return best;
+}
+
+function blockUnits(block) {
     const paragraphs = block.split(/\n\s*\n/).map(p => p.replace(/\s+/g, ' ').trim()).filter(p => p && !SOURCE_NOTE.test(p))
         .map(p => p.replace(/[\\<]/g, '\\$&'));  // Plain text: a "<" or "\" is never bill markup.
     // Some files end a heading line without its period ("Art. 37.071. PROCEDURE IN CAPITAL CASE"); bills quote it with one.

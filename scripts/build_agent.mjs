@@ -131,7 +131,10 @@ export function loadLaw(liveDir, ids) {
     try { body = readFileSync(join(liveDir, 'law', ...file.split('/')), 'utf8'); } catch { continue; }
     for (const part of body.split('\n## ').slice(1)) {
       const match = /^(?:Sec|Art)\.\s+([0-9A-Za-z][0-9A-Za-z.()\-]*?)\.(?:\s|$)/.exec(part);
-      if (match && sections.has(match[1]) && !texts.has(`${file} ${match[1]}`)) texts.set(`${file} ${match[1]}`, part.trim());
+      // A number used twice (CN 3.49-d-14) keeps every text, in file order, as scripts/law_context.py does.
+      if (!match || !sections.has(match[1])) continue;
+      const at = `${file} ${match[1]}`;
+      texts.set(at, texts.has(at) ? `${texts.get(at)}\n\n${part.trim()}` : part.trim());
     }
   }
   for (const items of perBill.values()) {

@@ -8,7 +8,7 @@ import {join} from 'node:path';
 import {parseLocation, parseHash, buildUrl, buildHash, lawPath, chapterPath, isAppPath} from '../src/prefs.js';
 import {STATUTE_KEY, isChapterKey, chapterOf, isLawFollowQuery, statuteFile, statuteLabel, officialStatuteUrl,
   parseStatuteQuery, parseChapterQuery, canonicalLawKey, lawChapterOutline, lawCopyUnits, lawSearchMatches,
-  LAW_CODE_NAMES} from '../src/features/statutes/model.js';
+  LAW_CODE_NAMES, lawCopyVersions, closestLawVersion} from '../src/features/statutes/model.js';
 import {lawCodeList, codeChapters} from '../src/features/lawcodes/model.js';
 import {lawHead, chapterHead, lawCodeHead} from '../src/core/head.js';
 import {loadLaw} from '../scripts/build_agent.mjs';
@@ -131,4 +131,54 @@ test('the agent edition reads a section from its own article', () => {
   } finally {
     rmSync(dir, {recursive: true, force: true});
   }
+});
+
+test('citations name an article in Roman numerals, without a comma, or in the order bills use', () => {
+  const cases = {
+    'Tex. Const. art. VIII, \u00a7 1-b': '8.1-b',
+    'Tex. Const. art. VIII \u00a7 1-b': '8.1-b',
+    'Texas Constitution article 8 section 1-b': '8.1-b',
+    'Texas Constitution, Article XVII, Section 1': '17.1',
+    'Section 1-b, Article VIII, Texas Constitution': '8.1-b',
+    'Sec. 49-d-14, Art. III, Tex. Const.': '3.49-d-14',
+    'Section 1(g)': null,
+  };
+  for (const [text, sec] of Object.entries(cases))
+    assert.deepEqual(parseStatuteQuery(text), sec ? {code: 'CN', sec} : null, text);
+  assert.equal(parseStatuteQuery('Tex. Const. art. IIII, \u00a7 1'), null, 'a malformed numeral is not an article');
+  assert.equal(parseStatuteQuery('Tex. Const. art. VX, \u00a7 1'), null);
+  assert.equal(parseChapterQuery('Texas Constitution article VIII'), 'CN 8');
+  assert.equal(parseChapterQuery('Tex. Const. art. XIV'), 'CN 14');
+  assert.deepEqual(parseStatuteQuery('Penal Code \u00a7 46.06', {PE: 'Penal Code'}), {code: 'PE', sec: '46.06'});
+});
+
+test('a number used for two sections keeps both, and a bill is set against the one it rewrites', () => {
+  const md = '# The Texas Constitution, ARTICLE 8. TAXATION AND REVENUE\n\n'
+    + '## Sec. 1-n. EXEMPTION OF RAW COCOA AND GREEN COFFEE. (a) The legislature may exempt raw cocoa and green coffee held in Harris County.\n\n'
+    + '## Sec. 1-n. EXEMPTION OF GOODS IN TRANSIT. (a) To promote economic development, goods held temporarily in a warehouse are exempt.\n';
+  const versions = lawCopyVersions(md, '1-n');
+  assert.equal(versions.length, 2);
+  assert.match(versions[0][0].text, /RAW COCOA/);
+  assert.match(versions[1][0].text, /GOODS IN TRANSIT/);
+  assert.deepEqual(lawCopyUnits(md, '1-n'), versions[0], 'one text still reads as the first');
+  const dir = mkdtempSync(join(tmpdir(), 'agent-cn-dup-'));
+  try {  // The agent edition keeps both texts too, in file order.
+    mkdirSync(join(dir, 'statutes'));
+    mkdirSync(join(dir, 'law', 'CN'), {recursive: true});
+    writeFileSync(join(dir, 'statutes', 'index.json'), JSON.stringify({format: 'texas-bill-statutes-v1', codes: {},
+      sections: {'CN 8.1-n': {h: '', b: [['HJR1', 'm']]}}, bills: {}}));
+    writeFileSync(join(dir, 'law', 'index.json'), JSON.stringify({format: 'texas-bill-law-v1', codes: {CN: {name: 'The Texas Constitution'}}}));
+    writeFileSync(join(dir, 'law', 'CN', 'index.json'), JSON.stringify({format: 'texas-bill-law-v1', code: 'CN', chapters: {
+      8: {heading: 'ARTICLE 8. TAXATION', file: 'CN/8.md', sha256: 'b'.repeat(64),
+        sections: [['1-n', 'Sec. 1-n. RAW COCOA.'], ['1-n', 'Sec. 1-n. GOODS IN TRANSIT.']]}}}));
+    writeFileSync(join(dir, 'law', 'CN', '8.md'), md);
+    const [item] = loadLaw(dir, ['HJR1']).get('HJR1');
+    assert.ok(item.text.indexOf('RAW COCOA') < item.text.indexOf('GOODS IN TRANSIT') && item.text.includes('RAW COCOA'));
+  } finally {
+    rmSync(dir, {recursive: true, force: true});
+  }
+  const bill = [{label: 'a', text: '(a) To promote economic development, goods and wares held temporarily in a warehouse are exempt.'}];
+  assert.equal(closestLawVersion(versions, bill), versions[1]);
+  assert.equal(closestLawVersion(versions, [{label: 'a', text: 'raw cocoa and green coffee'}]), versions[0]);
+  assert.equal(closestLawVersion(versions, []), versions[0], 'with no wording to go on, the first');
 });

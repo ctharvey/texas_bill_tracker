@@ -76,12 +76,15 @@ class LawCopy:
         return None
 
     def section_texts(self, code: str, chapter: str) -> dict[str, str]:
-        """{section id: '## Sec. ...' block without the leading '## '} for one chapter file."""
+        """{section id: '## Sec. ...' block without the leading '## '} for one chapter file. Where the file has several
+        sections with one number (CN 3.49-d-14, enacted twice), the text is every one of them, in file order."""
         name = f"{code}/{chapter}.md"
         if name not in self._texts:
             blocks = _SECTION_SPLIT.split((self.law_dir / name).read_text("utf-8"))[1:]
             ids = [s[0] for s in self.code(code)["chapters"][chapter].get("sections", [])]
-            texts = {sid: block.strip() for sid, block in zip(ids, blocks)}
+            texts: dict[str, str] = {}
+            for sid, block in zip(ids, blocks):
+                texts[sid] = f"{texts[sid]}\n\n{block.strip()}" if sid in texts else block.strip()
             if not self.keep_texts:
                 return texts
             self._texts[name] = texts
