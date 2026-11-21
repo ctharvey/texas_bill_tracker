@@ -35,6 +35,9 @@ FORMAT = 'texas-bill-law-v1'
 MAX_ZIP_BYTES = 50_000_000         # largest code (SD) was 7.3 MB zipped
 MAX_UNZIPPED_BYTES = 200_000_000   # largest code unzips to about 40 MB; guards against a zip bomb
 MIN_CODES = 20                     # 31 listed on 2026-11-19; a shorter list is a broken page, not repeals
+# Bumped when convert_chapter changes what it publishes: a code converted by an older version is downloaded and
+# converted again even when its zip is unchanged. 2: wrapped chapter headings joined.
+CONVERT_VERSION = 2
 MIN_KEPT_SHARE = 0.5               # a code that suddenly loses half its chapters is refused, never published
 
 CODE = re.compile(r'^[A-Z][A-Z0-9]$')  # e.g. I1, the uncodified Insurance Code
@@ -44,6 +47,7 @@ PARAGRAPH = re.compile(r'<p\b([^>]*)>(.*?)</p>', re.S | re.I)
 # Codes number by "Sec."; the Code of Criminal Procedure and the uncodified statutes (CV, I1) by "Art.".
 SECTION_LINK = re.compile(r'<a\b[^>]*font-weight:\s*bold[^>]*>\s*((?:Sec|Art)\.\s.*?)</a>', re.S | re.I)
 SECTION_ID = re.compile(r'^(?:Sec|Art)\.\s+([0-9A-Za-z][0-9A-Za-z.\-()]*?)\.(?:\s|$)')  # e.g. Art. 4413(47e-1).
+HEADING_WORD = re.compile(r'(CHAPTER|ARTICLE|SUBCHAPTER|SUBTITLE|TITLE|PART)\b')  # Starts a heading line of its own.
 TAG = re.compile(r'<[^>]+>')
 SPACE = re.compile(r'[ \t\r\n\xa0]+')
 
@@ -57,6 +61,8 @@ def convert_chapter(raw: str) -> tuple[str, str, list[list[str]]]:
     bold paragraphs before the first section; each section starts a `## Sec. ...` line. Wording is unchanged apart
     from collapsed whitespace, so an excerpt can be matched against it verbatim."""
     lines, sections, heading = [], [], ''
+    # A long chapter heading wraps onto the next centered line(s): PE 20 "...RESTRAINT, AND" / "SMUGGLING OF PERSONS".
+    wrapping = False
     for match in PARAGRAPH.finditer(raw):
         attrs, body = match.group(1), match.group(2)
         line = text_of(body)
@@ -64,14 +70,25 @@ def convert_chapter(raw: str) -> tuple[str, str, list[list[str]]]:
             continue
         link = SECTION_LINK.search(body)
         if link:
+            wrapping = False
             title = text_of(link.group(1))
             ident = SECTION_ID.match(title)
             if ident:
                 sections.append([ident.group(1), title])
             lines.append('## ' + line)
             continue
-        if not sections and 'center' in attrs and re.match(r'(CHAPTER|ARTICLE|SUBCHAPTER)\b', line):
-            heading = heading or line
+        centered = not sections and 'center' in attrs
+        if centered and not heading and re.match(r'(CHAPTER|ARTICLE|SUBCHAPTER)\b', line):
+            heading, wrapping = line, True
+        elif centered and HEADING_WORD.match(line):
+            wrapping = False
+        # The wrapped part is centered but not bold; a bold centered line is a subheading (CN Art. 7's
+        # "THE PUBLIC FREE SCHOOLS").
+        elif (wrapping and centered and 'font-weight' not in attrs and line == line.upper()
+              and re.search(r'[A-Z]', line)):
+            heading = f'{heading} {line}'
+        else:
+            wrapping = False
         lines.append(line)
     return heading, '\n\n'.join(lines) + '\n', sections
 
@@ -300,7 +317,8 @@ def run(out: Path, source: Source, *, force: bool = False, now: dt.datetime | No
     for entry in codes:
         code, previous = entry['code'], known.get(entry['code'])
         try:
-            data, meta = source.zip(entry['url'], None if force else previous)
+            stale = bool(previous) and previous.get('convert') != CONVERT_VERSION
+            data, meta = source.zip(entry['url'], None if force or stale else previous)
             if data is None and previous:  # 304: the zip has not changed
                 result[code] = {**previous, 'checked_at': now.isoformat()}
                 continue
@@ -314,7 +332,8 @@ def run(out: Path, source: Source, *, force: bool = False, now: dt.datetime | No
                             'zip_bytes': len(data), 'checked_at': now.isoformat(), 'copied_at': now.isoformat(),
                             'chapters': counts['chapters'], 'sections': counts['sections'],
                             'index': f'{code}/index.json', 'skipped_files': skipped,
-                            'headings': {c: chapters[c]['heading'] for c in sorted(chapters)}}
+                            'headings': {c: chapters[c]['heading'] for c in sorted(chapters)},
+                            'convert': CONVERT_VERSION}
             log(f'{code}: {counts["chapters"]} chapters, {counts["sections"]} sections, '
                 f'{counts["written"]} written, {counts["removed"]} removed')
         except Exception as error:  # noqa: BLE001 - one code's failure keeps its old copy; the run reports it

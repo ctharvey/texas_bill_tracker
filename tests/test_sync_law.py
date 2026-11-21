@@ -90,6 +90,24 @@ class ConvertTests(unittest.TestCase):
         self.assertIn('(1) "Board" means the board.', body)  # entities decoded, wording kept
         self.assertNotIn('<', body)
 
+    def test_a_heading_that_wraps_onto_a_second_line_is_joined(self):
+        # PE 20 in the official files: the chapter line ends "..., AND", the rest is the next centered, unbolded line.
+        raw = chapter_html('pe', '20', 'KIDNAPPING, UNLAWFUL RESTRAINT, AND', [('20.01', 'DEFINITIONS', 'In this chapter:')])
+        raw = raw.replace('RESTRAINT, AND</p><br />', 'RESTRAINT, AND</p><p class="center">SMUGGLING OF PERSONS</p>'
+                          '<p class="left"></p>')
+        heading, body, _ = sync_law.convert_chapter(raw)
+        self.assertEqual(heading, 'CHAPTER 20. KIDNAPPING, UNLAWFUL RESTRAINT, AND SMUGGLING OF PERSONS')
+        self.assertIn('\n\nSMUGGLING OF PERSONS\n\n', body)  # The body keeps the official lines as they are.
+
+    def test_a_bold_subheading_or_subchapter_after_the_heading_is_not_joined(self):
+        # CN Art. 7: "ARTICLE 7. EDUCATION", then the bold subheading "THE PUBLIC FREE SCHOOLS".
+        for line in ('<p class="center" style="font-weight:bold;">THE PUBLIC FREE SCHOOLS</p>',
+                     '<p class="center">SUBCHAPTER A. GENERAL PROVISIONS</p>',
+                     '<p class="left">Text that is not a heading.</p><p class="center">LATER CENTERED LINE</p>'):
+            raw = chapter_html('cn', '7', 'EDUCATION', [('1', 'SUPPORT', 'Text.')])
+            raw = raw.replace('EDUCATION</p><br />', 'EDUCATION</p>' + line)
+            self.assertEqual(sync_law.convert_chapter(raw)[0], 'CHAPTER 7. EDUCATION', line)
+
     def test_articles_and_numbers_with_parentheses_are_sections(self):
         _, _, sections = sync_law.convert_chapter(chapter_html(
             'cv', '4413', 'X', [('11.07', 'PROCEDURE', 'Text.'), ('4413(47e-1)', 'COLLIDER', 'Text.')], label='Art.'))
@@ -155,6 +173,21 @@ class RunTests(unittest.TestCase):
         self.assertEqual(self.server.requests[-1][1].get('if-none-match'), '"v1"')
         self.assertEqual({p: p.stat().st_mtime_ns for p in (self.out / 'GV').glob('*.md')}, before)
         self.assertEqual(top['codes']['GV']['chapters'], 4)
+
+    def test_a_code_converted_by_an_older_version_is_converted_again(self):
+        # An unchanged zip would answer 304 and keep headings the old converter cut short; the version forces a fresh
+        # download and conversion once, then the code is cached again.
+        top, _ = self.run_once()
+        self.assertEqual(top['codes']['GV']['convert'], sync_law.CONVERT_VERSION)
+        stored = json.loads((self.out / 'index.json').read_text('utf-8'))
+        del stored['codes']['GV']['convert']
+        (self.out / 'index.json').write_text(json.dumps(stored), 'utf-8')
+        top, failures = self.run_once()
+        self.assertEqual(failures, [])
+        self.assertIsNone(self.server.requests[-1][1].get('if-none-match'))
+        self.assertEqual(top['codes']['GV']['convert'], sync_law.CONVERT_VERSION)
+        self.run_once()
+        self.assertEqual(self.server.requests[-1][1].get('if-none-match'), '"v1"')
 
     def test_a_changed_zip_rewrites_only_changed_chapters_and_removes_dropped_ones(self):
         self.run_once()
