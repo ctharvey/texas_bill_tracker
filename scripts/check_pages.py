@@ -33,7 +33,7 @@ AGENTS = {
     "discordbot": f"Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com) {CHECKER}",
 }
 # One address per page type; the sitemap sample adds more.
-FIXED = ["/", "/bill/HB1094", "/law/PE/46.06"]
+FIXED = ["/", "/bill/HB1094", "/law/PE/46.06", "/law", "/law/PE"]
 SITEMAP = "live/sitemap.xml"
 MEMBER_FILE = re.compile(r"A\d{3,5}")  # member/<code>.html, served at /member/<code>/<slug>.
 MEMBER_SLUG = re.compile(r"/[a-z0-9-]{1,60}")
@@ -126,7 +126,10 @@ EXPECTED_LD = {"bill": ("Legislation", "BreadcrumbList"), "law": ("Legislation",
 
 
 def expected_ld(url: str) -> tuple[str, ...]:
-    return EXPECTED_LD.get(urlsplit(url).path.strip("/").split("/")[0], ())
+    path = urlsplit(url).path.strip("/")
+    if path == "law":  # The code index (/law) lists the codes; /law/<CODE> and below are Legislation.
+        return ("CollectionPage", "BreadcrumbList")
+    return EXPECTED_LD.get(path.split("/")[0], ())
 
 
 def normalized_hash(page: str) -> str:
@@ -261,6 +264,10 @@ def fixture_address(path: Path, root: Path, site: str) -> str | None:
         return f"{site}bill/{parts[0]}"
     if len(parts) == 3 and parts[0] == "law":  # A section or a chapter: the gateway serves both.
         return f"{site}law/{parts[1]}/{parts[2]}"
+    if rel == "law/index":
+        return f"{site}law"
+    if len(parts) == 2 and parts[0] == "law" and re.fullmatch(r"[A-Z]{2}", parts[1]):  # A code page.
+        return f"{site}law/{parts[1]}"
     if len(parts) == 2 and parts[0] in GROUP_FILE and GROUP_FILE[parts[0]].fullmatch(parts[1]):
         return f"{site}{parts[0]}/{parts[1]}"
     if len(parts) == 2 and parts[0] == "member" and MEMBER_FILE.fullmatch(parts[1]):

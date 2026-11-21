@@ -89,6 +89,7 @@ export function applyLocation(initial){
   state.memberCode=p.member;
   state.agencyId=p.agency;state.topicSlug=p.topic;
   state.statuteKey=p.statute;
+  state.lawCode=p.lawCode;
   state.openBill=view==='bill'?p.bill:null;
   // Arriving back at the page a bill was opened from: show as many results as before, then return to the same place.
   // Compared as the address this view will have, so an old-style link back (goTo) matches its path too.
@@ -103,7 +104,7 @@ export function applyLocation(initial){
 const addressScope=()=>state.sharedList?null:state.scope;
 function currentHash(){
   return buildHash(state.view,pickFilters(state),{scope:addressScope(),list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
-    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey,agency:state.agencyId,topic:state.topicSlug});
+    sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,statute:state.statuteKey,agency:state.agencyId,topic:state.topicSlug,lawCode:state.lawCode});
 }
 
 // A member's name for the readable part of their address. Until the roster is here, the name already in the address
@@ -118,7 +119,7 @@ function memberSlug(){
 function currentUrl(view=state.view){
   return buildUrl(view,pickFilters(state),{scope:addressScope(),list:state.sharedMode==='link'?state.sharedList:null,bill:state.openBill,
     sync:state.sharedMode==='sync-view'?state.sharedSyncKey:null,member:state.memberCode,slug:view==='member'?memberSlug():null,
-    statute:state.statuteKey,agency:state.agencyId,topic:state.topicSlug});
+    statute:state.statuteKey,agency:state.agencyId,topic:state.topicSlug,lawCode:state.lawCode});
 }
 
 // The head for the view on screen: title and description from app.js (runtime.pageHead), canonical, robots and the

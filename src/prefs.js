@@ -23,7 +23,7 @@ const RENAMED = {outlook: {'Not rated': 'No hearing yet'}};
 const SORT_NAME = /^[a-z]{1,20}$/;
 const usable = (name, value) => name !== 'sort' || SORT_NAME.test(value);
 const current = (name, value) => Object.hasOwn(RENAMED, name) && Object.hasOwn(RENAMED[name], value) ? RENAMED[name][value] : value;
-export const VIEWS = ['home', 'all', 'watchlist', 'following', 'today', 'local', 'member', 'agency', 'topic', 'statute', 'bill', 'agencies', 'review', 'method', 'saving', 'export', 'data'];
+export const VIEWS = ['home', 'all', 'watchlist', 'following', 'today', 'local', 'member', 'agency', 'topic', 'statute', 'laws', 'lawcode', 'bill', 'agencies', 'review', 'method', 'saving', 'export', 'data'];
 const LAW_CODE = /^[A-Z]{2}$/;
 const LAW_SECTION = /^\d+[A-Z]?(?:\.\d+[A-Z]?)+$/;  // The statute index's section numbers (build_feeds.SECTION_NUM).
 const LAW_CHAPTER = /^\d+[A-Z]?$/;  // A chapter: a section number before its first dot ("46", "12A").
@@ -86,7 +86,8 @@ export function parseHash(hash) {
     list: list && list.length ? list : null, bill: isBillId(bill) ? bill : null, sync: SYNC_KEY.test(sync) ? sync : null,
     member: view === 'member' && MEMBER_CODE.test(member) ? member : null,
     agency: view === 'agency' && AGENCY_ID.test(agency) ? agency : null, topic: view === 'topic' && TOPIC_SLUG.test(topic) ? topic : null,
-    statute: chapter || (view === 'statute' && LAW_CODE.test(law) && LAW_SECTION.test(sec) && sec.length <= 16 ? `${law} ${sec}` : null)};
+    statute: chapter || (view === 'statute' && LAW_CODE.test(law) && LAW_SECTION.test(sec) && sec.length <= 16 ? `${law} ${sec}` : null),
+    lawCode: view === 'lawcode' && LAW_CODE.test(law) ? law : null};
 }
 
 // The filters of the views that keep them in the address, defaults left out.
@@ -112,12 +113,13 @@ function contextParts(view, {list = null, bill = null, sync = null} = {}) {
 }
 
 // `sync` is only ever a view-only key; edit keys are never written into the address bar.
-export function buildHash(view, filters, {list = null, bill = null, sync = null, member = null, statute = null, agency = null, topic = null, scope = null} = {}) {
+export function buildHash(view, filters, {list = null, bill = null, sync = null, member = null, statute = null, agency = null, topic = null, lawCode = null, scope = null} = {}) {
   const parts = [...filterParts(view, filters), ...scopePart(view, scope)];
   if (view === 'bill' && isBillId(bill)) parts.push(`id=${bill}`);
   if (view === 'member' && MEMBER_CODE.test(member || '')) parts.push(`code=${member}`);
   if (view === 'agency' && AGENCY_ID.test(agency || '')) parts.push(`id=${agency}`);
   if (view === 'topic' && TOPIC_SLUG.test(topic || '')) parts.push(`slug=${topic}`);
+  if (view === 'lawcode' && LAW_CODE.test(lawCode || '')) parts.push(`law=${lawCode}`);
   const [law, sec] = String(statute || '').split(' ');
   const chapter = view === 'statute' && LAW_CODE.test(law || '') && LAW_CHAPTER.test(sec || '') && sec.length <= 8;
   if (chapter) parts.push(`law=${law}`, `ch=${sec}`);
@@ -135,6 +137,7 @@ const CHAPTER_PATH = /^\/law\/([A-Za-z]{2})\/(\d+[A-Za-z]?)\/?$/;
 const MEMBER_PATH = /^\/member\/([A-Za-z]\d{3,5})(?:\/[^/]*)?\/?$/;  // The slug is for reading only; the code decides.
 const AGENCY_PATH = /^\/agency\/([A-Za-z0-9][A-Za-z0-9-]{0,40})\/?$/;
 const TOPIC_PATH = /^\/topic\/([A-Za-z0-9][A-Za-z0-9-]{0,79})\/?$/;
+const CODE_PATH = /^\/law\/([A-Za-z]{2})\/?$/;  // A code's chapter list (/law/PE); /law itself is a fixed route.
 const CONTEXT = new Set(['list', 'bill', 'sync']);
 
 // The fragment's list, bill and sync on a path address; anything else in it is ignored (the path decides the view).
@@ -146,7 +149,7 @@ function contextFrom(hash) {
 // Whether a same-site path is one of the app's own views (opened in place), not a file such as /live/feeds/HB1.xml.
 export function isAppPath(pathname) {
   const path = String(pathname || '');
-  return Boolean(routeForPath(path)) || [BILL_PATH, LAW_PATH, CHAPTER_PATH, MEMBER_PATH, AGENCY_PATH, TOPIC_PATH].some(re => re.test(path));
+  return Boolean(routeForPath(path)) || [BILL_PATH, LAW_PATH, CHAPTER_PATH, CODE_PATH, MEMBER_PATH, AGENCY_PATH, TOPIC_PATH].some(re => re.test(path));
 }
 
 export function parseLocation(pathname, hash, search = '') {
@@ -164,6 +167,7 @@ export function parseLocation(pathname, hash, search = '') {
   if ((m = MEMBER_PATH.exec(path))) return keyed(at('member', [`code=${m[1].toUpperCase()}`]), p => p.member);
   if ((m = AGENCY_PATH.exec(path))) return keyed(at('agency', [`id=${m[1].toLowerCase()}`]), p => p.agency);
   if ((m = TOPIC_PATH.exec(path))) return keyed(at('topic', [`slug=${m[1].toLowerCase()}`]), p => p.topic);
+  if ((m = CODE_PATH.exec(path))) return keyed(at('lawcode', [`law=${m[1].toUpperCase()}`]), p => p.lawCode);
   const route = routeForPath(path);
   const raw = String(hash || '').replace(/^#/, '');
   // A fragment naming a view is an old link (#today, #all?topic=Water, #?query=x), wherever it lands: pasted on /explorer
@@ -221,6 +225,7 @@ export function buildUrl(view, filters, options = {}) {
   }
   if (view === 'agency' && AGENCY_ID.test(options.agency || '')) return `/agency/${options.agency}${fragment}`;
   if (view === 'topic' && TOPIC_SLUG.test(options.topic || '')) return `/topic/${options.topic}${fragment}`;
+  if (view === 'lawcode' && LAW_CODE.test(options.lawCode || '')) return `/law/${options.lawCode}${fragment}`;
   const route = routeForView(view);
   // A keyed view without its key keeps the old form, which opens the explorer.
   if (!route?.path) return `/${buildHash(view, filters, options)}`;

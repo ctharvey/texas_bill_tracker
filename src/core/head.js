@@ -47,6 +47,9 @@ export function chapterHead(codeName, chapter, heading) {
   const label = `${codeName} Chapter ${chapter}`, name = titleCase(heading);
   return {title: clip(name ? `${label}: ${name}` : label, TITLE_MAX), description: null};
 }
+// The code index and a code's chapter list (build_feeds.law_codes_page, law_code_page).
+export const lawsHead = () => ({title: 'Texas law: the codes', description: null});
+export const lawCodeHead = codeName => ({title: clip(`Texas ${codeName}: every chapter`, TITLE_MAX), description: null});
 // About pages and Today: the page heading without its full stop.
 export const headingHead = heading => ({title: String(heading || '').replace(/\.+$/, ''), description: null});
 

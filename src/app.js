@@ -18,8 +18,9 @@ import {options} from './features/explorer/controls.js';
 import {agenciesMarkup, filterAgencyCards, showAgencyChoices, hideAgencyChoices, setAgencySort, pickAgency, handleAgencyKeydown} from './features/agencies/view.js';
 import {clearFilter, explorerMarkup, drawResults, PREVIEW_WIDE, preview, showPreview, closePreview, stepPreview, showMoreLaws, toggleLawChanged} from './features/explorer/view.js';
 import {statuteLabel, isChapterKey, LAW_CODE_NAMES} from './features/statutes/model.js';
-import {HOME_TITLE, HOME_DESCRIPTION, billHead, memberHead, groupHead, lawHead, chapterHead, headingHead} from './core/head.js';
+import {HOME_TITLE, HOME_DESCRIPTION, billHead, memberHead, groupHead, lawHead, chapterHead, headingHead, lawsHead, lawCodeHead} from './core/head.js';
 import {loadStatutes, statuteMarkup} from './features/statutes/view.js';
+import {lawsMarkup, lawCodeMarkup, lawCodeTitle} from './features/lawcodes/view.js';
 import {stageFiles} from './features/stages/view.js';
 import {exportMarkup} from './features/export/view.js';
 import {methodMarkup} from './features/pages/method.js';
@@ -249,12 +250,13 @@ function setNavOpen(open){
   const more=$('#nav-more');more.setAttribute('aria-expanded',String(open));more.querySelector('.nav-more-label').textContent=open?'Close':'More';
 }
 // push=true adds a history entry (opening a bill page), so the browser's Back returns to the page before it.
-const PAGE_NAMES={home:'Home',all:'Bill explorer',watchlist:'Watchlist',following:'Following',today:'Today',local:'Near you',member:'Legislator',agency:'Agency',topic:'Topic',statute:'Section of law',agencies:'Agency index',review:'Review progress',method:'How it works',saving:'Saving your info',export:'Export your saved info',data:'Data & imports'};
+const PAGE_NAMES={home:'Home',all:'Bill explorer',watchlist:'Watchlist',following:'Following',today:'Today',local:'Near you',member:'Legislator',agency:'Agency',topic:'Topic',statute:'Section of law',laws:'Texas law',lawcode:'Texas code',agencies:'Agency index',review:'Review progress',method:'How it works',saving:'Saving your info',export:'Export your saved info',data:'Data & imports'};
 // The tab title names the page (and the bill or member), so history, tabs and screen readers can tell views apart.
 function namedHeading(view){
   if(view==='member'){const m=memberByCode(state.roster,state.memberCode);return m?esc(memberTitle(m)):null}
   if(view==='agency'||view==='topic'){const t=groupTitle(view);return t?esc(t):null}
   if(view==='statute'&&state.statuteKey&&state.statutes)return esc(statuteLabel(state.statuteKey,state.statutes.codes));
+  if(view==='lawcode'){const t=lawCodeTitle();return t?esc(t):null}
   return null;
 }
 function refreshNamedHeading(){
@@ -276,6 +278,8 @@ function pageHead(view){
     return isChapterKey(key)?chapterHead(name,number,state.statutes.chapters?.[key]?.h||'')
       :lawHead(name,code,number,state.statutes.sections?.[key]?.h||'');
   }
+  if(view==='laws')return lawsHead();
+  if(view==='lawcode'&&LAW_CODE_NAMES[state.lawCode])return lawCodeHead(LAW_CODE_NAMES[state.lawCode]);
   if(['today','method','saving','data'].includes(view))return headingHead(viewHeading(view)[0]);
   return {title:PAGE_NAMES[view]||'Bill explorer',description:null};
 }
@@ -375,6 +379,8 @@ function registerViews(){
   registerView('agency',{heading:['One agency.','The bills in this snapshot that could affect a Texas state agency.'],render:agencyMarkup});
   registerView('topic',{heading:['One policy topic.','The bills in this snapshot tagged with a policy topic.'],render:topicMarkup});
   registerView('statute',{heading:['One section of law.','A section of Texas law and the bills in the 90th Legislature that would change it.'],render:statuteMarkup});
+  registerView('laws',{heading:['Texas law.','Every chapter of the Texas codes this site follows, and the ones bills are changing.'],render:lawsMarkup});
+  registerView('lawcode',{heading:['One Texas code.','Every chapter of a Texas code, and the ones bills in the 90th Legislature would change.'],render:lawCodeMarkup});
   registerView('bill',{heading:['One bill.','Its summary, text, changes to law, people, agencies and sources.'],render:()=>'<article class="bill-page" id="bill-page" aria-label="Bill details"></article>',after:fillBillPage});
   registerView('agencies',{heading:['Follow the agencies.','Explore where legislation might land across Texas government.'],render:agenciesMarkup});
   registerView('review',{heading:['Full-text review.','Which bills Luna has read in full, which it is working on, and what is still waiting.'],render:reviewMarkup});

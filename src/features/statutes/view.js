@@ -27,7 +27,7 @@ export function loadStatutes(){
     }catch(error){state.statutes=null;state.statutesFailed=true;console.warn('Statute index unavailable',error.message)}
     // Views drawn before it arrived: section search results, saved-search counts, the statute page, the open drawer.
     if(state.view==='all'||state.view==='watchlist')renderResults();
-    else if(state.view==='following'||state.view==='statute')renderContent();
+    else if(['following','statute','laws','lawcode'].includes(state.view))renderContent();
     else if(state.view==='home')refreshHome();  // A followed law's new bills count only once the index is here.
     if(state.openBill)fillDrawerStatutes(state.openBill);
   })());

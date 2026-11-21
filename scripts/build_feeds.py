@@ -646,9 +646,9 @@ def chapter_lastmod(g: dict, code: str, copied: dict[str, str]) -> str | None:
 def sitemap_entries(snapshot: dict, site: str = SITE, law_keys=(), members=(), paths=(), reviews: dict | None = None,
                     index: dict | None = None, copied: dict[str, str] | None = None, roster: dict | None = None,
                     pages_data: dict | None = None) -> dict[str, list[tuple[str, str | None]]]:
-    """Child name -> sorted (loc, lastmod) rows. Bills: valid ids; laws: sections in law_keys and the chapter pages
-    write_law_chapter_pages writes; members: the coded ones given; groups: topic/ and agency/ paths; pages: home and
-    the other paths (today, about/*)."""
+    """Child name -> sorted (loc, lastmod) rows. Bills: valid ids; laws: sections in law_keys, the chapter pages
+    write_law_chapter_pages writes and the law/ paths (code pages); members: the coded ones given; groups: topic/ and
+    agency/ paths; pages: home and the other paths (today, about/*)."""
     reviews, copied, index = reviews or {}, copied or {}, index if isinstance(index, dict) else {}
     marks: dict[str, str | None] = {}
     for bill in snapshot.get("bills") or []:
@@ -672,8 +672,16 @@ def sitemap_entries(snapshot: dict, site: str = SITE, law_keys=(), members=(), p
         for key, _name, bill_ids in _group_entries(pages_data, kind):
             grouped[f"{kind}/{key}"] = _newest(marks.get(b) for b in bill_ids)
     newest = _newest(marks.values())
+    by_code: dict[str, list] = {}
+    for key, g in chapter_groups(index).items():
+        by_code.setdefault(key[:2], []).append(chapter_lastmod(g, key[:2], copied))
     for path in paths:
-        if path in grouped or path.split("/")[0] in ("topic", "agency"):
+        if path == "law" or path.startswith("law/"):
+            code = path[4:]  # "" for /law itself, which takes every code's days.
+            days = ([*by_code.get(code, []), copied.get(code)] if code
+                    else [d for v in by_code.values() for d in v] + list(copied.values()))
+            rows["laws"].append((site + path, _newest(days)))
+        elif path in grouped or path.split("/")[0] in ("topic", "agency"):
             rows["groups"].append((site + path, grouped.get(path)))
         else:
             rows["pages"].append((site + path, newest if path == "today" else None))
@@ -2199,6 +2207,130 @@ def write_law_chapter_pages(index: dict, out_dir: Path, site: str = SITE,
     return written, unchanged, removed
 
 
+# Code pages (#24): live/share/law/index.html (/law) lists the tracked codes, live/share/law/<CODE>.html (/law/<CODE>)
+# every chapter in the law copy, marking those bills change. Versioned chapters ("491.v2") are left out (#21).
+_CODE_CHAPTER = re.compile(r"\d+[A-Z]?")
+
+
+def law_code_chapters(law_dir: Path | None) -> dict[str, list[tuple[str, str]]]:
+    """Code -> [(chapter, title)] in numeric order, for the tracked codes the law copy's index lists; {} without one."""
+    if law_dir is None:
+        return {}
+    try:
+        codes = json.loads((law_dir / "index.json").read_text("utf-8")).get("codes")
+    except (OSError, ValueError, AttributeError):
+        return {}
+    found = {}
+    for code in sorted(c for c in (codes if isinstance(codes, dict) else {}) if c in CODE_NAME):
+        headings = codes[code].get("headings") if isinstance(codes[code], dict) else None
+        rows = [(c, chapter_title(h)) for c, h in (headings.items() if isinstance(headings, dict) else [])
+                if isinstance(c, str) and _CODE_CHAPTER.fullmatch(c) and isinstance(h, str)]
+        if rows:
+            found[code] = sorted(rows, key=lambda r: _natural(r[0]))
+    return found
+
+
+def _chapter_bills(groups: dict[str, dict]) -> dict[str, int]:
+    """"PE 46" -> how many bills change the chapter, whole or in any section."""
+    return {key: len({b for b, _ in g["whole"]} | {b for pairs, _s, _h in g["sections"].values() for b, _ in pairs})
+            for key, g in groups.items()}
+
+
+def _code_shell_page(shell: str, *, title: str, description: str, url: str, jsonld: tuple, body: list[str],
+                     view: str, aria: str, site: str) -> str:
+    a = lambda value: escape(value, {'"': "&quot;"})
+    head = page_head.head_html(title=title, description=description, url=url, image=f"{site}{SITE_CARD}", jsonld=jsonld)
+    content = f'\n<article class="law-code-page static-page" aria-label="{a(aria)}">\n{chr(10).join(body)}\n</article>\n'
+    version = hashlib.sha256((head + content).encode()).hexdigest()[:12]
+    return pages.render_page(shell, head=f'{head}<meta name="page-version" content="{version}">', content=content,
+                             view=view)
+
+
+def _chapters(n: int) -> str:
+    return f"{n} chapter{'s' if n != 1 else ''}"
+
+
+def _bills_change(n: int) -> str:
+    return f"{n} bill{'s' if n != 1 else ''} change{'s' if n == 1 else ''} it"
+
+
+def law_code_page(code: str, chapters: list[tuple[str, str]], counts: dict[str, int], shell: str,
+                  site: str = SITE) -> str:
+    """The page at /law/<CODE>: every chapter with its title, linked to /law/<CODE>/<chapter>."""
+    a = lambda value: escape(value, {'"': "&quot;"})
+    name, url = CODE_NAME[code], f"{site}law/{code}"
+    changed = [(c, t) for c, t in chapters if counts.get(f"{code} {c}")]
+    title = clip(f"Texas {name}: every chapter", SHARE_TITLE_MAX)
+    lead = (f"{_chapters(len(chapters))}. Bills in the 90th Legislature would change {len(changed)} of them."
+            if changed else f"{_chapters(len(chapters))}. No bill in the 90th Legislature changes one yet.")
+    description = clip(f"Every chapter of the Texas {name}, with the ones bills in the 90th Legislature would change. "
+                       f"{lead}", SHARE_DESCRIPTION_MAX)
+    rows = []
+    for chapter, heading in chapters:
+        n = counts.get(f"{code} {chapter}", 0)
+        rows.append(f'<li><a href="{a(f"{site}law/{code}/{chapter}")}">Chapter {escape(chapter)}</a>'
+                    f"{': ' + escape(title_case(heading)) if heading else ''}"
+                    f"{f' <strong>({_bills_change(n)})</strong>' if n else ''}</li>")
+    body = [f"<h1>Texas {escape(name)}</h1>", f"<p>{escape(lead)}</p>",
+            "<h2>Chapters</h2>", "<ul>\n" + "\n".join(rows) + "\n</ul>",
+            "<p>Bills are matched to chapters automatically from their text and can be missed. Chapter titles come "
+            "from this site's copy of the official statutes.</p>",
+            f'<p><a href="{a(f"{site}law")}">All Texas codes</a></p>',
+            '<p><a href="https://statutes.capitol.texas.gov/">Official statutes on statutes.capitol.texas.gov</a></p>',
+            "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
+    legislation = {"@context": "https://schema.org", "@type": "Legislation", "name": f"Texas {name}",
+                   "legislationIdentifier": name, "legislationJurisdiction": page_head.TEXAS, "inLanguage": "en",
+                   "url": url}
+    if changed:
+        legislation["hasPart"] = [{"@type": "Legislation", "name": f"{name} Chapter {c}{': ' + title_case(t) if t else ''}",
+                                   "url": f"{site}law/{code}/{c}"} for c, t in changed]
+    jsonld = (legislation, page_head.breadcrumbs(site, [("Texas law", f"{site}law"), (name, url)]))
+    return _code_shell_page(shell, title=title, description=description, url=url, jsonld=jsonld, body=body,
+                            view=f"code:{code}", aria=name, site=site)
+
+
+def law_codes_page(codes: dict[str, list[tuple[str, str]]], counts: dict[str, int], shell: str,
+                   site: str = SITE) -> str:
+    """The page at /law: the tracked codes, each with its chapter count and how many chapters bills change."""
+    a = lambda value: escape(value, {'"': "&quot;"})
+    url = f"{site}law"
+    title = "Texas law: the codes"
+    description = clip(f"The {len(codes)} Texas codes this site follows, every chapter of each, and the chapters bills in "
+                       f"the 90th Legislature would change.", SHARE_DESCRIPTION_MAX)
+    rows = []
+    for code in sorted(codes, key=lambda c: CODE_NAME[c]):
+        n = sum(1 for c, _t in codes[code] if counts.get(f"{code} {c}"))
+        rows.append(f'<li><a href="{a(f"{site}law/{code}")}">{escape(CODE_NAME[code])}</a>: '
+                    f"{_chapters(len(codes[code]))}{f', {n} changed by bills' if n else ''}</li>")
+    body = ["<h1>Texas law</h1>",
+            f"<p>The {len(codes)} codes of Texas law this site follows. Open a code to see every chapter and the ones "
+            f"bills in the 90th Legislature would change.</p>",
+            "<ul>\n" + "\n".join(rows) + "\n</ul>",
+            "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
+    page = page_head.collection(name=title, url=url, description=description,
+                                items=[f"{site}law/{c}" for c in sorted(codes, key=lambda c: CODE_NAME[c])])
+    jsonld = (page, page_head.breadcrumbs(site, [("Texas law", url)]))
+    return _code_shell_page(shell, title=title, description=description, url=url, jsonld=jsonld, body=body,
+                            view="page:laws", aria="Texas law", site=site)
+
+
+def write_law_code_pages(index: dict, out_dir: Path, site: str = SITE, law_dir: Path | None = None,
+                         shell: str | None = None, changed: list[str] | None = None) -> list[str]:
+    """out_dir/index.html and out_dir/<CODE>.html; returns the sitemap paths ("law", "law/PE"). Without the shell or
+    the law copy nothing is written, and a page is never removed (the gateway serves the app when it is missing)."""
+    codes = law_code_chapters(law_dir)
+    if shell is None or not codes:
+        return []
+    counts = _chapter_bills(chapter_groups(index))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    _write_page(out_dir / "index.html", law_codes_page(codes, counts, shell, site), "law", changed)
+    paths = ["law"]
+    for code, chapters in codes.items():
+        _write_page(out_dir / f"{code}.html", law_code_page(code, chapters, counts, shell, site), f"law/{code}", changed)
+        paths.append(f"law/{code}")
+    return paths
+
+
 # Population brackets live in atlas/feeds/brackets/. They are imported on first use, because that package reads the
 # statute helpers above; every bracket name stays reachable here (build_feeds.bill_brackets and so on).
 def __getattr__(name: str):
@@ -2289,12 +2421,15 @@ def main() -> int:
         write_law_chapter_pages(statute_index, (args.share or args.snapshot.parent / "share") / "law", args.site,
                                 args.snapshot.parent / "law", shell, changed)
         write_law_chapter_feeds(snapshot, statute_index, args.out / "law", args.site, reviews, args.snapshot.parent / "law")
+    code_paths = write_law_code_pages(statute_index, (args.share or args.snapshot.parent / "share") / "law", args.site,
+                                      args.snapshot.parent / "law", shell, changed)
     write_member_pages(snapshot, roster, (args.share or args.snapshot.parent / "share") / "member", args.site, shell, changed)
     # Members are listed only with their pages: without the shell the address would serve the bare app.
     members = [m for m in roster.values() if isinstance(m, dict)] if shell else []
     groups = write_group_pages(site_pages, snapshot, args.share or args.snapshot.parent / "share", args.site, shell, changed)
     groups += write_about_pages(site_pages, args.share or args.snapshot.parent / "share", args.site, shell, changed)
     groups += write_view_pages(site_pages, args.share or args.snapshot.parent / "share", args.site, shell, changed)
+    groups += code_paths
     write_sitemaps(args.sitemap or args.snapshot.parent / "sitemap.xml", snapshot, args.site, law_keys, members, groups,
                    reviews, statute_index, args.snapshot.parent / "law", roster, site_pages)
     if not args.no_indexnow and args.site == SITE and args.snapshot == LIVE_SNAPSHOT:

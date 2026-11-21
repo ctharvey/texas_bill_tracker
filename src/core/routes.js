@@ -10,6 +10,7 @@ export const ROUTES = [
   {view: 'watchlist', path: '/watchlist', indexable: false, filters: true, description: 'Your watchlist of Texas bills, saved in this browser.'},
   {view: 'following', path: '/following', indexable: false, description: 'The legislators, laws and searches you follow, saved in this browser.'},
   {view: 'agencies', path: '/agencies', indexable: true, description: 'Texas state agencies and the bills in the 90th Legislature that could affect each one.'},
+  {view: 'laws', path: '/law', indexable: true, description: 'The codes of Texas law, every chapter of each, and the chapters bills in the 90th Legislature would change.'},
   {view: 'review', path: '/review', indexable: true, description: 'How far the full-text reviews of Texas bills have progressed, and what they found.'},
   {view: 'method', path: '/about/method', indexable: true, description: 'How Texas Bill Atlas reads the official record, tags bills and shows hearing progress and author prominence.'},
   {view: 'data', path: '/about/data', indexable: true, description: 'The sources behind Texas Bill Atlas, how fresh they are, and how to import your own lists.'},
@@ -19,6 +20,7 @@ export const ROUTES = [
   // form the app writes (prefs.js parses more leniently).
   {view: 'bill', pattern: '/bill/<ID>', match: '^/bill/(HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9][0-9]{0,4}$', indexable: true, description: 'A Texas bill in the 90th Legislature: its official history, text, the laws it changes and the agencies it affects.'},
   {view: 'statute', pattern: '/law/<CODE>/<section or chapter>', match: '^/law/[A-Z]{2}/[0-9]+[A-Z]?(\\.[0-9]+[A-Z]?)*$', indexable: true, description: 'A part of Texas law and the bills in the 90th Legislature that would change it.'},
+  {view: 'lawcode', pattern: '/law/<CODE>', match: '^/law/[A-Z]{2}$', indexable: true, description: 'Every chapter of a Texas code, with the chapters bills in the 90th Legislature would change.'},
   {view: 'agency', pattern: '/agency/<id>', match: '^/agency/[a-z0-9][a-z0-9-]{0,40}$', indexable: true, description: 'A Texas state agency and the bills in the 90th Legislature that could affect it.'},
   {view: 'topic', pattern: '/topic/<slug>', match: '^/topic/[a-z0-9][a-z0-9-]{0,79}$', indexable: true, description: 'A policy topic and the Texas bills in the 90th Legislature about it.'},
   {view: 'member', pattern: '/member/<code>/<name-slug>', match: '^/member/A[0-9]{3,5}(/[a-z0-9-]{1,60})?$', indexable: true, description: 'A member of the 90th Texas Legislature and the bills they filed.'},

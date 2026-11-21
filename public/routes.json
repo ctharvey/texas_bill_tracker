@@ -44,6 +44,12 @@
    "indexable": true
   },
   {
+   "view": "laws",
+   "path": "/law",
+   "match": "^/law$",
+   "indexable": true
+  },
+  {
    "view": "review",
    "path": "/review",
    "match": "^/review$",
@@ -83,6 +89,12 @@
    "view": "statute",
    "path": "/law/<CODE>/<section or chapter>",
    "match": "^/law/[A-Z]{2}/[0-9]+[A-Z]?(\\.[0-9]+[A-Z]?)*$",
+   "indexable": true
+  },
+  {
+   "view": "lawcode",
+   "path": "/law/<CODE>",
+   "match": "^/law/[A-Z]{2}$",
    "indexable": true
   },
   {
