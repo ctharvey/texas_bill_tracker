@@ -39,17 +39,19 @@ export function groupHead(kind, name) {
 }
 // A section: `heading` is the index's heading ("CERTAIN PERSONS INELIGIBLE"), as build_feeds.law_page uses it.
 export function lawHead(codeName, code, number, heading) {
-  const label = `${codeName} ${code === 'CR' ? 'Art.' : '§'} ${number}`;
+  // The Constitution: number is "<article>.<section>" and the label is its citation ("Tex. Const. art. 8, § 1-b").
+  const label = code === 'CN' ? `Tex. Const. art. ${number.split('.')[0]}, § ${number.split('.').slice(1).join('.')}`
+    : `${codeName} ${code === 'CR' ? 'Art.' : '§'} ${number}`;
   const name = squash(heading).replace(/\.+$/, '').trim();
   return {title: clip(name ? `${label}: ${name}` : label, TITLE_MAX), description: null};
 }
-export function chapterHead(codeName, chapter, heading) {
-  const label = `${codeName} Chapter ${chapter}`, name = titleCase(heading);
+export function chapterHead(codeName, chapter, heading, word = 'Chapter') {
+  const label = word === 'Article' ? `${codeName}, Article ${chapter}` : `${codeName} ${word} ${chapter}`, name = titleCase(heading);
   return {title: clip(name ? `${label}: ${name}` : label, TITLE_MAX), description: null};
 }
 // The code index and a code's chapter list (build_feeds.law_codes_page, law_code_page).
 export const lawsHead = () => ({title: 'Texas law: the codes', description: null});
-export const lawCodeHead = codeName => ({title: clip(`Texas ${codeName}: every chapter`, TITLE_MAX), description: null});
+export const lawCodeHead = codeName => ({title: clip(`${codeName.startsWith('Texas ') ? codeName : `Texas ${codeName}`}: every ${codeName.startsWith('Texas ') ? 'article' : 'chapter'}`, TITLE_MAX), description: null});
 // About pages and Today: the page heading without its full stop.
 export const headingHead = heading => ({title: String(heading || '').replace(/\.+$/, ''), description: null});
 

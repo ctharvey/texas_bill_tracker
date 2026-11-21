@@ -17,7 +17,7 @@ import {importFile} from './features/explorer/import.js';
 import {options} from './features/explorer/controls.js';
 import {agenciesMarkup, filterAgencyCards, showAgencyChoices, hideAgencyChoices, setAgencySort, pickAgency, handleAgencyKeydown} from './features/agencies/view.js';
 import {clearFilter, explorerMarkup, drawResults, PREVIEW_WIDE, preview, showPreview, closePreview, stepPreview, showMoreLaws, toggleLawChanged} from './features/explorer/view.js';
-import {statuteLabel, isChapterKey, LAW_CODE_NAMES} from './features/statutes/model.js';
+import {statuteLabel, isChapterKey, chapterWord, LAW_CODE_NAMES} from './features/statutes/model.js';
 import {HOME_TITLE, HOME_DESCRIPTION, billHead, memberHead, groupHead, lawHead, chapterHead, headingHead, lawsHead, lawCodeHead} from './core/head.js';
 import {loadStatutes, statuteMarkup} from './features/statutes/view.js';
 import {lawsMarkup, lawCodeMarkup, lawCodeTitle} from './features/lawcodes/view.js';
@@ -274,8 +274,8 @@ function pageHead(view){
   const group=view==='agency'||view==='topic'?groupTitle(view):null;
   if(group)return groupHead(view,group);
   if(view==='statute'&&state.statuteKey&&state.statutes){
-    const key=state.statuteKey,[code,number]=key.split(' '),name=state.statutes.codes?.[code]||LAW_CODE_NAMES[code]||code;
-    return isChapterKey(key)?chapterHead(name,number,state.statutes.chapters?.[key]?.h||'')
+    const key=state.statuteKey,[code,number]=key.split(' '),name=code==='CN'?LAW_CODE_NAMES.CN:state.statutes.codes?.[code]||LAW_CODE_NAMES[code]||code;
+    return isChapterKey(key)?chapterHead(name,number,state.statutes.chapters?.[key]?.h||'',chapterWord(code))
       :lawHead(name,code,number,state.statutes.sections?.[key]?.h||'');
   }
   if(view==='laws')return lawsHead();

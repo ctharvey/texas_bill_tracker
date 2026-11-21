@@ -111,7 +111,7 @@ test('heading search loads the smallest matching prefix file and lists headings 
   assert.deepEqual(lawSearchPrefixes(manifest, ['unlawful', 'carrying']), ['unl']);
   assert.equal(lawSearchPrefixes(manifest, ['unlawful', 'zebra']), null, 'a word no heading has: nothing can match');
   const shard = [['PE 46.02', 'UNLAWFUL CARRYING WEAPONS'], ['PE 46', 'WEAPONS'], ['PE 46.06', 'UNLAWFUL TRANSFER OF CERTAIN WEAPONS'],
-    ['CN 1.1', 'UNLAWFUL CARRYING'], ['PE 30.05', 'CRIMINAL TRESPASS'], ['GV 411.1', 'BUNLAWFUL CARRYING']];
+    ['CV 1.1', 'UNLAWFUL CARRYING'], ['PE 30.05', 'CRIMINAL TRESPASS'], ['GV 411.1', 'BUNLAWFUL CARRYING']];
   assert.deepEqual(lawSearchMatches(shard, ['unlawful', 'carrying']), [['PE 46.02', 'UNLAWFUL CARRYING WEAPONS']],
     'every word must start a heading word; untracked codes are left out');
   assert.deepEqual(lawSearchMatches(shard, ['weapons']).map(e => e[0]), ['PE 46', 'PE 46.02', 'PE 46.06'], 'chapters first');

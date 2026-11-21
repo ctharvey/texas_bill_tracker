@@ -657,9 +657,9 @@ def sitemap_entries(snapshot: dict, site: str = SITE, law_keys=(), members=(), p
     rows: dict[str, list] = {name: [] for name in SITEMAP_NAMES}
     rows["bills"] = [(f"{site}bill/{b}", d) for b, d in marks.items()]
     sections = index.get("sections") if isinstance(index.get("sections"), dict) else {}
-    for key in (k for k in law_keys if STATUTE_KEY.fullmatch(k) and k[:2] in CODE_NAME):
+    for key in (k for k in law_keys if STATUTE_KEY.fullmatch(k) and k[:2] in LAW_NAME):
         code, number = key.split(" ")
-        rows["laws"].append((f"{site}law/{code}/{number}", section_lastmod(sections.get(key), code, copied)))
+        rows["laws"].append((site + law_path(code, number), section_lastmod(sections.get(key), code, copied)))
     for key, g in chapter_groups(index).items():
         code, chapter = key.split(" ")
         rows["laws"].append((f"{site}law/{code}/{chapter}", chapter_lastmod(g, code, copied)))
@@ -1228,9 +1228,37 @@ CODE_ABBR = {
     "Tax Code": "TX", "Transportation Code": "TN", "Utilities Code": "UT", "Water Code": "WA",
 }
 CODE_NAME = {abbr: name for name, abbr in CODE_ABBR.items()}
+# Every code that has law pages: the 27 statutory codes (which also drive the bill parser) and the Constitution.
+LAW_NAME = {**CODE_NAME, "CN": "Texas Constitution"}
+
+
+def law_path(code: str, number: str) -> str:
+    """The site path of a section or chapter key's page: "law/PE/46.06", "law/PE/46". A Constitution section is
+    "law/CN/<article>/<section>" (law/CN/8/1-b): its numbers start again in every article."""
+    return f"law/CN/{number.replace('.', '/', 1)}" if code == "CN" and "." in number else f"law/{code}/{number}"
+
+
+def official_law_url(code: str, number: str) -> str:
+    """statutes.capitol.texas.gov for a section or chapter, as the app's officialStatuteUrl. The Constitution has no
+    search-form address; its article files carry an anchor per section ("CN.8.htm#8.1-b")."""
+    chapter = number.split(".")[0]
+    if code == "CN":
+        return f"https://statutes.capitol.texas.gov/Docs/CN/htm/CN.{chapter}.htm" + (f"#{number}" if "." in number else "")
+    if "." not in number:
+        return f"https://statutes.capitol.texas.gov/?tab=1&code={code}&chapter={code}.{chapter}"
+    return f"https://statutes.capitol.texas.gov/?tab=1&code={code}&chapter={code}.{chapter}&artSec={number}"
+
+
+def chapter_name(code: str, chapter: str) -> str:
+    """"Penal Code Chapter 46"; the Constitution's chapters are its articles: "Texas Constitution, Article 8"."""
+    return f"Texas Constitution, Article {chapter}" if code == "CN" else f"{LAW_NAME.get(code, code)} Chapter {chapter}"
 _CODE_RE = re.compile("(" + "|".join(sorted(map(re.escape, CODE_ABBR), key=len, reverse=True)) + ")")
 SECTION_NUM = re.compile(r"\d+[A-Z]?(?:\.\d+[A-Z]?)+")      # 48.160, 42A.054, 2051.151; never a bare "1"
-STATUTE_KEY = re.compile(r"([A-Z]{2}) (" + SECTION_NUM.pattern + r")")
+# Constitution keys are "CN <article>.<section>" (arabic article; the section keeps the official case): CN 8.1-b.
+CN_ARTICLE = r"[1-9][0-9]?"
+CN_SECTION = r"[0-9]+[A-Za-z]?(?:-[A-Za-z0-9]+)*"
+CN_NUMBER = CN_ARTICLE + r"\." + CN_SECTION
+STATUTE_KEY = re.compile(r"CN " + CN_NUMBER + r"|(?!CN )[A-Z]{2} " + SECTION_NUM.pattern)
 _SUBSECTION = re.compile(r"\(([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\)")
 # A list after "Section(s)": "123.001(b) and (c) and 126.001(b)", "1.01, 1.02(a), and 1.03".
 _LIST = r" ((?:(?:[0-9A-Z.]+|\([A-Za-z0-9-]+\))(?:\([A-Za-z0-9-]+\))*(?:, and |, | and )?)+)"
@@ -1257,6 +1285,58 @@ def _subsections(text: str) -> list[str]:
     return [m.group(1) for m in _SUBSECTION.finditer(text)]
 
 
+# Joint resolutions amending the Texas Constitution: "Section 1(g), Article VIII, Texas Constitution, is amended",
+# "Article III, Texas Constitution, is amended by amending Section 1 and adding Sections 1A and 1B".
+_CN_PATH = re.compile(r"\bArticle ([IVX]+), (?:the )?Texas Constitution\b")
+_CN_UNIT = re.compile(r"\bSections? ((?:(?:[0-9][0-9A-Za-z-]*|\([A-Za-z0-9-]+\))(?:\([A-Za-z0-9-]+\))*"
+                      r"(?:, and |, | and )?)+)")
+_CN_TOKEN = re.compile(r"(?<![A-Za-z0-9-])" + CN_SECTION + r"(?![A-Za-z0-9-])")
+_CN_HEADER = re.compile(r"^Sec\. (" + CN_SECTION + r")\.")
+_ROMAN = {"I": 1, "V": 5, "X": 10}
+
+
+def _roman(text: str) -> int | None:
+    """"VIII" -> 8; None unless it is an article number the Constitution has (1 to 17)."""
+    values = [_ROMAN[c] for c in text]
+    total = sum(-v if i + 1 < len(values) and v < values[i + 1] else v for i, v in enumerate(values))
+    return total if 1 <= total <= 17 else None
+
+
+def _cn_clause(path: str, rest: str, action: str, out: dict) -> dict | None:
+    """The Constitution reading of a clause, or None when it does not name "Article <Roman>, Texas Constitution".
+    Targets are "<article>.<section>"; `adds` lists the sections a clause both amends and adds."""
+    named = _CN_PATH.search(path)
+    article = _roman(named.group(1)) if named else None
+    if not article:
+        return None
+
+    def sections(text: str) -> list[str]:
+        return [f"{article}.{n}" for m in _CN_UNIT.finditer(text)
+                for n in _CN_TOKEN.findall(_SUBSECTION.sub("", m.group(1)))]
+
+    before = path[:named.start()]
+    targets, subs, adds = sections(before), _subsections(before), []
+    for piece in re.split(r"\b(?=(?:amending|adding) )", rest):
+        verb, _, text = piece.strip().partition(" ")
+        if verb == "amending":
+            targets += sections(text)
+        elif verb == "adding":
+            adds += sections(text)
+        if re.match(r"(?:Subsections?|Subdivisions?) ", text):
+            subs += _subsections(text)
+    targets, adds = list(dict.fromkeys(targets)), [n for n in dict.fromkeys(adds) if n not in targets]
+    out = {**out, "code": "CN"}
+    if action == "repealed":
+        return {**out, "kind": "repeal" if targets else "chapter", "targets": targets, "subsections": subs}
+    if action == "added":
+        return {**out, "kind": "add" if targets else "chapter", "targets": targets}
+    if targets:
+        return {**out, "kind": "amend", "targets": targets, "adds": adds, "subsections": list(dict.fromkeys(subs))}
+    if adds:
+        return {**out, "kind": "add", "targets": adds, "adds": []}
+    return {**out, "kind": "chapter"}
+
+
 def parse_clause(clause: str) -> dict:
     """Classify one SECTION's opening sentence.
 
@@ -1274,6 +1354,11 @@ def parse_clause(clause: str) -> dict:
         return out
     path, rest, action = text[:verb.start()], text[verb.end():].strip(), verb.group(1)
     codes = list(_CODE_RE.finditer(path))
+    # A clause naming a code changes that code, even when it cites the Constitution ("Section 11.13(n), Tax Code, as
+    # authorized by Section 1-b, Article VIII, Texas Constitution, is amended").
+    constitution = None if codes else _cn_clause(path, rest, action, out)
+    if constitution:
+        return constitution
     if not codes:
         return {**out, "kind": "other_law" if _OTHER_LAW.search(text) else "unparsed"}
     code = CODE_ABBR[codes[-1].group(1)]
@@ -1305,11 +1390,21 @@ def parse_clause(clause: str) -> dict:
     return {**out, "kind": "chapter"}
 
 
-def _split_body(body: list[str], targets: list[str], from_body: bool) -> dict[str, list[str]]:
-    """Assign body paragraphs to sections by their "Sec. N." / "Art. N." headers."""
+def _split_body(body: list[str], targets: list[str], from_body: bool, code: str | None = None) -> dict[str, list[str]]:
+    """Assign body paragraphs to sections by their "Sec. N." / "Art. N." headers. For the Constitution (code "CN")
+    a header "Sec. 26." in an Article 8 resolution is the target "8.26", matched without case."""
     parts: dict[str, list[str]] = {}
     current = targets[0] if len(targets) == 1 and not from_body else None
+    by_lower = {t.lower(): t for t in targets}
     for line in body:
+        if code == "CN":
+            header = _CN_HEADER.match(plain_text(line))
+            article = targets[0].split(".")[0] if targets else ""
+            if header and f"{article}.{header.group(1)}".lower() in by_lower:
+                current = by_lower[f"{article}.{header.group(1)}".lower()]
+            if current is not None:
+                parts.setdefault(current, []).append(line)
+            continue
         header = _HEADER.match(plain_text(line))
         if header and (from_body or header.group(1) in targets):
             current = header.group(1)
@@ -1339,7 +1434,7 @@ def bill_statutes(markdown: str) -> tuple[dict[str, dict], int]:
 
     def note(code: str, number: str, kind: str, subs: list[str], paragraphs: list[str]):
         key = f"{code} {number}"
-        if not STATUTE_KEY.fullmatch(key) or len(number) > 16:
+        if not STATUTE_KEY.fullmatch(key) or len(number) > 16:  # CN keys too: "CN 8.1-b"
             return
         entry = sections.setdefault(key, {"kind": kind, "subsections": [], "partial": True, "paragraphs": []})
         if rank[kind] > rank[entry["kind"]]:
@@ -1372,10 +1467,13 @@ def bill_statutes(markdown: str) -> tuple[dict[str, dict], int]:
             for number in parsed["targets"]:
                 note(parsed["code"], number, "repeal", parsed["subsections"], [])
         elif kind in ("amend", "add"):
-            parts = _split_body(body, parsed["targets"], parsed["from_body"])
+            adds = parsed.get("adds", [])  # Constitution only: sections a clause adds besides the ones it amends.
+            parts = _split_body(body, parsed["targets"] + adds, parsed["from_body"], parsed["code"])
             numbers = list(parts) if parsed["from_body"] else parsed["targets"]
             for number in numbers:
                 note(parsed["code"], number, kind, parsed["subsections"] if kind == "amend" else [], parts.get(number, []))
+            for number in adds:
+                note(parsed["code"], number, "add", [], parts.get(number, []))
         i = end
     return sections, unparsed
 
@@ -1441,7 +1539,7 @@ def bill_chapters(markdown: str) -> dict[str, str]:
             for line in body:
                 for item_code, number, part in _chapter_refs(plain_text(line).replace(" & ", " and "), code):
                     note(item_code, number, "amend" if part else "repeal")
-        elif code and kind in ("chapter", "amend", "add", "repeal"):
+        elif code and code != "CN" and kind in ("chapter", "amend", "add", "repeal"):  # "Chapter N" is never an article.
             verb = _VERB.search(clause)
             path = clause[:verb.start()] if verb else clause
             action = {"repealed": "repeal", "added": "add"}.get(verb.group(1) if verb else "", "amend")
@@ -1471,30 +1569,33 @@ def _latest_text(text_dir: Path, bill_id: str) -> tuple[dict, str] | None:
         return None
 
 
-def section_heading(paragraphs: list[str], current: bool = False) -> str:
+def section_heading(paragraphs: list[str], current: bool = False, constitution: bool = False) -> str:
     """"Sec. 48.160. FUNDING FOR X." -> "FUNDING FOR X": the heading as the bill would write it, or with current=True
-    as it reads now (insertions dropped, deletions kept)."""
+    as it reads now (insertions dropped, deletions kept). A Constitution section's header carries no article:
+    "Sec. 1-b. HOMESTEADS."."""
+    number = CN_SECTION if constitution else SECTION_NUM.pattern
     for line in paragraphs:
         if current:
             line = re.sub(r"\\[\[\]]", "", re.sub(r"<ins>.*?</ins>", "", line))
         else:
             line = re.sub(r"\\\[<del>.*?</del>\\\]|<del>.*?</del>", "", line)
         proposed = re.sub(r"\s+", " ", plain_text(line)).strip()
-        m = re.match(r"^(?:Sec|Art)\. " + SECTION_NUM.pattern + r"\.\s+([^a-z]{3,200}?)\.(?:\s|$)", proposed)
+        m = re.match(r"^(?:Sec|Art)\. " + number + r"\.\s+([^a-z]{3,200}?)\.(?:\s|$)", proposed)
         if m:
             return m.group(1).strip()
     return ""
 
 
-def section_headings(entries: list[dict]) -> tuple[str, dict[str, str]]:
+def section_headings(entries: list[dict], constitution: bool = False) -> tuple[str, dict[str, str]]:
     """(the section's heading, {adding bill: its own heading where it differs}).
 
     An existing section (any bill amends or repeals it) takes the current heading the first amending bill quotes, never
     an added section's: bills drafted separately can add unrelated sections under a number already in use. A section
     only bills add has a heading only when every bill gives it the same one."""
-    adds = {e["bill"]: section_heading(e["paragraphs"]) for e in entries if e["kind"] == "add"}
+    adds = {e["bill"]: section_heading(e["paragraphs"], constitution=constitution) for e in entries if e["kind"] == "add"}
     if len(adds) < len(entries):
-        heading = next((h for e in entries if e["kind"] != "add" and (h := section_heading(e["paragraphs"], current=True))), "")
+        heading = next((h for e in entries if e["kind"] != "add"
+                        and (h := section_heading(e["paragraphs"], current=True, constitution=constitution))), "")
     else:
         found = set(adds.values())
         heading = found.pop() if len(found) == 1 else ""
@@ -1553,14 +1654,23 @@ def build_statutes(snapshot: dict, text_dir: Path, law_dir: Path | None = None) 
         sections, unparsed = bill_statutes(markdown)
         bills_meta[bill_id] = {"v": version["code"], "n": len(sections), "u": unparsed}
         for chapter_key, chapter_kind in bill_chapters(markdown).items():
-            if chapter_kind in CHAPTER_KIND and CHAPTER_KEY.fullmatch(chapter_key) and chapter_key[:2] in CODE_NAME:
+            if chapter_kind in CHAPTER_KIND and CHAPTER_KEY.fullmatch(chapter_key) and chapter_key[:2] in LAW_NAME:
                 by_chapter.setdefault(chapter_key, {})[bill_id] = CHAPTER_KIND[chapter_kind]
         for key, entry in sections.items():
             by_key.setdefault(key, []).append({"bill": bill_id, "version": version["code"],
                                                "version_name": str(version.get("name") or version["code"]), **entry})
-    index = {"format": STATUTE_FORMAT, "codes": {abbr: CODE_NAME[abbr] for abbr in sorted({k[:2] for k in by_key})},
+    index = {"format": STATUTE_FORMAT, "codes": {abbr: LAW_NAME[abbr] for abbr in sorted({k[:2] for k in by_key})},
              "sections": {}, "bills": dict(sorted(bills_meta.items()))}
-    law = _open_law(law_dir) if by_chapter else None
+    constitution = [k for k in by_key if k.startswith("CN ")]
+    law = _open_law(law_dir) if by_chapter or constitution else None
+    # A Constitution key takes the copy's case ("Section 3A" in a bill is the copy's "3a"); a new section keeps the
+    # bill's. Other codes' keys are upper case already.
+    for key in constitution if law is not None else []:
+        number = key[3:]
+        found = law.section_chapter("CN", number)
+        stored = law.section_id(found[1], law.local_section("CN", number)) if found else None
+        if stored and f"CN {found[0]}.{stored}" != key:
+            by_key.setdefault(f"CN {found[0]}.{stored}", []).extend(by_key.pop(key))
     index["chapters"] = {
         key: {"h": _law_chapter_title(law, key[:2], key[3:]),
               "b": [[bill, kind] for bill, kind in sorted(by_chapter[key].items(), key=lambda p: _bill_order(p[0]))]}
@@ -1568,13 +1678,13 @@ def build_statutes(snapshot: dict, text_dir: Path, law_dir: Path | None = None) 
     files = {}
     for key in sorted(by_key):
         entries = sorted(by_key[key], key=lambda e: (e["bill"][:2] != "HB", int(re.sub(r"\D", "", e["bill"]) or 0), e["bill"]))
-        heading, own = section_headings(entries)
+        heading, own = section_headings(entries, constitution=key.startswith("CN "))
         index["sections"][key] = {"h": heading, "b": [[e["bill"], KIND_LETTER[e["kind"]]] for e in entries]}
         if own:
             index["sections"][key]["hb"] = own
         code, number = key.split(" ")
         files[f"{code}-{number}.json"] = {"format": STATUTE_SECTION_FORMAT, "key": key, "code": code,
-                                          "code_name": CODE_NAME[code], "section": number, "heading": heading,
+                                          "code_name": LAW_NAME[code], "section": number, "heading": heading,
                                           "entries": entries}
     return index, files
 
@@ -1704,7 +1814,7 @@ def write_statutes(snapshot: dict, text_dir: Path, out_dir: Path, today: str | N
         else:
             unchanged += 1
     for stale in sections_dir.glob("*.json"):
-        if stale.name not in files and re.fullmatch(r"[A-Z]{2}-[0-9A-Z.]+\.json", stale.name):
+        if stale.name not in files and re.fullmatch(r"[A-Z]{2}-[0-9A-Za-z.-]+\.json", stale.name):
             stale.unlink()
             removed += 1
     # The index goes last, so it never names a section file that is not there yet.
@@ -1717,7 +1827,7 @@ def write_statutes(snapshot: dict, text_dir: Path, out_dir: Path, today: str | N
 # share pages: plain HTML, its own canonical address, the site card, and people sent on to the app.
 LAW_KIND_WORDS = {"m": "amends", "n": "adds", "r": "repeals"}
 LAW_TEXT_MAX = 3000  # Characters of the section's current text on its page; the rest is a link to our chapter copy.
-_LAW_PAGE_NAME = re.compile(r"\d+[A-Z]?(?:\.\d+[A-Z]?)+\.html")
+_LAW_PAGE_NAME = re.compile(r"\d+[A-Z]?(?:\.\d+[A-Z]?)+\.html|" + CN_NUMBER + r"\.html")
 
 
 def _current_law(law, code: str, number: str) -> tuple[str, str, str] | None:
@@ -1728,7 +1838,7 @@ def _current_law(law, code: str, number: str) -> tuple[str, str, str] | None:
     if not found:
         return None
     chapter, entry = found
-    stored = law.section_id(entry, number)  # Matched without case: the copy has CR "42.04a".
+    stored = law.section_id(entry, law.local_section(code, number))  # Matched without case: the copy has CR "42.04a".
     text = law.section_texts(code, chapter).get(stored) or ""
     heading = next((s[1] for s in entry.get("sections", []) if s[0] == stored), "")
     return heading, text, f"live/law/{code}/{chapter}.md"
@@ -1740,7 +1850,7 @@ def _law_rss(label: str, feed: str) -> str:
 
 def _code_trail(code: str, site: str) -> list[tuple[str, str]]:
     """The breadcrumb steps above a section or chapter: the code index (/law) and the code page (/law/<CODE>)."""
-    return [("Texas law", f"{site}law"), (CODE_NAME[code], f"{site}law/{code}")]
+    return [("Texas law", f"{site}law"), (LAW_NAME[code], f"{site}law/{code}")]
 
 
 def _law_standalone_head(head_args: dict, label: str, feed: str) -> str:
@@ -1767,9 +1877,10 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     are the chapter pages that exist; the section links its own chapter only when that page is there. robots marks a
     page rendered on request (scripts/law_on_demand.py) as not indexed."""
     code, number = key.split(" ")
-    url, target = f"{site}law/{code}/{number}", f"{site}#statute?law={code}&sec={number}"
+    url, target = f"{site}{law_path(code, number)}", f"{site}#statute?law={code}&sec={number}"
     feed = f"{site}live/feeds/law/{code}-{number}.xml"
-    heading = (current[0] if current else "") or (f"Sec. {number}. {entry['h']}." if entry.get("h") else "")
+    own = number.split(".", 1)[1] if code == "CN" else number  # The Constitution's own number: "Sec. 1-b."
+    heading = (current[0] if current else "") or (f"Sec. {own}. {entry['h']}." if entry.get("h") else "")
     name = re.sub(r"^(?:Sec|Art)\.\s+\S+\.\s*", "", heading).rstrip(".").strip()
     label = law_label(code, number, code_name)
     title = clip(f"{label}: {name}" if name else label, SHARE_TITLE_MAX)
@@ -1789,7 +1900,9 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     items = "\n".join(f'<li><a href="{a(f"{site}bill/{b}")}">{escape(bill_number(b))}</a> '
                       f'{LAW_KIND_WORDS.get(k, "changes")} this section</li>' for b, k in bills)
     chapter = number.split(".")[0]
-    chapter_name, chapter_url = f"{code_name or CODE_NAME[code]} Chapter {chapter}", f"{site}law/{code}/{chapter}"
+    chapter_title_, chapter_url = chapter_name(code, chapter), f"{site}law/{code}/{chapter}"
+    if code != "CN" and code_name:
+        chapter_title_ = f"{code_name} Chapter {chapter}"
     body = [f"<h1>{escape(label)}{': ' + escape(name) if name else ''}</h1>",
             f'<p><a href="{a(target)}">Open {escape(label)} in Texas Bill Atlas</a> '
             + ("to read each proposal.</p>" if proposed else "to compare each bill's wording with current law.</p>"),
@@ -1797,29 +1910,29 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     body.append(f"<ul>\n{items}\n</ul>" if bills else
                 "<p>Follow this section in Texas Bill Atlas: a bill filed later that changes it shows up as new.</p>")
     if chapters and f"{code} {chapter}" in chapters:
-        body.append(f'<p>Part of <a href="{a(chapter_url)}">{escape(chapter_name)}</a>, with every bill that changes it.</p>')
+        body.append(f'<p>Part of <a href="{a(chapter_url)}">{escape(chapter_title_)}</a>, with every bill that changes it.</p>')
     body += ["<p>Bills are matched to sections automatically from their text and can be missed, for example when a bill "
             "changes a whole chapter at once or renumbers sections. No bill listed here does not mean no bill changes "
             "this section.</p>"]
     # As the app's officialStatuteUrl (checked for every code the index uses).
-    official = (f"https://statutes.capitol.texas.gov/?tab=1&code={code}&chapter={code}.{number.split('.')[0]}"
-                f"&artSec={number}")
+    official = official_law_url(code, number)
     links = []
     if current and current[1]:
         shown, cut = current[1][:LAW_TEXT_MAX], len(current[1]) > LAW_TEXT_MAX
         paragraphs = "\n".join(f"<p>{escape(p.strip())}</p>" for p in shown.split("\n") if p.strip())
         body += ["<h2>Current law</h2>", paragraphs]
         if cut:
-            body.append(f'<p>The section continues: <a href="{a(site + current[2])}">whole chapter</a>.</p>')
-        links.append(f'<li><a href="{a(site + current[2])}">This chapter as it stands now, Markdown copy of the '
-                     f"Texas Legislative Council's statute files</a></li>")
+            body.append(f'<p>The section continues: <a href="{a(site + current[2])}">whole '
+                        f'{"article" if code == "CN" else "chapter"}</a>.</p>')
+        links.append(f'<li><a href="{a(site + current[2])}">This {"article" if code == "CN" else "chapter"} as it '
+                     f"stands now, Markdown copy of the Texas Legislative Council's statute files</a></li>")
     links.append(f'<li><a href="{a(official)}">Official text on statutes.capitol.texas.gov</a></li>')
     links.append(f'<li><a href="{a(feed)}">RSS feed of actions on these bills</a></li>')
     body += ["<h2>Links</h2>", "<ul>\n" + "\n".join(links) + "\n</ul>",
              "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
-    jsonld = (page_head.law_section(name=title, label=label, url=url, official=official, chapter_name=chapter_name,
+    jsonld = (page_head.law_section(name=title, label=label, url=url, official=official, chapter_name=chapter_title_,
                                     chapter_url=chapter_url),
-              page_head.breadcrumbs(site, [*_code_trail(code, site), (chapter_name, chapter_url), (label, url)]))
+              page_head.breadcrumbs(site, [*_code_trail(code, site), (chapter_title_, chapter_url), (label, url)]))
     head_args = dict(title=title, description=description, url=url, image=f"{site}{SITE_CARD}", jsonld=jsonld,
                      robots=robots)
     if shell is not None:  # The page is the app: no "Open in" link.
@@ -1844,12 +1957,16 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
 LAW_LIMITS = ("Bills are matched to sections automatically from their text and can be missed: changes to a whole "
               "chapter at once, renumbering and unusual wording. No item here does not mean no bill changes this "
               "section.")
-_LAW_FEED_NAME = re.compile(r"([A-Z]{2})-(\d+[A-Z]?(?:\.\d+[A-Z]?)+)\.xml")
+_LAW_FEED_NAME = re.compile(r"([A-Z]{2})-(\d+[A-Z]?(?:\.\d+[A-Z]?)+|" + CN_NUMBER + r")\.xml")
 
 
 def law_label(code: str, number: str, code_name: str | None = None) -> str:
-    """"Penal Code § 46.06", or "Code of Criminal Procedure Art. 42.12", as the app's statuteLabel."""
-    return f"{code_name or CODE_NAME.get(code, code)} {'Art.' if code == 'CR' else chr(0xa7)} {number}"
+    """"Penal Code § 46.06", "Code of Criminal Procedure Art. 42.12" or "Tex. Const. art. 8, § 1-b", as the app's
+    statuteLabel."""
+    if code == "CN" and "." in number:
+        article, section = number.split(".", 1)
+        return f"Tex. Const. art. {article}, {chr(0xa7)} {section}"
+    return f"{code_name or LAW_NAME.get(code, code)} {'Art.' if code == 'CR' else chr(0xa7)} {number}"
 
 
 def law_feed(key: str, bills: list[tuple[dict, str]], site: str = SITE, reviews: dict | None = None,
@@ -1874,7 +1991,7 @@ def law_feed(key: str, bills: list[tuple[dict, str]], site: str = SITE, reviews:
         for item in all_items(bill, reviews.get(bill["id"])):
             items.append({**item, "caption": f"{bill_number(bill['id'])} {verb} {label}. {item['caption']}"})
     items.sort(key=lambda i: i["date"] or "", reverse=True)
-    return render_rss(f"{label} · Texas Bill Atlas", f"{site}law/{code}/{number}",
+    return render_rss(f"{label} · Texas Bill Atlas", f"{site}{law_path(code, number)}",
                       f"Actions on bills in the 90th Legislature that would change {label}. {LAW_LIMITS} "
                       f"Official text: {official} Unofficial; confirm on Texas Legislature Online.",
                       items[:MEMBER_FEED_ITEMS], site)
@@ -1888,7 +2005,7 @@ def write_law_feeds(snapshot: dict, index: dict, out_dir: Path, site: str = SITE
              if isinstance(b, dict) and BILL_ID.fullmatch(str(b.get("id", "")))}
     feeds: dict[str, tuple[list, dict]] = {}
     for key, entry in (index.get("sections") or {}).items():
-        if not STATUTE_KEY.fullmatch(key) or key[:2] not in CODE_NAME or not isinstance(entry, dict):
+        if not STATUTE_KEY.fullmatch(key) or key[:2] not in LAW_NAME or not isinstance(entry, dict):
             continue  # Never build a file name from an unexpected key.
         pairs = entry.get("b") if isinstance(entry.get("b"), list) else []
         since = entry.get("f") if isinstance(entry.get("f"), dict) else {}
@@ -1899,7 +2016,7 @@ def write_law_feeds(snapshot: dict, index: dict, out_dir: Path, site: str = SITE
     out_dir.mkdir(parents=True, exist_ok=True)
     for path in out_dir.iterdir():
         found = _LAW_FEED_NAME.fullmatch(path.name)
-        if found and found.group(1) in CODE_NAME:
+        if found and found.group(1) in LAW_NAME:
             feeds.setdefault(f"{found.group(1)} {found.group(2)}", ([], {}))
     written = unchanged = 0
     for key, (bills, since) in feeds.items():
@@ -1923,7 +2040,7 @@ def write_law_pages(index: dict, out_dir: Path, site: str = SITE, law_dir: Path 
     written = unchanged = removed = 0
     keep: dict[str, set[str]] = {}
     for key, entry in sections.items():
-        if not STATUTE_KEY.fullmatch(key) or key[:2] not in CODE_NAME or not isinstance(entry, dict):
+        if not STATUTE_KEY.fullmatch(key) or key[:2] not in LAW_NAME or not isinstance(entry, dict):
             continue  # Never build a file name from an unexpected key.
         code, number = key.split(" ")
         keep.setdefault(code, set()).add(f"{number}.html")
@@ -1933,8 +2050,8 @@ def write_law_pages(index: dict, out_dir: Path, site: str = SITE, law_dir: Path 
             current = _current_law(law, code, number)
         except (OSError, ValueError, KeyError):
             current = None
-        if _write_page(folder / f"{number}.html", law_page(key, entry, CODE_NAME[code], current, site, shell, chapters),
-                       f"law/{code}/{number}", changed):
+        if _write_page(folder / f"{number}.html", law_page(key, entry, LAW_NAME[code], current, site, shell, chapters),
+                       law_path(code, number), changed):
             written += 1
         else:
             unchanged += 1
@@ -1984,7 +2101,7 @@ def chapter_groups(index: dict) -> dict[str, dict]:
         return groups.setdefault(key, {"h": "", "whole": [], "since": {}, "sections": {}})
 
     for key, entry in (index.get("chapters") or {}).items():
-        if not (isinstance(key, str) and CHAPTER_KEY.fullmatch(key) and key[:2] in CODE_NAME and isinstance(entry, dict)):
+        if not (isinstance(key, str) and CHAPTER_KEY.fullmatch(key) and key[:2] in LAW_NAME and isinstance(entry, dict)):
             continue
         g = group(key)
         g["h"] = entry["h"] if isinstance(entry.get("h"), str) else ""
@@ -1992,7 +2109,7 @@ def chapter_groups(index: dict) -> dict[str, dict]:
         g["since"] = {b: d for b, d in (entry.get("f") if isinstance(entry.get("f"), dict) else {}).items()
                       if isinstance(d, str)}
     for key, entry in (index.get("sections") or {}).items():
-        if not (isinstance(key, str) and STATUTE_KEY.fullmatch(key) and key[:2] in CODE_NAME and isinstance(entry, dict)):
+        if not (isinstance(key, str) and STATUTE_KEY.fullmatch(key) and key[:2] in LAW_NAME and isinstance(entry, dict)):
             continue
         since = {b: d for b, d in (entry.get("f") if isinstance(entry.get("f"), dict) else {}).items() if isinstance(d, str)}
         group(chapter_of(key))["sections"][key] = (_valid_pairs(entry), since,
@@ -2001,7 +2118,7 @@ def chapter_groups(index: dict) -> dict[str, dict]:
 
 
 def _natural(number: str) -> list[tuple[int, str]]:
-    return [(int(n), s) for n, s in re.findall(r"(\d+)([A-Z]*)", number)]
+    return [(int(n), s) for n, s in re.findall(r"(\d+)([A-Z]*)", number.upper())]
 
 
 def bill_law_links(index: dict) -> dict[str, list[tuple[str, str, str]]]:
@@ -2016,15 +2133,16 @@ def bill_law_links(index: dict) -> dict[str, list[tuple[str, str, str]]]:
         for skey, (pairs, _since, _h) in g["sections"].items():
             number = skey.split(" ")[1]
             for bill, kind in pairs:
-                found.setdefault(bill, []).append(((code, _natural(number), 1), f"law/{code}/{number}",
-                                                   law_label(code, number, CODE_NAME[code]), kind))
+                found.setdefault(bill, []).append(((code, _natural(number), 1), law_path(code, number),
+                                                   law_label(code, number, LAW_NAME[code]), kind))
     return {bill: [(path, label, LAW_KIND_WORDS.get(kind, "changes")) for _s, path, label, kind in sorted(rows, key=lambda r: r[0])]
             for bill, rows in found.items()}
 
 
 def chapter_label(code: str, chapter: str, heading: str = "") -> str:
-    """"Penal Code chapter 46 (Weapons)"."""
-    return f"{CODE_NAME.get(code, code)} chapter {chapter}" + (f" ({title_case(heading)})" if heading else "")
+    """"Penal Code chapter 46 (Weapons)", "Texas Constitution, Article 8 (Taxation and Revenue)"."""
+    name = f"Texas Constitution, Article {chapter}" if code == "CN" else f"{LAW_NAME.get(code, code)} chapter {chapter}"
+    return name + (f" ({title_case(heading)})" if heading else "")
 
 
 def _chapter_heading(g: dict, law, code: str, chapter: str) -> str:
@@ -2032,10 +2150,13 @@ def _chapter_heading(g: dict, law, code: str, chapter: str) -> str:
 
 
 def _section_short(code: str, number: str) -> str:
+    if code == "CN":  # "8.1-b" or the copy's "1-b": the section within its article.
+        return f"{chr(0xa7)} {number.split('.', 1)[-1]}"
     return f"{'Art.' if code == 'CR' else chr(0xa7)} {number}"
 
 
 _SECTION_NUMBER = re.compile(r"\d+[A-Z]?(?:\.\d+[A-Z]?)+")
+_CN_LOCAL = re.compile(CN_SECTION)  # A Constitution section as its article file numbers it: "1-b".
 
 
 def _section_name(heading) -> str:
@@ -2088,7 +2209,7 @@ def write_law_chapter_feeds(snapshot: dict, index: dict, out_dir: Path, site: st
     out_dir.mkdir(parents=True, exist_ok=True)
     for path in out_dir.iterdir():
         found = _LAW_CHAPTER_FEED_NAME.fullmatch(path.name)
-        if found and found.group(1) in CODE_NAME:
+        if found and found.group(1) in LAW_NAME:
             groups.setdefault(f"{found.group(1)} {found.group(2)}", {"h": "", "whole": [], "since": {}, "sections": {}})
     law = _open_law(law_dir)
     written = unchanged = 0
@@ -2109,25 +2230,26 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
     robots and all_sections ([[number, "Sec. ..." heading]] from the law copy) are for a page rendered on request
     (scripts/law_on_demand.py): every section of the chapter is listed so any one can be opened and followed."""
     code, chapter = key.split(" ")
-    code_name = CODE_NAME[code]
+    code_name = LAW_NAME[code]
     url, target = f"{site}law/{code}/{chapter}", f"{site}#chapter?law={code}&ch={chapter}"
     feed = f"{site}live/feeds/law/{code}-{chapter}.xml"
     name = title_case(heading)
-    label = f"{code_name} Chapter {chapter}"
+    label = chapter_name(code, chapter) if code == "CN" else f"{code_name} Chapter {chapter}"
+    unit = "article" if code == "CN" else "chapter"
     title = clip(f"{label}: {name}" if name else label, SHARE_TITLE_MAX)
     whole = g["whole"]
     sections = {k: v for k, v in sorted(g["sections"].items()) if v[0]}
     bill_ids = sorted({b for b, _ in whole} | {b for pairs, _s, _h in sections.values() for b, _ in pairs},
                       key=_bill_order)
     count = (f"{len(bill_ids)} bill{'s' if len(bill_ids) != 1 else ''} in the 90th Legislature would change something "
-             f"in this chapter" if bill_ids else "No bill in the 90th Legislature changes this chapter yet")
+             f"in this {unit}" if bill_ids else f"No bill in the 90th Legislature changes this {unit} yet")
     description = clip(f"{count}. Follow it in Texas Bill Atlas to see when another bill does." if bill_ids else
                        f"The sections of {label}. {count}: follow it in Texas Bill Atlas to see when one does.",
                        SHARE_DESCRIPTION_MAX)
     a = lambda value: escape(value, {'"': "&quot;"})
     body = [f"<h1>{escape(label)}{': ' + escape(name) if name else ''}</h1>",
             f'<p><a href="{a(target)}">Open {escape(label)} in Texas Bill Atlas</a> to follow it: anything a bill '
-            f"changes in this chapter shows up as new.</p>",
+            f"changes in this {unit} shows up as new.</p>",
             f"<h2>{escape(count[0].upper() + count[1:])}</h2>"]
     if whole:
         body += ["<h3>Bills that change the whole chapter</h3>", "<ul>\n" + "\n".join(
@@ -2139,25 +2261,27 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
             number = skey.split(" ")[1]
             who = ", ".join(f'<a href="{a(f"{site}bill/{b}")}">{escape(bill_number(b))}</a> '
                             f'({LAW_KIND_WORDS.get(k, "changes")})' for b, k in pairs)
-            rows.append(f'<li><a href="{a(f"{site}law/{code}/{number}")}">{escape(_section_short(code, number))}</a>'
+            rows.append(f'<li><a href="{a(f"{site}{law_path(code, number)}")}">{escape(_section_short(code, number))}</a>'
                         f"{': ' + escape(shead) if shead else ''}: {who}</li>")
         body += ["<h3>Sections bills change</h3>", "<ul>\n" + "\n".join(rows) + "\n</ul>"]
     if all_sections:
-        rows = [f'<li><a href="{a(f"{site}law/{code}/{str(s[0]).upper()}")}">{escape(_section_short(code, s[0]))}</a>'
+        # The Constitution's copy numbers sections within the article and keeps their case ("1-b", "3a").
+        full = (lambda n: f"{chapter}.{n}") if code == "CN" else (lambda n: n.upper())
+        number_ok = _CN_LOCAL.fullmatch if code == "CN" else (lambda n: _SECTION_NUMBER.fullmatch(n.upper()))
+        rows = [f'<li><a href="{a(site + law_path(code, full(str(s[0]))))}">{escape(_section_short(code, str(s[0])))}</a>'
                 f"{': ' + escape(_section_name(s[1])) if _section_name(s[1]) else ''}</li>"
-                for s in all_sections if isinstance(s, (list, tuple)) and len(s) >= 2
-                and _SECTION_NUMBER.fullmatch(str(s[0]).upper())]
-        body += ["<h3>Sections in this chapter</h3>", "<ul>\n" + "\n".join(rows) + "\n</ul>"]
+                for s in all_sections if isinstance(s, (list, tuple)) and len(s) >= 2 and number_ok(str(s[0]))]
+        body += [f"<h3>Sections in this {unit}</h3>", "<ul>\n" + "\n".join(rows) + "\n</ul>"]
     body += ["<p>Bills are matched to sections automatically from their text and can be missed, for example when a bill "
              "renumbers sections or uses unusual wording. No bill listed here does not mean no bill changes this "
-             "chapter.</p>"]
-    official = f"https://statutes.capitol.texas.gov/?tab=1&code={code}&chapter={code}.{chapter}"
+             f"{unit}.</p>"]
+    official = official_law_url(code, chapter)
     body += ["<h2>Links</h2>", "<ul>\n" + "\n".join([
         f'<li><a href="{a(official)}">Official text on statutes.capitol.texas.gov</a></li>',
         f'<li><a href="{a(feed)}">RSS feed of actions on these bills</a></li>']) + "\n</ul>",
         "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
     parts = [(f"{_section_short(code, skey.split(' ')[1])}{': ' + shead if shead else ''}",
-              f"{site}law/{code}/{skey.split(' ')[1]}") for skey, (_p, _s, shead) in sections.items()]
+              site + law_path(code, skey.split(' ')[1])) for skey, (_p, _s, shead) in sections.items()]
     jsonld = (page_head.law_chapter(name=title, label=label, url=url, official=official, sections=parts),
               page_head.breadcrumbs(site, [*_code_trail(code, site), (label, url)]))
     head_args = dict(title=title, description=description, url=url, image=f"{site}{SITE_CARD}", jsonld=jsonld,
@@ -2226,7 +2350,7 @@ def law_code_chapters(law_dir: Path | None) -> dict[str, list[tuple[str, str]]]:
     except (OSError, ValueError, AttributeError):
         return {}
     found = {}
-    for code in sorted(c for c in (codes if isinstance(codes, dict) else {}) if c in CODE_NAME):
+    for code in sorted(c for c in (codes if isinstance(codes, dict) else {}) if c in LAW_NAME):
         headings = codes[code].get("headings") if isinstance(codes[code], dict) else None
         rows = [(c, chapter_title(h)) for c, h in (headings.items() if isinstance(headings, dict) else [])
                 if isinstance(c, str) and _CODE_CHAPTER.fullmatch(c) and isinstance(h, str)]
@@ -2251,8 +2375,8 @@ def _code_shell_page(shell: str, *, title: str, description: str, url: str, json
                              view=view)
 
 
-def _chapters(n: int) -> str:
-    return f"{n} chapter{'s' if n != 1 else ''}"
+def _chapters(n: int, word: str = "chapter") -> str:
+    return f"{n} {word}{'s' if n != 1 else ''}"
 
 
 def _bills_change(n: int) -> str:
@@ -2263,31 +2387,33 @@ def law_code_page(code: str, chapters: list[tuple[str, str]], counts: dict[str, 
                   site: str = SITE) -> str:
     """The page at /law/<CODE>: every chapter with its title, linked to /law/<CODE>/<chapter>."""
     a = lambda value: escape(value, {'"': "&quot;"})
-    name, url = CODE_NAME[code], f"{site}law/{code}"
+    name, url = LAW_NAME[code], f"{site}law/{code}"
+    full = name if code == "CN" else f"Texas {name}"  # "Texas Constitution", "Texas Penal Code"
+    word, words = ("article", "Articles") if code == "CN" else ("chapter", "Chapters")
     changed = [(c, t) for c, t in chapters if counts.get(f"{code} {c}")]
-    title = clip(f"Texas {name}: every chapter", SHARE_TITLE_MAX)
-    lead = (f"{_chapters(len(chapters))}. Bills in the 90th Legislature would change {len(changed)} of them."
-            if changed else f"{_chapters(len(chapters))}. No bill in the 90th Legislature changes one yet.")
-    description = clip(f"Every chapter of the Texas {name}, with the ones bills in the 90th Legislature would change. "
+    title = clip(f"{full}: every {word}", SHARE_TITLE_MAX)
+    lead = (f"{_chapters(len(chapters), word)}. Bills in the 90th Legislature would change {len(changed)} of them."
+            if changed else f"{_chapters(len(chapters), word)}. No bill in the 90th Legislature changes one yet.")
+    description = clip(f"Every {word} of the {full}, with the ones bills in the 90th Legislature would change. "
                        f"{lead}", SHARE_DESCRIPTION_MAX)
     rows = []
     for chapter, heading in chapters:
         n = counts.get(f"{code} {chapter}", 0)
-        rows.append(f'<li><a href="{a(f"{site}law/{code}/{chapter}")}">Chapter {escape(chapter)}</a>'
+        rows.append(f'<li><a href="{a(f"{site}law/{code}/{chapter}")}">{word.capitalize()} {escape(chapter)}</a>'
                     f"{': ' + escape(title_case(heading)) if heading else ''}"
                     f"{f' <strong>({_bills_change(n)})</strong>' if n else ''}</li>")
-    body = [f"<h1>Texas {escape(name)}</h1>", f"<p>{escape(lead)}</p>",
-            "<h2>Chapters</h2>", "<ul>\n" + "\n".join(rows) + "\n</ul>",
-            "<p>Bills are matched to chapters automatically from their text and can be missed. Chapter titles come "
-            "from this site's copy of the official statutes.</p>",
+    body = [f"<h1>{escape(full)}</h1>", f"<p>{escape(lead)}</p>",
+            f"<h2>{words}</h2>", "<ul>\n" + "\n".join(rows) + "\n</ul>",
+            f"<p>Bills are matched to {word}s automatically from their text and can be missed. {word.capitalize()} "
+            "titles come from this site's copy of the official statutes.</p>",
             f'<p><a href="{a(f"{site}law")}">All Texas codes</a></p>',
             '<p><a href="https://statutes.capitol.texas.gov/">Official statutes on statutes.capitol.texas.gov</a></p>',
             "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
-    legislation = {"@context": "https://schema.org", "@type": "Legislation", "name": f"Texas {name}",
+    legislation = {"@context": "https://schema.org", "@type": "Legislation", "name": full,
                    "legislationIdentifier": name, "legislationJurisdiction": page_head.TEXAS, "inLanguage": "en",
                    "url": url}
     if changed:
-        legislation["hasPart"] = [{"@type": "Legislation", "name": f"{name} Chapter {c}{': ' + title_case(t) if t else ''}",
+        legislation["hasPart"] = [{"@type": "Legislation", "name": f"{chapter_name(code, c)}{': ' + title_case(t) if t else ''}",
                                    "url": f"{site}law/{code}/{c}"} for c, t in changed]
     jsonld = (legislation, page_head.breadcrumbs(site, [("Texas law", f"{site}law"), (name, url)]))
     return _code_shell_page(shell, title=title, description=description, url=url, jsonld=jsonld, body=body,
@@ -2303,17 +2429,18 @@ def law_codes_page(codes: dict[str, list[tuple[str, str]]], counts: dict[str, in
     description = clip(f"The {len(codes)} Texas codes this site follows, every chapter of each, and the chapters bills in "
                        f"the 90th Legislature would change.", SHARE_DESCRIPTION_MAX)
     rows = []
-    for code in sorted(codes, key=lambda c: CODE_NAME[c]):
+    for code in sorted(codes, key=lambda c: LAW_NAME[c]):
         n = sum(1 for c, _t in codes[code] if counts.get(f"{code} {c}"))
-        rows.append(f'<li><a href="{a(f"{site}law/{code}")}">{escape(CODE_NAME[code])}</a>: '
-                    f"{_chapters(len(codes[code]))}{f', {n} changed by bills' if n else ''}</li>")
+        rows.append(f'<li><a href="{a(f"{site}law/{code}")}">{escape(LAW_NAME[code])}</a>: '
+                    f"{_chapters(len(codes[code]), 'article' if code == 'CN' else 'chapter')}"
+                    f"{f', {n} changed by bills' if n else ''}</li>")
     body = ["<h1>Texas law</h1>",
             f"<p>The {len(codes)} codes of Texas law this site follows. Open a code to see every chapter and the ones "
             f"bills in the 90th Legislature would change.</p>",
             "<ul>\n" + "\n".join(rows) + "\n</ul>",
             "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
     page = page_head.collection(name=title, url=url, description=description,
-                                items=[f"{site}law/{c}" for c in sorted(codes, key=lambda c: CODE_NAME[c])])
+                                items=[f"{site}law/{c}" for c in sorted(codes, key=lambda c: LAW_NAME[c])])
     jsonld = (page, page_head.breadcrumbs(site, [("Texas law", url)]))
     return _code_shell_page(shell, title=title, description=description, url=url, jsonld=jsonld, body=body,
                             view="page:laws", aria="Texas law", site=site)

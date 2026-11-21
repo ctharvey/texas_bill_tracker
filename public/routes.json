@@ -87,8 +87,8 @@
   },
   {
    "view": "statute",
-   "path": "/law/<CODE>/<section or chapter>",
-   "match": "^/law/[A-Z]{2}/[0-9]+[A-Z]?(\\.[0-9]+[A-Z]?)*$",
+   "path": "/law/<CODE>/<section or chapter>, /law/CN/<article>/<section>",
+   "match": "^/law/(?:[A-Z]{2}/[0-9]+[A-Z]?(\\.[0-9]+[A-Z]?)*|CN/[0-9]{1,2}/[0-9]+[A-Za-z]?(-[A-Za-z0-9]+)*)$",
    "indexable": true
   },
   {

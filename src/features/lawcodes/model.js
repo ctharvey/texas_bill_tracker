@@ -4,6 +4,7 @@
 import {LAW_CODE_NAMES, chapterOf} from '../statutes/model.js';
 
 const CHAPTER = /^\d+[A-Z]?$/;  // "491.v2" (a second version, #21) is left out.
+const ARTICLE = /^[1-9]\d?$/;
 const CHAPTER_PREFIX = /^(?:CHAPTER|ARTICLE|SUBCHAPTER)\s+[0-9A-Za-z.-]+?\.\s+/i;
 
 export const validLawIndex = x => x?.format === 'texas-bill-law-v1' && x.codes && typeof x.codes === 'object' && !Array.isArray(x.codes);
@@ -28,7 +29,8 @@ export function lawCodeList(index) {
 export function codeChapters(index, code) {
   const headings = validLawIndex(index) ? index.codes[code]?.headings : null;
   if (!headings || typeof headings !== 'object') return [];
-  return Object.entries(headings).filter(([c, h]) => CHAPTER.test(c) && typeof h === 'string')
+  const ok = code === 'CN' ? ARTICLE : CHAPTER;  // The Constitution's articles are 1 to 17; "ap" and "pr" have no heading.
+  return Object.entries(headings).filter(([c, h]) => ok.test(c) && typeof h === 'string' && (code !== 'CN' || h.trim()))
     .map(([c, h]) => [c, chapterTitle(h)]).sort((a, b) => natural(a[0], b[0]));
 }
 
@@ -45,5 +47,7 @@ export function chapterBillCounts(statutes) {
   return new Map([...bills].filter(([, s]) => s.size).map(([k, s]) => [k, s.size]));
 }
 
-export const chapterCount = n => `${n} chapter${n === 1 ? '' : 's'}`;
+export const chapterCount = (n, word = 'chapter') => `${n} ${word}${n === 1 ? '' : 's'}`;
+// "Texas Constitution" already carries its country; the codes are "Texas Penal Code".
+export const codeTitle = name => /^Texas /.test(name) ? name : `Texas ${name}`;
 export const billsChange = n => `${n} bill${n === 1 ? '' : 's'} change${n === 1 ? 's' : ''} it`;

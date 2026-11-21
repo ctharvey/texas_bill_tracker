@@ -8,7 +8,7 @@ from pathlib import Path
 
 SHELL_PATH = Path('/var/www/html/texas-bill-atlas/current/shell.html')
 MARKERS = ('head', 'heading', 'content')
-VIEW = re.compile(r'bill:[A-Z]{2,3}[1-9][0-9]{0,4}|(?:law|chapter):[A-Za-z0-9 .]+|member:A[0-9]{3,5}'
+VIEW = re.compile(r'bill:[A-Z]{2,3}[1-9][0-9]{0,4}|(?:law|chapter):[A-Za-z0-9 .-]+|member:A[0-9]{3,5}'
                   r'|agency:[a-z0-9][a-z0-9-]{0,40}|topic:[a-z0-9][a-z0-9-]{0,79}|about:(?:method|saving|data)'
                   r'|page:(?:home|today|laws)|code:[A-Z]{2}')
 SCRIPT = re.compile(r'<script\b[^>]*>', re.IGNORECASE)

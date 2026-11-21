@@ -19,7 +19,7 @@ export const ROUTES = [
   // Views with a key in the path; `pattern` documents the shape and `match` is the server's test for the canonical
   // form the app writes (prefs.js parses more leniently).
   {view: 'bill', pattern: '/bill/<ID>', match: '^/bill/(HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9][0-9]{0,4}$', indexable: true, description: 'A Texas bill in the 90th Legislature: its official history, text, the laws it changes and the agencies it affects.'},
-  {view: 'statute', pattern: '/law/<CODE>/<section or chapter>', match: '^/law/[A-Z]{2}/[0-9]+[A-Z]?(\\.[0-9]+[A-Z]?)*$', indexable: true, description: 'A part of Texas law and the bills in the 90th Legislature that would change it.'},
+  {view: 'statute', pattern: '/law/<CODE>/<section or chapter>, /law/CN/<article>/<section>', match: '^/law/(?:[A-Z]{2}/[0-9]+[A-Z]?(\\.[0-9]+[A-Z]?)*|CN/[0-9]{1,2}/[0-9]+[A-Za-z]?(-[A-Za-z0-9]+)*)$', indexable: true, description: 'A part of Texas law and the bills in the 90th Legislature that would change it.'},
   {view: 'lawcode', pattern: '/law/<CODE>', match: '^/law/[A-Z]{2}$', indexable: true, description: 'Every chapter of a Texas code, with the chapters bills in the 90th Legislature would change.'},
   {view: 'agency', pattern: '/agency/<id>', match: '^/agency/[a-z0-9][a-z0-9-]{0,40}$', indexable: true, description: 'A Texas state agency and the bills in the 90th Legislature that could affect it.'},
   {view: 'topic', pattern: '/topic/<slug>', match: '^/topic/[a-z0-9][a-z0-9-]{0,79}$', indexable: true, description: 'A policy topic and the Texas bills in the 90th Legislature about it.'},

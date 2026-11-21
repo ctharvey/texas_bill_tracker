@@ -81,7 +81,7 @@ test('a bill that starts changing a followed law counts as new from its first-se
 });
 
 test('only section keys of known codes are follows, so a search like "PM 2.5" stays a text search', () => {
-  assert.equal(LAW_CODES.size, 27);
+  assert.equal(LAW_CODES.size, 28);  // The 27 codes and the Texas Constitution (#20).
   for (const q of ['PM 2.5', 'CO 2.0', 'HB 1.5']) assert.ok(!isLawFollowQuery(q), q);
   const smog = bill('SB4', 'Relating to PM 2.5 emissions.', '2026-11-10');
   state.bills = [smog];
@@ -94,7 +94,8 @@ test('the code names match the build script, and an unknown code still labels', 
   const block = /CODE_ABBR = \{([\s\S]*?)\n\}/.exec(py);
   assert.ok(block, 'CODE_ABBR in build_feeds.py');
   const pyNames = Object.fromEntries([...block[1].matchAll(/"([^"]+)":\s*"([A-Z]{2})"/g)].map(m => [m[2], m[1]]));
-  assert.deepEqual(pyNames, LAW_CODE_NAMES);
+  // The parser's 27 codes, plus the Texas Constitution, which has pages but its own clause wording (#20).
+  assert.deepEqual({...pyNames, CN: 'Texas Constitution'}, LAW_CODE_NAMES);
   assert.equal(statuteLabel('PE 46.06'), 'Penal Code § 46.06');
   assert.equal(statuteLabel('CR 42.12'), 'Code of Criminal Procedure Art. 42.12');
 });

@@ -27,6 +27,13 @@ export const VIEWS = ['home', 'all', 'watchlist', 'following', 'today', 'local',
 const LAW_CODE = /^[A-Z]{2}$/;
 const LAW_SECTION = /^\d+[A-Z]?(?:\.\d+[A-Z]?)+$/;  // The statute index's section numbers (build_feeds.SECTION_NUM).
 const LAW_CHAPTER = /^\d+[A-Z]?$/;  // A chapter: a section number before its first dot ("46", "12A").
+// The Constitution (CN): chapters are articles ("8"), sections are "<article>.<section>" ("8.1-b", "1.3a") and keep
+// the official case; every other code is upper case.
+const CN_CHAPTER = /^[1-9]\d?$/;
+const CN_SECTION = /^[1-9]\d?\.\d+[A-Za-z]?(?:-[A-Za-z0-9]+)*$/;
+const validSection = (law, sec) => law === 'CN' ? CN_SECTION.test(sec) : LAW_SECTION.test(sec);
+const validChapter = (law, ch) => law === 'CN' ? CN_CHAPTER.test(ch) : LAW_CHAPTER.test(ch);
+const lawCase = (law, sec) => law === 'CN' ? sec : sec.toUpperCase();
 export const MAX_LIST = 500;
 const BILL_ID = /^(HB|SB|HJR|SJR|HCR|SCR|HR|SR)[1-9]\d{0,4}$/;
 const SYNC_KEY = /^[A-Za-z0-9_-]{22}$/;
@@ -77,16 +84,16 @@ export function parseHash(hash) {
   const scope = view === 'all' && SEARCH_SCOPES.includes(params.get('scope')) ? params.get('scope') : null;
   const member = String(params.get('code') || '').trim().toUpperCase();
   const agency = String(params.get('id') || '').trim().toLowerCase(), topic = String(params.get('slug') || '').trim().toLowerCase();
-  const law = String(params.get('law') || '').toUpperCase(), sec = String(params.get('sec') || '').toUpperCase();
+  const law = String(params.get('law') || '').toUpperCase(), sec = lawCase(law, String(params.get('sec') || ''));
   const ch = String(params.get('ch') || '').toUpperCase();
   // A whole chapter (`#chapter?law=PE&ch=46`) is the statute view with a chapter key ("PE 46").
-  const chapter = view === 'chapter' && LAW_CODE.test(law) && LAW_CHAPTER.test(ch) && ch.length <= 8 ? `${law} ${ch}` : null;
+  const chapter = view === 'chapter' && LAW_CODE.test(law) && validChapter(law, ch) && ch.length <= 8 ? `${law} ${ch}` : null;
   // A bare address is the dashboard; an unknown view (or `#?query=` and the like) is the explorer.
   return {view: raw === '' ? 'home' : view === 'chapter' ? 'statute' : VIEWS.includes(view) ? view : 'all', filters, hasFilters: Object.keys(filters).length > 0, scope,
     list: list && list.length ? list : null, bill: isBillId(bill) ? bill : null, sync: SYNC_KEY.test(sync) ? sync : null,
     member: view === 'member' && MEMBER_CODE.test(member) ? member : null,
     agency: view === 'agency' && AGENCY_ID.test(agency) ? agency : null, topic: view === 'topic' && TOPIC_SLUG.test(topic) ? topic : null,
-    statute: chapter || (view === 'statute' && LAW_CODE.test(law) && LAW_SECTION.test(sec) && sec.length <= 16 ? `${law} ${sec}` : null),
+    statute: chapter || (view === 'statute' && LAW_CODE.test(law) && validSection(law, sec) && sec.length <= 16 ? `${law} ${sec}` : null),
     lawCode: view === 'lawcode' && LAW_CODE.test(law) ? law : null};
 }
 
@@ -121,9 +128,9 @@ export function buildHash(view, filters, {list = null, bill = null, sync = null,
   if (view === 'topic' && TOPIC_SLUG.test(topic || '')) parts.push(`slug=${topic}`);
   if (view === 'lawcode' && LAW_CODE.test(lawCode || '')) parts.push(`law=${lawCode}`);
   const [law, sec] = String(statute || '').split(' ');
-  const chapter = view === 'statute' && LAW_CODE.test(law || '') && LAW_CHAPTER.test(sec || '') && sec.length <= 8;
+  const chapter = view === 'statute' && LAW_CODE.test(law || '') && validChapter(law, sec || '') && sec.length <= 8;
   if (chapter) parts.push(`law=${law}`, `ch=${sec}`);
-  else if (view === 'statute' && LAW_CODE.test(law || '') && LAW_SECTION.test(sec || '')) parts.push(`law=${law}`, `sec=${sec}`);
+  else if (view === 'statute' && LAW_CODE.test(law || '') && validSection(law, sec || '')) parts.push(`law=${law}`, `sec=${sec}`);
   parts.push(...contextParts(view, {list, bill, sync}));
   return `#${chapter ? 'chapter' : VIEWS.includes(view) ? view : 'all'}${parts.length ? `?${parts.join('&')}` : ''}`;
 }
@@ -134,6 +141,7 @@ export function buildHash(view, filters, {list = null, bill = null, sync = null,
 const BILL_PATH = /^\/bill\/([A-Za-z]{2,3}\d{1,5})\/?$/;
 const LAW_PATH = /^\/law\/([A-Za-z]{2})\/(\d+[A-Za-z]?(?:\.\d+[A-Za-z]?)+)\/?$/;
 const CHAPTER_PATH = /^\/law\/([A-Za-z]{2})\/(\d+[A-Za-z]?)\/?$/;
+const CN_PATH = /^\/law\/[Cc][Nn]\/(\d{1,2})\/(\d+[A-Za-z]?(?:-[A-Za-z0-9]+)*)\/?$/;  // /law/CN/<article>/<section>: "/law/CN/8/1-b"
 const MEMBER_PATH = /^\/member\/([A-Za-z]\d{3,5})(?:\/[^/]*)?\/?$/;  // The slug is for reading only; the code decides.
 const AGENCY_PATH = /^\/agency\/([A-Za-z0-9][A-Za-z0-9-]{0,40})\/?$/;
 const TOPIC_PATH = /^\/topic\/([A-Za-z0-9][A-Za-z0-9-]{0,79})\/?$/;
@@ -149,7 +157,7 @@ function contextFrom(hash) {
 // Whether a same-site path is one of the app's own views (opened in place), not a file such as /live/feeds/HB1.xml.
 export function isAppPath(pathname) {
   const path = String(pathname || '');
-  return Boolean(routeForPath(path)) || [BILL_PATH, LAW_PATH, CHAPTER_PATH, CODE_PATH, MEMBER_PATH, AGENCY_PATH, TOPIC_PATH].some(re => re.test(path));
+  return Boolean(routeForPath(path)) || [BILL_PATH, LAW_PATH, CN_PATH, CHAPTER_PATH, CODE_PATH, MEMBER_PATH, AGENCY_PATH, TOPIC_PATH].some(re => re.test(path));
 }
 
 export function parseLocation(pathname, hash, search = '') {
@@ -161,7 +169,8 @@ export function parseLocation(pathname, hash, search = '') {
   };
   const keyed = (p, ok) => ok(p) ? p : parseHash('#all');
   let m = LAW_PATH.exec(path);
-  if (m) return keyed(at('statute', [`law=${m[1].toUpperCase()}`, `sec=${m[2].toUpperCase()}`]), p => p.statute);
+  if (m) return keyed(at('statute', [`law=${m[1].toUpperCase()}`, `sec=${lawCase(m[1].toUpperCase(), m[2])}`]), p => p.statute);
+  if ((m = CN_PATH.exec(path))) return keyed(at('statute', ['law=CN', `sec=${m[1]}.${m[2]}`]), p => p.statute);
   if ((m = CHAPTER_PATH.exec(path))) return keyed(at('chapter', [`law=${m[1].toUpperCase()}`, `ch=${m[2].toUpperCase()}`]), p => p.statute);
   if ((m = BILL_PATH.exec(path))) return keyed(at('bill', [`id=${encodeURIComponent(m[1])}`]), p => p.bill);
   if ((m = MEMBER_PATH.exec(path))) return keyed(at('member', [`code=${m[1].toUpperCase()}`]), p => p.member);
@@ -202,13 +211,14 @@ export function syncLinkUrl(origin, key) {
 // The address of a law section's page, or null for anything that is not a statute key.
 export function lawPath(statute) {
   const [law, sec] = String(statute || '').split(' ');
-  return LAW_CODE.test(law || '') && LAW_SECTION.test(sec || '') && sec.length <= 16 ? `/law/${law}/${sec}` : null;
+  if (!(LAW_CODE.test(law || '') && validSection(law, sec || '') && sec.length <= 16)) return null;
+  return law === 'CN' ? `/law/CN/${sec.replace('.', '/')}` : `/law/${law}/${sec}`;
 }
 
 // The address of a whole chapter's view (/law/PE/46), or null.
 export function chapterPath(statute) {
   const [law, ch] = String(statute || '').split(' ');
-  return LAW_CODE.test(law || '') && LAW_CHAPTER.test(ch || '') && ch.length <= 8 ? `/law/${law}/${ch}` : null;
+  return LAW_CODE.test(law || '') && validChapter(law, ch || '') && ch.length <= 8 ? `/law/${law}/${ch}` : null;
 }
 
 // `slug` (members only) is the member's name, made readable; a member address without one still opens.

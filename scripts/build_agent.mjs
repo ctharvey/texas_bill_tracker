@@ -96,8 +96,10 @@ export function loadLaw(liveDir, ids) {
     const sections = new Map();
     for (const [chapter, entry] of Object.entries(index?.format === 'texas-bill-law-v1' ? index.chapters || {} : {})) {
       if (!LAW_CHAPTER.test(chapter) || entry?.file !== `${code}/${chapter}.md`) continue;
-      for (const [section, heading] of entry.sections || []) {
-        if (!sections.has(section)) sections.set(section, {chapter, file: entry.file, sha256: entry.sha256, heading});
+      for (const [local, heading] of entry.sections || []) {
+        // The Constitution numbers sections within each article, so its keys carry the article ("CN 8.1-b").
+        const section = code === 'CN' ? `${chapter}.${local}` : local;
+        if (!sections.has(section)) sections.set(section, {chapter, local, file: entry.file, sha256: entry.sha256, heading});
       }
     }
     chapterOf.set(code, sections);
@@ -111,14 +113,14 @@ export function loadLaw(liveDir, ids) {
       const found = action === 'n' || action === 'a' ? null : codeIndex(code).get(section);
       const item = {code, code_name: law.codes[code]?.name || code, section, action: LAW_ACTION[action] || String(action),
         heading: found?.heading || null, url: found ? `${SITE}live/law/${found.file}` : null,
-        official: found ? `https://statutes.capitol.texas.gov/Docs/${code}/htm/${code}.${found.chapter}.htm` : null,
+        official: found ? `https://statutes.capitol.texas.gov/Docs/${code}/htm/${code}.${found.chapter}.htm${code === 'CN' ? `#${section}` : ''}` : null,
         copy_sha256: SHA256.test(found?.sha256 || '') ? found.sha256 : null,
-        copied_at: law.codes[code]?.copied_at || null, text: null, file: found?.file || null};
+        copied_at: law.codes[code]?.copied_at || null, text: null, file: found?.file || null, local: found?.local || null};
       if (!perBill.has(id)) perBill.set(id, []);
       perBill.get(id).push(item);
       if (found) {
         if (!needed.has(found.file)) needed.set(found.file, new Set());
-        needed.get(found.file).add(section);
+        needed.get(found.file).add(found.local);
       }
     }
   }
@@ -136,9 +138,10 @@ export function loadLaw(liveDir, ids) {
     let budget = LAW_PAGE_MAX;
     items.sort((a, b) => `${a.code} ${a.section}`.localeCompare(`${b.code} ${b.section}`, 'en', {numeric: true}));
     for (const item of items) {
-      const text = item.file ? texts.get(`${item.file} ${item.section}`) : null;
+      const text = item.file ? texts.get(`${item.file} ${item.local}`) : null;
       if (text && text.length <= LAW_INLINE_MAX && text.length <= budget) { item.text = text; budget -= text.length; }
       delete item.file;
+      delete item.local;
     }
   }
   return perBill;

@@ -2,7 +2,9 @@ import {parseParagraph} from '../billtext/model.js';
 
 // ---- Statutes: the sections of Texas law each bill changes (live/statutes, built by scripts/build_feeds.py) ----
 
-export const STATUTE_KEY = /^([A-Z]{2}) (\d+[A-Z]?(?:\.\d+[A-Z]?)+)$/;
+// A Constitution section is "CN <article>.<section>" ("CN 8.1-b", "CN 3.49-d-14"): the official case is kept
+// ("CN 1.3a"), and the section part may carry hyphenated sub-numbers. Every other code is upper case, dotted numbers.
+export const STATUTE_KEY = /^([A-Z]{2}) ((?<=^CN )[1-9]\d?\.\d+[A-Za-z]?(?:-[A-Za-z0-9]+)*|(?<!^CN )\d+[A-Z]?(?:\.\d+[A-Z]?)+)$/;
 export const STATUTE_KINDS = {m: 'amends', n: 'adds a new section', r: 'repeals'};
 
 // Following a law section is a saved search whose only filter is the section key as the query ({query: "PE 46.06"}),
@@ -16,10 +18,13 @@ export const LAW_CODE_NAMES = {AG: 'Agriculture Code', AL: 'Alcoholic Beverage C
     GV: 'Government Code', HR: 'Human Resources Code', HS: 'Health and Safety Code', IN: 'Insurance Code',
     LA: 'Labor Code', LG: 'Local Government Code', NR: 'Natural Resources Code', OC: 'Occupations Code',
     PE: 'Penal Code', PR: 'Property Code', PW: 'Parks and Wildlife Code', SD: 'Special District Local Laws Code',
-    TN: 'Transportation Code', TX: 'Tax Code', UT: 'Utilities Code', WA: 'Water Code'};
+    TN: 'Transportation Code', TX: 'Tax Code', UT: 'Utilities Code', WA: 'Water Code', CN: 'Texas Constitution'};
 export const LAW_CODES = new Set(Object.keys(LAW_CODE_NAMES));
 // A chapter is "<CODE> <chapter>" ("PE 46", "ED 12A"); a section's chapter is its number before the first dot.
-export const CHAPTER_KEY = /^([A-Z]{2}) (\d+[A-Z]?)$/;
+// The Constitution's chapters are its articles ("CN 8", 1 to 17).
+export const CHAPTER_KEY = /^([A-Z]{2}) ((?<=^CN )[1-9]\d?|(?<!^CN )\d+[A-Z]?)$/;
+// The word for a code's chapters: the Constitution has articles.
+export const chapterWord = code => code === 'CN' ? 'Article' : 'Chapter';
 export const isChapterKey = key => typeof key === 'string' && CHAPTER_KEY.test(key) && LAW_CODES.has(key.slice(0, 2)) && key.length <= 12;
 export const chapterOf = key => {
     const m = STATUTE_KEY.exec(key || '');
@@ -56,17 +61,20 @@ export const lawFollowBills = (index, key) => [...new Set(lawEntries(index, key)
 export const statuteFile = key => STATUTE_KEY.test(key) && key.length <= 20 ? `${key.replace(' ', '-')}.json` : null;
 export function statuteLabel(key, codes) {
     const c = isChapterKey(key) ? CHAPTER_KEY.exec(key) : null;
-    if (c) return `${codes?.[c[1]] || LAW_CODE_NAMES[c[1]]} chapter ${c[2]}`;
+    if (c) return c[1] === 'CN' ? `Texas Constitution, Article ${c[2]}` : `${codes?.[c[1]] || LAW_CODE_NAMES[c[1]]} chapter ${c[2]}`;
     const m = STATUTE_KEY.exec(key || '');
     if (!m) return String(key || '');
+    if (m[1] === 'CN') { const [article, ...rest] = m[2].split('.'); return `Tex. Const. art. ${article}, § ${rest.join('.')}`; }
     return `${codes?.[m[1]] || LAW_CODE_NAMES[m[1]] || m[1]} ${m[1] === 'CR' ? 'Art.' : '§'} ${m[2]}`;
 }
 // Checked against statutes.capitol.texas.gov for every code the index uses.
 export function officialStatuteUrl(key) {
     const c = isChapterKey(key) ? CHAPTER_KEY.exec(key) : null;
+    if (c && c[1] === 'CN') return `https://statutes.capitol.texas.gov/Docs/CN/htm/CN.${c[2]}.htm`;
     if (c) return `https://statutes.capitol.texas.gov/?tab=1&code=${c[1]}&chapter=${c[1]}.${c[2]}`;
     const m = STATUTE_KEY.exec(key || '');
     if (!m) return '';
+    if (m[1] === 'CN') return `https://statutes.capitol.texas.gov/Docs/CN/htm/CN.${m[2].split('.')[0]}.htm#${m[2]}`;
     return `https://statutes.capitol.texas.gov/?tab=1&code=${m[1]}&chapter=${m[1]}.${m[2].split('.')[0]}&artSec=${m[2]}`;
 }
 export const validStatuteIndex = x => x?.format === 'texas-bill-statutes-v1' && isMap(x.sections) && isMap(x.bills) && isMap(x.codes);
@@ -105,8 +113,20 @@ function codeFor(name, codes) {
 }
 // "48.160", "§ 48.160", "Penal Code 46.06", "ED 48.160", "CCP art. 46.04", "Tex. Gov't Code § 552.001" ->
 // {code (or null for any code), sec}.
+// The Constitution named by its code or title: "CN 8.1-b", "Texas Constitution 8.1-b", "Tex. Const. art. 8, § 1-b".
+const CN_NAME = '(?:cn|texas constitution|tex\\.? const(?:itution)?\\.?)';
+const CN_SECTION = new RegExp(`^${CN_NAME}[\\s,]*(?:art(?:icle)?\\.?\\s*)?(\\d{1,2})(?:\\s*,\\s*(?:§+|sec(?:tion)?\\.?)\\s*|\\.|\\s+)(\\d+[a-z]?(?:-[a-z0-9]+)*)$`, 'i');
+const CN_ARTICLE = new RegExp(`^${CN_NAME}[\\s,]*(?:art(?:icle)?\\.?\\s*)?(\\d{1,2})$`, 'i');
+// What a typed key is, canonical: other codes in upper case, the Constitution with its code in upper case and the
+// section part as typed ("cn 8.1-b" -> "CN 8.1-b"). Not checked: isLawFollowQuery does that.
+export function canonicalLawKey(text) {
+    const q = String(text || '').trim().replace(/\s+/g, ' ');
+    return /^cn /i.test(q) ? `CN ${q.slice(3)}` : q.toUpperCase();
+}
 export function parseStatuteQuery(query, codes) {
     const text = String(query || '').trim().replace(/\s+/g, ' ');
+    const cn = CN_SECTION.exec(text);
+    if (cn) return {code: 'CN', sec: `${cn[1]}.${cn[2]}`};
     const m = /^(.*?)[\s,]*(?:§+\s*|sec(?:tion)?\.?\s+|art(?:icle)?\.?\s+)?(\d+[a-z]?(?:\.\d+[a-z]?)+)$/i.exec(text);
     if (!m) return null;
     const sec = m[2].toUpperCase(), name = m[1].trim().replace(/[,§]+$/, '').trim();
@@ -116,6 +136,8 @@ export function parseStatuteQuery(query, codes) {
 }
 // A chapter named with its code: "Penal Code chapter 46", "Tex. Gov't Code ch. 552", "Penal Code 46" -> "PE 46"; else null.
 export function parseChapterQuery(query, codes) {
+    const cn = CN_ARTICLE.exec(String(query || '').trim().replace(/\s+/g, ' '));
+    if (cn) return isChapterKey(`CN ${cn[1]}`) ? `CN ${cn[1]}` : null;
     const m = /^(.*?)[\s,]*(ch(?:ap(?:ter)?)?\.?\s*)?(\d+[a-z]?)$/i.exec(String(query || '').trim().replace(/\s+/g, ' '));
     const name = m ? m[1].trim().replace(/,$/, '') : '';
     // Without "chapter" only a full code name counts ("Penal Code 46"), so "tax 2025" stays a word search.
@@ -128,7 +150,7 @@ export function statuteKeysFor(index, parsed) {
     if (!parsed || !index?.sections) return [];
     return Object.keys(index.sections).filter(k => {
         const m = STATUTE_KEY.exec(k);
-        return m && m[2] === parsed.sec && (!parsed.code || parsed.code === m[1]);
+        return m && m[2].toUpperCase() === parsed.sec.toUpperCase() && (!parsed.code || parsed.code === m[1]);
     });
 }
 
@@ -146,7 +168,8 @@ export function lawParagraph(line) {
     return {current: join('del'), proposed: join('ins')};
 }
 
-const SECTION_HEAD = /^((?:Sec|Art)\. \d+[A-Za-z]?(?:\.\d+[A-Za-z]?)+\.\s+[^a-z]*?\.)(?:\s+|$)/;  // CR has "Art. 42.04a."
+// CR has "Art. 42.04a."; the Constitution's sections are numbered within an article ("Sec. 1-b.", "Sec. 3a.").
+const SECTION_HEAD = /^((?:Sec|Art)\. (?:\d+[A-Za-z]?(?:\.\d+[A-Za-z]?)+|\d+[A-Za-z]?(?:-[A-Za-z0-9]+)*)\.\s+[^a-z]*?\.)(?:\s+|$)/;
 const SUB_LABEL = /^\(([a-z]{1,3}(?:-\d+[a-z]?)?)\)\s/;
 
 // Paragraphs of one bill's entry -> ordered [{label, text}] for one version. "head" is "Sec. N. HEADING."; "" is
@@ -236,7 +259,8 @@ export function compareLaw(left, right) {
 const SOURCE_NOTE = /^(?:Acts \d{4},|Amended by:|(?:Added|Amended|Redesignated|Renumbered|Transferred|Reenacted)(?: and \w+)? (?:by|from) |Subsecs?\. \S+(?: .{0,60})? (?:added|amended) by )/;
 // One section of a chapter file in live/law (Markdown, "## Sec. N. HEADING. text" blocks) -> units like lawUnits,
 // or null when the file has no such section. The first block wins when the file carries several versions. The number
-// is matched without case: keys are upper case, the copy has "Art. 42.04a.".
+// is matched without case: keys are upper case, the copy has "Art. 42.04a.". For the Constitution `number` is the
+// section within its article ("1-b").
 export function lawCopyUnits(markdown, number) {
     const want = new RegExp(`^(?:Sec|Art)\\. ${number.replace(/\./g, '\\.')}\\.\\s`, 'i');
     const block = String(markdown).split(/^## /m).slice(1).find(b => want.test(b));
@@ -253,7 +277,7 @@ export function lawCopyUnits(markdown, number) {
 // one "## Sec. 46.02. UNLAWFUL CARRYING WEAPONS." block per section.
 export function lawChapterOutline(markdown) {
     const text = String(markdown);
-    const title = /^# [^\n]*?CHAPTER \S+?\.?\s+([^\n]+)$/m.exec(text);
+    const title = /^# [^\n]*?(?:CHAPTER|ARTICLE) \S+?\.?\s+([^\n]+)$/m.exec(text);
     const sections = [];
     // A heading is upper case and can run into the text on the same line ("DEFINITIONS. In this chapter:").
     const headingOf = line => (/^([^a-z]+)\.(?:\s|$)/.exec(line)?.[1] ?? line).replace(/\.$/, '').trim();

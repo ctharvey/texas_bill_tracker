@@ -20,6 +20,8 @@ from law_context import LawCopy
 
 ROBOTS = "noindex, follow"
 PATH = re.compile(r"/law/([A-Za-z]{2})/([0-9]+[A-Za-z]?(?:\.[0-9]+[A-Za-z]?)*)/?")
+# The Constitution (#20): /law/CN/<article>/<section> ("/law/CN/8/1-b"), or the key's own form "/law/CN/8.1-b".
+CN_PATH = re.compile(r"/law/([Cc][Nn])/(" + build_feeds.CN_ARTICLE + r")[./](" + build_feeds.CN_SECTION + r")/?")
 KEY_MAX = 16  # The app's longest section key (src/prefs.js).
 HTML = "text/html; charset=utf-8"
 PAGE_HEADERS = {"Content-Type": HTML, "Cache-Control": "no-cache", "X-Robots-Tag": ROBOTS}
@@ -73,7 +75,8 @@ def not_found_page(site: str = build_feeds.SITE) -> str:
 <body>
 <h1>Not in our copy of Texas law</h1>
 <p>No section or chapter has this address in Texas Bill Atlas's copy of the Texas statutes. Section addresses look like
-<a href="{a(site)}law/PE/46.06">/law/PE/46.06</a> and chapter addresses like <a href="{a(site)}law/PE/46">/law/PE/46</a>.</p>
+<a href="{a(site)}law/PE/46.06">/law/PE/46.06</a> and chapter addresses like <a href="{a(site)}law/PE/46">/law/PE/46</a>.
+The Texas Constitution's sections are numbered within each article: <a href="{a(site)}law/CN/8/1-b">/law/CN/8/1-b</a>.</p>
 <p><a href="{a(site)}explorer">Search bills and law in Texas Bill Atlas</a></p>
 </body>
 </html>
@@ -90,9 +93,13 @@ class LawPages:
 
     def render(self, path: str) -> tuple[int, dict, bytes]:
         """(status, headers, body) for a /law/... path: 200 page, 301 to the canonical form, or 404."""
-        match = PATH.fullmatch(path)
-        code, key = (match[1].upper(), match[2].upper()) if match else ("", "")
-        if not match or code not in build_feeds.CODE_NAME or len(key) > KEY_MAX:
+        cn = CN_PATH.fullmatch(path)
+        match = cn or PATH.fullmatch(path)
+        if cn:  # The Constitution's sections keep their case until the copy names the stored one.
+            code, key = "CN", f"{cn[2]}.{cn[3]}"
+        else:
+            code, key = (match[1].upper(), match[2].upper()) if match else ("", "")
+        if not match or code not in build_feeds.LAW_NAME or len(key) > KEY_MAX:
             return self.not_found()
         law, shell = self.law.get(), pages.load_shell(self.shell_path)
         if law is None or shell is None:
@@ -100,23 +107,28 @@ class LawPages:
         sections, groups = (self.statutes.get() if self.statutes else None) or ({}, {})
         try:
             # LawCopy fills its code index cache lazily; two threads loading one code at once only repeat a read.
-            page = (self.section(law, shell, sections, code, key) if "." in key
-                    else self.chapter(law, shell, groups, code, key))
+            found = (self.section(law, shell, sections, code, key) if "." in key
+                     else self.chapter(law, shell, groups, code, key))
         except (OSError, ValueError, KeyError) as error:
             raise Unavailable(str(error)) from None
-        if page is None:
+        if found is None:
             return self.not_found()
-        canonical = f"/law/{code}/{key}"
+        page, key = found
+        canonical = "/" + build_feeds.law_path(code, key)
         if path != canonical:
             return 301, {"Location": canonical, "Content-Type": HTML, "Cache-Control": "no-cache"}, b""
         return 200, dict(PAGE_HEADERS), page.encode("utf-8")
 
-    def section(self, law: LawCopy, shell: str, sections: dict, code: str, number: str) -> str | None:
+    def section(self, law: LawCopy, shell: str, sections: dict, code: str, number: str) -> tuple[str, str] | None:
+        """(page, the key's canonical number) or None. Keys are upper case; a Constitution key takes the copy's case
+        ("CN 1.3a"), so another spelling redirects to it."""
         found = law.section_chapter(code, number)
         if not found:
             return None
         chapter, entry = found
-        stored = law.section_id(entry, number)  # "42.04a" in the copy for the key "42.04A"
+        stored = law.section_id(entry, law.local_section(code, number))  # "42.04a" in the copy for the key "42.04A"
+        if code == "CN":
+            number = f"{chapter}.{stored}"
         heading = next((s[1] for s in entry.get("sections", []) if s[0] == stored), "")
         current = (heading, law.section_texts(code, chapter).get(stored) or "", f"live/law/{code}/{chapter}.md")
         index_entry = sections.get(f"{code} {number}")
@@ -124,9 +136,10 @@ class LawPages:
         # The chapter's page always exists now (static or on request), so the section always links it.
         chapters = {f"{code} {own_chapter}"} if law.chapter(code, own_chapter) else set()
         return build_feeds.law_page(f"{code} {number}", index_entry if isinstance(index_entry, dict) else {},
-                                    build_feeds.CODE_NAME[code], current, self.site, shell, chapters, robots=ROBOTS)
+                                    build_feeds.LAW_NAME[code], current, self.site, shell, chapters,
+                                    robots=ROBOTS), number
 
-    def chapter(self, law: LawCopy, shell: str, groups: dict, code: str, number: str) -> str | None:
+    def chapter(self, law: LawCopy, shell: str, groups: dict, code: str, number: str) -> tuple[str, str] | None:
         found = law.chapter(code, number)
         if not found:
             return None
@@ -134,7 +147,7 @@ class LawPages:
         g = groups.get(f"{code} {number}") or {"h": "", "whole": [], "since": {}, "sections": {}}
         heading = g["h"] or build_feeds.chapter_title(entry.get("heading") or "")
         return build_feeds.law_chapter_page(f"{code} {number}", g, heading, self.site, shell, robots=ROBOTS,
-                                            all_sections=entry.get("sections") or [])
+                                            all_sections=entry.get("sections") or []), number
 
     def not_found(self) -> tuple[int, dict, bytes]:
         return 404, {"Content-Type": HTML, "Cache-Control": "no-cache", "X-Robots-Tag": "noindex"}, \

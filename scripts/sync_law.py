@@ -236,7 +236,7 @@ def load_json(path: Path):
 # search/index.json = {format, generated_at, prefixes: {prefix: count}}. Built from the published code indexes.
 SEARCH_FORMAT = 'texas-bill-law-search-v1'
 SEARCH_CODES = ('AG', 'AL', 'BC', 'BO', 'CP', 'CR', 'ED', 'EL', 'ES', 'FA', 'FI', 'GV', 'HS', 'HR', 'IN', 'LA', 'LG', 'NR',
-                'OC', 'PW', 'PE', 'PR', 'SD', 'TX', 'TN', 'UT', 'WA')
+                'OC', 'PW', 'PE', 'PR', 'SD', 'TX', 'TN', 'UT', 'WA', 'CN')
 SEARCH_STOP = frozenset('of and the for to in by or a an on with under from as at certain other'.split())
 SEARCH_WORD = re.compile(r'[a-z0-9]+')
 SEARCH_FILE = re.compile(r'^[a-z0-9]{3}\.json$')
@@ -264,8 +264,10 @@ def search_entries(out: Path) -> list[list[str]]:
             for section in item.get('sections') or []:
                 if isinstance(section, list) and len(section) == 2 and isinstance(section[0], str):
                     name = SECTION_PREFIX.sub('', str(section[1]).strip()).strip().rstrip('.').strip()
+                    # The Constitution numbers sections within each article and keeps their case: "CN 8.1-b".
+                    key = f'CN {chapter}.{section[0]}' if code == 'CN' else f'{code} {section[0].upper()}'
                     if name:
-                        entries.append([f'{code} {section[0].upper()}', name])
+                        entries.append([key, name])
     return entries
 
 

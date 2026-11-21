@@ -55,12 +55,21 @@ class LawCopy:
         return next((s[0] for s in entry.get("sections", []) if isinstance(s, (list, tuple)) and s
                      and str(s[0]).upper() == want), None)
 
+    @staticmethod
+    def local_section(code: str, section: str) -> str:
+        """The section's id inside its chapter file: the key's number, except that the Constitution numbers sections
+        within each article, so "CN 8.1-b" is section "1-b" of article 8."""
+        return section.split(".", 1)[1] if code == "CN" and "." in section else section
+
     def section_chapter(self, code: str, section: str) -> tuple[str, dict] | None:
-        """(chapter id as stored, its index entry) for a section, matched without case; section_id gives its stored id."""
+        """(chapter id as stored, its index entry) for a section, matched without case; section_id gives its stored id
+        (pass it local_section). A Constitution section is looked for in its own article only: numbers repeat."""
         guess = section.split(".")[0]
         found = self.chapter(code, guess)
-        if found and self.section_id(found[1], section):
+        if found and self.section_id(found[1], self.local_section(code, section)):
             return found
+        if code == "CN":
+            return None
         for key, entry in self.code(code)["chapters"].items():
             if self.section_id(entry, section) and entry.get("file") == f"{code}/{key}.md":
                 return key, entry
@@ -130,7 +139,8 @@ def build(markdown: str, law_dir: Path) -> list[dict]:
         found = law.chapter(code, chapter) if chapter else law.section_chapter(code, number)
         if not found:
             continue
-        current = law.section_texts(code, found[0]).get(LawCopy.section_id(found[1], number) or number)
+        local = LawCopy.local_section(code, number)
+        current = law.section_texts(code, found[0]).get(LawCopy.section_id(found[1], local) or local)
         if not current:
             continue
         text, trimmed = _clip(current, SECTION_TEXT_MAX)

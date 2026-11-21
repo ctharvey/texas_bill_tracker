@@ -202,7 +202,7 @@ class SearchShardTests(unittest.TestCase):
         self.out = Path(self.tmp.name)
         write_code_index(self.out, "PE", {"46": ("CHAPTER 46. WEAPONS", [
             ("46.02", "Sec. 46.02. UNLAWFUL CARRYING WEAPONS."), ("46.06", "Sec. 46.06. UNLAWFUL TRANSFER OF FIREARMS.")])})
-        write_code_index(self.out, "CN", {"1": ("ARTICLE 1. BILL OF RIGHTS", [("1.01", "Sec. 1.01. WEAPONS RIGHTS.")])})
+        write_code_index(self.out, "CV", {"1": ("TITLE 1. CIVIL STATUTES", [("1.01", "Art. 1.01. WEAPONS RIGHTS.")])})
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -211,8 +211,8 @@ class SearchShardTests(unittest.TestCase):
         return json.loads((self.out / "search" / f"{prefix}.json").read_text("utf-8"))
 
     def test_tracked_codes_match_the_site_list(self):
-        self.assertEqual(set(sync_law.SEARCH_CODES), set(build_feeds.CODE_ABBR.values()))
-        self.assertEqual(len(sync_law.SEARCH_CODES), 27)
+        self.assertEqual(set(sync_law.SEARCH_CODES), set(build_feeds.LAW_NAME))  # The 27 codes and CN (#20).
+        self.assertEqual(len(sync_law.SEARCH_CODES), 28)
 
     def test_entry_is_in_each_word_prefix_shard_and_not_in_stop_word_shards(self):
         result = sync_law.write_search(self.out)
@@ -235,7 +235,7 @@ class SearchShardTests(unittest.TestCase):
         sync_law.write_search(self.out)
         everything = [e for p in (self.out / "search").glob("???.json") for e in json.loads(p.read_text("utf-8"))]
         self.assertTrue(everything and all(k.startswith("PE ") for k, _ in everything))
-        self.assertFalse(any(k.startswith("CN") for k, _ in everything))
+        self.assertFalse(any(k.startswith("CV") for k, _ in everything))
 
     def test_unchanged_shards_are_not_rewritten_and_a_vanished_prefix_is_removed(self):
         sync_law.write_search(self.out)

@@ -262,6 +262,8 @@ def fixture_address(path: Path, root: Path, site: str) -> str | None:
         return f"{site}today"
     if len(parts) == 1:
         return f"{site}bill/{parts[0]}"
+    if len(parts) == 3 and parts[0] == "law" and parts[1] == "CN" and "." in parts[2]:  # A Constitution section.
+        return f"{site}law/CN/{parts[2].replace('.', '/', 1)}"
     if len(parts) == 3 and parts[0] == "law":  # A section or a chapter: the gateway serves both.
         return f"{site}law/{parts[1]}/{parts[2]}"
     if rel == "law/index":
