@@ -22,12 +22,12 @@ const body = (rows, url, what) => `<p class="near-hint">${rows.length ? `${rows.
 
 export function agencyMarkup() {
   const id = state.agencyId, rows = id ? agencyBills(state.bills, id) : [];
-  if (!known(id) && !rows.length) return `${head('AGENCY', 'Agency not found')}<div class="info-callout callout-warn">No agency in this snapshot matches ${id ? `<strong>${esc(id)}</strong>` : 'this address'}. See the <a class="text-link" href="/agencies" data-view="agencies">agency index</a>.</div>`;
+  if (!known(id) && !rows.length) return `${head('AGENCY', 'Agency not found')}<div class="info-callout callout-warn" data-not-found>No agency in this snapshot matches ${id ? `<strong>${esc(id)}</strong>` : 'this address'}. See the <a class="text-link" href="/agencies" data-view="agencies">agency index</a>.</div>`;
   return `${head('AGENCY', agencyName(id))}<div class="info-callout">Links to an agency are possible effects, not confirmed legal obligations. They come from Luna’s full-text review where a bill has one (Luna is an AI model and can be wrong) and from caption rules otherwise. <a class="text-link" href="/about/method" data-view="method">How it works</a>.</div>${body(rows, buildUrl('all', {agency: id}), 'agency')}`;
 }
 
 export function topicMarkup() {
   const name = topicName(state.topicSlug);
-  if (!name) return `${head('TOPIC', 'Topic not found')}<div class="info-callout callout-warn">No policy topic matches ${state.topicSlug ? `<strong>${esc(state.topicSlug)}</strong>` : 'this address'}. Browse topics in the <a class="text-link" href="/explorer" data-view="all">Bill explorer</a>.</div>`;
+  if (!name) return `${head('TOPIC', 'Topic not found')}<div class="info-callout callout-warn" data-not-found>No policy topic matches ${state.topicSlug ? `<strong>${esc(state.topicSlug)}</strong>` : 'this address'}. Browse topics in the <a class="text-link" href="/explorer" data-view="all">Bill explorer</a>.</div>`;
   return `${head('TOPIC', name)}${body(topicBills(state.bills, name), buildUrl('all', {topic: name}), 'topic')}`;
 }

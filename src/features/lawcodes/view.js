@@ -56,7 +56,7 @@ export function lawsMarkup() {
 
 export function lawCodeMarkup() {
   const code = state.lawCode, name = LAW_CODE_NAMES[code];
-  if (!name) return `${head('TEXAS LAW', 'Code not found')}<div class="info-callout callout-warn">No Texas code this site follows matches ${code ? `<strong>${esc(code)}</strong>` : 'this address'}. See <a class="text-link" href="/law" data-view="laws">all Texas codes</a>.</div>`;
+  if (!name) return `${head('TEXAS LAW', 'Code not found')}<div class="info-callout callout-warn" data-not-found>No Texas code this site follows matches ${code ? `<strong>${esc(code)}</strong>` : 'this address'}. See <a class="text-link" href="/law" data-view="laws">all Texas codes</a>.</div>`;
   const title = esc(codeTitle(name)), wait = waiting(), kind = code === 'CN' ? 'TEXAS LAW' : 'TEXAS CODE';
   if (wait) return `${head(kind, title)}${wait}`;
   const chapters = codeChapters(state.lawCodes, code), n = billCounts();

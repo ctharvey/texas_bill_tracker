@@ -275,7 +275,7 @@ export function statuteMarkup(){
   // A title that repeats the page's h1 is shown only where that h1 is hidden (phones), and never read twice.
   const head=(title,sub='90th Legislature · every bill that changes it')=>{const same=title===esc(statuteLabel(key||'',state.statutes?.codes));
     return `<div class="section-head law-section-head"><div><div class="section-overline">TEXAS LAW</div>${same?`<div class="law-title-same" aria-hidden="true">${title}</div>`:`<h2>${title}</h2>`}</div><span class="subtitle">${sub}</span></div>`};
-  if(!key)return `${head('Section not found')}<div class="info-callout callout-warn">This address does not name a section of Texas law. Open one from a bill's "Laws this bill changes" list, or search the explorer for a section number such as 48.160.</div>`;
+  if(!key)return `${head('Section not found')}<div class="info-callout callout-warn" data-not-found>This address does not name a section of Texas law. Open one from a bill's "Laws this bill changes" list, or search the explorer for a section number such as 48.160.</div>`;
   // Following needs only the key, so the button is there while the index loads and when it failed.
   if(!state.statutes){const label=statuteLabel(key);return state.statutesFailed?`${head(esc(label))}${lawToolsMarkup(key,label,false)}<div class="info-callout callout-warn">The list of laws each bill changes is not available right now. Try again later.</div>`:`${head(esc(label))}${lawToolsMarkup(key,label,false)}<p class="near-hint">Loading…</p>`}
   const label=statuteLabel(key,state.statutes.codes),info=state.statutes.sections[key];

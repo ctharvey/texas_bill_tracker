@@ -127,11 +127,13 @@ function currentUrl(view=state.view){
 function writeMeta(url){
   if(holdHead(runtime.headPath??null,url))return;
   runtime.headPath=null;
-  const meta=pageMeta(state.view,url,Boolean(state.sharedList));
+  // A view that finds nothing for its address marks its message data-not-found (check_pages.py reads the same mark).
+  const missing=Boolean(document.querySelector('#dynamic-content [data-not-found]'));
+  const meta=pageMeta(state.view,url,Boolean(state.sharedList),missing);
   const own=runtime.pageHead?.(state.view)||{title:'Bill explorer',description:null};
   writeHead(document,{title:own.title,description:own.description||meta.description,canonical:meta.canonical,robots:meta.robots});
 }
-// A view's name arrived after it was drawn (the roster, the statute index).
+// A view's name, or whether it found anything, settled after it was drawn (the roster, Luna's agencies, the statute index).
 export const refreshHead=()=>writeMeta(currentUrl());
 
 // Opens a bill's page with a history entry, remembering where it was opened from (not when moving bill to bill).

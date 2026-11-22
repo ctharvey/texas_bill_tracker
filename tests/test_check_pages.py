@@ -210,5 +210,35 @@ class Fixtures(unittest.TestCase):
             self.assertNotIn('https://billatlas.org/bill/HB1\n', out.getvalue())  # Fixture mode prints failures only.
 
 
+class NotFound(unittest.TestCase):
+    """Issue #37: a soft 404 (200 with a data-not-found view) is never indexable and never its own canonical."""
+    MISSING = '<main><div class="info-callout callout-warn" data-not-found>No agency matches zzz.</div></main>'
+    ZZZ = 'https://billatlas.org/agency/zzz'
+
+    def test_an_indexable_not_found_page_fails(self):
+        failures = cp.inspect(page(canonical=self.ZZZ, body=self.MISSING), self.ZZZ)['failures']
+        self.assertEqual([f for f in failures if f.startswith('not-found')],
+                         ['not-found page is indexable', 'not-found page names itself as canonical'])
+
+    def test_noindex_with_a_self_canonical_still_fails(self):
+        failures = cp.inspect(page(canonical=self.ZZZ, robots='noindex', body=self.MISSING), self.ZZZ)['failures']
+        self.assertEqual(failures, ['not-found page names itself as canonical'])
+
+    def test_noindex_pointing_home_passes_and_is_reported(self):
+        facts = cp.inspect(page(canonical='https://billatlas.org/', robots='noindex, follow', body=self.MISSING), self.ZZZ)
+        self.assertEqual(facts['failures'], [])
+        self.assertTrue(facts['not_found'])
+        self.assertFalse(cp.inspect(page(), URL)['not_found'])
+
+    def test_a_real_404_is_not_a_soft_404(self):
+        self.assertEqual(cp.inspect(page(canonical=self.ZZZ, body=self.MISSING), self.ZZZ, status=404)['failures'], [])
+
+    def test_fixture_mode_fails_a_marked_share_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, 'HB1.html').write_text(page(body=self.MISSING), encoding='utf-8')
+            reports, _ = cp.check_fixtures(Path(tmp), cp.SITE)
+            self.assertIn('file: not-found page is indexable', cp.all_failures(reports[0]))
+
+
 if __name__ == '__main__':
     unittest.main()

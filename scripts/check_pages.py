@@ -9,7 +9,8 @@ Fixture mode (CI): the same rules over a folder of generated share pages, mapped
     python scripts/check_pages.py --fixtures live/share
 
 Exits 1 when an indexable page (200, no noindex) has no title or description, a fragment canonical or one that is
-not its own address, or when user agents get different HTML."""
+not its own address, when user agents get different HTML, or when a not-found page served as 200 (a soft 404: an
+element marked data-not-found, as the app's not-found views are) is indexable or names itself as canonical."""
 from __future__ import annotations
 
 import argparse
@@ -47,6 +48,7 @@ class PageParser(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.title, self.meta, self.canonical, self.ld = None, {}, None, []
+        self.not_found = False  # An element marked data-not-found: the app's "no such bill/agency/..." view.
         self._in_title = self._in_ld = False
         self._skip = 0  # Inside <script> or <style> (not counted as text).
         self._main_depth = 0
@@ -56,6 +58,8 @@ class PageParser(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         a = {k: (v or "") for k, v in attrs}
+        if "data-not-found" in a:
+            self.not_found = True
         if tag == "title" and self.title is None:
             self._in_title, self._buf = True, []
         elif tag == "meta":
@@ -156,8 +160,13 @@ def inspect(page: str, url: str, status: int = 200, robots_header: str = "") -> 
     facts = {"status": status, "url": url, "title": parser.title, "description": parser.meta.get("description"),
              "canonical": canonical, "og_url": parser.meta.get("og:url"), "robots": robots or None,
              "jsonld": ld_types(parser.ld), "text_length": len(" ".join(" ".join(text).split())),
-             "hash": normalized_hash(page)}
+             "hash": normalized_hash(page), "not_found": parser.not_found}
     failures = []
+    if parser.not_found and status == 200:  # A soft 404: never indexable, and never its own canonical.
+        if "noindex" not in robots:
+            failures.append("not-found page is indexable")
+        if canonical and plain_url(canonical) == plain_url(url):
+            failures.append("not-found page names itself as canonical")
     if status == 200 and "noindex" not in robots:  # Indexable: the rules apply.
         if not facts["title"]:
             failures.append("no title")

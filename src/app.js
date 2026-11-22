@@ -372,6 +372,7 @@ function renderContent(){
     if(runtime.keepStatic)return;
     renderView(state.view,$('#dynamic-content'));
     $('#dynamic-content').removeAttribute('data-static-view');
+    refreshHead();
   });
   refreshNamedHeading();
 }

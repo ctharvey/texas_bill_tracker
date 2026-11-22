@@ -51,11 +51,12 @@ export const topicSlug = text => String(text || '').toLowerCase().replace(/&/g, 
   .replace(/^-+|-+$/g, '').slice(0, 80);
 
 // The canonical address, robots and description for a view at `url` (what buildUrl wrote). A personal or filterable
-// view, a shared list and a keyed view without its key point at the home page and are not indexed.
+// view, a shared list, a keyed view without its key and a not-found view (`missing`: its key names nothing) point at
+// the home page and are not indexed.
 const SITE = 'https://billatlas.org';
-export function pageMeta(view, url, shared = false) {
+export function pageMeta(view, url, shared = false, missing = false) {
   const route = routeForView(view);
-  const indexable = Boolean(route?.indexable) && !String(url).startsWith('/#') && !shared;
+  const indexable = Boolean(route?.indexable) && !String(url).startsWith('/#') && !shared && !missing;
   return {canonical: indexable ? SITE + String(url).split(/[?#]/)[0] : `${SITE}/`, robots: indexable ? null : 'noindex, follow',
     description: route?.description || null};
 }
