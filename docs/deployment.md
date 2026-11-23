@@ -72,8 +72,8 @@ The page itself is not cached. `/bill/<ID>` is the same page for every visitor: 
 `live/share/<ID>.html` (IDs with a bill prefix, case-sensitive), so it shares that file's cache entry and purge, and
 the page sends people on to the app. A redirect rule sends `/bill/<ID>` with `Accept: text/markdown` to
 `agent.billatlas.org/bills/<ID>.md`; agents otherwise find that record from the page's `rel="alternate"` link. The
-gateway's own user-agent rules for `/bill/<ID>` now apply only to bills.ctharvey.me. `/law/<CODE>/<section>` has
-no Cloudflare rule and is not cached at the edge: the gateway (cth.hosting `09-billatlas.org.caddy`) gives everyone
+gateway's own user-agent rules for `/bill/<ID>` now apply only to bills.ctharvey.me. `/law/<CODE>/<section>` is
+cached at the edge for an hour (table above), with no rewrite or purge: the gateway (cth.hosting `09-billatlas.org.caddy`) gives everyone
 `live/share/law/<CODE>/<key>.html` when it exists, else the sync service's page rendered on request
 (`scripts/law_on_demand.py`, noindex; 404 for keys not in the law copy), else, when the sync service is down, the app. Transform rules also serve `/.well-known/api-catalog`, `/openapi.json` and `/auth.md` from `live/`. A WAF rule
 blocks `/wp-*`, `.php`, `/.env` and `/.git` probes.
