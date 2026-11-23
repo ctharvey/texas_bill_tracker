@@ -1854,7 +1854,8 @@ def _code_trail(code: str, site: str) -> list[tuple[str, str]]:
 
 
 def _law_standalone_head(head_args: dict, label: str, feed: str) -> str:
-    return page_head.head_html(**head_args, links=('<link rel="icon" href="/favicon.ico">', _law_rss(label, feed)),
+    return page_head.head_html(**head_args, links=('<link rel="icon" href="/favicon.ico">',
+                                                     *((_law_rss(label, feed),) if feed else ())),
                                icons=False).strip()
 
 
@@ -1862,7 +1863,7 @@ def _law_shell_page(shell: str, *, head_args: dict, label: str, feed: str, body:
                     aria: str) -> str:
     """A law section or chapter page inside the site shell (SEO chunk 4 phase 5): the app takes it over in place."""
     a = lambda value: escape(value, {'"': "&quot;"})
-    head = page_head.head_html(**head_args, links=(_law_rss(label, feed),))
+    head = page_head.head_html(**head_args, links=(_law_rss(label, feed),) if feed else ())
     content = f'\n<article class="law-page static-page" aria-label="{a(aria)}">\n{chr(10).join(body)}\n</article>\n'
     version = hashlib.sha256((head + content).encode()).hexdigest()[:12]
     return pages.render_page(shell, head=f'{head}<meta name="page-version" content="{version}">', content=content,
@@ -1878,13 +1879,14 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
     page rendered on request (scripts/law_on_demand.py) as not indexed."""
     code, number = key.split(" ")
     url, target = f"{site}{law_path(code, number)}", f"{site}#statute?law={code}&sec={number}"
-    feed = f"{site}live/feeds/law/{code}-{number}.xml"
     own = number.split(".", 1)[1] if code == "CN" else number  # The Constitution's own number: "Sec. 1-b."
     heading = (current[0] if current else "") or (f"Sec. {own}. {entry['h']}." if entry.get("h") else "")
     name = re.sub(r"^(?:Sec|Art)\.\s+\S+\.\s*", "", heading).rstrip(".").strip()
     label = law_label(code, number, code_name)
     title = clip(f"{label}: {name}" if name else label, SHARE_TITLE_MAX)
     bills = [b for b in entry.get("b") or [] if isinstance(b, list) and len(b) == 2 and BILL_ID.fullmatch(str(b[0]))]
+    # Feeds are written only for law that bills change (write_law_feeds): no bills, no link.
+    feed = f"{site}live/feeds/law/{code}-{number}.xml" if bills else ""
     listed = ", ".join(f"{bill_number(b)} ({LAW_KIND_WORDS.get(k, 'changes')})" for b, k in bills[:6])
     more = f" and {len(bills) - 6} more" if len(bills) > 6 else ""
     count = (f"{len(bills)} bill{'s' if len(bills) != 1 else ''} in the 90th Legislature would change this section"
@@ -1927,7 +1929,8 @@ def law_page(key: str, entry: dict, code_name: str, current: tuple[str, str, str
         links.append(f'<li><a href="{a(site + current[2])}">This {"article" if code == "CN" else "chapter"} as it '
                      f"stands now, Markdown copy of the Texas Legislative Council's statute files</a></li>")
     links.append(f'<li><a href="{a(official)}">Official text on statutes.capitol.texas.gov</a></li>')
-    links.append(f'<li><a href="{a(feed)}">RSS feed of actions on these bills</a></li>')
+    if feed:
+        links.append(f'<li><a href="{a(feed)}">RSS feed of actions on these bills</a></li>')
     body += ["<h2>Links</h2>", "<ul>\n" + "\n".join(links) + "\n</ul>",
              "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
     jsonld = (page_head.law_section(name=title, label=label, url=url, official=official, chapter_name=chapter_title_,
@@ -2232,7 +2235,6 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
     code, chapter = key.split(" ")
     code_name = LAW_NAME[code]
     url, target = f"{site}law/{code}/{chapter}", f"{site}#chapter?law={code}&ch={chapter}"
-    feed = f"{site}live/feeds/law/{code}-{chapter}.xml"
     name = title_case(heading)
     label = chapter_name(code, chapter) if code == "CN" else f"{code_name} Chapter {chapter}"
     unit = "article" if code == "CN" else "chapter"
@@ -2241,6 +2243,7 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
     sections = {k: v for k, v in sorted(g["sections"].items()) if v[0]}
     bill_ids = sorted({b for b, _ in whole} | {b for pairs, _s, _h in sections.values() for b, _ in pairs},
                       key=_bill_order)
+    feed = f"{site}live/feeds/law/{code}-{chapter}.xml" if bill_ids else ""  # As law_page.
     count = (f"{len(bill_ids)} bill{'s' if len(bill_ids) != 1 else ''} in the 90th Legislature would change something "
              f"in this {unit}" if bill_ids else f"No bill in the 90th Legislature changes this {unit} yet")
     description = clip(f"{count}. Follow it in Texas Bill Atlas to see when another bill does." if bill_ids else
@@ -2278,7 +2281,7 @@ def law_chapter_page(key: str, g: dict, heading: str = "", site: str = SITE, she
     official = official_law_url(code, chapter)
     body += ["<h2>Links</h2>", "<ul>\n" + "\n".join([
         f'<li><a href="{a(official)}">Official text on statutes.capitol.texas.gov</a></li>',
-        f'<li><a href="{a(feed)}">RSS feed of actions on these bills</a></li>']) + "\n</ul>",
+        *([f'<li><a href="{a(feed)}">RSS feed of actions on these bills</a></li>'] if feed else [])]) + "\n</ul>",
         "<p>Texas Bill Atlas is an independent research tool, not an official state website.</p>"]
     parts = [(f"{_section_short(code, skey.split(' ')[1])}{': ' + shead if shead else ''}",
               site + law_path(code, skey.split(' ')[1])) for skey, (_p, _s, shead) in sections.items()]

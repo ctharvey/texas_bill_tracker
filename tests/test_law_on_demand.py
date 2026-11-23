@@ -91,8 +91,25 @@ class SectionPages(Fixture):
         self.assertEqual(found['canonical'], SITE + 'law/GV/2271.002')
         self.assertIn('noindex', found['robots'])
 
+    def test_links_a_feed_only_when_a_bill_changes_the_section(self):
+        # Crawlers followed the link on every section's page: half of one day's requests were 404s for missing feeds.
+        _status, _headers, page = self.get('/law/GV/2271.001')
+        self.assertNotIn('feeds/law/', page)
+        self.assertNotIn('RSS feed', page)
+        _status, _headers, page = self.get('/law/GV/2271.002')
+        self.assertIn('href="https://billatlas.org/live/feeds/law/GV-2271.002.xml"', head(page))
+        self.assertIn('href="https://billatlas.org/live/feeds/law/GV-2271.002.xml"', content(page))
+
 
 class ChapterPages(Fixture):
+    def test_links_a_feed_only_when_a_bill_changes_the_chapter(self):
+        _status, _headers, page = self.get('/law/GV/403')
+        self.assertNotIn('feeds/law/', page)
+        self.assertNotIn('RSS feed', page)
+        _status, _headers, page = self.get('/law/GV/2271')
+        self.assertIn('href="https://billatlas.org/live/feeds/law/GV-2271.xml"', head(page))
+        self.assertIn('href="https://billatlas.org/live/feeds/law/GV-2271.xml"', content(page))
+
     def test_an_untouched_chapter_lists_every_section(self):
         status, headers, page = self.get('/law/GV/403')
         self.assertEqual(status, 200)
