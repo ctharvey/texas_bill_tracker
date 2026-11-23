@@ -1,7 +1,7 @@
 # Changelog
 
 ## 2026-11-23
-- Home and Today no longer flash out-of-date counts while loading: with scripts on, the static pages' counts and lists keep their space but stay unseen until the app draws the live ones (`src/styles.css`; shown if the data fails to load, after 25 s if the app never starts, and without scripts). Home's Luna tile reads "—" instead of 0, and Today's topic chips wait, until Luna's data loads. If the bill data fails to load, the kept static home page is no longer overwritten with zeros.
+- Home and Today no longer flash out-of-date counts while loading: with scripts on, the static pages' counts and lists keep their space but stay unseen until the app draws the live ones (`src/styles.css`; shown if the data fails to load, after 25 s if the app never starts, and without scripts). Home's Luna tile reads "—" instead of 0, and Today's topic chips wait, until Luna's data loads. If the bill data fails to load, the kept static home page is no longer overwritten with zeros. The heading's date box is blank until the app fills in today's date (it was a hardcoded "09 NOV 2026").
 
 ## 2026-11-21
 - Not-found views are not indexed (#37): the agency, topic, member, bill, code (`/law/<CODE>`) and keyless law views mark their "not found" message `data-not-found`, and the app's meta then points the canonical at the home page with `noindex, follow` instead of a self canonical for the bad address. The meta is rewritten after every redraw, so data that arrives late (Luna's agencies) can still flip it. `scripts/check_pages.py` fails a marked page served as 200 that is indexable or names itself as canonical. The gateway still answers 200 for these addresses; a real 404 status there is a cth.hosting change, not made.
