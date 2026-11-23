@@ -55,8 +55,9 @@ FEED_ITEMS = 300
 TEXT_FILTERS = {"view", "query", "topic", "area", "agency", "chamber", "party", "stage", "action", "outlook", "sort"}
 BOOL_FILTERS = {"onlyWatch", "companion"}
 SORT_NAME = re.compile(r"[a-z]{1,20}")
+# Law pages allow a page a second per client: AI crawlers read the law copy, and at 1,200 they hit 429s (2026-11-23).
 LIMITS = {"create": (10, 3600), "write": (300, 3600), "read": (1200, 3600), "search": (1200, 3600),
-          "law": (1200, 3600)}
+          "law": (3600, 3600)}
 
 
 class Rejected(Exception):

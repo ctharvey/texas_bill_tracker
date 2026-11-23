@@ -227,6 +227,14 @@ class Addresses(Fixture):
         self.assertEqual(self.get('/law/GV/403')[0], 429)
         self.assertEqual(self.get('/law/GV/403', peer='198.51.100.7')[0], 200)
 
+    def test_law_limit_lets_a_crawler_read_a_page_a_second(self):
+        limiter, start = svc.RateLimiter(), 1_000_000.0
+        for second in range(3600):
+            limiter.check('203.0.113.9', 'law', start + second)
+        with self.assertRaises(svc.Rejected):
+            limiter.check('203.0.113.9', 'law', start + 3599.5)
+        limiter.check('203.0.113.9', 'law', start + 3600)
+
     def test_without_law_pages_the_service_does_not_answer_law_addresses(self):
         store = svc.Store(self.base / 'plain.db'); self.addCleanup(store.close)
         app = svc.App(store, svc.Snapshot(self.base / 'bills.json'))

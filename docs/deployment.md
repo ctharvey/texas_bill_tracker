@@ -60,7 +60,7 @@ Cache rules:
 |---|---|---|
 | `/assets/*` | 1 year | 1 year |
 | `/live/luna/shards/*` (content-addressed) | 1 year | 1 year |
-| Files only the data run writes (see [data-pipeline.md](data-pipeline.md#data-run-texas-bill-data)) | 30 days, changed files purged after each run | origin (`no-cache`) |
+| Files only the data run writes (see [data-pipeline.md](data-pipeline.md#data-run-texas-bill-data)) | 30 days, 404s 1 day; added, changed and deleted files purged after each run | origin (`no-cache`) |
 | Other `/live/*` and `/data/*` | 5 minutes | origin |
 | `/live/luna/status.json` | 15 seconds | origin |
 | `/api/sync/health` | 30 seconds | origin |
