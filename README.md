@@ -41,6 +41,16 @@ node --test tests/*.test.mjs
 
 Locally the site uses the bundled `data/bills.json`; on the server it loads the hourly `live/bills.json` first.
 
+## Daily check
+
+A read-only sweep of the live site, data, agent edition and CI. It takes well under a minute:
+
+```bash
+python -X utf8 scripts/daily_check.py
+```
+
+What it checks and how to read a failure: [docs/deployment.md](docs/deployment.md#daily-check).
+
 ## Data sources
 
 - Bill histories, text and documents: the Texas Legislative Council's

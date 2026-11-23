@@ -76,6 +76,22 @@ no Cloudflare rule and is not cached at the edge: the gateway (cth.hosting `09-b
 (`scripts/law_on_demand.py`, noindex; 404 for keys not in the law copy), else, when the sync service is down, the app. Transform rules also serve `/.well-known/api-catalog`, `/openapi.json` and `/auth.md` from `live/`. A WAF rule
 blocks `/wp-*`, `.php`, `/.env` and `/.git` probes.
 
+## Daily check
+
+`python -X utf8 scripts/daily_check.py` sweeps the public systems. Run it once a day, and after a push once the Tests run
+has finished. It needs no server access and writes nothing; the GitHub Actions checks use the `gh` CLI.
+
+- Options: `--no-ci` skips the GitHub Actions checks; `--sample N` sets how many of the newest filing day's bills are
+  spot-checked (default 8, 0 for all).
+- It checks both sites and that they run the same build, bill data age and edge purges, the Legislature's FTP against the
+  site, the roster, Luna's status, the sync API, the agent edition and search, newly filed bills, TLS certificates, the
+  nightly tests (E2E) and the tests on the last push to `main`.
+- Output is one PASS, WARN or FAIL line per check, then totals. It exits 1 if anything failed; warnings alone exit 0.
+- WARN "waiting for the next data run" on the FTP line is normal soon after a bill is posted. Check again after the
+  hourly :17 run.
+- FAIL "tests on the last push": `gh run list --workflow Tests -L 5`, then `gh run view <id> --log-failed`.
+- The limits are the constants at the top of the script; its tests are `tests/test_daily_check*.py`.
+
 ## Rollback
 
 Stop `texas-bill-atlas.timer`, point a temporary relative symlink at a kept `releases/<commit>`, and rename it over
