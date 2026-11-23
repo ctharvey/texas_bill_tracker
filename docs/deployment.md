@@ -53,6 +53,7 @@ Check with `systemctl list-timers 'texas-bill-*'` and `journalctl -u <unit>`.
 ## Cloudflare
 
 The billatlas.org zone (Free plan) proxies the site; agent.billatlas.org is DNS-only. Smart Tiered Cache is on.
+Minimum TLS version 1.2 (raised from 1.0 on 2026-11-23).
 Cache rules:
 
 | Path | Edge | Browser |
@@ -64,6 +65,7 @@ Cache rules:
 | `/live/luna/status.json` | 15 seconds | origin |
 | `/api/sync/health` | 30 seconds | origin |
 | `/favicon.ico`, `/icon.png`, `/apple-touch-icon.png` | 1 week | 1 week |
+| `/law` and `/law/*` (section, chapter and code pages, static or rendered on request) | 1 hour; 3xx, 4xx and 5xx (including the sync service's 429s) not cached | origin (`no-cache`) |
 | Other `*.js` and `*.css` (the stable `/app.css` and `/boot.js`, `src/`) | origin (`no-cache`, revalidated) | origin (`no-cache`) |
 
 The page itself is not cached. `/bill/<ID>` is the same page for every visitor: a URL rewrite serves

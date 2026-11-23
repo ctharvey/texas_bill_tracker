@@ -3,6 +3,7 @@
 ## 2026-11-23
 - Home and Today no longer flash out-of-date counts while loading: with scripts on, the static pages' counts and lists keep their space but stay unseen until the app draws the live ones (`src/styles.css`; shown if the data fails to load, after 25 s if the app never starts, and without scripts). Home's Luna tile reads "—" instead of 0, and Today's topic chips wait, until Luna's data loads. If the bill data fails to load, the kept static home page is no longer overwritten with zeros. The heading's date box is blank until the app fills in today's date (it was a hardcoded "09 NOV 2026").
 - Law section and chapter pages link an RSS feed only when a bill changes them: feeds exist only then, and crawlers following the link on every other page made about half of a day's requests 404s. Pages rendered on request change when the sync service is released.
+- Cloudflare: law pages (`/law`, `/law/*`) are cached at the edge for 1 hour (crawlers fetch about 40,000 a day, all of which reached the server); errors, redirects and 429s are not cached. Minimum TLS version raised to 1.2. Both are zone settings, recorded in `docs/deployment.md`.
 - The daily check is documented: README and `docs/deployment.md` ("Daily check").
 
 ## 2026-11-21
