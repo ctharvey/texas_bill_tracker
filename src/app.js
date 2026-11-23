@@ -90,6 +90,7 @@ async function init(){
     }
     if(!data)throw Error('Unable to load bill snapshot');
     data.loaded_from=loadedFrom==='./live/bills.json'?'Live server snapshot':'Bundled fallback snapshot';
+    state.lunaPending=true;
     lunaReady=fetchLuna().then(luna=>({luna,base:loadedBills}));
     state.roster=await rosterReady;
     await statusReady;
@@ -143,6 +144,8 @@ async function init(){
   const located=parseLocation(location.pathname,location.hash,location.search),staticHere=staticMatches(runtime.staticView,located);
   const decision=takeover(runtime.staticView,{loaded:state.meta?.data_mode!=='unavailable',matches:staticHere});
   runtime.keepStatic=decision==='keep';
+  // Kept for good (the data did not load): show the saved copy that styles.css holds back while the app loads.
+  if(runtime.keepStatic)$('#dynamic-content').dataset.staticKept='';
   // The static page's head is the indexed one: kept while the reader stays at its address (core/head.js).
   runtime.headPath=staticHere?location.pathname:null;
   // A matching static page keeps the reader's place on the first draw; a non-matching one still scrolls to the top.
@@ -213,6 +216,7 @@ async function fetchLuna(){
 // Rebuild the bills from the loaded snapshot in the original order (tags, extras, then members) and redraw.
 // A local import that replaced the snapshot meanwhile is kept: imported rows never carried Luna's data.
 function applyLuna({tags,extras,related,audit,updates},base,snapshot){
+  state.lunaPending=false;
   state.luna=tags?{...tags,agencies:isPlainMap(tags.agencies)?tags.agencies:{}}:null;
   state.related=related;state.audit=audit;state.lunaUpdates=updates;
   if(state.bills===snapshot){

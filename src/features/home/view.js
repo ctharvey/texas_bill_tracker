@@ -6,7 +6,7 @@ import {chicagoDate, openLinkHtml, lastActionInfo, groupByActionType, assessHear
 import {esc, $} from '../../core/dom.js';
 import {topicStyle, plainTitle, daysUntil} from './rows.js';
 import {billHref} from '../../core/links.js';
-import {state} from '../../core/state.js';
+import {state, runtime} from '../../core/state.js';
 import {todayDay, realAgencies, agencyName} from '../../core/labels.js';
 import {shortDate, dateText} from '../../core/format.js';
 import {followedBills} from '../../geo.js';
@@ -38,7 +38,8 @@ export function homeMarkup(){
     <div class="home-grid">${homeCards()}</div>`;
 }
 // Redraws the dashboard's cards only, so a sync or watch change never clears what is typed in its search box.
-export function refreshHome(){const grid=$('.home-grid');if(grid)grid.innerHTML=homeCards();else renderContent()}
+// A kept static page stays as it is: without bills the cards would all read zero.
+export function refreshHome(){if(runtime.keepStatic)return;const grid=$('.home-grid');if(grid)grid.innerHTML=homeCards();else renderContent()}
 function homeCards(){
   const today=todayDay(),prev=previousVisit();
   const more=(href,view,label)=>`<a class="text-link home-more" href="${esc(href)}"${view?` data-view="${view}"`:''}>${label} →</a>`;
@@ -71,11 +72,11 @@ function homeCards(){
   for(const b of newestReviewed(state.bills).slice(0,20))if(!luna.has(b.id))luna.set(b.id,{bill:b,note:`Reviewed ${shortDate(b.luna.reviewed_at.slice(0,10))}`});
   const lunaRows=[...luna.values()].filter(r=>!dayIds.has(r.bill.id));
   const lunaBody=lunaRows.length?`${lunaChanged.bills.length?changeCounts(lunaChanged.counts):''}${lunaRows.slice(0,HOME_ROWS+1).map(r=>compactRow(r.bill,r.note)).join('')}${more('/review','review','Every review and change')}`
-    :'<p class="tools-note">Luna has not reviewed any bills yet.</p>';
+    :`<p class="tools-note">${state.lunaPending?'Loading Luna’s reviews…':'Luna has not reviewed any bills yet.'}</p>`;
   const tile=(n,label,href,view)=>href
     ?`<a class="stat-tile" href="${esc(href)}"${view?` data-view="${view}"`:''}><strong>${n.toLocaleString()}</strong><span>${label}</span></a>`
     :`<div class="stat-tile"><strong>${n.toLocaleString()}</strong><span>${label}</span></div>`;
-  const stats=`<div class="home-stats">${tile(rows.length,day===today?'bills with action today':`bills with action ${esc(shortDate(day))}`,'/today','today')}${tile(lunaChanged.bills.length,'bills Luna reviewed or updated, last 24 hours','/review','review')}${tile(hearings.length,hearings.length===1?'hearing scheduled':'hearings scheduled',hearings.length?buildUrl('all',{outlook:'Scheduled'}):'','')}</div>`;
+  const stats=`<div class="home-stats">${tile(rows.length,day===today?'bills with action today':`bills with action ${esc(shortDate(day))}`,'/today','today')}${tile(state.lunaUpdates?lunaChanged.bills.length:'—','bills Luna reviewed or updated, last 24 hours','/review','review')}${tile(hearings.length,hearings.length===1?'hearing scheduled':'hearings scheduled',hearings.length?buildUrl('all',{outlook:'Scheduled'}):'','')}</div>`;
   // Two columns that do not share row heights, split so their lengths come out close on a typical day.
   // On a phone the columns dissolve and .home-oN puts the cards back in this order.
   return stats+`<div class="home-col">${card(yoursTitle,changed.length,yours,1)}${card(day===today?'Today at the Lege':`Most recent activity, ${esc(shortDate(day))}`,rows.length,dayBody,2)}</div>`

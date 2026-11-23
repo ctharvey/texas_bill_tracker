@@ -34,6 +34,7 @@ export function todayMarkup({todayRow}){
   const barTotal=counts.reduce((n,c)=>n+c.count,0);
   const bar=counts.length>1?`<div class="topic-bar" aria-hidden="true">${counts.map(c=>`<button type="button" tabindex="-1" class="topic-seg${state.todayTopic===c.topic?' selected':''}" data-today-topic="${esc(c.topic)}" style="--topic-h:${topicHue(c.topic)??220};flex:${c.count} 1 0" title="${esc(c.topic)} · ${c.count}"><span>${c.count/barTotal>=.09?`${esc(c.topic)} · ${c.count}`:''}</span></button>`).join('')}</div>`:'';
   const chips=`<div class="today-topics" role="group" aria-label="Filter this day's bills by topic">${chip('',`All · ${rows.length}`)}${listed.map(c=>chip(c.topic,`${esc(c.topic)} · ${c.count}`)).join('')}${counts.length>TOP?`<button class="text-button" id="today-topics-toggle">${state.todayAllTopics?'Show fewer':`+${counts.length-listed.length} more topics`}</button>`:''}</div>`;
+  // Luna's tags change the topic counts, so they keep their space but stay unseen until the tags load (app.js applyLuna).
   let budget=state.todayLimit;
   const sections=groupByActionType(shown).map(g=>{
     const part=g.rows.slice(0,Math.max(0,budget));budget-=part.length;
@@ -41,6 +42,6 @@ export function todayMarkup({todayRow}){
   }).join('');
   return `<div class="section-head"><div><div class="section-overline">${day===today?'TODAY':'MOST RECENT ACTIVITY'}</div><h2>${esc(dateText(day))}</h2></div><span class="subtitle">${shown.length} ${shown.length===1?'bill':'bills'} with recorded action</span></div>
     <div class="info-callout today-note">${note?`<p>${note}</p>`:''}<p>${esc(TODAY_INTERIM_NOTE)}</p></div>
-    ${rows.length?bar+chips:''}${sections||'<div class="empty-state"><h3>No activity to show</h3><p>Nothing is recorded for this day yet.</p></div>'}
+    ${!rows.length?'':state.lunaPending?`<div style="visibility:hidden">${bar+chips}</div>`:bar+chips}${sections||'<div class="empty-state"><h3>No activity to show</h3><p>Nothing is recorded for this day yet.</p></div>'}
     ${shown.length>state.todayLimit?`<button class="outline-button" id="today-more">Show 100 more · showing ${state.todayLimit} of ${shown.length}</button>`:''}`;
 }

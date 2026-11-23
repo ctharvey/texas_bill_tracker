@@ -630,6 +630,14 @@ a.bill-number{padding:6px 0}
 .bill-group>.drawer-pills,.bill-group>.area-badges{margin-top:12px}
 .luna-block>p+p{margin-top:6px}.luna-block>ul{margin:4px 0 0;padding-left:18px;font-size:var(--fs-xs);line-height:1.6}
 .review-file-area{margin-top:10px}
+/* The static home and Today pages are drawn by an earlier data run, so their counts can be out of date. With scripts on
+   they keep their space but stay unseen until the app draws the live ones. They show if the app keeps them (no data)
+   or has not started after 25 s, past the bill files' own time limits (app.js init). Without scripts they just show. */
+@media(scripting:enabled){
+  [data-static-view="page:home"]:not([data-static-kept]) :is(.home-grid,.home-top .tools-note,.calendar-desc),
+  [data-static-view="page:today"]:not([data-static-kept])>*{animation:static-reveal 25s step-end both}
+}
+@keyframes static-reveal{from{visibility:hidden}to{visibility:visible}}
 /* Home: count tiles, then one-line bill rows. A row's left stripe is its main topic's colour (features/home/rows.js). */
 .home-stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .stat-tile{display:block;background:var(--surface);border:1px solid var(--line);border-radius:calc(12px*var(--rs));padding:14px 16px 13px;color:inherit;text-decoration:none}
